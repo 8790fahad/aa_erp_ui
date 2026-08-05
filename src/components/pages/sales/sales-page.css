@@ -1,0 +1,155 @@
+/* Sales Page Custom Styles */
+
+.sales-page {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Custom color classes for item cards */
+.bg-light-pink {
+  background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%) !important;
+}
+
+.bg-light-blue {
+  background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%) !important;
+}
+
+.bg-light-green {
+  background: linear-gradient(135deg, #00b894 0%, #00a085 100%) !important;
+}
+
+.bg-light-orange {
+  background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%) !important;
+}
+
+/* Card hover effects */
+.card {
+  border-radius: 0.75rem !important;
+  border: none !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  transition: all 0.3s ease !important;
+}
+
+.card:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* Selected card styling */
+.card.border-primary {
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25) !important;
+  border: 3px solid #007bff !important;
+}
+
+/* Button styling */
+.btn-group .btn {
+  border-radius: 0.5rem !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-group .btn:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Form styling */
+.form-control-lg {
+  border-radius: 0.5rem !important;
+  border: 2px solid #e9ecef !important;
+  transition: all 0.2s ease !important;
+}
+
+.form-control-lg:focus {
+  border-color: #007bff !important;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
+}
+
+/* Floating labels */
+.form-floating > label {
+  font-weight: 500 !important;
+  color: #6c757d !important;
+}
+
+/* Custom scrollbar */
+.overflow-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overflow-auto::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.overflow-auto::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.overflow-auto::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Animation for card selection */
+@keyframes selectPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1.02);
+  }
+}
+
+.card.border-primary {
+  animation: selectPulse 0.3s ease-in-out;
+}
+
+/* Service price input styling */
+.form-control[type="number"] {
+  text-align: center !important;
+  font-weight: 600 !important;
+}
+
+/* Empty state styling */
+.text-muted {
+  color: #6c757d !important;
+}
+
+/* Header styling */
+.border-bottom {
+  border-bottom: 2px solid #e9ecef !important;
+}
+
+/* Icon styling */
+.fas,
+.far {
+  font-size: 1.1em;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .card-body {
+    padding: 1rem !important;
+  }
+
+  .btn-group .btn {
+    font-size: 0.875rem !important;
+    padding: 0.5rem 1rem !important;
+  }
+}
+
+/* Custom shadows */
+.shadow-sm {
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+}
+
+.hover-shadow-lg:hover {
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175) !important;
+}
+
+/* Transition effects */
+.transition-all {
+  transition: all 0.2s ease-in-out !important;
+}

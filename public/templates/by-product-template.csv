@@ -1,0 +1,3 @@
+sku,Product Name,Sales Description,Selling Price,Revenue Account,Sales Limit Period,Sales Limit Quantity,Purchase Description,Cost Price,COGS Account,Stock Quantity,Branch ID,Opening Balance Date,Reorder Level,Expiry Date,Inventory Account,Unit of Measurement,UOM Category,Taxable,Status,Supplier ID,Tags,Notes
+BP001,Sample By-Product 1,Sales desc for by-product 1,3000,4100,,,Purchase desc for by-product 1,1500,5001,0,,2025-12-01,30,2026-12-31,1200,Kg,General,Taxable,Active,,,
+BP002,Sample By-Product 2,Sales desc for by-product 2,2000,4100,,,Purchase desc for by-product 2,1000,5002,0,,2025-12-01,20,2026-11-30,1200,Kg,General,Not Taxable,Active,,,

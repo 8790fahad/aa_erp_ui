@@ -1,0 +1,97 @@
+
+name: 🚀 Deploy React Frontend to Hostinger (FTP)
+
+# Uses the FTP_*_MF secrets already configured in this repo.
+# FTP-Deploy-Action only speaks FTP / FTPS (NOT SFTP/SSH).
+#
+# If this times out on the control socket (ETIMEDOUT :21):
+#   1. In hPanel → Files → FTP Accounts, copy the exact "FTP hostname" (often an IP
+#      or ftp.yourdomain.com). FTP_HOST_MF must be that — NOT your website URL and
+#      NOT a scheme like ftp://...  (no path, no spaces).
+#   2. Confirm the plan offers FTP/FTPS (some setups are SFTP-only → this action
+#      cannot be used; switch to an SSH/SFTP deploy instead).
+#   3. Make sure port 21 (and passive ports) aren't firewalled.
+
+
+
+on:
+  push:
+    branches:
+      - mf
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - name: ⬇️ Checkout Code
+        uses: actions/checkout@v5
+
+      - name: ⚙️ Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 📦 Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: 🛠️ Build React App
+        run: npm run build
+
+      - name: 🧪 Verify dist folder
+        run: |
+          echo "Files in dist:"
+          ls -al ./dist
+
+      - name: 🔍 Verify Secrets
+        run: |
+          if [ -z "${{ secrets.FTP_HOST_MF }}" ]; then echo "ERROR: FTP_HOST_MF not set"; exit 1; fi
+          if [ -z "${{ secrets.FTP_USERNAME_MF }}" ]; then echo "ERROR: FTP_USERNAME_MF not set"; exit 1; fi
+          if [ -z "${{ secrets.FTP_PASSWORD_MF }}" ]; then echo "ERROR: FTP_PASSWORD_MF not set"; exit 1; fi
+          echo "✓ All FTP secrets are available (values masked)"
+
+      # Non-blocking probe so a flaky TCP check can't fail the deploy by itself.
+      - name: 🔌 Check FTP port 21 reachable
+        continue-on-error: true
+        run: |
+          raw="${{ secrets.FTP_HOST_MF }}"
+          host="$(printf '%s' "$raw" | sed -E 's#^[a-zA-Z]+://##; s#/.*$##' | xargs)"
+          if [ "$host" != "$raw" ]; then
+            echo "::warning::FTP_HOST_MF looks like '$raw'. It should be a bare hostname/IP (e.g. ftp.yourdomain.com), with no scheme, path, or spaces."
+          fi
+          echo "Testing TCP to ${host}:21 ..."
+          ok=""
+          for attempt in 1 2 3; do
+            if nc -zv -w 15 "$host" 21; then
+              ok="yes"; echo "Port 21 reachable (attempt ${attempt})."; break
+            fi
+            echo "Attempt ${attempt} failed; retrying..."; sleep 5
+          done
+          if [ -z "$ok" ]; then
+            echo "::warning::Could not open TCP to ${host}:21 after 3 attempts. Verify FTP_HOST_MF is the Hostinger FTP hostname/IP (hPanel → Files → FTP Accounts), not the website URL, and that the plan offers FTP/FTPS (not SFTP-only)."
+          fi
+
+      - name: 📤 Deploy via FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+        with:
+          server: ${{ secrets.FTP_HOST_MF }}
+          username: ${{ secrets.FTP_USERNAME_MF }}
+          password: ${{ secrets.FTP_PASSWORD_MF }}
+          protocol: ftps
+          port: 21
+          timeout: 180000
+          security: loose
+          log-level: standard
+          local-dir: ./dist/
+          # FTP home root; use /public_html/ if your panel shows files there instead
+          server-dir: /
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/.DS_Store
+
+

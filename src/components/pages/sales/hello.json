@@ -1,0 +1,179 @@
+{
+  "requestData": {
+    "costingType": "joint_shared",
+    "products": [
+      {
+        "id": "production-item-0",
+        "units": 10,
+        "finishedGoods": [
+          {
+            "sku": "PROD-00154",
+            "multiplier_id": null,
+            "cost_per_unit": 3.7,
+            "qty": 10,
+            "expiry_date": null
+          }
+        ],
+        "ingredients": [
+          {
+            "type": "raw_material",
+            "description": "TEA DISPLAY BOXES (X80)",
+            "descriptionCode": "",
+            "accountHead": "",
+            "quantity": 1,
+            "rawMaterialId": "",
+            "rawMaterialName": "TEA DISPLAY BOXES (X80)",
+            "rawMaterialSku": "RMOO1",
+            "otherType": "rate",
+            "rate": "",
+            "percentageBasis": "raw_material",
+            "unit_cost": 37,
+            "amount": 37
+          },
+          {
+            "type": "by_product_credit",
+            "description": "By-Product Inventory",
+            "descriptionCode": "1030705",
+            "accountHead": "By-Product Inventory",
+            "quantity": 1,
+            "rawMaterialId": "",
+            "rawMaterialName": "",
+            "rawMaterialSku": "",
+            "otherType": "percentage",
+            "rate": "",
+            "percentageBasis": "all_items",
+            "unit_cost": 0,
+            "amount": 0.37
+          },
+          {
+            "type": "other",
+            "description": "Cost of labour - COS",
+            "descriptionCode": "50101",
+            "accountHead": "Cost of labour - COS",
+            "quantity": 0,
+            "rawMaterialId": "",
+            "rawMaterialName": "",
+            "rawMaterialSku": "",
+            "otherType": "rate",
+            "rate": "100",
+            "percentageBasis": "raw_material",
+            "unit_cost": 0,
+            "amount": 100
+          }
+        ]
+      },
+      {
+        "id": "production-item-1",
+        "units": 10,
+        "finishedGoods": [
+          {
+            "sku": "PROD-00159",
+            "multiplier_id": null,
+            "cost_per_unit": 3.7,
+            "qty": 10,
+            "expiry_date": "2026-01-17"
+          }
+        ],
+        "ingredients": [
+          {
+            "type": "raw_material",
+            "description": "TEA DISPLAY BOXES (X80)",
+            "descriptionCode": "",
+            "accountHead": "",
+            "quantity": 1,
+            "rawMaterialId": "",
+            "rawMaterialName": "TEA DISPLAY BOXES (X80)",
+            "rawMaterialSku": "RMOO1",
+            "otherType": "rate",
+            "rate": "",
+            "percentageBasis": "raw_material",
+            "unit_cost": 37,
+            "amount": 37
+          }
+        ]
+      }
+    ],
+    "output": 65,
+    "sharedCosts": [
+      {
+        "type": "raw_material",
+        "description": "MAIZE 100KG",
+        "descriptionCode": "",
+        "accountHead": "",
+        "quantity": 100,
+        "rawMaterialId": "RMOO39",
+        "rawMaterialName": "MAIZE 100KG",
+        "rawMaterialSku": "RMOO39",
+        "otherType": "rate",
+        "rate": "",
+        "percentageBasis": "raw_material",
+        "unit_cost": 447.42,
+        "amount": 44742
+      },
+      {
+        "type": "other",
+        "description": "Normal Production Waste/Process Loss",
+        "descriptionCode": "50119",
+        "accountHead": "Normal Production Waste/Process Loss",
+        "quantity": 5,
+        "rawMaterialId": "",
+        "rawMaterialName": "",
+        "rawMaterialSku": "",
+        "otherType": "rate",
+        "rate": "",
+        "percentageBasis": "raw_material",
+        "unit_cost": 0,
+        "amount": 2237.1
+      },
+      {
+        "type": "other",
+        "description": "Manufacturing Overhead",
+        "descriptionCode": "50118",
+        "accountHead": "Manufacturing Overhead",
+        "quantity": 25,
+        "rawMaterialId": "",
+        "rawMaterialName": "",
+        "rawMaterialSku": "",
+        "otherType": "rate",
+        "rate": "",
+        "percentageBasis": "raw_material",
+        "unit_cost": 0,
+        "amount": 11744.775
+      },
+      {
+        "type": "other",
+        "description": "Cost of Labour",
+        "descriptionCode": "50217",
+        "accountHead": "Cost of Labour",
+        "quantity": 0,
+        "rawMaterialId": "",
+        "rawMaterialName": "",
+        "rawMaterialSku": "",
+        "otherType": "rate",
+        "rate": "500",
+        "percentageBasis": "raw_material",
+        "unit_cost": 0,
+        "amount": 500
+      },
+      {
+        "type": "by_product_credit",
+        "description": "By-Product Inventory",
+        "descriptionCode": "1030705",
+        "accountHead": "By-Product Inventory",
+        "quantity": 0,
+        "rawMaterialId": "",
+        "rawMaterialName": "",
+        "rawMaterialSku": "",
+        "otherType": "rate",
+        "rate": "6000",
+        "percentageBasis": "raw_material",
+        "unit_cost": 0,
+        "amount": 6000
+      }
+    ]
+  },
+  "facilityId": "ae9d49ee-3f9c-4f1e-bd6c-d2f18c61269f",
+  "userId": "4",
+  "batchNo": "Batch-01194",
+  "productionDate": "2026-01-17T00:00:00.000Z"
+}

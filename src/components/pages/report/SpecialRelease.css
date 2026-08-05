@@ -1,0 +1,91 @@
+.special-release {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 20px 150px;
+  }
+  
+  .header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  
+  .ministry-name {
+    font-weight: bold;
+    font-size: 18px;
+  }
+  
+  .address {
+    font-style: italic;
+  }
+  
+  .document-title {
+    font-weight: bold;
+    text-align: center;
+    margin: 20px 0;
+    text-decoration: underline;
+  }
+  
+  .recipient {
+    margin-bottom: 20px;
+  }
+  
+  .content {
+    margin-bottom: 20px;
+  }
+  
+  .bold {
+    font-weight: 600;
+  }
+  
+  .signature {
+    /* margin-top: 50px; */
+    font-weight: 600;
+  }
+  
+  .right-align {
+    text-align: right;
+  }
+  
+  .center-text {
+    text-align: center;
+  }
+  
+  .large-margin-top {
+    margin-top: 150px;
+  }
+  
+  .date {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 600;
+  }
+  
+  .underline {
+    border-bottom: 2px solid black;
+  }
+  
+  .page-break {
+    page-break-before: always;
+    margin-top: 50px;
+  }
+  
+  .distribution-section {
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  .recipient-list {
+    display: flex;
+    gap: 40px;
+  }
+  
+  .cc-content p {
+    font-size: 12px;
+    margin: 0;
+    padding: 0;
+  }
+  .rbt-menu {
+    z-index: 9999 !important;
+    position: absolute !important;
+  }

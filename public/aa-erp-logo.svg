@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 128" width="420" height="128" role="img" aria-label="AA ERP">
+  <rect width="128" height="128" rx="28" fill="#1A2D5E"/>
+  <text
+    x="64"
+    y="78"
+    text-anchor="middle"
+    font-family="Arial Black, Helvetica Neue, Arial, sans-serif"
+    font-size="52"
+    font-weight="800"
+    letter-spacing="-2"
+    fill="#FFFFFF"
+  >AA</text>
+  <rect x="34" y="92" width="60" height="6" rx="3" fill="#2C7BE5"/>
+  <text
+    x="156"
+    y="82"
+    font-family="Helvetica Neue, Arial, sans-serif"
+    font-size="56"
+    font-weight="700"
+    fill="#1A2D5E"
+  >AA ERP</text>
+</svg>

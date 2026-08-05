@@ -1,0 +1,982 @@
+{
+  "accountTypes": [
+    {
+      "typeId": "0",
+      "type": "Cash and cash equivalents",
+      "typeMnemonic": "bank",
+      "typeEnumName": "BANK",
+      "children": [
+        {
+          "detailTypeId": "1010",
+          "detailType": "Bank",
+          "detailTypeMnemonic": "checking",
+          "detailTypeEnumName": "CHECKING"
+        },
+        {
+          "detailTypeId": "1012",
+          "detailType": "Savings",
+          "detailTypeMnemonic": "savings",
+          "detailTypeEnumName": "SAVINGS"
+        },
+        {
+          "detailTypeId": "1014",
+          "detailType": "Money Market",
+          "detailTypeMnemonic": "moneymarket",
+          "detailTypeEnumName": "MONEY_MARKET"
+        },
+        {
+          "detailTypeId": "1020",
+          "detailType": "Cash on hand",
+          "detailTypeMnemonic": "cashonhand",
+          "detailTypeEnumName": "CASH_ON_HAND"
+        },
+        {
+          "detailTypeId": "1030",
+          "detailType": "Client trust account",
+          "detailTypeMnemonic": "trustaccounts",
+          "detailTypeEnumName": "TRUST_ACCOUNTS"
+        },
+        {
+          "detailTypeId": "1031",
+          "detailType": "Rents Held in Trust",
+          "detailTypeMnemonic": "rentsheldintrust",
+          "detailTypeEnumName": "RENTS_HELD_IN_TRUST"
+        },
+        {
+          "detailTypeId": "7340",
+          "detailType": "Cash and cash equivalents",
+          "detailTypeMnemonic": "cashandcashequivalents",
+          "detailTypeEnumName": "CASH_AND_CASH_EQUIVALENTS"
+        }
+      ]
+    },
+    {
+      "typeId": "1",
+      "type": "Accounts receivable (A/R)",
+      "typeMnemonic": "ar",
+      "typeEnumName": "AR",
+      "children": [
+        {
+          "detailTypeId": "1040",
+          "detailType": "Accounts Receivable (A/R)",
+          "detailTypeMnemonic": "accountsreceivable",
+          "detailTypeEnumName": "ACCOUNTS_RECEIVABLE"
+        }
+      ]
+    },
+    {
+      "typeId": "2",
+      "type": "Current assets",
+      "typeMnemonic": "othercurassets",
+      "typeEnumName": "OTHER_CUR_ASSETS",
+      "children": [
+        {
+          "detailTypeId": "1041",
+          "detailType": "Allowance for bad debts",
+          "detailTypeMnemonic": "allowanceforbaddebts",
+          "detailTypeEnumName": "ALLOWANCE_FOR_BAD_DEBTS"
+        },
+        {
+          "detailTypeId": "1032",
+          "detailType": "Employee Cash Advances",
+          "detailTypeMnemonic": "employeecashadvances",
+          "detailTypeEnumName": "EMPLOYEE_CASH_ADVANCES"
+        },
+        {
+          "detailTypeId": "1050",
+          "detailType": "Prepaid Expenses",
+          "detailTypeMnemonic": "prepaidexpenses",
+          "detailTypeEnumName": "PREPAID_EXPENSES"
+        },
+        {
+          "detailTypeId": "1055",
+          "detailType": "Retainage",
+          "detailTypeMnemonic": "retainage",
+          "detailTypeEnumName": "RETAINAGE"
+        },
+        {
+          "detailTypeId": "1060",
+          "detailType": "Undeposited Funds",
+          "detailTypeMnemonic": "undepositedfunds",
+          "detailTypeEnumName": "UNDEPOSITED_FUNDS"
+        },
+        {
+          "detailTypeId": "1210",
+          "detailType": "Development Costs",
+          "detailTypeMnemonic": "developmentcosts",
+          "detailTypeEnumName": "DEVELOPMENT_COSTS"
+        },
+        {
+          "detailTypeId": "1220",
+          "detailType": "Inventory",
+          "detailTypeMnemonic": "inventory",
+          "detailTypeEnumName": "INVENTORY"
+        },
+        {
+          "detailTypeId": "1250",
+          "detailType": "Loans To Officers",
+          "detailTypeMnemonic": "loanstoofficers",
+          "detailTypeEnumName": "LOANS_TO_OFFICERS"
+        },
+        {
+          "detailTypeId": "1255",
+          "detailType": "Loans to Shareholders",
+          "detailTypeMnemonic": "loanstostockholders",
+          "detailTypeEnumName": "LOANS_TO_STOCKHOLDERS"
+        },
+        {
+          "detailTypeId": "1260",
+          "detailType": "Loans to Others",
+          "detailTypeMnemonic": "loanstoothers",
+          "detailTypeEnumName": "LOANS_TO_OTHERS"
+        },
+        {
+          "detailTypeId": "1270",
+          "detailType": "Other current assets",
+          "detailTypeMnemonic": "othercurrentassets",
+          "detailTypeEnumName": "OTHER_CURRENT_ASSETS"
+        },
+        {
+          "detailTypeId": "1340",
+          "detailType": "Investments - Other",
+          "detailTypeMnemonic": "investmentother",
+          "detailTypeEnumName": "INVESTMENT_OTHER"
+        },
+        {
+          "detailTypeId": "7550",
+          "detailType": "Assets available for sale",
+          "detailTypeMnemonic": "assetsavailableforsale",
+          "detailTypeEnumName": "ASSETS_AVAILABLE_FOR_SALE"
+        }
+      ]
+    },
+    {
+      "typeId": "3",
+      "type": "Fixed assets",
+      "typeMnemonic": "fixedassets",
+      "typeEnumName": "FIXED_ASSETS",
+      "children": [
+        {
+          "detailTypeId": "1410",
+          "detailType": "Buildings",
+          "detailTypeMnemonic": "buildings",
+          "detailTypeEnumName": "BUILDINGS"
+        },
+        {
+          "detailTypeId": "1420",
+          "detailType": "Furniture and Fixtures",
+          "detailTypeMnemonic": "furniturefixtures",
+          "detailTypeEnumName": "FURNITURE_FIXTURES"
+        },
+        {
+          "detailTypeId": "1430",
+          "detailType": "Leasehold Improvements",
+          "detailTypeMnemonic": "leaseholdimprovements",
+          "detailTypeEnumName": "LEASEHOLD_IMPROVEMENTS"
+        },
+        {
+          "detailTypeId": "1440",
+          "detailType": "Machinery and equipment",
+          "detailTypeMnemonic": "machineryequipment",
+          "detailTypeEnumName": "MACHINERY_EQUIPMENT"
+        },
+        {
+          "detailTypeId": "1445",
+          "detailType": "Other fixed assets",
+          "detailTypeMnemonic": "otherfixedassets",
+          "detailTypeEnumName": "OTHER_FIXED_ASSETS"
+        },
+        {
+          "detailTypeId": "1450",
+          "detailType": "Vehicles",
+          "detailTypeMnemonic": "vehicles",
+          "detailTypeEnumName": "VEHICLES"
+        },
+        {
+          "detailTypeId": "1455",
+          "detailType": "Accumulated depreciation on property, plant and equipment",
+          "detailTypeMnemonic": "accumulateddepreciation",
+          "detailTypeEnumName": "ACCUMULATED_DEPRECIATION"
+        },
+        {
+          "detailTypeId": "1460",
+          "detailType": "Depletable Assets",
+          "detailTypeMnemonic": "depletableassets",
+          "detailTypeEnumName": "DEPLETABLE_ASSETS"
+        },
+        {
+          "detailTypeId": "1465",
+          "detailType": "Accumulated depletion",
+          "detailTypeMnemonic": "accumulateddepletion",
+          "detailTypeEnumName": "ACCUMULATED_DEPLETION"
+        },
+        {
+          "detailTypeId": "7570",
+          "detailType": "Land",
+          "detailTypeMnemonic": "noncurrentassets",
+          "detailTypeEnumName": "NON_CURRENT_ASSETS"
+        }
+      ]
+    },
+    {
+      "typeId": "4",
+      "type": "Non-current assets",
+      "typeMnemonic": "otherassets",
+      "typeEnumName": "OTHER_ASSETS",
+      "children": [
+        {
+          "detailTypeId": "1610",
+          "detailType": "Goodwill",
+          "detailTypeMnemonic": "goodwill",
+          "detailTypeEnumName": "GOODWILL"
+        },
+        {
+          "detailTypeId": "1620",
+          "detailType": "Lease Buyout",
+          "detailTypeMnemonic": "leasebuyout",
+          "detailTypeEnumName": "LEASE_BUYOUT"
+        },
+        {
+          "detailTypeId": "1630",
+          "detailType": "Licences",
+          "detailTypeMnemonic": "licenses",
+          "detailTypeEnumName": "LICENSES"
+        },
+        {
+          "detailTypeId": "1640",
+          "detailType": "Organisational Costs",
+          "detailTypeMnemonic": "organizationalcosts",
+          "detailTypeEnumName": "ORGANIZATIONAL_COSTS"
+        },
+        {
+          "detailTypeId": "1650",
+          "detailType": "Security Deposits",
+          "detailTypeMnemonic": "securitydeposits",
+          "detailTypeEnumName": "SECURITY_DEPOSITS"
+        },
+        {
+          "detailTypeId": "1660",
+          "detailType": "Other non-current assets",
+          "detailTypeMnemonic": "otherlongtermassets",
+          "detailTypeEnumName": "OTHER_LONG_TERM_ASSETS"
+        },
+        {
+          "detailTypeId": "1700",
+          "detailType": "Accumulated amortisation of non-current assets",
+          "detailTypeMnemonic": "accumulatedamortizationofotherassets",
+          "detailTypeEnumName": "ACCUMULATED_AMORTIZATION_OF_OTHER_ASSETS"
+        },
+        {
+          "detailTypeId": "7020",
+          "detailType": "Deferred tax",
+          "detailTypeMnemonic": "deferredtax",
+          "detailTypeEnumName": "DEFERRED_TAX"
+        },
+        {
+          "detailTypeId": "7060",
+          "detailType": "Intangible Assets",
+          "detailTypeMnemonic": "intangibleassets",
+          "detailTypeEnumName": "INTANGIBLEASSETS"
+        },
+        {
+          "detailTypeId": "7300",
+          "detailType": "Assets held for sale",
+          "detailTypeMnemonic": "assetsheldforsale",
+          "detailTypeEnumName": "ASSETS_HELD_FOR_SALE"
+        },
+        {
+          "detailTypeId": "7590",
+          "detailType": "Long-term investments",
+          "detailTypeMnemonic": "longterminvestments",
+          "detailTypeEnumName": "LONG_TERM_INVESTMENTS"
+        }
+      ]
+    },
+    {
+      "typeId": "5",
+      "type": "Accounts payable (A/P)",
+      "typeMnemonic": "ap",
+      "typeEnumName": "AP",
+      "children": [
+        {
+          "detailTypeId": "2010",
+          "detailType": "Accounts Payable (A/P)",
+          "detailTypeMnemonic": "accountspayable",
+          "detailTypeEnumName": "ACCOUNTS_PAYABLE"
+        }
+      ]
+    },
+    {
+      "typeId": "6",
+      "type": "Credit card",
+      "typeMnemonic": "credcard",
+      "typeEnumName": "CREDIT_CARD",
+      "children": [
+        {
+          "detailTypeId": "2015",
+          "detailType": "Credit Card",
+          "detailTypeMnemonic": "creditcard",
+          "detailTypeEnumName": "CREDIT_CARD"
+        }
+      ]
+    },
+    {
+      "typeId": "7",
+      "type": "Current liabilities",
+      "typeMnemonic": "othercurliabilities",
+      "typeEnumName": "OTHER_CUR_LIABILITIES",
+      "children": [
+        {
+          "detailTypeId": "2020",
+          "detailType": "Insurance payable",
+          "detailTypeMnemonic": "insurancepayable",
+          "detailTypeEnumName": "INSURANCE_PAYABLE"
+        },
+        {
+          "detailTypeId": "2030",
+          "detailType": "Payroll Clearing",
+          "detailTypeMnemonic": "payrollclearing",
+          "detailTypeEnumName": "PAYROLL_CLEARING"
+        },
+        {
+          "detailTypeId": "2040",
+          "detailType": "Payroll liabilities",
+          "detailTypeMnemonic": "payrolltaxpayable",
+          "detailTypeEnumName": "PAYROLL_TAX_PAYABLE"
+        },
+        {
+          "detailTypeId": "2050",
+          "detailType": "Sales and service tax payable",
+          "detailTypeMnemonic": "salestaxpayable",
+          "detailTypeEnumName": "SALES_TAX_PAYABLE"
+        },
+        {
+          "detailTypeId": "2060",
+          "detailType": "Client Trust Accounts - Liabilities",
+          "detailTypeMnemonic": "trustaccountsliabilities",
+          "detailTypeEnumName": "TRUST_ACCOUNTS_LIABILITIES"
+        },
+        {
+          "detailTypeId": "2061",
+          "detailType": "Rents in trust - Liability",
+          "detailTypeMnemonic": "rentsintrustliability",
+          "detailTypeEnumName": "RENTS_IN_TRUST_LIABILITY"
+        },
+        {
+          "detailTypeId": "2062",
+          "detailType": "Direct Deposit Payable",
+          "detailTypeMnemonic": "directdepositpayable",
+          "detailTypeEnumName": "DIRECT_DEPOSIT_PAYABLE"
+        },
+        {
+          "detailTypeId": "2070",
+          "detailType": "Sales and service tax payable",
+          "detailTypeMnemonic": "globaltaxpayable",
+          "detailTypeEnumName": "GLOBAL_TAX_PAYABLE"
+        },
+        {
+          "detailTypeId": "2071",
+          "detailType": "Tax Suspense",
+          "detailTypeMnemonic": "globaltaxsuspense",
+          "detailTypeEnumName": "GLOBAL_TAX_SUSPENSE"
+        },
+        {
+          "detailTypeId": "2505",
+          "detailType": "Line of Credit",
+          "detailTypeMnemonic": "lineofcredit",
+          "detailTypeEnumName": "LINE_OF_CREDIT"
+        },
+        {
+          "detailTypeId": "2510",
+          "detailType": "Loan Payable",
+          "detailTypeMnemonic": "loanpayable",
+          "detailTypeEnumName": "LOAN_PAYABLE"
+        },
+        {
+          "detailTypeId": "2520",
+          "detailType": "Prepaid Expenses Payable",
+          "detailTypeMnemonic": "prepaidexpensespayable",
+          "detailTypeEnumName": "PREPAID_EXPENSES_PAYABLE"
+        },
+        {
+          "detailTypeId": "7270",
+          "detailType": "Current portion of obligations under finance leases",
+          "detailTypeMnemonic": "currentportionofobligationsunderfinanceleases",
+          "detailTypeEnumName": "CURRENT_PORTION_OF_OBLIGATIONS_UNDER_FINANCE_LEASES"
+        },
+        {
+          "detailTypeId": "7310",
+          "detailType": "Accrued liabilities",
+          "detailTypeMnemonic": "accruedliabilities",
+          "detailTypeEnumName": "ACCRUED_LIABILITIES"
+        },
+        {
+          "detailTypeId": "7370",
+          "detailType": "Income tax payable",
+          "detailTypeMnemonic": "incometaxpayable",
+          "detailTypeEnumName": "INCOME_TAX_PAYABLE"
+        },
+        {
+          "detailTypeId": "7010",
+          "detailType": "Current Tax Liability",
+          "detailTypeMnemonic": "currenttaxliability",
+          "detailTypeEnumName": "CURRENT_TAX_LIABILITY"
+        },
+        {
+          "detailTypeId": "7600",
+          "detailType": "Dividends payable",
+          "detailTypeMnemonic": "dividendspayable",
+          "detailTypeEnumName": "DIVIDENDS_PAYABLE"
+        },
+        {
+          "detailTypeId": "7630",
+          "detailType": "Other current liabilities",
+          "detailTypeMnemonic": "currentliabilities",
+          "detailTypeEnumName": "CURRENT_LIABILITIES"
+        }
+      ]
+    },
+    {
+      "typeId": "8",
+      "type": "Non-current liabilities",
+      "typeMnemonic": "longtermliabilities",
+      "typeEnumName": "LONG_TERM_LIABILITIES",
+      "children": [
+        {
+          "detailTypeId": "2810",
+          "detailType": "Notes Payable",
+          "detailTypeMnemonic": "notespayable",
+          "detailTypeEnumName": "NOTES_PAYABLE"
+        },
+        {
+          "detailTypeId": "2820",
+          "detailType": "Shareholder Notes Payable",
+          "detailTypeMnemonic": "shareholdernotespayable",
+          "detailTypeEnumName": "SHAREHOLDER_NOTES_PAYABLE"
+        },
+        {
+          "detailTypeId": "2830",
+          "detailType": "Other non-current liabilities",
+          "detailTypeMnemonic": "otherlongtermliabilities",
+          "detailTypeEnumName": "OTHER_LONG_TERM_LIABILITIES"
+        },
+        {
+          "detailTypeId": "7320",
+          "detailType": "Accrued non-current liabilities",
+          "detailTypeMnemonic": "accruedlonglermliabilities",
+          "detailTypeEnumName": "ACCRUED_LONG_LERM_LIABILITIES"
+        },
+        {
+          "detailTypeId": "7330",
+          "detailType": "Accrued holiday payable",
+          "detailTypeMnemonic": "accruedvacationpayable",
+          "detailTypeEnumName": "ACCRUED_VACATION_PAYABLE"
+        },
+        {
+          "detailTypeId": "7410",
+          "detailType": "Liabilities related to assets held for sale",
+          "detailTypeMnemonic": "liabilitiesrelatedtoassetsheldforsale",
+          "detailTypeEnumName": "LIABILITIES_RELATED_TO_ASSETS_HELD_FOR_SALE"
+        },
+        {
+          "detailTypeId": "7420",
+          "detailType": "Long-term debt",
+          "detailTypeMnemonic": "longtermdebit",
+          "detailTypeEnumName": "LONG_TERM_DEBIT"
+        }
+      ]
+    },
+    {
+      "typeId": "9",
+      "type": "Owner's equity",
+      "typeMnemonic": "equity",
+      "typeEnumName": "EQUITY",
+      "children": [
+        {
+          "detailTypeId": "3010",
+          "detailType": "Accumulated adjustment",
+          "detailTypeMnemonic": "accumulatedadjustment",
+          "detailTypeEnumName": "ACCUMULATED_ADJUSTMENT"
+        },
+        {
+          "detailTypeId": "3020",
+          "detailType": "Ordinary shares",
+          "detailTypeMnemonic": "commonstock",
+          "detailTypeEnumName": "COMMON_STOCK"
+        },
+        {
+          "detailTypeId": "3025",
+          "detailType": "Preferred shares",
+          "detailTypeMnemonic": "preferredstock",
+          "detailTypeEnumName": "PREFERRED_STOCK"
+        },
+        {
+          "detailTypeId": "3028",
+          "detailType": "Paid-in capital or surplus",
+          "detailTypeMnemonic": "paidincapitalorsurplus",
+          "detailTypeEnumName": "PAID_IN_CAPITAL_OR_SURPLUS"
+        },
+        {
+          "detailTypeId": "3029",
+          "detailType": "Treasury Shares",
+          "detailTypeMnemonic": "treasurystock",
+          "detailTypeEnumName": "TREASURY_STOCK"
+        },
+        {
+          "detailTypeId": "3040",
+          "detailType": "Opening Balance Equity",
+          "detailTypeMnemonic": "openingbalanceequity",
+          "detailTypeEnumName": "OPENING_BALANCE_EQUITY"
+        },
+        {
+          "detailTypeId": "3050",
+          "detailType": "Owner's Equity",
+          "detailTypeMnemonic": "ownersequity",
+          "detailTypeEnumName": "OWNER_S_EQUITY"
+        },
+        {
+          "detailTypeId": "3060",
+          "detailType": "Partner's Equity",
+          "detailTypeMnemonic": "partnersequity",
+          "detailTypeEnumName": "PARTNER_S_EQUITY"
+        },
+        {
+          "detailTypeId": "3062",
+          "detailType": "Partner Contributions",
+          "detailTypeMnemonic": "partnercontributions",
+          "detailTypeEnumName": "PARTNER_CONTRIBUTIONS"
+        },
+        {
+          "detailTypeId": "3064",
+          "detailType": "Partner Distributions",
+          "detailTypeMnemonic": "partnerdistributions",
+          "detailTypeEnumName": "PARTNER_DISTRIBUTIONS"
+        },
+        {
+          "detailTypeId": "3070",
+          "detailType": "Retained Earnings",
+          "detailTypeMnemonic": "retainedearnings",
+          "detailTypeEnumName": "RETAINED_EARNINGS"
+        },
+        {
+          "detailTypeId": "7260",
+          "detailType": "Share capital",
+          "detailTypeMnemonic": "sharecapital",
+          "detailTypeEnumName": "SHARE_CAPITAL"
+        },
+        {
+          "detailTypeId": "7430",
+          "detailType": "Equity in earnings of subsidiaries",
+          "detailTypeMnemonic": "equityinearningsofsubsiduaries",
+          "detailTypeEnumName": "EQUITY_IN_EARNINGS_OF_SUBSIDUARIES"
+        },
+        {
+          "detailTypeId": "7460",
+          "detailType": "Dividend disbursed",
+          "detailTypeMnemonic": "dividenddisbursed",
+          "detailTypeEnumName": "DIVIDEND_DISBURSED"
+        },
+        {
+          "detailTypeId": "7540",
+          "detailType": "Other comprehensive income",
+          "detailTypeMnemonic": "accumulatedothercomprehensiveincome",
+          "detailTypeEnumName": "ACCUMULATED_OTHER_COMPREHENSIVE_INCOME"
+        }
+      ]
+    },
+    {
+      "typeId": "10",
+      "type": "Income",
+      "typeMnemonic": "income",
+      "typeEnumName": "INCOME",
+      "children": [
+        {
+          "detailTypeId": "5110",
+          "detailType": "Service/Fee Income",
+          "detailTypeMnemonic": "servicefeeincome",
+          "detailTypeEnumName": "SERVICE_FEE_INCOME"
+        },
+        {
+          "detailTypeId": "5120",
+          "detailType": "Sales of Product Income",
+          "detailTypeMnemonic": "salesofproductincome",
+          "detailTypeEnumName": "SALES_OF_PRODUCT_INCOME"
+        },
+        {
+          "detailTypeId": "5130",
+          "detailType": "Non-Profit Income",
+          "detailTypeMnemonic": "nonprofitincome",
+          "detailTypeEnumName": "NON_PROFIT_INCOME"
+        },
+        {
+          "detailTypeId": "5140",
+          "detailType": "Other Primary Income",
+          "detailTypeMnemonic": "otherprimaryincome",
+          "detailTypeEnumName": "OTHER_PRIMARY_INCOME"
+        },
+        {
+          "detailTypeId": "5150",
+          "detailType": "Discounts/Refunds Given",
+          "detailTypeMnemonic": "discountsrefundsgiven",
+          "detailTypeEnumName": "DISCOUNTS_REFUNDS_GIVEN"
+        },
+        {
+          "detailTypeId": "5160",
+          "detailType": "Unapplied Cash Payment Income",
+          "detailTypeMnemonic": "cashreceiptincome",
+          "detailTypeEnumName": "CASH_RECEIPT_INCOME"
+        },
+        {
+          "detailTypeId": "7450",
+          "detailType": "Revenue - General",
+          "detailTypeMnemonic": "revenuegeneral",
+          "detailTypeEnumName": "REVENUE_GENERAL"
+        },
+        {
+          "detailTypeId": "7520",
+          "detailType": "Sales - retail",
+          "detailTypeMnemonic": "salesretail",
+          "detailTypeEnumName": "SALES_RETAIL"
+        },
+        {
+          "detailTypeId": "7530",
+          "detailType": "Sales - wholesale",
+          "detailTypeMnemonic": "saleswholesale",
+          "detailTypeEnumName": "SALES_WHOLESALE"
+        }
+      ]
+    },
+    {
+      "typeId": "11",
+      "type": "Cost of sales",
+      "typeMnemonic": "cogs",
+      "typeEnumName": "COGS",
+      "children": [
+        {
+          "detailTypeId": "5525",
+          "detailType": "Cost of labour - COS",
+          "detailTypeMnemonic": "costoflaborcos",
+          "detailTypeEnumName": "COST_OF_LABOR_COS"
+        },
+        {
+          "detailTypeId": "5530",
+          "detailType": "Supplies and materials - COS",
+          "detailTypeMnemonic": "suppliesmaterialscogs",
+          "detailTypeEnumName": "SUPPLIES_MATERIALS_COGS"
+        },
+        {
+          "detailTypeId": "5540",
+          "detailType": "Equipment rental - COS",
+          "detailTypeMnemonic": "equipmentrentalcos",
+          "detailTypeEnumName": "EQUIPMENT_RENTAL_COS"
+        },
+        {
+          "detailTypeId": "5545",
+          "detailType": "Other costs of sales - COS",
+          "detailTypeMnemonic": "othercostsofservicecos",
+          "detailTypeEnumName": "OTHER_COSTS_OF_SERVICE_COS"
+        },
+        {
+          "detailTypeId": "7470",
+          "detailType": "Freight and delivery - COS",
+          "detailTypeMnemonic": "freightanddeliverycos",
+          "detailTypeEnumName": "FREIGHT_AND_DELIVERY_COS"
+        }
+      ]
+    },
+    {
+      "typeId": "12",
+      "type": "Expenses",
+      "typeMnemonic": "expense",
+      "typeEnumName": "EXPENSE",
+      "children": [
+        {
+          "detailTypeId": "6110",
+          "detailType": "Auto",
+          "detailTypeMnemonic": "auto",
+          "detailTypeEnumName": "AUTO"
+        },
+        {
+          "detailTypeId": "6120",
+          "detailType": "Charitable Contributions",
+          "detailTypeMnemonic": "charitablecontributions",
+          "detailTypeEnumName": "CHARITABLE_CONTRIBUTIONS"
+        },
+        {
+          "detailTypeId": "6130",
+          "detailType": "Taxes Paid",
+          "detailTypeMnemonic": "taxespaid",
+          "detailTypeEnumName": "TAXES_PAID"
+        },
+        {
+          "detailTypeId": "6140",
+          "detailType": "Payroll Expenses",
+          "detailTypeMnemonic": "payrollexpenses",
+          "detailTypeEnumName": "PAYROLL_EXPENSES"
+        },
+        {
+          "detailTypeId": "6150",
+          "detailType": "Legal and professional fees",
+          "detailTypeMnemonic": "legalprofessionalfees",
+          "detailTypeEnumName": "LEGAL_PROFESSIONAL_FEES"
+        },
+        {
+          "detailTypeId": "6160",
+          "detailType": "Dues and Subscriptions",
+          "detailTypeMnemonic": "duessubscriptions",
+          "detailTypeEnumName": "DUES_SUBSCRIPTIONS"
+        },
+        {
+          "detailTypeId": "6210",
+          "detailType": "Insurance",
+          "detailTypeMnemonic": "insurance",
+          "detailTypeEnumName": "INSURANCE"
+        },
+        {
+          "detailTypeId": "6220",
+          "detailType": "Office/General Administrative Expenses",
+          "detailTypeMnemonic": "officegeneraladministrativeexpenses",
+          "detailTypeEnumName": "OFFICE_GENERAL_ADMINISTRATIVE_EXPENSES"
+        },
+        {
+          "detailTypeId": "6230",
+          "detailType": "Utilities",
+          "detailTypeMnemonic": "utilities",
+          "detailTypeEnumName": "UTILITIES"
+        },
+        {
+          "detailTypeId": "6240",
+          "detailType": "Rent or Lease of Buildings",
+          "detailTypeMnemonic": "rentorleaseofbuildings",
+          "detailTypeEnumName": "RENT_OR_LEASE_OF_BUILDINGS"
+        },
+        {
+          "detailTypeId": "6250",
+          "detailType": "Repair and maintenance",
+          "detailTypeMnemonic": "repairmaintenance",
+          "detailTypeEnumName": "REPAIR_MAINTENANCE"
+        },
+        {
+          "detailTypeId": "6320",
+          "detailType": "Meals and entertainment",
+          "detailTypeMnemonic": "entertainmentmeals",
+          "detailTypeEnumName": "ENTERTAINMENT_MEALS"
+        },
+        {
+          "detailTypeId": "6360",
+          "detailType": "Advertising/Promotional",
+          "detailTypeMnemonic": "advertisingpromotional",
+          "detailTypeEnumName": "ADVERTISING_PROMOTIONAL"
+        },
+        {
+          "detailTypeId": "6410",
+          "detailType": "Bank charges",
+          "detailTypeMnemonic": "bankcharges",
+          "detailTypeEnumName": "BANK_CHARGES"
+        },
+        {
+          "detailTypeId": "6420",
+          "detailType": "Bad debts",
+          "detailTypeMnemonic": "baddebts",
+          "detailTypeEnumName": "BAD_DEBTS"
+        },
+        {
+          "detailTypeId": "6430",
+          "detailType": "Interest paid",
+          "detailTypeMnemonic": "interestpaid",
+          "detailTypeEnumName": "INTEREST_PAID"
+        },
+        {
+          "detailTypeId": "6510",
+          "detailType": "Cost of Labour",
+          "detailTypeMnemonic": "costoflabor",
+          "detailTypeEnumName": "COST_OF_LABOR"
+        },
+        {
+          "detailTypeId": "6520",
+          "detailType": "Supplies and materials",
+          "detailTypeMnemonic": "suppliesmaterials",
+          "detailTypeEnumName": "SUPPLIES_MATERIALS"
+        },
+        {
+          "detailTypeId": "6540",
+          "detailType": "Equipment rental",
+          "detailTypeMnemonic": "equipmentrental",
+          "detailTypeEnumName": "EQUIPMENT_RENTAL"
+        },
+        {
+          "detailTypeId": "6550",
+          "detailType": "Other Miscellaneous Service Cost",
+          "detailTypeMnemonic": "othermiscellaneousservicecost",
+          "detailTypeEnumName": "OTHER_MISCELLANEOUS_SERVICE_COST"
+        },
+        {
+          "detailTypeId": "6560",
+          "detailType": "Tax expense",
+          "detailTypeMnemonic": "globaltaxexpense",
+          "detailTypeEnumName": "GLOBAL_TAX_EXPENSE"
+        },
+        {
+          "detailTypeId": "6570",
+          "detailType": "Unapplied Cash Bill Payment Expense",
+          "detailTypeMnemonic": "cashexpenditureexpense",
+          "detailTypeEnumName": "CASH_EXPENDITURE_EXPENSE"
+        },
+        {
+          "detailTypeId": "7040",
+          "detailType": "Finance costs",
+          "detailTypeMnemonic": "financecosts",
+          "detailTypeEnumName": "FINANCE_COSTS"
+        },
+        {
+          "detailTypeId": "7350",
+          "detailType": "Commissions and fees",
+          "detailTypeMnemonic": "commissionsandfees",
+          "detailTypeEnumName": "COMMISSIONS_AND_FEES"
+        },
+        {
+          "detailTypeId": "7360",
+          "detailType": "Amortisation expense",
+          "detailTypeMnemonic": "amortizationexpense",
+          "detailTypeEnumName": "AMORTIZATION_EXPENSE"
+        },
+        {
+          "detailTypeId": "7380",
+          "detailType": "Loss on discontinued operations, net of tax",
+          "detailTypeMnemonic": "lossondiscontinuedoperationsnetoftax",
+          "detailTypeEnumName": "LOSS_ON_DISCONTINUED_OPERATIONS_NET_OF_TAX"
+        },
+        {
+          "detailTypeId": "7390",
+          "detailType": "Management compensation",
+          "detailTypeMnemonic": "managementcompensation",
+          "detailTypeEnumName": "MANAGEMENT_COMPENSATION"
+        },
+        {
+          "detailTypeId": "7400",
+          "detailType": "Other selling expenses",
+          "detailTypeMnemonic": "othersellingexpenses",
+          "detailTypeEnumName": "OTHER_SELLING_EXPENSES"
+        },
+        {
+          "detailTypeId": "7480",
+          "detailType": "Shipping and delivery expense",
+          "detailTypeMnemonic": "shippinganddeliveryexpense",
+          "detailTypeEnumName": "SHIPPING_AND_DELIVERY_EXPENSE"
+        },
+        {
+          "detailTypeId": "7490",
+          "detailType": "Travel expenses - general and admin expenses",
+          "detailTypeMnemonic": "travelexpensesgeneralandadminexpenses",
+          "detailTypeEnumName": "TRAVEL_EXPENSES_GENERAL_AND_ADMIN_EXPENSES"
+        },
+        {
+          "detailTypeId": "7500",
+          "detailType": "Travel expenses - selling expense",
+          "detailTypeMnemonic": "travelexpensessellingexpense",
+          "detailTypeEnumName": "TRAVEL_EXPENSES_SELLING_EXPENSE"
+        },
+        {
+          "detailTypeId": "7580",
+          "detailType": "Income tax expense",
+          "detailTypeMnemonic": "incometaxexpense",
+          "detailTypeEnumName": "INCOME_TAX_EXPENSE"
+        }
+      ]
+    },
+    {
+      "typeId": "13",
+      "type": "Other income",
+      "typeMnemonic": "otherincome",
+      "typeEnumName": "OTHER_INCOME",
+      "children": [
+        {
+          "detailTypeId": "6710",
+          "detailType": "Interest earned",
+          "detailTypeMnemonic": "interestearned",
+          "detailTypeEnumName": "INTEREST_EARNED"
+        },
+        {
+          "detailTypeId": "6715",
+          "detailType": "Tax-Exempt Interest",
+          "detailTypeMnemonic": "taxexemptinterest",
+          "detailTypeEnumName": "TAX_EXEMPT_INTEREST"
+        },
+        {
+          "detailTypeId": "6720",
+          "detailType": "Dividend income",
+          "detailTypeMnemonic": "dividendincome",
+          "detailTypeEnumName": "DIVIDEND_INCOME"
+        },
+        {
+          "detailTypeId": "6725",
+          "detailType": "Other Investment Income",
+          "detailTypeMnemonic": "otherinvestmentincome",
+          "detailTypeEnumName": "OTHER_INVESTMENT_INCOME"
+        },
+        {
+          "detailTypeId": "6750",
+          "detailType": "Other Miscellaneous Income",
+          "detailTypeMnemonic": "othermiscellaneousincome",
+          "detailTypeEnumName": "OTHER_MISCELLANEOUS_INCOME"
+        },
+        {
+          "detailTypeId": "7440",
+          "detailType": "Other operating income",
+          "detailTypeMnemonic": "otheroperatingincome",
+          "detailTypeEnumName": "OTHER_OPERATING_INCOME"
+        },
+        {
+          "detailTypeId": "7510",
+          "detailType": "Unrealised loss on securities, net of tax",
+          "detailTypeMnemonic": "unrealisedlossonsecuritiesnetoftax",
+          "detailTypeEnumName": "UNREALISED_LOSS_ON_SECURITIES_NET_OF_TAX"
+        },
+        {
+          "detailTypeId": "7560",
+          "detailType": "Loss on disposal of assets",
+          "detailTypeMnemonic": "lossondisposalofassets",
+          "detailTypeEnumName": "LOSS_ON_DISPOSAL_OF_ASSETS"
+        }
+      ]
+    },
+    {
+      "typeId": "14",
+      "type": "Other expense",
+      "typeMnemonic": "otherexpense",
+      "typeEnumName": "OTHER_EXPENSE",
+      "children": [
+        {
+          "detailTypeId": "6810",
+          "detailType": "Depreciation",
+          "detailTypeMnemonic": "depreciation",
+          "detailTypeEnumName": "DEPRECIATION"
+        },
+        {
+          "detailTypeId": "6815",
+          "detailType": "Amortisation",
+          "detailTypeMnemonic": "amortization",
+          "detailTypeEnumName": "AMORTIZATION"
+        },
+        {
+          "detailTypeId": "6820",
+          "detailType": "Penalties and settlements",
+          "detailTypeMnemonic": "penaltiessettlements",
+          "detailTypeEnumName": "PENALTIES_SETTLEMENTS"
+        },
+        {
+          "detailTypeId": "6830",
+          "detailType": "Other Expense",
+          "detailTypeMnemonic": "othermiscellaneousexpense",
+          "detailTypeEnumName": "OTHER_MISCELLANEOUS_EXPENSE"
+        },
+        {
+          "detailTypeId": "6850",
+          "detailType": "Exchange Gain or Loss",
+          "detailTypeMnemonic": "exchangegainorloss",
+          "detailTypeEnumName": "EXCHANGE_GAIN_OR_LOSS"
+        }
+      ]
+    }
+  ]
+}
