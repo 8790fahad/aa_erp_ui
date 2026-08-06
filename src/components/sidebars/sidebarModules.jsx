@@ -64,6 +64,23 @@ export const modules = [
     isActive: true,
     items: [
       {
+        title: "Goods",
+        url: "/app/purchase/inventory?tab=goods-transfer",
+        access: [
+          "services",
+          "retailers",
+          "recycling",
+          "manufacturing",
+          "contractors",
+        ],
+        subFunctionalities: [
+          { title: "Goods" },
+          { title: "New Goods Transfer" },
+          { title: "Transfer History" },
+          { title: "Pending Approvals" },
+        ],
+      },
+      {
         title: "Products & Services",
         url: "/app/inventory/product-list",
         access: [
@@ -84,24 +101,6 @@ export const modules = [
       //   url: "/app/inventory/store",
       //   access: ["services", "retailers", "recycling", "manufacturing"],
       // },
-
-      {
-        title: "Good Transfer",
-        url: "/app/purchase/inventory?tab=goods-transfer",
-        access: [
-          "services",
-          "retailers",
-          "recycling",
-          "manufacturing",
-          "contractors",
-        ],
-        subFunctionalities: [
-          { title: "New Goods Transfer" },
-          { title: "Goods List" },
-          { title: "Transfer History" },
-          { title: "Pending Approvals" },
-        ],
-      },
     ],
   },
   //Purchase
@@ -279,6 +278,18 @@ export const modules = [
         title: "Invoices",
         url: "/app/sales/invoices",
         functionality: ["Make sales", "Invoices"],
+        access: [
+          "services",
+          "retailers",
+          "recycling",
+          "manufacturing",
+          "contractors",
+        ],
+      },
+      {
+        title: "Price Setup",
+        url: "/app/sales/price-setup",
+        functionality: ["Make sales", "Invoices", "Products", "Inventory"],
         access: [
           "services",
           "retailers",

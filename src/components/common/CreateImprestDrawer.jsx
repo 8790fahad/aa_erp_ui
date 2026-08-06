@@ -702,16 +702,16 @@ export default function CreateImprestDrawer({
     >
       <DrawerContent
         side="right"
-        className="bg-white border-gray-200 flex flex-col sm:max-w-2xl"
+        className="bg-white border-slate-200 flex flex-col sm:max-w-2xl"
       >
-        <DrawerHeader className="border-b border-gray-200 shrink-0">
+        <DrawerHeader className="border-b border-slate-200 shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 text-left">
-              <DrawerTitle className="text-gray-900 text-xl flex items-center gap-2">
-                <Wallet className="h-5 w-5 text-emerald-600 shrink-0" />
+              <DrawerTitle className="text-slate-900 text-xl flex items-center gap-2">
+                <Wallet className="h-5 w-5 text-[#4267B2] shrink-0" />
                 Create imprest
               </DrawerTitle>
-              <DrawerDescription className="text-gray-600 mt-1">
+              <DrawerDescription className="text-slate-600 mt-1">
                 Choose payment source first, then add expense lines. For each
                 line you can pick a purchase tax from Tax setup (exclusive VAT
                 increases the amount paid from cash or bank).
@@ -722,10 +722,10 @@ export default function CreateImprestDrawer({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="shrink-0 hover:bg-gray-100"
+                className="shrink-0 hover:bg-slate-100"
                 aria-label="Close"
               >
-                <X className="h-5 w-5 text-gray-500" />
+                <X className="h-5 w-5 text-slate-500" />
               </Button>
             </DrawerClose>
           </div>
@@ -758,17 +758,17 @@ export default function CreateImprestDrawer({
                 value={narration}
                 onChange={(e) => setNarration(e.target.value)}
                 placeholder="Overall note for this receipt…"
-                className="border-gray-200 resize-none"
+                className="border-slate-200 resize-none"
               />
             </div>
 
-            <div className="border-t border-gray-200 pt-4 space-y-3">
-              <div className="bg-gradient-to-r from-green-50 via-emerald-50 to-green-50 rounded-lg px-4 py-2.5 border-2 border-green-100 flex items-center justify-between">
-                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                  <Package className="w-4 h-4 text-green-600 shrink-0" />
+            <div className="border-t border-slate-200 pt-4 space-y-3">
+              <div className="flex items-center justify-between rounded-lg border border-[#4267B2]/20 bg-[var(--aa-sidebar-active)] px-4 py-2.5">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <Package className="h-4 w-4 shrink-0 text-[#4267B2]" />
                   Expense lines
                 </h2>
-                <span className="text-xs font-medium text-slate-600 bg-white/80 px-2 py-1 rounded border border-green-100">
+                <span className="rounded border border-[#4267B2]/20 bg-white px-2 py-1 text-xs font-medium text-slate-600">
                   {lines.length} line{lines.length === 1 ? "" : "s"}
                 </span>
               </div>
@@ -792,7 +792,7 @@ export default function CreateImprestDrawer({
                           linePaymentDate: e.target.value,
                         }))
                       }
-                      className="border-gray-200 h-9 text-sm"
+                      className="border-slate-200 h-9 text-sm"
                     />
                     <p className="text-[11px] text-slate-500">
                       Set the date for this line (new lines default to today).
@@ -830,7 +830,7 @@ export default function CreateImprestDrawer({
                       )}
                       clearButton
                       positionFixed
-                      className="w-full [&_.rbt-input-main]:rounded-md [&_.rbt-input-main]:border [&_.rbt-input-main]:border-gray-200 [&_.rbt-input-main]:min-h-9 text-sm"
+                      className="w-full [&_.rbt-input-main]:rounded-md [&_.rbt-input-main]:border [&_.rbt-input-main]:border-slate-200 [&_.rbt-input-main]:min-h-9 text-sm"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -847,7 +847,7 @@ export default function CreateImprestDrawer({
                         }))
                       }
                       placeholder="Enter description…"
-                      className="border-gray-200 h-9 text-sm"
+                      className="border-slate-200 h-9 text-sm"
                     />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -864,7 +864,7 @@ export default function CreateImprestDrawer({
                             quantity: sanitizeAmountInput(e.target.value),
                           }))
                         }
-                        className="border-gray-200 h-9 text-sm text-right tabular-nums"
+                        className="border-slate-200 h-9 text-sm text-right tabular-nums"
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -872,7 +872,7 @@ export default function CreateImprestDrawer({
                         Unit cost <span className="text-red-500">*</span>
                       </Label>
                       <div className="relative">
-                        <span className="pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-1/2 text-xs text-gray-500">
+                        <span className="pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-1/2 text-xs text-slate-500">
                           ₦
                         </span>
                         <Input
@@ -886,7 +886,7 @@ export default function CreateImprestDrawer({
                               ),
                             }))
                           }
-                          className="border-gray-200 h-9 pl-6 text-sm text-right tabular-nums"
+                          className="border-slate-200 h-9 pl-6 text-sm text-right tabular-nums"
                         />
                       </div>
                     </div>
@@ -896,7 +896,7 @@ export default function CreateImprestDrawer({
                         readOnly
                         disabled
                         value={formatNumber1(draftLineNet)}
-                        className="border-gray-200 h-9 text-sm text-right font-semibold bg-slate-100 tabular-nums"
+                        className="border-slate-200 h-9 text-sm text-right font-semibold bg-slate-100 tabular-nums"
                       />
                     </div>
                   </div>
@@ -912,7 +912,7 @@ export default function CreateImprestDrawer({
                             taxableLine: e.target.checked,
                           }))
                         }
-                        className="w-5 h-5 text-green-600 border-2 border-slate-300 rounded focus:ring-2 focus:ring-green-500 cursor-pointer shrink-0"
+                        className="w-5 h-5 text-[#4267B2] border-2 border-slate-300 rounded focus:ring-2 focus:ring-[#4267B2]/30 cursor-pointer shrink-0"
                       />
                       <label
                         htmlFor="imprest-draft-taxable-line"
@@ -924,7 +924,7 @@ export default function CreateImprestDrawer({
                     <Button
                       type="button"
                       onClick={addLineFromDraft}
-                      className="h-10 w-full sm:w-auto sm:min-w-[7rem] bg-green-600 hover:bg-green-700 text-white shadow-md gap-2"
+                      className="h-10 w-full gap-2 border-0 bg-[#4267B2] text-white shadow-none hover:bg-[#4267B2]/90 sm:w-auto sm:min-w-[7rem]"
                       title="Add line"
                     >
                       <Plus className="h-4 w-4" />
@@ -938,10 +938,10 @@ export default function CreateImprestDrawer({
                 <div className="bg-white rounded-xl p-4 border-2 border-slate-200 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                      <Package className="w-4 h-4 text-blue-600 shrink-0" />
+                      <Package className="w-4 h-4 text-[#4267B2] shrink-0" />
                       Lines list
                     </h3>
-                    <span className="text-xs font-medium text-slate-600 bg-blue-50 px-2 py-1 rounded">
+                    <span className="text-xs font-medium text-slate-600 bg-[var(--aa-sidebar-active)] px-2 py-1 rounded">
                       {lines.length} line{lines.length !== 1 ? "s" : ""}
                     </span>
                   </div>
@@ -1003,10 +1003,10 @@ export default function CreateImprestDrawer({
                                       e.target.checked
                                     )
                                   }
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  className="w-4 h-4 text-[#4267B2] border-slate-300 rounded focus:ring-[#4267B2]/30"
                                 />
                                 {ln.taxable === "Taxable" && (
-                                  <span className="ml-1 text-[10px] text-green-600 font-medium">
+                                  <span className="ml-1 text-[10px] text-[#4267B2] font-medium">
                                     Yes
                                   </span>
                                 )}
@@ -1044,13 +1044,13 @@ export default function CreateImprestDrawer({
                 </div>
               )}
 
-              <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-3 space-y-2 text-sm">
-                <div className="flex justify-between text-emerald-900">
+              <div className="rounded-lg bg-[var(--aa-sidebar-active)] border border-[#4267B2]/25 px-3 py-3 space-y-2 text-sm">
+                <div className="flex justify-between text-slate-800">
                   <span>Subtotal (net)</span>
                   <span className="tabular-nums">₦{formatNumber1(subtotalNet)}</span>
                 </div>
                 {Math.abs(totalVat) > 1e-9 && (
-                  <div className="flex justify-between gap-3 text-emerald-800">
+                  <div className="flex justify-between gap-3 text-slate-700">
                     <span className="min-w-0 break-words leading-snug">
                       {vatRowLabel}
                     </span>
@@ -1059,21 +1059,21 @@ export default function CreateImprestDrawer({
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between items-center pt-2 border-t border-emerald-200 font-semibold text-emerald-950">
+                <div className="flex justify-between items-center pt-2 border-t border-[#4267B2]/25 font-semibold text-slate-900">
                   <span>Grand total</span>
-                  <span className="text-lg font-bold tabular-nums text-emerald-700">
+                  <span className="text-lg font-bold tabular-nums text-[#4267B2]">
                     ₦{formatNumber1(grandTotal)}
                   </span>
                 </div>
               </div>
 
-              <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-3">
+              <div className="rounded-lg border border-[#4267B2]/25 bg-[var(--aa-sidebar-active)] px-3 py-3">
                 <div className="mb-2">
                   <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
                     <button
                       type="button"
                       onClick={() => setShowTaxSelection(!showTaxSelection)}
-                      className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors"
+                      className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-[#4267B2] transition-colors"
                     >
                       <span>Apply Taxes</span>
                       {showTaxSelection ? (
@@ -1083,7 +1083,7 @@ export default function CreateImprestDrawer({
                       )}
                     </button>
                     {activeBusiness?.vat_policy && (
-                      <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-medium">
+                      <span className="text-xs px-2 py-0.5 bg-[var(--aa-sidebar-active)] text-[#4267B2] rounded font-medium">
                         VAT:{" "}
                         {activeBusiness.vat_policy === "vat_inclusive"
                           ? "Inclusive"
@@ -1094,7 +1094,7 @@ export default function CreateImprestDrawer({
                     )}
                   </div>
                   {showTaxSelection && filteredTaxes.length > 0 && (
-                    <p className="text-xs text-blue-600 mb-2">
+                    <p className="text-xs text-[#4267B2] mb-2">
                       Both inclusive and exclusive taxes are available. Select one
                       for the next line you add (toggle off to clear).
                     </p>
@@ -1118,7 +1118,7 @@ export default function CreateImprestDrawer({
                             return (
                               <div
                                 key={tax.id}
-                                className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors"
+                                className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-slate-200 hover:border-[#4267B2]/40 transition-colors"
                               >
                                 <div className="relative">
                                   <input
@@ -1136,7 +1136,7 @@ export default function CreateImprestDrawer({
                                         toggleDraftTax(tax);
                                     }}
                                     className={`w-10 h-5 rounded-full transition-colors cursor-pointer ${
-                                      isSelected ? "bg-green-600" : "bg-gray-300"
+                                      isSelected ? "bg-[#4267B2]" : "bg-slate-300"
                                     }`}
                                   >
                                     <div
@@ -1148,14 +1148,14 @@ export default function CreateImprestDrawer({
                                     />
                                   </div>
                                 </div>
-                                <span className="text-xs font-semibold text-gray-700 cursor-pointer whitespace-nowrap">
+                                <span className="text-xs font-semibold text-slate-700 cursor-pointer whitespace-nowrap">
                                   {tax.description} ({tax.rate}%)
                                   {showIncExcBadge && (
                                     <span
                                       className={`ml-1.5 px-1.5 py-0.5 rounded text-xs font-medium ${
                                         isInclusive
-                                          ? "bg-blue-100 text-blue-700"
-                                          : "bg-green-100 text-green-700"
+                                          ? "bg-[var(--aa-sidebar-active)] text-[#4267B2]"
+                                          : "bg-[var(--aa-sidebar-active)] text-[#4267B2]"
                                       }`}
                                     >
                                       {isInclusive ? "Inc" : "Exc"}
@@ -1168,12 +1168,12 @@ export default function CreateImprestDrawer({
                         </div>
                       )}
                       {filteredTaxes.length === 0 && !loadingTaxes && (
-                        <p className="text-xs text-gray-500 mt-2">
+                        <p className="text-xs text-slate-500 mt-2">
                           No taxes available for purchase category
                         </p>
                       )}
                       {loadingTaxes && (
-                        <p className="text-xs text-gray-500 mt-2">
+                        <p className="text-xs text-slate-500 mt-2">
                           Loading taxes…
                         </p>
                       )}
@@ -1184,7 +1184,7 @@ export default function CreateImprestDrawer({
             </div>
           </div>
 
-          <DrawerFooter className="border-t border-gray-200 shrink-0 gap-2 flex-row flex-wrap justify-end">
+          <DrawerFooter className="border-t border-slate-200 shrink-0 gap-2 flex-row flex-wrap justify-end">
             <Button
               type="button"
               variant="outline"
@@ -1206,7 +1206,7 @@ export default function CreateImprestDrawer({
             <Button
               type="submit"
               disabled={submitting || lines.length === 0}
-              className="bg-emerald-600 hover:bg-emerald-700"
+              className="border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
             >
               {submitting ? (
                 <>
@@ -1225,40 +1225,40 @@ export default function CreateImprestDrawer({
       <Drawer open={historyOpen} onOpenChange={setHistoryOpen}>
         <DrawerContent
           side="right"
-          className="bg-white border-gray-200 flex flex-col sm:max-w-lg z-[60]"
+          className="bg-white border-slate-200 flex flex-col sm:max-w-lg z-[60]"
         >
-          <DrawerHeader className="border-b border-gray-200 shrink-0">
-            <DrawerTitle className="text-gray-900 text-lg flex items-center gap-2">
-              <ListOrdered className="h-5 w-5 text-emerald-600 shrink-0" />
+          <DrawerHeader className="border-b border-slate-200 shrink-0">
+            <DrawerTitle className="text-slate-900 text-lg flex items-center gap-2">
+              <ListOrdered className="h-5 w-5 text-[#4267B2] shrink-0" />
               Imprest history
             </DrawerTitle>
-            <DrawerDescription className="text-gray-600 text-sm">
+            <DrawerDescription className="text-slate-600 text-sm">
               Recent direct-expense (imprest) records. Open a receipt to print.
             </DrawerDescription>
           </DrawerHeader>
           <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
             {loadingHistory && (
-              <p className="text-sm text-gray-500 py-6 text-center">
+              <p className="text-sm text-slate-500 py-6 text-center">
                 Loading…
               </p>
             )}
             {!loadingHistory && impressRows.length === 0 && (
-              <p className="text-sm text-gray-500 py-6 text-center">
+              <p className="text-sm text-slate-500 py-6 text-center">
                 No imprest records yet.
               </p>
             )}
             {!loadingHistory && impressRows.length > 0 && (
-              <ul className="divide-y divide-gray-100 border rounded-lg mt-2">
+              <ul className="divide-y divide-slate-100 border rounded-lg mt-2">
                 {impressRows.map((row) => (
                   <li
                     key={row.id || row.ref_number}
-                    className="p-3 flex flex-wrap items-center justify-between gap-2 hover:bg-gray-50"
+                    className="p-3 flex flex-wrap items-center justify-between gap-2 hover:bg-slate-50"
                   >
                     <div className="min-w-0">
-                      <p className="font-mono text-sm font-semibold text-gray-900 truncate">
+                      <p className="font-mono text-sm font-semibold text-slate-900 truncate">
                         {row.reference_display || row.ref_number}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-slate-500">
                         {row.transaction_date
                           ? moment(row.transaction_date).format("DD MMM, YYYY")
                           : "—"}{" "}

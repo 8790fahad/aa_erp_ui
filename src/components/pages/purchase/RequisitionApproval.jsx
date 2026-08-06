@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Alert, Badge, Button, Col, Input, Label, Row } from "reactstrap";
 import { useSelector } from "react-redux";
-import { Edit, Eye, ClipboardList, Search } from "lucide-react";
+import { ClipboardList, Search } from "lucide-react";
 import moment from "moment";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { toast } from "sonner";
@@ -278,30 +278,15 @@ function RequisitionApproval() {
       component: (item) => (
         <div className="flex justify-center">
           <UIButton
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={() => {
               viewList(item);
             }}
-            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
-            title="View Details"
+            className="h-8 border-[#4267B2]/30 px-3 text-xs font-medium text-[#4267B2] hover:bg-[var(--aa-sidebar-active)]"
           >
-            <Eye className="h-4 w-4" />
+            View details
           </UIButton>
-          {/* {item.status === "rejected" ? (
-            <UIButton
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                console.log(item);
-                toggle2(item);
-              }}
-              className="text-green-600 hover:text-green-800 hover:bg-green-50 ml-2"
-              title="Edit"
-            >
-              <Edit className="h-4 w-4" />
-            </UIButton>
-          ) : null} */}
         </div>
       ),
     },

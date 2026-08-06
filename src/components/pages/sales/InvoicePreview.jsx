@@ -6,7 +6,7 @@ import ThermalReceipt, { printThermalReceipt } from "./ThermalReceipt";
 import useQuery from "@/hooks/useQuery";
 import { useSelector } from "react-redux";
 import { _fetchApi } from "@/redux/actions/api";
-import { Button } from "reactstrap";
+import { Button, Modal, ModalBody, ModalFooter, ModalHeader } from "reactstrap";
 import { Printer } from "lucide-react";
 
 function buildBranchInvoiceView(invoiceData, branchIdFilter, packCode) {
@@ -81,6 +81,7 @@ function InvoicePreview() {
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [didAutoPrint, setDidAutoPrint] = useState(false);
+  const [printChoiceOpen, setPrintChoiceOpen] = useState(false);
 
   const fetchInvoice = useCallback(() => {
     if (!saleCode || !facilityId) {
@@ -194,6 +195,11 @@ function InvoicePreview() {
 
   const handlePrintAll = () => {
     window.print();
+  };
+
+  const handleChoosePrint = (mode) => {
+    setPrintChoiceOpen(false);
+    printThermalReceipt(mode);
   };
 
   if (isLoading) {
@@ -332,7 +338,7 @@ function InvoicePreview() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Button color="primary" onClick={() => printThermalReceipt()}>
+              <Button color="primary" onClick={() => setPrintChoiceOpen(true)}>
                 <Printer className="inline w-4 h-4 mr-2" />
                 Print receipt
               </Button>
@@ -342,11 +348,67 @@ function InvoicePreview() {
             </div>
           </div>
 
+          <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+            <strong>Two receipt layouts</strong>
+            <span className="block text-xs text-emerald-800 mt-0.5">
+              VAT copy shows tax per product + Output VAT. Customer copy folds
+              VAT into each Amt (no VAT column / Output VAT). Choose which to
+              print.
+            </span>
+          </div>
+
+          <Modal
+            isOpen={printChoiceOpen}
+            toggle={() => setPrintChoiceOpen(false)}
+            centered
+          >
+            <ModalHeader toggle={() => setPrintChoiceOpen(false)}>
+              Which receipt are you printing?
+            </ModalHeader>
+            <ModalBody>
+              <p className="text-sm text-muted mb-3">
+                Select the copy to send to the thermal printer.
+              </p>
+              <div className="d-grid gap-2">
+                <Button
+                  color="primary"
+                  onClick={() => handleChoosePrint("vat")}
+                >
+                  VAT copy
+                  <span className="d-block small opacity-75 fw-normal">
+                    Amt + separate VAT column + Output VAT
+                  </span>
+                </Button>
+                <Button
+                  color="success"
+                  onClick={() => handleChoosePrint("customer")}
+                >
+                  Customer copy
+                  <span className="d-block small opacity-75 fw-normal">
+                    Amt includes VAT — no Output VAT line
+                  </span>
+                </Button>
+                <Button
+                  color="secondary"
+                  outline
+                  onClick={() => handleChoosePrint("both")}
+                >
+                  Print both
+                </Button>
+              </div>
+            </ModalBody>
+            <ModalFooter>
+              <Button color="link" onClick={() => setPrintChoiceOpen(false)}>
+                Cancel
+              </Button>
+            </ModalFooter>
+          </Modal>
+
           <div className="flex justify-center pb-8">
             <div className="rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
               <div className="border-b border-gray-100 bg-gray-50 px-3 py-1 text-center">
                 <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                  80mm thermal slip
+                  80mm · VAT copy + Customer copy
                 </span>
               </div>
               <div className="p-1.5 bg-gray-100">

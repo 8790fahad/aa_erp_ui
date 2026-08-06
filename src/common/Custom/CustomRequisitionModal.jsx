@@ -3,19 +3,45 @@ import { Collapse } from "reactstrap";
 import moment from "moment";
 import PropTypes from "prop-types";
 import { formatNumber1 } from "@/components/router/utilities";
-import { X, ClipboardCheck } from "lucide-react";
+import {
+  Building2,
+  CheckCircle2,
+  ClipboardCheck,
+  Package,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 const inputClass =
-  "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]";
+  "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20";
 const textareaClass =
-  "min-h-[88px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]";
+  "min-h-[88px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20";
 const labelClass = "mb-1.5 block text-xs font-medium text-slate-600";
 const thClass =
-  "border-b border-slate-100 bg-slate-50/80 px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-slate-500";
-const tdClass =
-  "border-b border-slate-100/80 bg-white px-4 py-2.5 text-sm text-slate-700";
-const trClass = "bg-white hover:bg-slate-50/60";
+  "px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500";
+const tdClass = "border-b border-slate-100 px-3 py-2.5 text-sm text-slate-700";
+const trClass = "bg-white transition-colors hover:bg-slate-50/80";
+
+const DetailItem = ({ label, value, className = "" }) => (
+  <div className={className}>
+    <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+      {label}
+    </dt>
+    <dd className="mt-1 text-sm font-medium text-slate-900">{value || "—"}</dd>
+  </div>
+);
+
+DetailItem.propTypes = {
+  label: PropTypes.string,
+  value: PropTypes.node,
+  className: PropTypes.string,
+};
 
 const CustomRequisitionModal = ({
   isOpen,
@@ -93,6 +119,21 @@ const CustomRequisitionModal = ({
     review_rejected: "Review rejected requisition",
   };
 
+  const modeBadge = {
+    receive: "Goods receive",
+    review: "Pending approval",
+    approve: "Final approval",
+    preview: "Preview",
+    review_rejected: "Rejected",
+  };
+
+  const documentTitle =
+    mode === "receive"
+      ? "Goods Received Note"
+      : mode === "review"
+        ? "Requisition Approval"
+        : "Review";
+
   const renderReviewRejectedContent = () => (
     <div className="grid gap-4 sm:grid-cols-2">
       <div>
@@ -130,15 +171,15 @@ const CustomRequisitionModal = ({
           variant="outline"
           size="sm"
           onClick={toggleMemoLog}
-          className="mb-2"
+          className="mb-2 border-slate-200"
         >
           {isOpen3 ? "Hide" : "Show"} memo log
         </Button>
         <Collapse isOpen={isOpen3}>
-          <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full">
               <thead>
-                <tr>
+                <tr className="border-b border-slate-200 bg-slate-50">
                   <th className={thClass}>S/N</th>
                   <th className={thClass}>Date</th>
                   <th className={thClass}>Activity</th>
@@ -165,29 +206,58 @@ const CustomRequisitionModal = ({
   );
 
   const renderHeaderSection = () => (
-    <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-4 text-center">
-      <h2 className="text-base font-semibold uppercase tracking-wide text-slate-900">
-        {activeBusiness?.business_name}
-      </h2>
-      <p className="mt-1 text-xs font-medium uppercase tracking-wider text-slate-500">
-        {mode === "receive"
-          ? "Goods Received Note"
-          : mode === "review"
-            ? "Requisition Approval"
-            : "Review"}
-      </p>
-    </div>
-  );
-
-  const MetaRow = ({ label, value, align = "left" }) => (
-    <div className={align === "right" ? "text-right" : ""}>
-      <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-        {label}
-      </span>
-      <div className="mt-0.5 text-sm font-medium text-slate-800">
-        {value || "—"}
+    <section className="mb-6">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+            <Building2 className="h-3.5 w-3.5 text-[#4267B2]" />
+            {activeBusiness?.business_name || "Business"}
+          </p>
+          <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">
+            {documentTitle}
+          </h2>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {items?.pr_no ? (
+            <span className="rounded-md bg-slate-100 px-2.5 py-1 font-mono text-xs font-semibold text-slate-800">
+              {items.pr_no}
+            </span>
+          ) : null}
+          <span className="rounded-md bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200/80">
+            {modeBadge[mode] || "Review"}
+          </span>
+        </div>
       </div>
-    </div>
+
+      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
+        <DetailItem
+          label="Date"
+          value={
+            items?.date ? moment(items.date).format("DD MMM YYYY") : "—"
+          }
+        />
+        <DetailItem label="PR No." value={items?.pr_no} />
+        <DetailItem label="From warehouse" value={items?.branch} />
+        {mode === "receive" ? (
+          <DetailItem label="PO No." value={items?.po_no} />
+        ) : null}
+        {mode !== "review" ? (
+          <DetailItem label="Raised by" value={items?.requisitor} />
+        ) : null}
+        <DetailItem label="Reason" value={items?.reason} />
+        <DetailItem
+          className="col-span-2 border-t border-slate-100 pt-4"
+          label="Supplier"
+          value={
+            items?.supplier_name
+              ? `${items.supplier_name}${
+                  items?.supplier_code ? ` (${items.supplier_code})` : ""
+                }`
+              : "—"
+          }
+        />
+      </dl>
+    </section>
   );
 
   const renderReceiveModeContent = () => (
@@ -215,12 +285,20 @@ const CustomRequisitionModal = ({
         </div>
       </div>
 
-      <p className="mb-2 text-sm font-semibold text-slate-800">Goods detail</p>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <Package className="h-3.5 w-3.5" />
+          Goods detail
+        </p>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+          {itemList.length} item{itemList.length !== 1 ? "s" : ""}
+        </span>
+      </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200/80">
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full min-w-[720px] border-collapse text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/80">
+            <tr className="border-b border-slate-200 bg-slate-50">
               <th className={thClass} colSpan={2}>
                 Order
               </th>
@@ -228,7 +306,7 @@ const CustomRequisitionModal = ({
                 Receive
               </th>
             </tr>
-            <tr className="border-b border-slate-100 bg-slate-50/80">
+            <tr className="border-b border-slate-200 bg-slate-50/80">
               <th className={thClass}>Description</th>
               <th className={`${thClass} text-right`}>P. Qty</th>
               <th className={thClass}>UoM</th>
@@ -349,7 +427,9 @@ const CustomRequisitionModal = ({
                     }}
                   />
                 </td>
-                <td className={`${tdClass} text-right font-mono font-medium text-[var(--aa-accent)]`}>
+                <td
+                  className={`${tdClass} text-right font-mono font-medium text-[#4267B2]`}
+                >
                   {formatNumber1(item.averageCostPerUom || 0)}
                 </td>
                 <td className={tdClass}>
@@ -374,7 +454,7 @@ const CustomRequisitionModal = ({
         </table>
       </div>
 
-      <div className="mt-3 flex flex-wrap justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+      <div className="mt-3 flex flex-wrap justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
         <div>
           <span className="text-slate-500">Supplier payment: </span>
           <span className="font-mono font-semibold text-slate-900">
@@ -418,81 +498,99 @@ const CustomRequisitionModal = ({
   );
 
   const renderDefaultContent = () => (
-    <div className="overflow-x-auto rounded-lg border border-slate-200/80">
-      <table className="w-full border-collapse text-left text-sm">
-        <thead>
-          <tr className="border-b border-slate-100 bg-slate-50/80">
-            <th className={thClass}>S/N</th>
-            <th className={thClass}>Item Code</th>
-            <th className={thClass}>Item Name</th>
-            <th className={thClass}>Unit of Measure</th>
-            <th className={`${thClass} text-right`}>Quantity</th>
-            {mode === "review" && (
-              <th className={`${thClass} text-right`}>Approved Qty</th>
-            )}
-          </tr>
-        </thead>
-        <tbody className="bg-white">
-          {itemList.map((item, idx) => (
-            <tr
-              key={item.id || item.item_list_id || item.rowId || idx}
-              className={trClass}
-            >
-              <td className={tdClass}>{idx + 1}</td>
-              <td className={`${tdClass} font-mono text-[13px] font-semibold text-slate-800`}>
-                {item.item_code}
-              </td>
-              <td className={`${tdClass} font-medium text-slate-800`}>
-                {item.item_name}
-              </td>
-              <td className={tdClass}>{item.unit_measure}</td>
-              <td className={`${tdClass} text-right font-mono tabular-nums text-slate-600`}>
-                {formatNumber1(item.quantity)}
-              </td>
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <Package className="h-3.5 w-3.5" />
+          Line items
+        </p>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+          {itemList.length} item{itemList.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <table className="w-full border-collapse text-left text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50">
+              <th className={`${thClass} w-12`}>S/N</th>
+              <th className={thClass}>Item code</th>
+              <th className={thClass}>Item name</th>
+              <th className={thClass}>UoM</th>
+              <th className={`${thClass} text-right`}>Qty</th>
               {mode === "review" && (
-                <td className={`${tdClass} text-right`}>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className={`${inputClass} ml-auto w-[90px] bg-white text-center`}
-                    value={item.approved_qty ?? ""}
-                    onChange={(e) => {
-                      const requestedQty = parseFloat(item.quantity) || 0;
-                      let approvedQty = parseFloat(e.target.value);
-                      if (!Number.isFinite(approvedQty)) approvedQty = 0;
-                      if (approvedQty > requestedQty) approvedQty = requestedQty;
-                      if (approvedQty < 0) approvedQty = 0;
-                      setItemList((prev) =>
-                        prev.map((listItem) =>
-                          listItem.rowId === item.rowId
-                            ? { ...listItem, approved_qty: approvedQty }
-                            : listItem,
-                        ),
-                      );
-                    }}
-                  />
-                </td>
+                <th className={`${thClass} text-right`}>Approved qty</th>
               )}
             </tr>
-          ))}
-          {itemList.length === 0 && (
-            <tr className="bg-white">
-              <td
-                colSpan={mode === "review" ? 6 : 5}
-                className="bg-white px-4 py-8 text-center text-sm text-slate-500"
+          </thead>
+          <tbody className="bg-white">
+            {itemList.map((item, idx) => (
+              <tr
+                key={item.id || item.item_list_id || item.rowId || idx}
+                className={trClass}
               >
-                No line items
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+                <td className={`${tdClass} text-slate-400`}>{idx + 1}</td>
+                <td
+                  className={`${tdClass} font-mono text-[12px] font-medium text-slate-600`}
+                >
+                  {item.item_code}
+                </td>
+                <td className={`${tdClass} font-medium text-slate-900`}>
+                  {item.item_name}
+                </td>
+                <td className={`${tdClass} text-slate-500`}>
+                  {item.unit_measure}
+                </td>
+                <td
+                  className={`${tdClass} text-right font-mono tabular-nums text-slate-700`}
+                >
+                  {formatNumber1(item.quantity)}
+                </td>
+                {mode === "review" && (
+                  <td className={`${tdClass} text-right`}>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className={`${inputClass} ml-auto w-[5.5rem] bg-white text-right tabular-nums`}
+                      value={item.approved_qty ?? ""}
+                      onChange={(e) => {
+                        const requestedQty = parseFloat(item.quantity) || 0;
+                        let approvedQty = parseFloat(e.target.value);
+                        if (!Number.isFinite(approvedQty)) approvedQty = 0;
+                        if (approvedQty > requestedQty)
+                          approvedQty = requestedQty;
+                        if (approvedQty < 0) approvedQty = 0;
+                        setItemList((prev) =>
+                          prev.map((listItem) =>
+                            listItem.rowId === item.rowId
+                              ? { ...listItem, approved_qty: approvedQty }
+                              : listItem,
+                          ),
+                        );
+                      }}
+                    />
+                  </td>
+                )}
+              </tr>
+            ))}
+            {itemList.length === 0 && (
+              <tr className="bg-white">
+                <td
+                  colSpan={mode === "review" ? 6 : 5}
+                  className="px-4 py-10 text-center text-sm text-slate-500"
+                >
+                  No line items on this requisition
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 
   const renderReviewApproveContent = () => (
-    <div className="mt-4 space-y-3">
+    <div className="mt-6 space-y-3 border-t border-slate-200 pt-5">
       {mode === "approve" && (
         <div>
           <label className={labelClass}>
@@ -511,88 +609,57 @@ const CustomRequisitionModal = ({
         </div>
       )}
       <div>
-        <label className={labelClass}>Remark</label>
+        <label className={labelClass}>
+          Remark <span className="text-rose-500">*</span>
+        </label>
         <textarea
           className={textareaClass}
           value={remark}
           onChange={({ target: { value } }) => setRemark(value)}
-          placeholder="Add a remark to approve…"
+          placeholder="Add an approval remark…"
         />
+        {mode === "review" && !remark ? (
+          <p className="mt-1.5 text-[11px] text-slate-500">
+            A remark is required before you can approve.
+          </p>
+        ) : null}
       </div>
     </div>
   );
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]">
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 bg-[var(--aa-navy)] px-5 py-4 pr-4 text-white">
+    <Sheet
+      open={!!isOpen}
+      onOpenChange={(open) => {
+        if (!open) toggle?.();
+      }}
+    >
+      <SheetContent
+        side="right"
+        className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-xl md:!max-w-2xl lg:!max-w-3xl [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100"
+      >
+        <SheetHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-navy)] px-5 py-4 pr-12 text-left">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 rounded-md bg-white/10 p-2">
               <ClipboardCheck className="h-4 w-4 text-[var(--aa-accent)]" />
             </div>
-            <div>
-              <h3 className="text-lg font-semibold leading-tight">{header}</h3>
-              <p className="mt-0.5 text-xs text-slate-300">
+            <div className="min-w-0">
+              <SheetTitle className="text-lg font-semibold leading-tight text-white">
+                {header}
+              </SheetTitle>
+              <SheetDescription className="mt-0.5 text-xs text-white/70">
                 {modeSubtitle[mode] || "Review requisition"}
-              </p>
+              </SheetDescription>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={toggle}
-            className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
-        </div>
+        </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto p-5 md:p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-5 py-5 md:px-6">
           {mode === "review_rejected" ? (
             renderReviewRejectedContent()
           ) : (
             <div>
               {renderHeaderSection()}
-
-              <div className="mb-5 grid gap-4 sm:grid-cols-2">
-                <MetaRow
-                  label="Date"
-                  value={
-                    items?.date
-                      ? moment(items.date).format("DD-MMM-YYYY")
-                      : "—"
-                  }
-                />
-                <MetaRow label="PR No." value={items?.pr_no} align="right" />
-                <MetaRow label="From branch" value={items?.branch} />
-                {mode === "receive" && (
-                  <MetaRow label="PO No." value={items?.po_no} align="right" />
-                )}
-                {mode !== "review" && (
-                  <MetaRow label="Raised by" value={items?.requisitor} />
-                )}
-                <MetaRow
-                  label="Reason"
-                  value={items?.reason}
-                  align={mode === "review" ? "right" : "left"}
-                />
-                <div className="sm:col-span-2">
-                  <MetaRow
-                    label="Supplier"
-                    value={
-                      items?.supplier_name
-                        ? `${items.supplier_name}${
-                            items?.supplier_code
-                              ? ` (${items.supplier_code})`
-                              : ""
-                          }`
-                        : "—"
-                    }
-                  />
-                </div>
-              </div>
 
               {mode === "receive"
                 ? renderReceiveModeContent()
@@ -604,77 +671,99 @@ const CustomRequisitionModal = ({
           )}
         </div>
 
-        <div className="flex shrink-0 justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3">
-          {(mode === "preview" || mode === "receive") && (
-            <>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/90 px-5 py-3.5">
+          <div className="hidden text-xs text-slate-500 sm:block">
+            {itemList.length > 0
+              ? `${itemList.length} line item${itemList.length !== 1 ? "s" : ""}`
+              : null}
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            {(mode === "preview" || mode === "receive") && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={cancel}
+                  disabled={loading2}
+                  className="border-slate-200"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleFormSubmit}
+                  disabled={loading2}
+                  className="gap-1.5 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Submit
+                </Button>
+              </>
+            )}
+            {mode === "review" && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={toggle}
+                  className="border-slate-200"
+                >
+                  Close
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleFormSubmit}
+                  disabled={remark === ""}
+                  className="gap-1.5 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90 disabled:opacity-50"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Approve
+                </Button>
+              </>
+            )}
+            {mode === "approve" && (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={reject}
+                  disabled={remark === ""}
+                  className="border-rose-200 text-rose-700 hover:bg-rose-50"
+                >
+                  Reject
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={approveMemo}
+                  disabled={amount === ""}
+                  className="gap-1.5 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90 disabled:opacity-50"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Submit
+                </Button>
+              </>
+            )}
+            {mode === "review_rejected" && (
               <Button
                 type="button"
-                variant="outline"
                 size="sm"
-                onClick={cancel}
+                onClick={handleEdit}
                 disabled={loading2}
+                className="border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
               >
-                Cancel
+                {loading2 ? "Submitting…" : "Submit"}
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleFormSubmit}
-                disabled={loading2}
-                className="bg-[var(--aa-accent)] text-white hover:opacity-90"
-              >
-                Submit
-              </Button>
-            </>
-          )}
-          {mode === "review" && (
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleFormSubmit}
-              disabled={remark === ""}
-              className="bg-[var(--aa-accent)] text-white hover:opacity-90 disabled:opacity-50"
-            >
-              Approve
-            </Button>
-          )}
-          {mode === "approve" && (
-            <>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={reject}
-                disabled={remark === ""}
-                className="border-rose-200 text-rose-700 hover:bg-rose-50"
-              >
-                Reject
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={approveMemo}
-                disabled={amount === ""}
-                className="bg-[var(--aa-accent)] text-white hover:opacity-90 disabled:opacity-50"
-              >
-                Submit
-              </Button>
-            </>
-          )}
-          {mode === "review_rejected" && (
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleEdit}
-              disabled={loading2}
-              className="bg-[var(--aa-accent)] text-white hover:opacity-90"
-            >
-              {loading2 ? "Submitting…" : "Submit"}
-            </Button>
-          )}
+            )}
+          </div>
         </div>
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 };
 

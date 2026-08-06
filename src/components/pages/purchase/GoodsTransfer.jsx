@@ -79,14 +79,14 @@ const blankLine = () => ({
 
 const GOODS_TRANSFER_TABS = [
   {
+    value: "goods-list",
+    label: "Goods",
+    privilege: "Goods List",
+  },
+  {
     value: "new",
     label: "New Goods Transfer",
     privilege: "New Goods Transfer",
-  },
-  {
-    value: "goods-list",
-    label: "Goods List",
-    privilege: "Goods List",
   },
   {
     value: "history",
@@ -127,7 +127,7 @@ export default function GoodsTransfer() {
 
   const [branches, setBranches] = useState([]);
 
-  const activeTab = searchParams.get("subtab") || "new";
+  const activeTab = searchParams.get("subtab") || "goods-list";
   const handleSubTabChange = (value) => {
     const next = new URLSearchParams(searchParams);
     if (value && value !== "new") next.set("subtab", value);
@@ -802,7 +802,7 @@ export default function GoodsTransfer() {
       pending: "bg-amber-100 text-amber-800",
       approved: "bg-green-100 text-green-800",
       rejected: "bg-red-100 text-red-800",
-      cancelled: "bg-gray-200 text-gray-700",
+      cancelled: "bg-slate-200 text-slate-700",
     };
     const cls = map[status] || "bg-slate-100 text-slate-700";
     return (
@@ -812,21 +812,31 @@ export default function GoodsTransfer() {
     );
   };
 
+  const fieldClass =
+    "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20";
+  const labelClass = "mb-1 block text-xs font-medium text-slate-600";
+  const readonlyClass =
+    "flex h-9 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-800";
+  const sectionCardClass =
+    "rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm";
+  const tableHeadClass =
+    "border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500";
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {submitSuccess && (
-        <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+        <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
           <div className="flex-1">
             <p className="font-medium">{submitSuccess.message}</p>
-            <p className="mt-1 text-green-700">
+            <p className="mt-1 text-emerald-700">
               View it under Pending Approvals or Transfer History.
             </p>
           </div>
           <button
             type="button"
             onClick={() => setSubmitSuccess(null)}
-            className="text-green-700 hover:text-green-900"
+            className="text-emerald-700 hover:text-emerald-900"
           >
             Dismiss
           </button>
@@ -834,8 +844,8 @@ export default function GoodsTransfer() {
       )}
 
       {visibleTabs.length === 0 ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-6 text-center text-amber-800">
-          You do not have permission to access Goods Transfer on this account.
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-6 text-center text-amber-800">
+          You do not have permission to access Goods on this account.
         </div>
       ) : (
         <Tabs
@@ -843,13 +853,19 @@ export default function GoodsTransfer() {
           onValueChange={handleSubTabChange}
           className="w-full"
         >
-          <TabsList className="mb-4 bg-slate-100">
+          <TabsList className="mb-4 h-auto w-full justify-start gap-1 rounded-none border-b border-slate-200 bg-transparent p-0">
             {visibleTabs.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value} className="gap-2">
-                {tab.value === "new" && <Plus className="w-4 h-4" />}
-                {tab.value === "goods-list" && <Package className="w-4 h-4" />}
-                {tab.value === "history" && <History className="w-4 h-4" />}
-                {tab.value === "pending" && <Clock className="w-4 h-4" />}
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className="gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-3 py-2.5 text-sm font-medium text-slate-500 shadow-none data-[state=active]:border-[#4267B2] data-[state=active]:bg-transparent data-[state=active]:text-[#4267B2] data-[state=active]:shadow-none"
+              >
+                {tab.value === "new" && <Plus className="h-3.5 w-3.5" />}
+                {tab.value === "goods-list" && (
+                  <Package className="h-3.5 w-3.5" />
+                )}
+                {tab.value === "history" && <History className="h-3.5 w-3.5" />}
+                {tab.value === "pending" && <Clock className="h-3.5 w-3.5" />}
                 {tab.label}
                 {tab.value === "pending" && ` (${pendingTransfers.length})`}
               </TabsTrigger>
@@ -859,31 +875,31 @@ export default function GoodsTransfer() {
           {/* ====== NEW TRANSFER ====== */}
           {canViewTab("New Goods Transfer") && (
             <TabsContent value="new" className="mt-0">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <div className="lg:col-span-2 space-y-4">
-                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <div className={sectionCardClass}>
                     <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-4 mb-6">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className={labelClass}>
                           Transfer No.
                         </label>
-                        <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-800">
+                        <div className={readonlyClass}>
                           {transferNo}
                         </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className={labelClass}>
                           Date
                         </label>
                         <input
                           type="date"
                           value={transferDate}
                           onChange={(e) => setTransferDate(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                          className={fieldClass}
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className={labelClass}>
                           From Warehouse
                         </label>
                         <select
@@ -895,7 +911,7 @@ export default function GoodsTransfer() {
                             setSearchTerm("");
                             setLineItems([blankLine()]);
                           }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                          className={fieldClass}
                         >
                           <option value="">Select location...</option>
                           {fromLocationOptions.map((opt) => (
@@ -907,13 +923,13 @@ export default function GoodsTransfer() {
                       </div>
                       {storeFromId ? (
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className={labelClass}>
                             To Warehouse
                           </label>
                           <select
                             value={storeToId}
                             onChange={(e) => setStoreToId(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                            className={fieldClass}
                           >
                             <option value="">Select location...</option>
                             {toLocationOptions.map((b) => (
@@ -925,39 +941,39 @@ export default function GoodsTransfer() {
                         </div>
                       ) : (
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className={labelClass}>
                             To Warehouse
                           </label>
-                          <div className="px-3 py-2 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500">
+                          <div className="flex h-9 items-center rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 text-sm text-slate-500">
                             Select From Warehouse first
                           </div>
                         </div>
                       )}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className={labelClass}>
                           Initiated By
                         </label>
-                        <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-800">
+                        <div className={readonlyClass}>
                           {`${user?.fullname || `${user?.firstname || ""} ${user?.lastname || ""}`.trim() || user?.username || "User"}${user?.role ? ` (${user.role})` : ""}`}
                         </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className={labelClass}>
                           Status
                         </label>
-                        <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm">
-                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
+                        <div className={readonlyClass}>
+                          <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
                             {formStatus}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="mb-4 flex items-center justify-between gap-2 flex-wrap">
-                      <label className="block text-sm font-medium text-gray-700">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <label className="text-sm font-semibold text-slate-800">
                         Request Items
                         {storeFromId && (
-                          <span className="ml-2 text-xs text-slate-500">
+                          <span className="ml-2 text-xs font-normal text-slate-500">
                             Finished Good, Resalable &amp; By-Product
                           </span>
                         )}
@@ -968,27 +984,19 @@ export default function GoodsTransfer() {
                           placeholder="Search items..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 w-60"
+                          className="h-8 w-60 rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20"
                         />
                       )}
                     </div>
 
-                    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-amber-50/30">
+                    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
                       <table className="w-full text-sm">
-                        <thead className="bg-slate-100">
-                          <tr className="border-b-2 border-slate-200">
-                            <th className="px-3 py-2.5 text-left font-semibold text-slate-700 w-1/2">
-                              PRODUCT
-                            </th>
-                            <th className="px-3 py-2.5 text-left font-semibold text-slate-700">
-                              UoM
-                            </th>
-                            <th className="px-3 py-2.5 text-right font-semibold text-slate-700">
-                              QTY
-                            </th>
-                            <th className="px-3 py-2.5 text-center font-semibold text-slate-700">
-                              ACTION
-                            </th>
+                        <thead>
+                          <tr className={tableHeadClass}>
+                            <th className="w-1/2 px-3 py-2.5 text-left">Goods</th>
+                            <th className="px-3 py-2.5 text-left">UoM</th>
+                            <th className="px-3 py-2.5 text-right">Qty</th>
+                            <th className="px-3 py-2.5 text-center">Action</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1085,20 +1093,20 @@ export default function GoodsTransfer() {
                                       styles={{
                                         control: (provided, state) => ({
                                           ...provided,
-                                          minHeight: "38px",
+                                          minHeight: "36px",
                                           borderColor: state.isFocused
-                                            ? "#3b82f6"
-                                            : "#d1d5db",
+                                            ? "#4267B2"
+                                            : "#e2e8f0",
                                           borderWidth: "1px",
-                                          borderRadius: "0.5rem",
+                                          borderRadius: "0.375rem",
                                           boxShadow: state.isFocused
-                                            ? "0 0 0 3px rgb(59 130 246 / 0.1)"
+                                            ? "0 0 0 3px rgb(66 103 178 / 0.15)"
                                             : "none",
                                           fontSize: "14px",
                                           "&:hover": {
                                             borderColor: state.isFocused
-                                              ? "#3b82f6"
-                                              : "#d1d5db",
+                                              ? "#4267B2"
+                                              : "#cbd5e1",
                                           },
                                         }),
                                         menu: (provided) => ({
@@ -1204,7 +1212,7 @@ export default function GoodsTransfer() {
                           !storeToId ||
                           hasInvalidQty
                         }
-                        className="bg-blue-600 hover:bg-blue-700"
+                        className="border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
                       >
                         {submitting ? "Submitting..." : "Submit Request"}
                       </Button>
@@ -1212,15 +1220,15 @@ export default function GoodsTransfer() {
                   </div>
                 </div>
                 <div className="lg:col-span-1">
-                  <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 sticky top-4">
-                    <h3 className="font-semibold text-slate-800 mb-3 flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4" />
+                  <div className="sticky top-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
+                      <AlertCircle className="h-4 w-4 text-[#4267B2]" />
                       How Goods Transfer Works
                     </h3>
                     <div className="space-y-4">
                       {WORKFLOW_STEPS.map((s) => (
                         <div key={s.step} className="flex gap-3">
-                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--aa-sidebar-active)] text-[#4267B2] flex items-center justify-center text-sm font-bold">
                             {s.step}
                           </div>
                           <div>
@@ -1243,28 +1251,28 @@ export default function GoodsTransfer() {
           {/* ====== GOODS LIST ====== */}
           {canViewTab("Goods List") && (
             <TabsContent value="goods-list" className="mt-0">
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className={sectionCardClass}>
                 <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
                   <div>
-                    <h3 className="text-lg font-semibold">Goods List</h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Finished Good, Resalable &amp; By-Product stock by location
+                    <h3 className="text-base font-semibold tracking-tight text-slate-900">
+                      Goods
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Finished Good, Resalable &amp; By-Product stock by warehouse
                     </p>
                   </div>
                   <div className="flex flex-wrap items-end gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
-                        Location
-                      </label>
+                      <label className={labelClass}>Warehouse</label>
                       <select
                         value={goodsListBranchId}
                         onChange={(e) => {
                           setGoodsListBranchId(e.target.value);
                           setGoodsListSearch("");
                         }}
-                        className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[180px]"
+                        className={`${fieldClass} min-w-[180px]`}
                       >
-                        <option value="">Select location...</option>
+                        <option value="">Select warehouse...</option>
                         {goodsListBranchOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>
                             {opt.label}
@@ -1273,7 +1281,7 @@ export default function GoodsTransfer() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                      <label className={labelClass}>
                         Search
                       </label>
                       <input
@@ -1282,7 +1290,7 @@ export default function GoodsTransfer() {
                         value={goodsListSearch}
                         onChange={(e) => setGoodsListSearch(e.target.value)}
                         disabled={!goodsListBranchId}
-                        className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-52 disabled:bg-gray-100"
+                        className={`${fieldClass} w-52 disabled:bg-slate-100`}
                       />
                     </div>
                     <Button
@@ -1297,37 +1305,27 @@ export default function GoodsTransfer() {
                 </div>
 
                 {!goodsListBranchId ? (
-                  <div className="text-center py-12 text-gray-500">
+                  <div className="text-center py-12 text-slate-500">
                     <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>Select a location to view available goods</p>
+                    <p>Select a warehouse to view available goods</p>
                   </div>
                 ) : loadingGoodsList ? (
-                  <div className="text-center py-12 text-gray-500">Loading…</div>
+                  <div className="text-center py-12 text-slate-500">Loading…</div>
                 ) : filteredGoodsList.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">
+                  <div className="text-center py-12 text-slate-500">
                     <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>No transferable goods in stock at this location</p>
+                    <p>No transferable goods in stock at this warehouse</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-lg border border-slate-200">
                     <table className="w-full text-sm">
-                      <thead className="bg-slate-100">
-                        <tr className="border-b-2 border-slate-200">
-                          <th className="px-3 py-2.5 text-left font-semibold text-slate-700">
-                            Product
-                          </th>
-                          <th className="px-3 py-2.5 text-left font-semibold text-slate-700">
-                            SKU
-                          </th>
-                          <th className="px-3 py-2.5 text-left font-semibold text-slate-700">
-                            Item Type
-                          </th>
-                          <th className="px-3 py-2.5 text-right font-semibold text-slate-700">
-                            Available Stock
-                          </th>
-                          <th className="px-3 py-2.5 text-left font-semibold text-slate-700">
-                            UoM
-                          </th>
+                      <thead>
+                        <tr className={tableHeadClass}>
+                          <th className="px-3 py-2.5 text-left">Goods</th>
+                          <th className="px-3 py-2.5 text-left">SKU</th>
+                          <th className="px-3 py-2.5 text-left">Item Type</th>
+                          <th className="px-3 py-2.5 text-right">Available Stock</th>
+                          <th className="px-3 py-2.5 text-left">UoM</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1336,23 +1334,23 @@ export default function GoodsTransfer() {
                             key={`${item.product_id}-${item.sku || ""}`}
                             className="border-b border-slate-200 bg-white hover:bg-slate-50/50"
                           >
-                            <td className="px-3 py-2.5 font-medium text-gray-900">
+                            <td className="px-3 py-2.5 font-medium text-slate-900">
                               {item.item_name || item.name || "—"}
                             </td>
-                            <td className="px-3 py-2.5 text-gray-600">
+                            <td className="px-3 py-2.5 text-slate-600">
                               {item.sku || item.product_id || "—"}
                             </td>
                             <td className="px-3 py-2.5">
-                              <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                              <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-sky-50 text-sky-800">
                                 {item.item_type || "—"}
                               </span>
                             </td>
-                            <td className="px-3 py-2.5 text-right font-medium text-gray-900">
+                            <td className="px-3 py-2.5 text-right font-medium text-slate-900">
                               {formatNumber1(
                                 parseFloat(item.qty ?? item.balance) || 0,
                               )}
                             </td>
-                            <td className="px-3 py-2.5 text-gray-600">
+                            <td className="px-3 py-2.5 text-slate-600">
                               {item.unit_of_measure || item.uom || "Pcs"}
                             </td>
                           </tr>
@@ -1368,18 +1366,18 @@ export default function GoodsTransfer() {
           {/* ====== HISTORY ====== */}
           {canViewTab("Transfer History") && (
             <TabsContent value="history" className="mt-0">
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className={sectionCardClass}>
                 <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
-                  <h3 className="text-lg font-semibold">Transfer History</h3>
+                  <h3 className="text-base font-semibold tracking-tight text-slate-900">Transfer History</h3>
                   <div className="flex flex-wrap items-end gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                      <label className={labelClass}>
                         To Warehouse
                       </label>
                       <select
                         value={historyToLocation}
                         onChange={(e) => setHistoryToLocation(e.target.value)}
-                        className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[10rem]"
+                        className={`${fieldClass} min-w-[10rem]`}
                       >
                         <option value="">All my locations</option>
                         {historyToLocationOptions.map((opt) => (
@@ -1390,13 +1388,13 @@ export default function GoodsTransfer() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                      <label className={labelClass}>
                         Status
                       </label>
                       <select
                         value={historyStatus}
                         onChange={(e) => setHistoryStatus(e.target.value)}
-                        className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[9rem]"
+                        className={`${fieldClass} min-w-[9rem]`}
                       >
                         <option value="all">All statuses</option>
                         <option value="pending">Pending</option>
@@ -1406,7 +1404,7 @@ export default function GoodsTransfer() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                      <label className={labelClass}>
                         Date From
                       </label>
                       <input
@@ -1414,11 +1412,11 @@ export default function GoodsTransfer() {
                         value={historyFrom}
                         max={historyTo || undefined}
                         onChange={(e) => setHistoryFrom(e.target.value)}
-                        className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className={fieldClass}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                      <label className={labelClass}>
                         Date To
                       </label>
                       <input
@@ -1426,7 +1424,7 @@ export default function GoodsTransfer() {
                         value={historyTo}
                         min={historyFrom || undefined}
                         onChange={(e) => setHistoryTo(e.target.value)}
-                        className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className={fieldClass}
                       />
                     </div>
                     <Button
@@ -1440,11 +1438,11 @@ export default function GoodsTransfer() {
                   </div>
                 </div>
                 {loadingHistory ? (
-                  <div className="text-center py-12 text-gray-500">
+                  <div className="text-center py-12 text-slate-500">
                     Loading…
                   </div>
                 ) : transferHistory.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">
+                  <div className="text-center py-12 text-slate-500">
                     <History className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>No transfer history yet</p>
                   </div>
@@ -1453,19 +1451,19 @@ export default function GoodsTransfer() {
                     {transferHistory.map((t) => (
                       <div
                         key={t.id}
-                        className="border rounded-lg p-4 hover:bg-gray-50"
+                        className="rounded-xl border border-slate-200 p-4 transition-colors hover:bg-slate-50/80"
                       >
                         <div className="flex justify-between items-start gap-3">
                           <div>
                             <div className="font-semibold">{t.transfer_no}</div>
-                            <div className="text-sm text-gray-600">
+                            <div className="text-sm text-slate-600">
                               {t.source_branch_name ||
                                 branchName(t.source_branch_id)}{" "}
                               →{" "}
                               {t.destination_branch_name ||
                                 branchName(t.destination_branch_id)}
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs text-slate-500 mt-1">
                               {moment(t.transfer_date).format("DD MMM YYYY")} •{" "}
                               {t.initiated_by_name || "Unknown"}
                               {t.approved_by_name
@@ -1477,9 +1475,9 @@ export default function GoodsTransfer() {
                         </div>
                         <table className="w-full mt-3 text-sm">
                           <thead>
-                            <tr className="text-left text-gray-600">
-                              <th>Item</th>
-                              <th>Description</th>
+                            <tr className="text-left text-slate-600">
+                              <th>Goods</th>
+                              <th>SKU</th>
                               <th className="text-right">Transfer Qty</th>
                               <th>UOM</th>
                             </tr>
@@ -1487,8 +1485,8 @@ export default function GoodsTransfer() {
                           <tbody>
                             {(t.items || []).map((it) => (
                               <tr key={it.id ?? `${t.id}-${it.product_id}`}>
-                                <td>{it.product_id}</td>
                                 <td>{it.item_name || it.product_name}</td>
+                                <td>{it.product_id}</td>
                                 <td className="text-right">
                                   {formatNumber1(it.quantity)}
                                 </td>
@@ -1512,9 +1510,9 @@ export default function GoodsTransfer() {
           {/* ====== PENDING ====== */}
           {canViewTab("Pending Approvals") && (
             <TabsContent value="pending" className="mt-0">
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className={sectionCardClass}>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Pending Approvals</h3>
+                  <h3 className="text-base font-semibold tracking-tight text-slate-900">Pending Approvals</h3>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1525,11 +1523,11 @@ export default function GoodsTransfer() {
                   </Button>
                 </div>
                 {loadingPending ? (
-                  <div className="text-center py-12 text-gray-500">
+                  <div className="text-center py-12 text-slate-500">
                     Loading…
                   </div>
                 ) : pendingTransfers.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">
+                  <div className="text-center py-12 text-slate-500">
                     <Clock className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>No pending transfers</p>
                   </div>
@@ -1538,53 +1536,53 @@ export default function GoodsTransfer() {
                     {pendingTransfers.map((t) => (
                       <div
                         key={t.id}
-                        className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm"
+                        className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
                       >
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 p-4 bg-gray-50/80 border-b">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 p-4 bg-slate-50/80 border-b">
                           <div>
-                            <div className="text-xs text-gray-500 uppercase tracking-wide">
+                            <div className="text-xs text-slate-500 uppercase tracking-wide">
                               Transfer Date
                             </div>
-                            <div className="font-medium text-gray-900">
+                            <div className="font-medium text-slate-900">
                               {moment(t.transfer_date).format("DD MMMM YYYY")}
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs text-gray-500 uppercase tracking-wide">
+                            <div className="text-xs text-slate-500 uppercase tracking-wide">
                               Transfer No
                             </div>
-                            <div className="font-medium text-gray-900">
+                            <div className="font-medium text-slate-900">
                               {t.transfer_no}
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs text-gray-500 uppercase tracking-wide">
+                            <div className="text-xs text-slate-500 uppercase tracking-wide">
                               From Warehouse
                             </div>
-                            <div className="font-medium text-gray-900">
+                            <div className="font-medium text-slate-900">
                               {t.source_branch_name ||
                                 branchName(t.source_branch_id)}
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs text-gray-500 uppercase tracking-wide">
+                            <div className="text-xs text-slate-500 uppercase tracking-wide">
                               To Warehouse
                             </div>
-                            <div className="font-medium text-gray-900">
+                            <div className="font-medium text-slate-900">
                               {t.destination_branch_name ||
                                 branchName(t.destination_branch_id)}
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs text-gray-500 uppercase tracking-wide">
+                            <div className="text-xs text-slate-500 uppercase tracking-wide">
                               Initiated By
                             </div>
-                            <div className="font-medium text-gray-900">
+                            <div className="font-medium text-slate-900">
                               {t.initiated_by_name || "—"}
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs text-gray-500 uppercase tracking-wide">
+                            <div className="text-xs text-slate-500 uppercase tracking-wide">
                               Status
                             </div>
                             {renderStatusBadge(t.status)}
@@ -1593,12 +1591,12 @@ export default function GoodsTransfer() {
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
-                              <tr className="bg-slate-700 text-white">
+                              <tr className={tableHeadClass}>
                                 <th className="px-4 py-3 text-left font-medium">
-                                  Item
+                                  Goods
                                 </th>
                                 <th className="px-4 py-3 text-left font-medium">
-                                  Description
+                                  SKU
                                 </th>
                                 <th className="px-4 py-3 text-right font-medium">
                                   Available Qty
@@ -1631,19 +1629,19 @@ export default function GoodsTransfer() {
                                 return (
                                   <tr
                                     key={it.id ?? idx}
-                                    className={`border-b border-gray-100 ${
+                                    className={`border-b border-slate-100 ${
                                       exceeds
                                         ? "bg-red-100"
                                         : idx % 2 === 0
                                           ? "bg-white"
-                                          : "bg-gray-50/50"
+                                          : "bg-slate-50/50"
                                     }`}
                                   >
-                                    <td className="px-4 py-3 font-medium text-gray-900">
-                                      {it.product_id}
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-700">
+                                    <td className="px-4 py-3 font-medium text-slate-900">
                                       {it.item_name || it.product_name}
+                                    </td>
+                                    <td className="px-4 py-3 text-slate-700">
+                                      {it.product_id}
                                     </td>
                                     <td
                                       className={`px-4 py-3 text-right font-semibold ${
@@ -1673,10 +1671,10 @@ export default function GoodsTransfer() {
                                             e.target.value,
                                           )
                                         }
-                                        className={`w-24 rounded-md border px-2 py-1 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                        className={`w-24 rounded-md border px-2 py-1 text-right text-sm focus:outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20 ${
                                           exceeds
                                             ? "border-red-400 bg-red-50"
-                                            : "border-gray-300"
+                                            : "border-slate-200"
                                         }`}
                                       />
                                       {exceeds && (
@@ -1696,19 +1694,19 @@ export default function GoodsTransfer() {
                             </tbody>
                           </table>
                         </div>
-                        <div className="flex justify-end gap-2 p-4 border-t bg-gray-50/50">
+                        <div className="flex justify-end gap-2 p-4 border-t bg-slate-50/50">
                           <Button
                             variant="outline"
                             onClick={() => rejectTransfer(t)}
                             disabled={actioningId === t.id}
-                            className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                            className="border-slate-200 text-slate-700 hover:bg-slate-50"
                           >
                             Cancel
                           </Button>
                           <Button
                             onClick={() => approveTransfer(t)}
                             disabled={actioningId === t.id}
-                            className="bg-green-600 hover:bg-green-700"
+                            className="border-0 bg-emerald-600 text-white hover:bg-emerald-700"
                           >
                             <CheckCircle className="w-4 h-4 mr-1" />
                             {actioningId === t.id

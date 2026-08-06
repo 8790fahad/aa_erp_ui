@@ -5,7 +5,6 @@ import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   MoreVerticalIcon,
   Plus,
@@ -14,6 +13,8 @@ import {
   FileBarChart,
   Trash2,
   Download,
+  BookOpen,
+  Search,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,7 +36,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import CustomTree from "../CustomTree";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   Dialog,
   DialogContent,
@@ -106,12 +113,21 @@ export default function AccountChart() {
       parentCode: form.parentCode || form.subhead || null,
       level: form.level,
       category: form.category || form.description,
+      subcategory: form.subcategory || null,
       description: form.description,
       type: form.type || null,
       detail: form.detail || null,
       accountNature: form.accountNature || form.account_type,
-      normalBalance: form.normalBalance || "DEBIT",
-      fsSection: form.fsSection || "BS",
+      normalBalance: form.normalBalance || form.normal_balance || "debit",
+      fsSection: form.fsSection || form.fs_section || "balance_sheet",
+      reportingBehavior:
+        form.reportingBehavior || form.reporting_behavior || "fixed",
+      alternateNature:
+        form.alternateNature || form.alternate_nature || null,
+      accountRole: form.accountRole || form.account_role || "general",
+      plLine: form.plLine || form.pl_line || null,
+      display: form.display,
+      isActive: form.isActive ?? form.is_active,
       facilityId: activeBusiness.id,
     };
 
@@ -588,174 +604,170 @@ export default function AccountChart() {
   });
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Chart of Accounts</h1>
-            <p className="text-muted-foreground">
-              Manage your financial structure
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <CustomButton onClick={() => setAddModalOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Account
-            </CustomButton>
-            <CustomButton variant="outline" onClick={() => setUploadOpen(true)}>
-              <Upload className="h-4 w-4 mr-2" />
-              Upload
-            </CustomButton>
-          </div>
+    <div className="min-h-[70vh] px-3 py-4 sm:px-4 lg:px-6">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
+            <BookOpen className="h-5 w-5 text-[#4267B2]" />
+            Chart of Accounts
+          </h1>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Manage your financial structure for P&amp;L, Trial Balance, and Balance Sheet
+          </p>
         </div>
+      </div>
 
-        {/* Selection toolbar */}
-        {selectedAccounts.size > 0 && (
-          <div className="mb-4 flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <Badge className="bg-blue-600">
-              {selectedAccounts.size} selected
-            </Badge>
-            <Button
-              size="sm"
-              className="gap-2 bg-blue-600 hover:bg-blue-700"
-              onClick={handleRunReportForSelected}
-            >
-              <FileBarChart className="h-4 w-4" />
-              Run Report
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="gap-2 bg-white">
-                  <Download className="h-4 w-4" />
-                  Export
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={exportSelectedAsExcel}>
-                  Export Excel
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={exportSelectedAsPdf}>
-                  Export PDF
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              size="sm"
-              variant="destructive"
-              className="gap-2"
-              onClick={handleDeleteSelected}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setSelectedAccounts(new Set())}
-            >
-              Clear Selection
-            </Button>
-          </div>
-        )}
+      {selectedAccounts.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-[#4267B2]/20 bg-[var(--aa-sidebar-active,#eff4fb)] p-3">
+          <Badge className="border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]">
+            {selectedAccounts.size} selected
+          </Badge>
+          <Button
+            size="sm"
+            className="gap-2 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
+            onClick={handleRunReportForSelected}
+          >
+            <FileBarChart className="h-4 w-4" />
+            Run Report
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2 border-slate-200 bg-white text-slate-700"
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={exportSelectedAsExcel}>
+                Export Excel
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportSelectedAsPdf}>
+                Export PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="gap-2"
+            onClick={handleDeleteSelected}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-slate-600"
+            onClick={() => setSelectedAccounts(new Set())}
+          >
+            Clear Selection
+          </Button>
+        </div>
+      )}
 
-        <ChartofAccountUpload
-          open={uploadOpen}
-          onClose={() => setUploadOpen(false)}
-          getAcc={getAccounts}
-        />
+      <ChartofAccountUpload
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        getAcc={getAccounts}
+      />
 
-        <div className="mt-4 mb-2">
-          <Input
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by code, description, account type, subcategory, or nature"
-            className="max-w-md bg-white"
+            className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20"
           />
         </div>
-
-        <Tabs defaultValue="list" className="mt-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="list">Table View</TabsTrigger>
-            <TabsTrigger value="tree">3D View</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="list">
-            {loading ? (
-              <AccountListSkeleton />
-            ) : (
-              <AccountList
-                accounts={filteredAccounts}
-                onEdit={(account) => setEditAccount(account)}
-                onDisable={handleDisable}
-                selectedAccounts={selectedAccounts}
-                onToggleSelect={toggleAccountSelection}
-                onToggleSelectAll={toggleSelectAll}
-                onRunReport={(code) => runReport(code)}
-              />
-            )}
-          </TabsContent>
-          <TabsContent value="tree">
-            {loading ? (
-              <AccountListSkeleton />
-            ) : (
-              <AccountTreeList
-                accounts={filteredAccounts}
-                onEdit={(account) => setEditAccount(account)}
-                onDisable={handleDisable}
-                selectedAccounts={selectedAccounts}
-                onToggleSelect={toggleAccountSelection}
-                onToggleSelectAll={toggleSelectAll}
-                onRunReport={(code) => runReport(code)}
-              />
-            )}
-          </TabsContent>
-        </Tabs>
-
-        <AddAccountModal
-          open={addModalOpen}
-          onClose={() => setAddModalOpen(false)}
-          onSuccess={getAccounts}
-        />
-        {editAccount && (
-          <EditAccountForm
-            account={editAccount}
-            onSave={handleCreateOrUpdate}
-            onCancel={() => setEditAccount(null)}
-            existingAccounts={accounts}
-          />
-        )}
+        <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2 border-slate-200 text-[#4267B2] hover:bg-[var(--aa-sidebar-active)]"
+            onClick={() => setUploadOpen(true)}
+          >
+            <Upload className="h-4 w-4 shrink-0" />
+            Upload
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 gap-2 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90 shadow-none"
+            onClick={() => setAddModalOpen(true)}
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            Add Account
+          </Button>
+        </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
+      {loading ? (
+        <AccountListSkeleton />
+      ) : (
+        <AccountList
+          accounts={filteredAccounts}
+          onEdit={(account) => setEditAccount(account)}
+          onDisable={handleDisable}
+          selectedAccounts={selectedAccounts}
+          onToggleSelect={toggleAccountSelection}
+          onToggleSelectAll={toggleSelectAll}
+          onRunReport={(code) => runReport(code)}
+        />
+      )}
+
+      <AddAccountModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        onSuccess={getAccounts}
+      />
+      {editAccount && (
+        <EditAccountForm
+          account={editAccount}
+          onSave={handleCreateOrUpdate}
+          onCancel={() => setEditAccount(null)}
+          existingAccounts={accounts}
+        />
+      )}
+
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md border-slate-200">
           <DialogHeader>
-            <DialogTitle>Permanent Delete</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-slate-900">Permanent Delete</DialogTitle>
+            <DialogDescription className="text-slate-500">
               Are you sure you want to delete {selectedAccounts.size} selected
               account(s)? This action cannot be undone. Only accounts with no
               ledger transactions can be deleted.
             </DialogDescription>
           </DialogHeader>
-          <div className="mt-2 py-2 px-3 bg-gray-50 rounded text-sm max-h-32 overflow-y-auto space-y-1">
+          <div className="mt-2 max-h-32 space-y-1 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
             {Array.from(selectedAccounts).map((code) => {
               const accountsList =
                 flatAccounts.length > 0 ? flatAccounts : accounts;
               const acc = accountsList.find((a) => (a.code || a.head) === code);
               const description = acc?.description || acc?.detail || "";
               return (
-                <div key={code} className="text-gray-700">
+                <div key={code} className="text-slate-700">
                   <span className="font-medium">{code}</span>
                   {description && (
-                    <span className="text-gray-600"> — {description}</span>
+                    <span className="text-slate-500"> — {description}</span>
                   )}
                 </div>
               );
             })}
           </div>
-          <div className="flex justify-end gap-2 mt-4">
+          <div className="mt-4 flex justify-end gap-2">
             <Button
               variant="outline"
+              className="border-slate-200"
               onClick={() => setDeleteDialogOpen(false)}
             >
               Cancel
@@ -807,20 +819,24 @@ const AccountList = ({
 
   const getNatureTone = (natureLabel) => {
     const n = String(natureLabel || "").toLowerCase();
-    if (n.includes("asset")) return "bg-blue-100 text-blue-800 border-blue-200";
-    if (n.includes("liabil")) return "bg-orange-100 text-orange-800 border-orange-200";
-    if (n.includes("equity")) return "bg-purple-100 text-purple-800 border-purple-200";
-    if (n.includes("revenue")) return "bg-green-100 text-green-800 border-green-200";
-    if (n.includes("expense")) return "bg-red-100 text-red-800 border-red-200";
-    return "bg-gray-100 text-gray-800 border-gray-200";
+    if (n.includes("asset"))
+      return "bg-[#4267B2]/10 text-[#4267B2] border-[#4267B2]/25";
+    if (n.includes("liabil"))
+      return "bg-slate-100 text-slate-700 border-slate-200";
+    if (n.includes("equity"))
+      return "bg-slate-800/5 text-slate-800 border-slate-300";
+    if (n.includes("revenue"))
+      return "bg-emerald-50 text-emerald-800 border-emerald-200";
+    if (n.includes("expense"))
+      return "bg-rose-50 text-rose-800 border-rose-200";
+    return "bg-slate-100 text-slate-700 border-slate-200";
   };
 
   const getDepthTone = (depth) => {
-    if (depth === 0) return "bg-slate-50";
-    if (depth === 1) return "bg-blue-50";
-    if (depth === 2) return "bg-emerald-50";
-    if (depth === 3) return "bg-violet-50";
-    return "bg-amber-50";
+    if (depth === 0) return "bg-slate-50/90";
+    if (depth === 1) return "bg-white";
+    if (depth === 2) return "bg-slate-50/40";
+    return "bg-white";
   };
 
   const flattenAccounts = (accList) => {
@@ -986,14 +1002,26 @@ const AccountList = ({
       custom: true,
       component: (a) =>
         a._isGroupHeader ? null : (
-          <Badge
-            variant="outline"
-            className={`${getNatureTone(deriveNature(a))} ${
-              a._hasChildren ? "font-bold" : "font-semibold"
-            }`}
-          >
-            {deriveNature(a)}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge
+              variant="outline"
+              className={`${getNatureTone(deriveNature(a))} ${
+                a._hasChildren ? "font-bold" : "font-semibold"
+              }`}
+            >
+              {deriveNature(a)}
+            </Badge>
+            {(a.reporting_behavior === "balance_switch" ||
+              a.reportingBehavior === "balance_switch") && (
+              <Badge
+                variant="outline"
+                className="bg-[#4267B2]/10 text-[#4267B2] border-[#4267B2]/30 text-[10px] font-medium tracking-wide"
+                title="Balance switch: debit → asset, credit → liability"
+              >
+                Switch
+              </Badge>
+            )}
+          </div>
         ),
     },
     {
@@ -1009,8 +1037,8 @@ const AccountList = ({
             variant="outline"
             className={
               isActive
-                ? "bg-green-100 text-green-800 border-green-200"
-                : "bg-red-100 text-red-800 border-red-200"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-rose-200 bg-rose-50 text-rose-800"
             }
           >
             {status}
@@ -1053,115 +1081,18 @@ const AccountList = ({
   ];
 
   return (
-    <Card>
-      <CardContent className="p-0">
-        <CustomTable1
-          data={groupedRows}
-          fields={columns}
-          pageSize={100}
-          rowClassName={(row) =>
-            row?._isGroupHeader
-              ? "bg-slate-200/70 font-semibold"
-              : `${getDepthTone(row?._depth || 0)} ${row?._hasChildren ? "font-semibold" : ""}`
-          }
-        />
-      </CardContent>
-    </Card>
-  );
-};
-
-/* ====================== TREE LIST COMPONENT (3D VIEW) ====================== */
-const AccountTreeList = ({
-  accounts,
-}) => {
-  const isStandardSixDigitCode = (value) => /^[1-5]\d{5}$/.test(String(value || "").trim());
-
-  const flattenAccounts = (accList) => {
-    if (!Array.isArray(accList)) return [];
-    const result = [];
-    for (const acc of accList) {
-      if (acc.children && Array.isArray(acc.children)) {
-        const { children, ...nodeData } = acc;
-        result.push(nodeData);
-        result.push(...flattenAccounts(children));
-      } else {
-        result.push(acc);
-      }
-    }
-    return result;
-  };
-
-  const accountsArray = Array.isArray(accounts) ? accounts : [];
-  const flatAccountsList =
-    accountsArray.length > 0 && accountsArray[0]?.children
-      ? flattenAccounts(accountsArray)
-      : accountsArray;
-  const normalizedAccounts = flatAccountsList.filter((a) =>
-    isStandardSixDigitCode(a.code || a.head),
-  );
-  const map = new Map();
-  const treeRoots = [];
-  normalizedAccounts.forEach((a) => {
-    const code = String(a.code || a.head || "").trim();
-    if (!code) return;
-    map.set(code, {
-      ...a,
-      code,
-      children: [],
-    });
-  });
-
-  const findExistingAncestor = (code) => {
-    const c = String(code || "").trim();
-    if (!c) return "";
-    for (let i = c.length - 1; i >= 1; i -= 1) {
-      const candidate = c.slice(0, i);
-      if (map.has(candidate)) return candidate;
-    }
-    return "";
-  };
-
-  map.forEach((node) => {
-    const rawParent = String(
-      node.parent_code || node.parentCode || node.subhead || "",
-    ).trim();
-
-    let parentCode = "";
-    if (rawParent && rawParent !== "0" && rawParent !== node.code && map.has(rawParent)) {
-      parentCode = rawParent;
-    } else if (rawParent && rawParent !== "0" && rawParent !== node.code) {
-      parentCode = findExistingAncestor(rawParent);
-    }
-
-    if (parentCode && map.has(parentCode) && parentCode !== node.code) {
-      map.get(parentCode).children.push(node);
-    } else {
-      treeRoots.push(node);
-    }
-  });
-
-  const toTreeData = (nodes) =>
-    nodes
-      .sort((a, b) => a.code.localeCompare(b.code))
-      .map((n) => ({
-        title: `${n.code} - ${n.description || n.type || ""}`,
-        subtitle: `${n.account_nature || n.accountNature || ""} | parent: ${
-          n.parent_code || n.parentCode || n.subhead || "0"
-        }`,
-        expanded: String(n.code || "").length === 1,
-        children: toTreeData(n.children || []),
-      }));
-
-  return (
-    <Card>
-      <CardContent className="p-4">
-        {/* {JSON.stringify(toTreeData(treeRoots))} */}
-        <div className="rounded-lg border p-2">
-          <div className="text-sm font-semibold mb-2">Sortable Tree</div>
-          <CustomTree treeData={toTreeData(treeRoots)} treeLoading={false} />
-        </div>
-      </CardContent>
-    </Card>
+    <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
+      <CustomTable1
+        data={groupedRows}
+        fields={columns}
+        pageSize={100}
+        rowClassName={(row) =>
+          row?._isGroupHeader
+            ? "bg-slate-100 font-semibold"
+            : `${getDepthTone(row?._depth || 0)} ${row?._hasChildren ? "font-semibold" : ""}`
+        }
+      />
+    </div>
   );
 };
 
@@ -1390,88 +1321,389 @@ export const AddAccountForm = ({ onSave, onCancel }) => {
 
 /* ====================== EDIT FORM ====================== */
 export const EditAccountForm = ({ account, onSave, onCancel }) => {
-  const [form, setForm] = useState(() => ({
-    ...account,
-    level: account?.level ?? account?.Level ?? "",
-    category: account?.category ?? "",
-    accountNature:
-      account?.accountNature ?? account?.account_nature ?? account?.account_type ?? "",
-  }));
+  const pick = (...keys) => {
+    for (const k of keys) {
+      if (account?.[k] !== undefined && account?.[k] !== null && account?.[k] !== "") {
+        return account[k];
+      }
+    }
+    return "";
+  };
+
+  const primaryNature = String(
+    pick("accountNature", "account_nature", "account_type") || ""
+  ).toUpperCase();
+
+  const [form, setForm] = useState(() => {
+    const fsRaw = String(pick("fsSection", "fs_section") || "").toLowerCase();
+    let fsSection = "balance_sheet";
+    if (fsRaw === "pl" || fsRaw === "profit_and_loss") fsSection = "profit_and_loss";
+    else if (fsRaw === "off_statement") fsSection = "off_statement";
+    else if (fsRaw === "bs" || fsRaw === "balance_sheet") fsSection = "balance_sheet";
+    else if (["REVENUE", "EXPENSE"].includes(primaryNature))
+      fsSection = "profit_and_loss";
+
+    const nb = String(pick("normalBalance", "normal_balance") || "").toLowerCase();
+    return {
+      ...account,
+      level: account?.level ?? account?.Level ?? "",
+      category: account?.category ?? "",
+      subcategory: pick("subcategory"),
+      type: pick("type"),
+      accountNature: primaryNature,
+      description: pick("description"),
+      normalBalance: nb === "credit" ? "credit" : nb === "debit" ? "debit" : (
+        ["ASSET", "EXPENSE"].includes(primaryNature) ? "debit" : "credit"
+      ),
+      fsSection,
+      reportingBehavior:
+        pick("reportingBehavior", "reporting_behavior") || "fixed",
+      alternateNature: String(
+        pick("alternateNature", "alternate_nature") || ""
+      ).toUpperCase(),
+      accountRole: pick("accountRole", "account_role") || "general",
+      plLine: pick("plLine", "pl_line"),
+      display:
+        account?.display === undefined || account?.display === null
+          ? true
+          : Boolean(account.display === true || account.display === 1 || account.display === "1"),
+      isActive:
+        account?.is_active === undefined && account?.isActive === undefined
+          ? true
+          : Boolean(
+              account?.isActive === true ||
+                account?.isActive === 1 ||
+                account?.is_active === true ||
+                account?.is_active === 1
+            ),
+    };
+  });
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const merged = {
-      ...form,
-      level: form.level || account?.level,
-      category: form.category || account?.category,
-      accountNature:
-        form.accountNature ||
-        account?.accountNature ||
-        account?.account_nature ||
-        account?.account_type,
-    };
-    onSave(merged, true);
+    if (!form.description?.trim()) {
+      toast.error("Description is required");
+      return;
+    }
+    if (
+      form.reportingBehavior === "balance_switch" &&
+      !form.alternateNature
+    ) {
+      toast.error("Alternate nature is required for balance-switch accounts");
+      return;
+    }
+    onSave(
+      {
+        ...form,
+        code: form.code || form.head || account?.code || account?.head,
+        head: form.head || account?.head,
+        level: form.level || account?.level,
+        category: form.category || account?.category,
+        accountNature:
+          form.accountNature ||
+          account?.accountNature ||
+          account?.account_nature ||
+          account?.account_type,
+      },
+      true
+    );
   };
 
+  const selectClass =
+    "mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2] text-sm";
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl">
-        <CardHeader className="flex flex-row justify-between">
-          <CardTitle>Edit Account</CardTitle>
-          <Button variant="ghost" onClick={onCancel}>
-            <X />
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+    <Sheet
+      open={!!account}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onCancel?.();
+      }}
+    >
+      <SheetContent
+        side="right"
+        className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-xl md:!max-w-2xl [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100"
+      >
+        <SheetHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-navy,#4267B2)] px-5 py-4 pr-12 text-left">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-md bg-white/10 p-2">
+              <BookOpen className="h-4 w-4 text-[var(--aa-accent,#93c5fd)]" />
+            </div>
+            <div className="min-w-0">
+              <SheetTitle className="text-lg font-semibold leading-tight text-white">
+                Edit Account
+              </SheetTitle>
+              <SheetDescription className="mt-0.5 text-xs text-white/70">
+                Update classification and statement mapping (code is locked)
+              </SheetDescription>
+            </div>
+          </div>
+        </SheetHeader>
+
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-white px-5 py-5 md:px-6">
             <div>
               <Label>Code</Label>
-              <Input value={form.head} disabled />
+              <Input value={form.head || form.code || ""} disabled className="mt-1 font-mono" />
             </div>
             <div>
               <Label>Description</Label>
               <Input
+                className="mt-1 border-slate-200"
                 value={form.description}
                 onChange={(e) =>
                   setForm({ ...form, description: e.target.value })
                 }
               />
             </div>
-            <div className="flex gap-3">
-              <CustomButton type="submit">Update</CustomButton>
-              <Button variant="outline" onClick={onCancel}>
-                Cancel
-              </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label>Account type</Label>
+                <Input
+                  className="mt-1 border-slate-200"
+                  value={form.type || ""}
+                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Subcategory</Label>
+                <Input
+                  className="mt-1 border-slate-200"
+                  value={form.subcategory || ""}
+                  onChange={(e) =>
+                    setForm({ ...form, subcategory: e.target.value })
+                  }
+                />
+              </div>
             </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50/90 p-3 space-y-3">
+              <h4 className="text-sm font-semibold text-slate-800">
+                Statement mapping
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label>Nature</Label>
+                  <select
+                    className={selectClass}
+                    value={form.accountNature}
+                    onChange={(e) => {
+                      const accountNature = e.target.value;
+                      const isPl =
+                        accountNature === "REVENUE" ||
+                        accountNature === "EXPENSE";
+                      setForm((f) => ({
+                        ...f,
+                        accountNature,
+                        normalBalance: ["ASSET", "EXPENSE"].includes(
+                          accountNature
+                        )
+                          ? "debit"
+                          : "credit",
+                        fsSection: isPl ? "profit_and_loss" : "balance_sheet",
+                      }));
+                    }}
+                  >
+                    {["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"].map(
+                      (n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <Label>Financial statement</Label>
+                  <select
+                    className={selectClass}
+                    value={form.fsSection}
+                    onChange={(e) =>
+                      setForm({ ...form, fsSection: e.target.value })
+                    }
+                  >
+                    <option value="balance_sheet">Balance sheet</option>
+                    <option value="profit_and_loss">Profit &amp; loss</option>
+                    <option value="off_statement">Off statement</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>Normal balance</Label>
+                  <select
+                    className={selectClass}
+                    value={form.normalBalance}
+                    onChange={(e) =>
+                      setForm({ ...form, normalBalance: e.target.value })
+                    }
+                  >
+                    <option value="debit">Debit</option>
+                    <option value="credit">Credit</option>
+                  </select>
+                </div>
+                {form.fsSection === "profit_and_loss" && (
+                  <div>
+                    <Label>P&amp;L line</Label>
+                    <select
+                      className={selectClass}
+                      value={form.plLine || ""}
+                      onChange={(e) =>
+                        setForm({ ...form, plLine: e.target.value })
+                      }
+                    >
+                      <option value="">Derive from type</option>
+                      <option value="turnover">Turnover</option>
+                      <option value="cost_of_sales">Cost of sales</option>
+                      <option value="admin_costs">Admin costs</option>
+                      <option value="other_income">Other income</option>
+                      <option value="finance">Finance</option>
+                      <option value="tax">Tax</option>
+                      <option value="impairment">Impairment</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 p-3 space-y-3">
+              <h4 className="text-sm font-semibold text-slate-800">
+                Special reporting
+              </h4>
+              <div>
+                <Label>Reporting behavior</Label>
+                <select
+                  className={selectClass}
+                  value={form.reportingBehavior}
+                  onChange={(e) => {
+                    const reportingBehavior = e.target.value;
+                    setForm((f) => ({
+                      ...f,
+                      reportingBehavior,
+                      alternateNature:
+                        reportingBehavior === "balance_switch"
+                          ? f.alternateNature ||
+                            (f.accountNature === "LIABILITY"
+                              ? "ASSET"
+                              : "LIABILITY")
+                          : "",
+                    }));
+                  }}
+                >
+                  <option value="fixed">Fixed</option>
+                  <option value="balance_switch">Balance switch</option>
+                </select>
+              </div>
+              {form.reportingBehavior === "balance_switch" && (
+                <div className="rounded-md border border-[#4267B2]/25 bg-[var(--aa-sidebar-active,#eff4fb)] p-3 space-y-2">
+                  <p className="text-xs text-slate-600">
+                    Debit balance → asset side; credit balance → liability side
+                    (VAT / clearing).
+                  </p>
+                  <div>
+                    <Label>Alternate nature</Label>
+                    <select
+                      className={selectClass}
+                      value={form.alternateNature}
+                      onChange={(e) =>
+                        setForm({ ...form, alternateNature: e.target.value })
+                      }
+                    >
+                      <option value="">Select…</option>
+                      {["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"]
+                        .filter((n) => n !== form.accountNature)
+                        .map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+              <div>
+                <Label>Account role</Label>
+                <select
+                  className={selectClass}
+                  value={form.accountRole}
+                  onChange={(e) =>
+                    setForm({ ...form, accountRole: e.target.value })
+                  }
+                >
+                  <option value="general">General</option>
+                  <option value="tax_control">Tax control</option>
+                  <option value="bank">Bank</option>
+                  <option value="ar">AR</option>
+                  <option value="ap">AP</option>
+                  <option value="clearing">Clearing</option>
+                  <option value="retained_earnings">Retained earnings</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3">
+              <label className="flex items-center justify-between gap-4 text-sm text-slate-700 cursor-pointer">
+                <span>Show in account lists</span>
+                <Checkbox
+                  checked={!!form.display}
+                  onCheckedChange={(c) =>
+                    setForm({ ...form, display: !!c })
+                  }
+                />
+              </label>
+              <label className="flex items-center justify-between gap-4 text-sm text-slate-700 cursor-pointer">
+                <span>Active</span>
+                <Checkbox
+                  checked={!!form.isActive}
+                  onCheckedChange={(c) =>
+                    setForm({ ...form, isActive: !!c })
+                  }
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/90 px-5 py-3.5">
+            <Button
+              variant="outline"
+              type="button"
+              size="sm"
+              onClick={onCancel}
+              className="border-slate-200"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              className="border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
+            >
+              Update
+            </Button>
+          </div>
+        </form>
+      </SheetContent>
+    </Sheet>
   );
 };
 
 /* ====================== SKELETON ====================== */
 const AccountListSkeleton = () => (
-  <Card>
-    <CardContent className="p-0">
-      <div className="p-4">
-        <div className="grid grid-cols-5 gap-4 mb-4 pb-3 border-b">
-          <Skeleton className="h-5 w-20" />
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="h-5 w-16" />
-          <Skeleton className="h-5 w-20" />
-          <Skeleton className="h-5 w-16" />
-        </div>
-        {[...Array(10)].map((_, i) => (
-          <div key={i} className="grid grid-cols-5 gap-4 mb-3 pb-3 border-b">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-6 w-20 mx-auto" />
-            <Skeleton className="h-6 w-6 ml-auto" />
-          </div>
-        ))}
+  <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
+    <div className="p-4">
+      <div className="mb-4 grid grid-cols-5 gap-4 border-b border-slate-200 pb-3">
+        <Skeleton className="h-5 w-20" />
+        <Skeleton className="h-5 w-24" />
+        <Skeleton className="h-5 w-16" />
+        <Skeleton className="h-5 w-20" />
+        <Skeleton className="h-5 w-16" />
       </div>
-    </CardContent>
-  </Card>
+      {[...Array(10)].map((_, i) => (
+        <div key={i} className="mb-3 grid grid-cols-5 gap-4 border-b border-slate-100 pb-3">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="mx-auto h-6 w-20" />
+          <Skeleton className="ml-auto h-6 w-6" />
+        </div>
+      ))}
+    </div>
+  </div>
 );

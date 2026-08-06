@@ -1,11 +1,19 @@
 /* eslint-disable react/prop-types */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSelector } from "react-redux";
-import { X } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Typeahead } from "react-bootstrap-typeahead";
 import { toast } from "sonner";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -166,6 +174,38 @@ const humanize = (value = "") =>
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
+const ACCOUNT_ROLE_OPTIONS = [
+  { value: "general", label: "General" },
+  { value: "tax_control", label: "Tax control (VAT/WHT)" },
+  { value: "bank", label: "Bank" },
+  { value: "ar", label: "Accounts receivable" },
+  { value: "ap", label: "Accounts payable" },
+  { value: "clearing", label: "Clearing / suspense" },
+  { value: "retained_earnings", label: "Retained earnings" },
+];
+
+const PL_LINE_OPTIONS = [
+  { value: "turnover", label: "Turnover" },
+  { value: "cost_of_sales", label: "Cost of sales" },
+  { value: "admin_costs", label: "Admin / operating costs" },
+  { value: "other_income", label: "Other income" },
+  { value: "finance", label: "Finance / interest" },
+  { value: "tax", label: "Tax" },
+  { value: "impairment", label: "Impairment" },
+];
+
+const NATURE_ENUM_OPTIONS = ["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"];
+
+const defaultReportingForNature = (accountNature) => {
+  const n = String(accountNature || "").toUpperCase();
+  const isPl = n === "REVENUE" || n === "EXPENSE";
+  return {
+    normalBalance: ["ASSET", "EXPENSE"].includes(n) ? "debit" : "credit",
+    fsSection: isPl ? "profit_and_loss" : "balance_sheet",
+    plLine: "",
+  };
+};
+
 export default function AddAccountModal({ open, onClose, onSuccess }) {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
 
@@ -199,6 +239,12 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
     description: "",
     display: true,
     isActive: true,
+    normalBalance: "debit",
+    fsSection: "balance_sheet",
+    reportingBehavior: "fixed",
+    alternateNature: "",
+    accountRole: "general",
+    plLine: "",
   });
 
   /** Six digits only: nature 1–5 + five-digit sequence (e.g. 100001, 100002). */
@@ -425,8 +471,17 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
       {
         parentCode,
         category: form.category,
-        normalBalance: selectedType?.normal_balance,
-        fsSection: selectedType?.fs_section,
+        subcategory: selectedCategory?.key || form.category,
+        normalBalance: form.normalBalance,
+        fsSection: form.fsSection,
+        reportingBehavior: form.reportingBehavior,
+        alternateNature:
+          form.reportingBehavior === "balance_switch"
+            ? form.alternateNature || null
+            : null,
+        accountRole: form.accountRole || "general",
+        plLine:
+          form.fsSection === "profit_and_loss" ? form.plLine || null : null,
         type: selectedType?.type,
         accountNature: accountNature,
         detail: null,
@@ -458,11 +513,18 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
             description: "",
             display: true,
             isActive: true,
+            normalBalance: "debit",
+            fsSection: "balance_sheet",
+            reportingBehavior: "fixed",
+            alternateNature: "",
+            accountRole: "general",
+            plLine: "",
           });
           setIsSubaccount(false);
           setSelectedType(null);
           setSelectedCategory(null);
           setSelectedParent(null);
+          setSelectedNature("");
         } else {
           toast.error(resp.message || "Failed to create account");
         }
@@ -474,8 +536,6 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
       }
     );
   };
-
-  if (!open) return null;
 
   const natureOptions = Object.keys(ACCOUNT_TAXONOMY);
 
@@ -511,38 +571,48 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
     return categoryKeys.map((k) => ({ key: k, label: humanize(k) }));
   })();
 
+  const selectClass =
+    "w-full px-3 py-2 border border-slate-200 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]";
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        {/* Modal Header with Blue Gradient */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3">
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-base font-bold">Add New Account</h3>
-              <p className="text-blue-100 text-xs mt-0.5">
-                Create a new account in your chart of accounts
-              </p>
+    <Sheet
+      open={!!open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose?.();
+      }}
+    >
+      <SheetContent
+        side="right"
+        className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-xl md:!max-w-2xl [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100"
+      >
+        <SheetHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-navy,#4267B2)] px-5 py-4 pr-12 text-left">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-md bg-white/10 p-2">
+              <BookOpen className="h-4 w-4 text-[var(--aa-accent,#93c5fd)]" />
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-white/20 rounded transition-all"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <div className="min-w-0">
+              <SheetTitle className="text-lg font-semibold leading-tight text-white">
+                Add New Account
+              </SheetTitle>
+              <SheetDescription className="mt-0.5 text-xs text-white/70">
+                Map the account for P&amp;L, Trial Balance, and Balance Sheet
+              </SheetDescription>
+            </div>
           </div>
-        </div>
+        </SheetHeader>
 
-        <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Account number */}
-            {/*  */}
-
+        <form
+          onSubmit={handleSubmit}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto bg-white px-5 py-5 md:px-6">
+            <div className="space-y-5">
             {/* Nature (balance-sheet classification: Assets, Liabilities, …) */}
             <div>
               <Label>
                 Nature <span className="text-red-500">*</span>
               </Label>
-              <p className="text-xs text-muted-foreground mt-1 mb-1.5">
+              <p className="text-xs text-slate-500 mt-1 mb-1.5">
                 High-level group (Assets, Liabilities, Equity, Revenue, Expenses). This is not the same as Account
                 type below.
               </p>
@@ -562,9 +632,16 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                     accountType: "",
                     category: "",
                     parentAccount: null,
+                    ...defaultReportingForNature(
+                      NATURE_TO_ENUM[nextNature] || ""
+                    ),
+                    reportingBehavior: "fixed",
+                    alternateNature: "",
+                    accountRole: "general",
+                    plLine: "",
                   }));
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className={selectClass}
               >
                 <option value="">Select nature...</option>
                 {natureOptions.map((n) => (
@@ -580,21 +657,8 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
               <div>
                 <Label>
                   Account type <span className="text-red-500">*</span>
-                  <span className="ml-2 text-gray-400">
-                    <svg
-                      className="inline w-4 h-4"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </span>
                 </Label>
-                <p className="text-xs text-muted-foreground mt-1 mb-1.5 min-h-[1rem]">
+                <p className="text-xs text-slate-500 mt-1 mb-1.5 min-h-[1rem]">
                   Choose the account type.
                 </p>
 
@@ -621,6 +685,11 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                       setSelectedNature(type.natureKey);
                     }
                     setAccountNumberTouched(false);
+                    const nature =
+                      type?.accountNature ||
+                      NATURE_TO_ENUM[type?.natureKey || selectedNature] ||
+                      "";
+                    const defaults = defaultReportingForNature(nature);
                     setForm({
                       accountName: "",
                       accountNumber: "",
@@ -632,6 +701,11 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                       description: "",
                       display: true,
                       isActive: true,
+                      ...defaults,
+                      reportingBehavior: "fixed",
+                      alternateNature: "",
+                      accountRole: "general",
+                      plLine: "",
                     });
 
                     setParentAccounts([]);
@@ -659,10 +733,30 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                   onChange={(selected) => {
                     const category = selected[0] || null;
                     setSelectedCategory(category);
-                    setForm((f) => ({
-                      ...f,
-                      category: category?.label || "",
-                    }));
+                    const subKey = category?.key || "";
+                    const isTaxControl =
+                      subKey === "tax_payable" ||
+                      subKey === "deferred_tax" ||
+                      /tax|vat|wht/i.test(subKey);
+                    setForm((f) => {
+                      const next = {
+                        ...f,
+                        category: category?.label || "",
+                      };
+                      if (isTaxControl) {
+                        next.reportingBehavior = "balance_switch";
+                        next.accountRole = "tax_control";
+                        next.alternateNature =
+                          (NATURE_TO_ENUM[selectedNature] || "") === "LIABILITY"
+                            ? "ASSET"
+                            : "LIABILITY";
+                      } else if (f.accountRole === "tax_control") {
+                        next.reportingBehavior = "fixed";
+                        next.accountRole = "general";
+                        next.alternateNature = "";
+                      }
+                      return next;
+                    });
                   }}
                   clearButton
                   disabled={!selectedType}
@@ -814,7 +908,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                   setForm((f) => ({ ...f, description: e.target.value }))
                 }
                 placeholder="Enter account description"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
                 required
               />
             </div>
@@ -838,7 +932,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                     setForm((f) => ({ ...f, accountNumber: next }));
                   }}
                   placeholder="e.g. 200001"
-                  className="h-12 rounded-2xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 font-mono text-lg font-medium text-slate-900 shadow-sm placeholder:text-slate-400 focus-visible:border-amber-400 focus-visible:ring-2 focus-visible:ring-amber-400/30"
+                  className="h-11 rounded-lg border border-[#4267B2]/25 bg-[var(--aa-sidebar-active,#eff4fb)] px-4 font-mono text-base font-medium text-slate-900 shadow-none placeholder:text-slate-400 focus-visible:border-[#4267B2] focus-visible:ring-2 focus-visible:ring-[#4267B2]/25"
                 />
                 <p className="text-xs text-muted-foreground">
                   You can keep the suggested code or type your own. It must be
@@ -858,6 +952,177 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                     {codeCheck.message}
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Statement mapping */}
+            {selectedType && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50/90 p-4 space-y-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-800">
+                    Statement mapping
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    How this account appears on P&amp;L, Trial Balance, and Balance Sheet.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Financial statement</Label>
+                    <select
+                      value={form.fsSection}
+                      onChange={(e) => {
+                        const fsSection = e.target.value;
+                        setForm((f) => ({
+                          ...f,
+                          fsSection,
+                          plLine:
+                            fsSection === "profit_and_loss" ? f.plLine : "",
+                        }));
+                      }}
+                      className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
+                    >
+                      <option value="balance_sheet">Balance sheet</option>
+                      <option value="profit_and_loss">Profit &amp; loss</option>
+                      <option value="off_statement">Off statement</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Normal balance</Label>
+                    <select
+                      value={form.normalBalance}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          normalBalance: e.target.value,
+                        }))
+                      }
+                      className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
+                    >
+                      <option value="debit">Debit</option>
+                      <option value="credit">Credit</option>
+                    </select>
+                  </div>
+                  {form.fsSection === "profit_and_loss" && (
+                    <div className="md:col-span-2">
+                      <Label>P&amp;L line</Label>
+                      <select
+                        value={form.plLine}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, plLine: e.target.value }))
+                        }
+                        className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
+                      >
+                        <option value="">Derive from account type</option>
+                        {PL_LINE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Special reporting */}
+            {selectedType && (
+              <div className="rounded-lg border border-slate-200 p-4 space-y-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-800">
+                    Special reporting
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Dual-nature controls (VAT, WHT clearing) reclassify by closing balance.
+                  </p>
+                </div>
+                <div>
+                  <Label>Reporting behavior</Label>
+                  <select
+                    value={form.reportingBehavior}
+                    onChange={(e) => {
+                      const reportingBehavior = e.target.value;
+                      setForm((f) => ({
+                        ...f,
+                        reportingBehavior,
+                        alternateNature:
+                          reportingBehavior === "balance_switch"
+                            ? f.alternateNature ||
+                              ((NATURE_TO_ENUM[selectedNature] || "") ===
+                              "LIABILITY"
+                                ? "ASSET"
+                                : "LIABILITY")
+                            : "",
+                        accountRole:
+                          reportingBehavior === "balance_switch" &&
+                          f.accountRole === "general"
+                            ? "tax_control"
+                            : f.accountRole,
+                      }));
+                    }}
+                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
+                  >
+                    <option value="fixed">Fixed (primary nature)</option>
+                    <option value="balance_switch">
+                      Balance switch (debit ↔ asset, credit ↔ liability)
+                    </option>
+                  </select>
+                </div>
+                {form.reportingBehavior === "balance_switch" && (
+                  <div className="rounded-md border border-[#4267B2]/25 bg-[var(--aa-sidebar-active,#eff4fb)] p-3 space-y-3">
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Used for VAT / clearing: a{" "}
+                      <span className="font-medium text-slate-800">
+                        debit
+                      </span>{" "}
+                      closing balance presents as an asset (e.g. VAT recoverable);
+                      a{" "}
+                      <span className="font-medium text-slate-800">
+                        credit
+                      </span>{" "}
+                      balance presents as a liability (e.g. VAT payable).
+                    </p>
+                    <div>
+                      <Label>Alternate nature (when balance flips)</Label>
+                      <select
+                        value={form.alternateNature}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            alternateNature: e.target.value,
+                          }))
+                        }
+                        className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
+                      >
+                        <option value="">Select…</option>
+                        {NATURE_ENUM_OPTIONS.filter(
+                          (n) => n !== (NATURE_TO_ENUM[selectedNature] || "")
+                        ).map((n) => (
+                          <option key={n} value={n}>
+                            {humanize(n)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <Label>Account role</Label>
+                  <select
+                    value={form.accountRole}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, accountRole: e.target.value }))
+                    }
+                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
+                  >
+                    {ACCOUNT_ROLE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
 
@@ -917,14 +1182,11 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                         onChange={(e) =>
                           setForm((f) => ({ ...f, asOf: e.target.value }))
                         }
-                        className="pr-10"
+                        className="border-slate-200"
                         required={!!form.openingBalance}
                       />
-                      <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                        📅
-                      </span>
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-sm text-slate-500 mt-1">
                       {form.asOf
                         ? `We'll start tracking from ${form.asOf} onwards.`
                         : "Select a date if entering an opening balance."}
@@ -967,42 +1229,43 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                 </div>
               </div>
             )}
-
-            {/* Description - Only show when Account type is selected */}
-
-            {/* Submit */}
-            <div className="flex justify-end gap-2 pt-3 border-t">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-3 py-0.5 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-all font-medium"
-                disabled={loading}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-3 py-0.5 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded hover:from-blue-700 hover:to-indigo-700 transition-all font-medium flex items-center gap-1 shadow-lg hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={
-                  loading ||
-                  codeCheck.status === "taken" ||
-                  codeCheck.status === "invalid" ||
-                  codeCheck.status === "checking"
-                }
-              >
-                {loading ? (
-                  <>
-                    <span className="h-3 w-3 border-2 border-white/60 border-t-transparent rounded-full animate-spin"></span>
-                    Creating...
-                  </>
-                ) : (
-                  "Create Account"
-                )}
-              </button>
             </div>
-          </form>
-        </div>
-      </div>
-    </div>
+          </div>
+
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/90 px-5 py-3.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+              disabled={loading}
+              className="border-slate-200"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={
+                loading ||
+                codeCheck.status === "taken" ||
+                codeCheck.status === "invalid" ||
+                codeCheck.status === "checking"
+              }
+              className="gap-1.5 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90 disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <span className="h-3.5 w-3.5 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Account"
+              )}
+            </Button>
+          </div>
+        </form>
+      </SheetContent>
+    </Sheet>
   );
 }

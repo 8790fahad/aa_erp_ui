@@ -113,6 +113,7 @@ import { appTypeAccess } from "../sidebars/sidebarModules";
 import TeamSetup from "../pages/admin/TeamSetup";
 import RateSetup from "../pages/admin/RateSetup";
 import DiscountSetup from "../pages/admin/DiscountSetup";
+import PriceSetup from "../pages/admin/PriceSetup";
 import Production from "../pages/production/recycling/Production";
 import ProductionList from "../pages/production/recycling/ProductionList";
 import RawMaterialList from "../pages/production/recycling/RawMaterialList";
@@ -817,6 +818,10 @@ const routeModules = {
         element: <Markup />,
       },
       {
+        path: "price-setup",
+        element: <PriceSetup />,
+      },
+      {
         path: "markup/costing/:recordId",
         element: <Markup />,
       },
@@ -1399,7 +1404,7 @@ const routeModules = {
       },
       {
         path: "price-setup",
-        element: <Navigate to="/app/admin/settings#price-setup" replace />,
+        element: <PriceSetup />,
       },
       {
         path: "hr/*",

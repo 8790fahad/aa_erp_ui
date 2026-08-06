@@ -320,6 +320,7 @@ export function PageContextBar() {
   const isSalesRoute = location.pathname.split("/").includes("sales");
   const isInvoicesListPage = location.pathname.includes("/sales/invoices");
   const isMarkupPage = location.pathname.includes("/sales/markup");
+  const isPriceSetupPage = location.pathname.includes("/sales/price-setup");
   const isSalesInvoicesReportPage = location.pathname.includes(
     "/reports/accounting-reports/sales-invoices-report",
   );
@@ -330,6 +331,7 @@ export function PageContextBar() {
     isSalesRoute &&
     !isInvoicesListPage &&
     !isMarkupPage &&
+    !isPriceSetupPage &&
     !isSalesInvoicesReportPage &&
     !isSalesLineReportPage;
   return (

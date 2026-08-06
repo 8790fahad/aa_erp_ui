@@ -1,23 +1,16 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useSelector } from "react-redux";
-import { Col, Row } from "reactstrap";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Input } from "antd";
 import {
   HandCoins,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   Wallet,
+  Search,
+  Receipt,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -26,6 +19,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import CreateImprestDrawer from "@/components/common/CreateImprestDrawer";
@@ -39,6 +39,15 @@ const STATUS_PAID = "paid";
 const STATUS_UNPAID = "unpaid";
 const STATUS_PARTIALLY_PAID = "partially_paid";
 
+const primaryBtn =
+  "border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90 shadow-none";
+const searchClass =
+  "h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20";
+const tableHeadClass =
+  "border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500";
+const selectTriggerClass =
+  "h-9 w-full min-w-[11rem] border-slate-200 bg-white text-sm focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20";
+
 export default function BillSources() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -47,6 +56,7 @@ export default function BillSources() {
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(false);
   const [imprestOpen, setImprestOpen] = useState(false);
+  const [createBillOpen, setCreateBillOpen] = useState(false);
   const [expenseList, setExpenseList] = useState([]);
   const searchFromUrl = searchParams.get("search") || "";
   const pageFromUrl = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
@@ -204,85 +214,86 @@ export default function BillSources() {
       custom: true,
       className: "text-center",
       component: (item) => (
-        <div
-          style={{ cursor: "pointer" }}
+        <button
+          type="button"
           onClick={() =>
             navigate(
-              `/app/expenses/billing/product-supplier-bill-pdf?invoice_ref=${item.invoice_ref}`
+              `/app/expenses/billing/product-supplier-bill-pdf?invoice_ref=${item.invoice_ref}`,
             )
           }
-          className="text-blue-600 font-medium text-center"
+          className="font-medium text-[#4267B2] hover:underline"
         >
-          {/* {JSON.stringify(item)} */}
           {item.invoice_ref || "N/A"}
-        </div>
+        </button>
       ),
     },
     {
-      title: "SUPPLIER",
+      title: "Supplier",
       custom: true,
       component: (item) => (
-        <span className="text-blue-600 font-medium">
+        <span className="font-medium text-slate-800">
           {item.supplier_name || "N/A"}
         </span>
       ),
     },
     {
-      title: "SUPPLIER ID",
+      title: "Supplier ID",
       custom: true,
       component: (item) => (
-        <span className="text-sm text-gray-600 font-mono">
+        <span className="font-mono text-sm text-slate-600">
           {item.ref_number || "—"}
         </span>
       ),
     },
     {
-      title: "BILL DATE",
+      title: "Bill date",
       custom: true,
       component: (item) => (
-        <span>
+        <span className="text-slate-700">
           {item.transaction_date
-            ? moment(item.transaction_date).format("MM/DD/YYYY")
+            ? moment(item.transaction_date).format("DD MMM YYYY")
             : "N/A"}
         </span>
       ),
     },
     {
-      title: "DUE DATE",
+      title: "Due date",
       custom: true,
       component: (item) => (
-        <span>
-          {item.due_date ? moment(item.due_date).format("MM/DD/YYYY") : "N/A"}
+        <span className="text-slate-700">
+          {item.due_date ? moment(item.due_date).format("DD MMM YYYY") : "N/A"}
         </span>
       ),
     },
     {
-      title: "BILL AMOUNT(₦)",
+      title: "Bill amount (₦)",
       custom: true,
       component: (item) => (
-        <span className="font-semibold">{formatNumber1(item.amount || 0)}</span>
+        <span className="font-semibold tabular-nums text-slate-900">
+          {formatNumber1(item.amount || 0)}
+        </span>
       ),
     },
     {
-      title: "STATUS",
+      title: "Status",
       custom: true,
       component: (item) => {
-        // Normalize status: handle both "Partially Paid" and "partially_paid" formats
         const statusRaw = item.status || "";
         const statusNormalized = statusRaw.toLowerCase().replace(/\s+/g, "_");
 
         const statusConfig = {
           paid: {
             label: "Paid",
-            className: "bg-green-100 text-green-800 border-green-200",
+            className:
+              "border-emerald-200 bg-emerald-50 text-emerald-800",
           },
           unpaid: {
             label: "Unpaid",
-            className: "bg-red-100 text-red-800 border-red-200",
+            className: "border-rose-200 bg-rose-50 text-rose-800",
           },
           partially_paid: {
             label: "Partially Paid",
-            className: "bg-yellow-100 text-yellow-800 border-yellow-200",
+            className: "border-amber-200 bg-amber-50 text-amber-800",
           },
         };
 
@@ -298,185 +309,102 @@ export default function BillSources() {
         );
       },
     },
-    // {
-    //   title: "ACTION",
-    //   custom: true,
-    //   component: (item) => {
-    //     const status = item.status || "unpaid";
-
-    //     if (status === "paid") {
-    //       return (
-    //         <div className="flex items-center gap-2">
-    //           <button
-    //             onClick={() => {
-    //               // You can add expand/collapse logic here if needed
-    //               console.log("Show payments for", item.invoice_id);
-    //             }}
-    //             className="text-green-600 hover:text-green-800 font-medium cursor-pointer"
-    //           >
-    //             Show payments
-    //           </button>
-    //         </div>
-    //       );
-    //     }
-
-    //     return (
-    //       <div className="flex items-center gap-2">
-    //         <button
-    //           onClick={() => {
-    //             // Navigate to make payment page or open payment modal
-    //             console.log("Make payment for", item.invoice_id);
-    //           }}
-    //           className="text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
-    //         >
-    //           Process Payment
-    //         </button>
-    //       </div>
-    //     );
-    //   },
-    // },
   ];
 
+  const openBillType = (path) => {
+    setCreateBillOpen(false);
+    navigate(path);
+  };
+
+  const createBillButton = (
+    <Button
+      type="button"
+      variant="default"
+      size="sm"
+      className={`flex h-9 items-center gap-2 ${primaryBtn}`}
+      onClick={() => setCreateBillOpen(true)}
+    >
+      <HandCoins className="h-4 w-4" />
+      Create Bill
+    </Button>
+  );
+
   return (
-    <div className="p-2">
-      <div className="flex justify-between items-center mb-6">
+    <div className="min-h-[70vh] px-3 py-4 sm:px-4 lg:px-6">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Bill</h1>
-          <p className="text-muted-foreground">Manage your billing expense</p>
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
+            <Receipt className="h-5 w-5 text-[#4267B2]" />
+            Bill
+          </h1>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Manage your billing expense
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 justify-end">
+      </div>
+
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            placeholder="Search by supplier name, invoice ref, or description"
+            value={searchInput}
+            onChange={handleSearchChange}
+            className={searchClass}
+          />
+        </div>
+        <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+          <div className="w-full sm:w-[12rem] lg:w-[11rem]">
+            <Select
+              value={statusFromUrl || STATUS_ALL}
+              onValueChange={(value) =>
+                handleStatusFilter(value === STATUS_ALL ? null : value)
+              }
+            >
+              <SelectTrigger className={selectTriggerClass}>
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={STATUS_ALL}>All</SelectItem>
+                <SelectItem value={STATUS_PAID}>Paid</SelectItem>
+                <SelectItem value={STATUS_PARTIALLY_PAID}>
+                  Partially Paid
+                </SelectItem>
+                <SelectItem value={STATUS_UNPAID}>Unpaid</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="flex items-center gap-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-medium"
+            className="h-9 gap-2 border-slate-200 text-[#4267B2] hover:bg-[var(--aa-sidebar-active)]"
             onClick={() => setImprestOpen(true)}
           >
-            <Wallet className="w-4 h-4 shrink-0" />
-            Create Imprest 
+            <Wallet className="h-4 w-4 shrink-0" />
+            Create Imprest
           </Button>
+          {createBillButton}
         </div>
       </div>
 
-      <Row className="mb-3">
-        <Col md="6">
-          <Input.Search
-            placeholder="Search by supplier name, invoice ref, or description"
-            value={searchInput}
-            onChange={(e) => handleSearchChange(e)}
-          />
-        </Col>
-        <Col md="6">
-          <div className="flex justify-end gap-2 items-center">
-            <div className="flex gap-2">
-              <Button
-                variant={statusFilter === null ? "default" : "outline"}
-                size="sm"
-                onClick={() => handleStatusFilter(null)}
-                className={
-                  statusFilter === null
-                    ? "bg-[#4267B2] hover:bg-[#5A7EC1] text-white"
-                    : ""
-                }
-              >
-                All
-              </Button>
-              <Button
-                variant={statusFilter === "paid" ? "default" : "outline"}
-                size="sm"
-                onClick={() => handleStatusFilter("paid")}
-                className={
-                  statusFilter === "paid"
-                    ? "bg-green-600 hover:bg-green-700 text-white"
-                    : "border-green-200 text-green-700 hover:bg-green-50"
-                }
-              >
-                Paid
-              </Button>
-              <Button
-                variant={
-                  statusFilter === "partially_paid" ? "default" : "outline"
-                }
-                size="sm"
-                onClick={() => handleStatusFilter("partially_paid")}
-                className={
-                  statusFilter === "partially_paid"
-                    ? "bg-yellow-600 hover:bg-yellow-700 text-white"
-                    : "border-yellow-200 text-yellow-700 hover:bg-yellow-50"
-                }
-              >
-                Partially Paid
-              </Button>
-              <Button
-                variant={statusFilter === "unpaid" ? "default" : "outline"}
-                size="sm"
-                onClick={() => handleStatusFilter("unpaid")}
-                className={
-                  statusFilter === "unpaid"
-                    ? "bg-red-600 hover:bg-red-700 text-white"
-                    : "border-red-200 text-red-700 hover:bg-red-50"
-                }
-              >
-                Unpaid
-              </Button>
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="flex items-center gap-2 bg-[#4267B2] hover:bg-[#5A7EC1] dark:bg-slate-800 dark:hover:bg-slate-700 shadow-none"
-                >
-                  <HandCoins className="w-4 h-4" />
-                  Create Bill
-                  <ChevronDown className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem
-                  onClick={() =>
-                    navigate("/app/expenses/billing/product-supplier-bill")
-                  }
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  <HandCoins className="w-4 h-4" />
-                Inventory Bill
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() =>
-                    navigate("/app/expenses/billing/operating-expense-bill")
-                  }
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  <HandCoins className="w-4 h-4" />
-                  Expense Bill
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </Col>
-      </Row>
-
-      <div className="mt-3">
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
+        <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead>
               <tr>
                 {fields.map((field, idx) => (
-                  <th
-                    key={idx}
-                    className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider"
-                  >
+                  <th key={idx} className={tableHeadClass}>
                     {field.title}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
-                // Skeleton loading rows
                 Array.from({ length: 5 }).map((_, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
+                  <tr key={idx}>
                     {fields.map((_, fieldIdx) => (
                       <td key={fieldIdx} className="px-4 py-3">
                         <Skeleton className="h-4 w-full" />
@@ -486,54 +414,32 @@ export default function BillSources() {
                 ))
               ) : filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={fields.length} className="px-4 py-8 text-center">
-                    <div className="flex flex-col items-center justify-center gap-4">
-                      <p className="text-gray-500 text-lg">No bills found</p>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="default"
-                            size="sm"
-                            className="flex items-center gap-2 bg-[#4267B2] hover:bg-[#5A7EC1] dark:bg-slate-800 dark:hover:bg-slate-700 shadow-none"
-                          >
-                            <HandCoins className="w-4 h-4" />
-                            Create Bill
-                            <ChevronDown className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="center" className="w-48">
-                          <DropdownMenuItem
-                            onClick={() =>
-                              navigate(
-                                "/app/expenses/billing/product-supplier-bill"
-                              )
-                            }
-                            className="flex items-center gap-2 cursor-pointer"
-                          >
-                            <HandCoins className="w-4 h-4" />
-                            Product Bill
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() =>
-                              navigate(
-                                "/app/expenses/billing/operating-expense-bill"
-                              )
-                            }
-                            className="flex items-center gap-2 cursor-pointer"
-                          >
-                            <HandCoins className="w-4 h-4" />
-                            Expense Bill
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                  <td colSpan={fields.length} className="px-4 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--aa-sidebar-active)] text-[#4267B2]">
+                        <Receipt className="h-5 w-5" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-700">
+                        No bills found
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Create a bill to get started
+                      </p>
+                      {createBillButton}
                     </div>
                   </td>
                 </tr>
               ) : (
                 paginatedData.map((item) => (
-                  <tr key={item.invoice_id} className="hover:bg-gray-50">
+                  <tr
+                    key={item.invoice_id}
+                    className="transition-colors hover:bg-slate-50/80"
+                  >
                     {fields.map((field, idx) => (
-                      <td key={idx} className="px-4 py-3 text-sm text-gray-900">
+                      <td
+                        key={idx}
+                        className="px-4 py-3 text-sm text-slate-800"
+                      >
                         {field.component
                           ? field.component(item)
                           : item[field.value]}
@@ -544,82 +450,140 @@ export default function BillSources() {
               )}
             </tbody>
           </table>
+        </div>
 
-          {/* Pagination */}
-          {!loading && filteredData.length > 0 && (
-            <div className="mt-3 flex items-center justify-end px-4 pb-4">
-              <div className="flex w-full items-center gap-8 lg:w-fit">
-                <div className="hidden items-center gap-2 lg:flex">
-                  <Label
-                    htmlFor="rows-per-page"
-                    className="text-sm font-medium"
+        {!loading && filteredData.length > 0 && (
+          <div className="flex items-center justify-end border-t border-slate-100 px-4 py-3">
+            <div className="flex w-full items-center gap-8 lg:w-fit">
+              <div className="hidden items-center gap-2 lg:flex">
+                <Label
+                  htmlFor="rows-per-page"
+                  className="text-sm font-medium text-slate-600"
+                >
+                  Rows per page
+                </Label>
+                <Select
+                  value={`${pageSize}`}
+                  onValueChange={(value) =>
+                    handlePageSizeChange(Number(value))
+                  }
+                >
+                  <SelectTrigger
+                    className="h-8 w-20 border-slate-200"
+                    id="rows-per-page"
                   >
-                    Rows per page
-                  </Label>
-                  <Select
-                    value={`${pageSize}`}
-                    onValueChange={(value) => handlePageSizeChange(Number(value))}
-                  >
-                    <SelectTrigger className="w-20" id="rows-per-page">
-                      <SelectValue placeholder={pageSize} />
-                    </SelectTrigger>
-                    <SelectContent side="top">
-                      {[10, 20, 30, 40, 50, 100].map((size) => (
-                        <SelectItem key={size} value={`${size}`}>
-                          {size}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex w-fit items-center justify-center text-sm font-medium">
-                  Page {safePageIndex + 1} of {totalPages}
-                </div>
-                <div className="ml-auto flex items-center gap-2 lg:ml-0">
-                  <Button
-                    variant="outline"
-                    className="hidden h-8 w-8 p-0 lg:flex"
-                    onClick={() => handlePageChange(0)}
-                    disabled={safePageIndex === 0}
-                  >
-                    <span className="sr-only">Go to first page</span>
-                    <ChevronsLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-8 w-8 p-0"
-                    onClick={() => handlePageChange(Math.max(0, safePageIndex - 1))}
-                    disabled={safePageIndex === 0}
-                  >
-                    <span className="sr-only">Go to previous page</span>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-8 w-8 p-0"
-                    onClick={() =>
-                      handlePageChange(Math.min(totalPages - 1, safePageIndex + 1))
-                    }
-                    disabled={safePageIndex >= totalPages - 1}
-                  >
-                    <span className="sr-only">Go to next page</span>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="hidden h-8 w-8 p-0 lg:flex"
-                    onClick={() => handlePageChange(totalPages - 1)}
-                    disabled={safePageIndex >= totalPages - 1}
-                  >
-                    <span className="sr-only">Go to last page</span>
-                    <ChevronsRight className="h-4 w-4" />
-                  </Button>
-                </div>
+                    <SelectValue placeholder={pageSize} />
+                  </SelectTrigger>
+                  <SelectContent side="top">
+                    {[10, 20, 30, 40, 50, 100].map((size) => (
+                      <SelectItem key={size} value={`${size}`}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex w-fit items-center justify-center text-sm font-medium text-slate-600">
+                Page {safePageIndex + 1} of {totalPages}
+              </div>
+              <div className="ml-auto flex items-center gap-2 lg:ml-0">
+                <Button
+                  variant="outline"
+                  className="hidden h-8 w-8 border-slate-200 p-0 lg:flex"
+                  onClick={() => handlePageChange(0)}
+                  disabled={safePageIndex === 0}
+                >
+                  <span className="sr-only">Go to first page</span>
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-8 w-8 border-slate-200 p-0"
+                  onClick={() =>
+                    handlePageChange(Math.max(0, safePageIndex - 1))
+                  }
+                  disabled={safePageIndex === 0}
+                >
+                  <span className="sr-only">Go to previous page</span>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-8 w-8 border-slate-200 p-0"
+                  onClick={() =>
+                    handlePageChange(
+                      Math.min(totalPages - 1, safePageIndex + 1),
+                    )
+                  }
+                  disabled={safePageIndex >= totalPages - 1}
+                >
+                  <span className="sr-only">Go to next page</span>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="hidden h-8 w-8 border-slate-200 p-0 lg:flex"
+                  onClick={() => handlePageChange(totalPages - 1)}
+                  disabled={safePageIndex >= totalPages - 1}
+                >
+                  <span className="sr-only">Go to last page</span>
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+
+      <Dialog open={createBillOpen} onOpenChange={setCreateBillOpen}>
+        <DialogContent className="max-w-md gap-0 border-slate-200 p-0 sm:rounded-lg">
+          <DialogHeader className="space-y-1 px-5 pb-0 pt-5 pr-12 text-left">
+            <DialogTitle className="text-base font-semibold text-slate-900">
+              Which bill are you creating?
+            </DialogTitle>
+            <DialogDescription className="text-sm text-slate-500">
+              Select the bill type to continue.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 px-5 py-4">
+            <button
+              type="button"
+              onClick={() =>
+                openBillType("/app/expenses/billing/product-supplier-bill")
+              }
+              className="w-full rounded-md border-0 bg-[#4267B2] px-4 py-3 text-left text-white transition-colors hover:bg-[#4267B2]/90"
+            >
+              <span className="block text-sm font-semibold">
+                Inventory Bill
+              </span>
+              <span className="mt-0.5 block text-xs font-normal text-white/75">
+                Product / supplier stock purchase bill
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                openBillType("/app/expenses/billing/operating-expense-bill")
+              }
+              className="w-full rounded-md border-0 bg-emerald-600 px-4 py-3 text-left text-white transition-colors hover:bg-emerald-700"
+            >
+              <span className="block text-sm font-semibold">Expense Bill</span>
+              <span className="mt-0.5 block text-xs font-normal text-white/75">
+                Operating expense bill
+              </span>
+            </button>
+          </div>
+          <div className="flex justify-end border-t border-slate-100 px-5 py-3">
+            <button
+              type="button"
+              onClick={() => setCreateBillOpen(false)}
+              className="text-sm font-medium text-[#4267B2] hover:underline"
+            >
+              Cancel
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <CreateImprestDrawer
         open={imprestOpen}

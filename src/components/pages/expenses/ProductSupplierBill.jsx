@@ -1646,19 +1646,19 @@ export default function ProductSupplierBill() {
       >
         <DrawerContent
           side="right"
-          className="flex h-full !w-[600px] max-w-[600px] flex-col border-l border-[#dfe3ec] bg-white font-sans text-[#1c2536]"
+          className="flex h-full !w-[600px] max-w-[600px] flex-col border-l border-slate-200 bg-white"
         >
-          <DrawerHeader className="border-b border-[#eceff5] px-6 py-5">
+          <DrawerHeader className="shrink-0 border-b border-slate-200 px-5 py-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-[#1e3a8a]/10 text-[#1e3a8a]">
+                <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-md bg-[var(--aa-sidebar-active)] text-[#4267B2]">
                   <FileText size={18} />
                 </div>
-                <div>
-                  <DrawerTitle className="text-lg font-bold tracking-tight text-[#141b2c]">
+                <div className="min-w-0 text-left">
+                  <DrawerTitle className="text-lg font-semibold tracking-tight text-slate-900">
                     Approved Purchase Requisitions
                   </DrawerTitle>
-                  <DrawerDescription className="mt-1 text-sm text-[#6b7385]">
+                  <DrawerDescription className="mt-1 text-xs text-slate-500">
                     Add one or more requisitions — drawer stays open until you
                     close it
                   </DrawerDescription>
@@ -1667,7 +1667,7 @@ export default function ProductSupplierBill() {
               <DrawerClose asChild>
                 <button
                   type="button"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#d7dce6] text-[#5b6478] transition hover:bg-[#f3f5f9]"
+                  className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
                   onClick={() => setSelectedRequisitionIds([])}
                   aria-label="Close"
                 >
@@ -1677,28 +1677,28 @@ export default function ProductSupplierBill() {
             </div>
           </DrawerHeader>
 
-          <div className="flex-1 overflow-y-auto px-6 py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-2">
             {loadingRequisitions ? (
               <div className="flex items-center justify-center py-12">
-                <Loader className="h-5 w-5 animate-spin text-[#1e3a8a]" />
-                <span className="ml-2 text-sm text-[#6b7385]">
+                <Loader className="h-5 w-5 animate-spin text-[#4267B2]" />
+                <span className="ml-2 text-sm text-slate-500">
                   Loading requisitions...
                 </span>
               </div>
             ) : requisitions.length === 0 ? (
               <div className="py-12 text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-[#1e3a8a]/10 text-[#1e3a8a]">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--aa-sidebar-active)] text-[#4267B2]">
                   <FileText size={22} />
                 </div>
-                <p className="mb-1 text-sm font-medium text-[#141b2c]">
+                <p className="mb-1 text-sm font-medium text-slate-800">
                   No approved requisitions found
                 </p>
-                <p className="text-sm text-[#6b7385]">
+                <p className="text-xs text-slate-500">
                   There are no approved purchase requisitions available
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-[#eceff5]">
+              <div className="divide-y divide-slate-100">
                 {requisitions
                   .filter((r) => !dismissedPrIds.includes(r.pr_no))
                   .map((requisition) => (
@@ -1706,20 +1706,22 @@ export default function ProductSupplierBill() {
                       key={requisition.pr_no || requisition._id}
                       className={`py-5 transition-colors ${
                         confirmDismissId === requisition.pr_no
-                          ? "bg-red-50/60"
+                          ? "bg-rose-50/60"
                           : selectedRequisitionIds.includes(requisition.pr_no)
-                          ? "opacity-50"
-                          : ""
+                            ? "opacity-50"
+                            : ""
                       }`}
                     >
                       {confirmDismissId === requisition.pr_no ? (
                         <div className="flex flex-col items-center gap-3 py-2">
-                          <p className="text-center text-sm font-semibold text-red-700">
+                          <p className="text-center text-sm font-semibold text-rose-700">
                             Dismiss{" "}
-                            <span className="font-bold">{requisition.pr_no}</span>
+                            <span className="font-bold">
+                              {requisition.pr_no}
+                            </span>
                             ?
                           </p>
-                          <p className="text-center text-xs text-[#6b7385]">
+                          <p className="text-center text-xs text-slate-500">
                             This will change the status to{" "}
                             <strong>Dismissed</strong> and remove it from this
                             list permanently.
@@ -1746,28 +1748,28 @@ export default function ProductSupplierBill() {
                                       ]);
                                       setRequisitions((prev) =>
                                         prev.filter(
-                                          (r) => r.pr_no !== requisition.pr_no
-                                        )
+                                          (r) => r.pr_no !== requisition.pr_no,
+                                        ),
                                       );
                                       setConfirmDismissId(null);
                                       toast.success(
-                                        `${requisition.pr_no} dismissed`
+                                        `${requisition.pr_no} dismissed`,
                                       );
                                     } else {
                                       toast.error(
-                                        resp?.message || "Failed to dismiss PR"
+                                        resp?.message || "Failed to dismiss PR",
                                       );
                                     }
                                   },
                                   (err) => {
                                     setDismissingId(null);
                                     toast.error(
-                                      err?.message || "Failed to dismiss PR"
+                                      err?.message || "Failed to dismiss PR",
                                     );
-                                  }
+                                  },
                                 );
                               }}
-                              className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60"
+                              className="flex flex-1 items-center justify-center gap-1 rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-rose-700 disabled:opacity-60"
                             >
                               {dismissingId === requisition.pr_no ? (
                                 <>
@@ -1782,7 +1784,7 @@ export default function ProductSupplierBill() {
                               type="button"
                               disabled={dismissingId === requisition.pr_no}
                               onClick={() => setConfirmDismissId(null)}
-                              className="flex-1 rounded-lg border border-[#d7dce6] px-3 py-2 text-sm font-medium text-[#5b6478] transition hover:bg-[#f3f5f9]"
+                              className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                             >
                               Cancel
                             </button>
@@ -1793,15 +1795,15 @@ export default function ProductSupplierBill() {
                           <div className="mb-3 flex items-start justify-between">
                             <div className="min-w-0 flex-1">
                               <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                                <h3 className="text-sm font-bold text-[#141b2c]">
+                                <h3 className="font-mono text-sm font-semibold text-slate-900">
                                   {requisition.pr_no}
                                 </h3>
-                                <span className="rounded px-2 py-0.5 text-xs font-medium bg-[#1e3a8a]/10 text-[#1e3a8a]">
+                                <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-inset ring-amber-200/80">
                                   {requisition.status}
                                 </span>
                               </div>
                               {requisition.reason && (
-                                <p className="mb-2 text-sm text-[#3d4457]">
+                                <p className="mb-2 text-sm text-slate-600">
                                   {requisition.reason}
                                 </p>
                               )}
@@ -1812,19 +1814,19 @@ export default function ProductSupplierBill() {
                               onClick={() =>
                                 setConfirmDismissId(requisition.pr_no)
                               }
-                              className="ml-2 shrink-0 rounded-md p-1 text-[#b5bac7] transition hover:bg-red-50 hover:text-red-500"
+                              className="ml-2 shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
                             >
                               <X className="h-4 w-4" />
                             </button>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-3 text-xs text-[#6b7385]">
+                          <div className="grid grid-cols-2 gap-3 text-xs text-slate-500">
                             {requisition.date && (
                               <div className="flex items-center gap-2">
-                                <Calendar className="h-3.5 w-3.5 text-[#8b93a5]" />
+                                <Calendar className="h-3.5 w-3.5 text-slate-400" />
                                 <span>
                                   {moment(requisition.date).format(
-                                    "MMM DD, YYYY"
+                                    "MMM DD, YYYY",
                                   )}
                                 </span>
                               </div>
@@ -1833,8 +1835,8 @@ export default function ProductSupplierBill() {
                               requisition.supplier_number ||
                               requisition.supplier_code) && (
                               <div className="flex items-center gap-2">
-                                <Users className="h-3.5 w-3.5 text-[#8b93a5]" />
-                                <span className="truncate font-medium text-[#3d4457]">
+                                <Users className="h-3.5 w-3.5 text-slate-400" />
+                                <span className="truncate font-medium text-slate-700">
                                   {requisition.supplier_name ||
                                     requisition.supplier_number ||
                                     requisition.supplier_code}
@@ -1845,7 +1847,7 @@ export default function ProductSupplierBill() {
 
                           {requisition.items &&
                             requisition.items.length > 0 && (
-                              <div className="mt-3 border-t border-[#eceff5] pt-3">
+                              <div className="mt-3 border-t border-slate-100 pt-3">
                                 <div className="space-y-2">
                                   {requisition.items
                                     .slice(0, 3)
@@ -1855,21 +1857,21 @@ export default function ProductSupplierBill() {
                                         className="flex items-center justify-between py-1.5"
                                       >
                                         <div className="min-w-0 flex-1">
-                                          <h4 className="truncate text-sm font-medium text-[#141b2c]">
+                                          <h4 className="truncate text-sm font-medium text-slate-900">
                                             {item.item_name}{" "}
                                             {item.unit_measure}
                                           </h4>
-                                          <p className="text-xs text-[#8b93a5]">
+                                          <p className="font-mono text-xs text-slate-400">
                                             {item.item_code}
                                           </p>
                                         </div>
-                                        <div className="ml-3 shrink-0 text-right text-sm font-medium text-[#1c2536]">
+                                        <div className="ml-3 shrink-0 text-right text-sm font-medium tabular-nums text-slate-700">
                                           Qty: {item.quantity || 1}
                                         </div>
                                       </div>
                                     ))}
                                   {requisition.items.length > 3 && (
-                                    <div className="text-center text-xs text-[#8b93a5]">
+                                    <div className="text-center text-xs text-slate-400">
                                       + {requisition.items.length - 3} more
                                       items
                                     </div>
@@ -1885,12 +1887,12 @@ export default function ProductSupplierBill() {
                                 addRequisitionItems(requisition);
                               }}
                               disabled={selectedRequisitionIds.includes(
-                                requisition.pr_no
+                                requisition.pr_no,
                               )}
-                              className="flex-1 rounded-lg border border-[#d7dce6] px-3 py-2 text-sm font-medium text-[#5b6478] transition hover:bg-[#f3f5f9] disabled:cursor-not-allowed disabled:opacity-50"
+                              className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-[#4267B2] transition hover:bg-[var(--aa-sidebar-active)] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {selectedRequisitionIds.includes(
-                                requisition.pr_no
+                                requisition.pr_no,
                               )
                                 ? "✓ Added"
                                 : `Add to List (${
@@ -1908,9 +1910,9 @@ export default function ProductSupplierBill() {
                                 }
                               }}
                               disabled={selectedRequisitionIds.includes(
-                                requisition.pr_no
+                                requisition.pr_no,
                               )}
-                              className="flex-1 rounded-lg bg-[#1e3a8a] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#182f70] disabled:cursor-not-allowed disabled:opacity-50"
+                              className="flex-1 rounded-md border-0 bg-[#4267B2] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#4267B2]/90 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Add &amp; Close
                             </button>
@@ -1924,8 +1926,8 @@ export default function ProductSupplierBill() {
           </div>
 
           {selectedRequisitionIds.length > 0 && (
-            <div className="flex items-center justify-between gap-3 border-t border-[#eceff5] px-6 py-4">
-              <p className="text-sm text-[#6b7385]">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/90 px-5 py-3.5">
+              <p className="text-xs text-slate-500">
                 {selectedRequisitionIds.length} requisition
                 {selectedRequisitionIds.length === 1 ? "" : "s"} added — you can
                 still add more
@@ -1933,7 +1935,7 @@ export default function ProductSupplierBill() {
               <button
                 type="button"
                 onClick={() => setIsRequisitionsDrawerOpen(false)}
-                className="rounded-lg bg-[#1e3a8a] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#182f70]"
+                className="rounded-md border-0 bg-[#4267B2] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#4267B2]/90"
               >
                 Done
               </button>
