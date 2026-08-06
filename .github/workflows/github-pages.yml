@@ -22,6 +22,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Ensures Pages source is GitHub Actions (avoids forever deployment_queued)
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -31,9 +35,11 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
+      # Custom domain (ashiru-ali.com) serves from site root → base "/"
+      # Project pages without custom domain would need GITHUB_PAGES=true (/aa_erp_ui/)
       - name: Build
         env:
-          GITHUB_PAGES: "true"
+          GITHUB_PAGES: "false"
         run: npm run build
 
       # SPA fallback so deep links work on GitHub Pages
@@ -50,8 +56,13 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ fromJSON(steps.deployment.outputs.outputs).page_url }}
     steps:
+      # deploy-pages can stick on deployment_queued; retry handles transient Pages backend issues
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: Wandalen/wretry.action@v3.8.0
+        with:
+          action: actions/deploy-pages@v4
+          attempt_limit: 3
+          attempt_delay: 20000
