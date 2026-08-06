@@ -1,5 +1,13 @@
 name: Deploy Frontend to GitHub Pages
 
+# Uses gh-pages branch deploy (peaceiris) instead of actions/deploy-pages.
+# That path was stuck forever on deployment_queued for this repo.
+#
+# After first green run, set:
+#   Settings → Pages → Source = "Deploy from a branch"
+#   Branch = gh-pages / (root)
+# Keep custom domain: ashiru-ali.com
+
 on:
   push:
     branches:
@@ -7,24 +15,18 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: github-pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      # Ensures Pages source is GitHub Actions (avoids forever deployment_queued)
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -35,34 +37,22 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      # Custom domain (ashiru-ali.com) serves from site root → base "/"
-      # Project pages without custom domain would need GITHUB_PAGES=true (/aa_erp_ui/)
+      # Custom domain serves from site root
       - name: Build
         env:
           GITHUB_PAGES: "false"
         run: npm run build
 
-      # SPA fallback so deep links work on GitHub Pages
       - name: Add 404.html for client-side routes
         run: cp dist/index.html dist/404.html
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ fromJSON(steps.deployment.outputs.outputs).page_url }}
-    steps:
-      # deploy-pages can stick on deployment_queued; retry handles transient Pages backend issues
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: Wandalen/wretry.action@v3.8.0
-        with:
-          action: actions/deploy-pages@v4
-          attempt_limit: 3
-          attempt_delay: 20000
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          force_orphan: true
+          cname: ashiru-ali.com
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
