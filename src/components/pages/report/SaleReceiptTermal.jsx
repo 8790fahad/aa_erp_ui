@@ -268,7 +268,7 @@ const SalesReceipt = ({
             Thanks for coming, get well soon!
           </Text>
         </View>
-        <Text style={styles.poweredBy}>Powered by:MyLikita Health</Text>
+        <Text style={styles.poweredBy}>This solution is powered by Nexifour Limited</Text>
       </Page>
     </Document>
   );

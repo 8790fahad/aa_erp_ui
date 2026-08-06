@@ -99,7 +99,7 @@ export default function ResetPassword() {
           <div className="relative inline-block mx-auto">
             <img
               src={logo}
-              alt="AA ERP logo"
+              alt="Alh. Ashiru Yanmusa logo"
               className="mx-auto"
               style={{ width: "9rem", height: "3.5rem" }}
             />
@@ -137,7 +137,7 @@ export default function ResetPassword() {
             <div className="relative inline-block mx-auto">
               <img
                 src={logo}
-                alt="AA ERP logo"
+                alt="Alh. Ashiru Yanmusa logo"
                 className="mx-auto animate-scale-in"
                 style={{ width: "9rem", height: "3.5rem" }}
               />
@@ -217,7 +217,7 @@ export default function ResetPassword() {
           <div className="relative inline-block">
             <img
               src={logo}
-              alt="AA ERP logo"
+              alt="Alh. Ashiru Yanmusa logo"
               className="mx-auto animate-scale-in"
               style={{ width: "9rem", height: "3.5rem" }}
             />

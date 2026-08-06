@@ -183,18 +183,6 @@ export const modules = [
         ],
       },
       {
-        title: "Apply Deposit",
-        url: "/app/payments/apply-deposit",
-        functionality: ["Pay Bills", "Payments", "Vendor Deposit"],
-        access: [
-          "services",
-          "retailers",
-          "recycling",
-          "manufacturing",
-          "contractors",
-        ],
-      },
-      {
         title: "Vendor Credits",
         url: "/app/payments/credit-note?party=vendor",
         functionality: ["Credit & Debit Note", "Credit Note"],

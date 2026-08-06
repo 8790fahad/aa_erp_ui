@@ -114,7 +114,7 @@ export default function TokenVerification() {
           <div className="relative inline-block mx-auto">
             <img
               src={logo}
-              alt="AA ERP logo"
+              alt="Alh. Ashiru Yanmusa logo"
               className="mx-auto animate-scale-in"
               style={{ width: "9rem", height: "3.5rem" }}
             />

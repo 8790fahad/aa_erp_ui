@@ -415,7 +415,7 @@ const PaymentReceiptPDF = ({ receiptData }) => {
               DOCUMENT • AUTHORIZED PERSONNEL ONLY
             </Text>
             <Text style={styles.footerBold}>
-              POWERED BY AA ERP · NDPC | ISO 27001 | ISO 9001
+              THIS SOLUTION IS POWERED BY NEXIFOUR LIMITED · NDPC | ISO 27001 | ISO 9001
             </Text>
           </View>
         </View>
@@ -704,7 +704,7 @@ const PaymentReceipt = () => {
                           CONFIDENTIAL DOCUMENT • AUTHORIZED PERSONNEL ONLY
                         </div>
                         <div className="text-xs font-bold text-gray-700 uppercase tracking-wide">
-                          POWERED BY AA ERP
+                          THIS SOLUTION IS POWERED BY NEXIFOUR LIMITED
                           GROUP · NDPC | ISO 27001 | ISO 9001
                         </div>
                       </div>

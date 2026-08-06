@@ -791,8 +791,7 @@ const SingleVoucherInBulk = ({ voucherData, index, totalVouchers }) => {
             PERSONNEL ONLY
           </Text>
           <Text style={styles.footerBrand}>
-            POWERED BY{" "}
-            {"Powered by AA ERP".toUpperCase()}
+            THIS SOLUTION IS POWERED BY NEXIFOUR LIMITED
             {" · NDPC | ISO 27001 | ISO 9001"}
           </Text>
         </View>

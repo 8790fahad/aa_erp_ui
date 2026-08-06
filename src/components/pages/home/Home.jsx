@@ -182,7 +182,7 @@ export default function Home() {
             <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-base font-semibold text-slate-800">
-                  Welcome to AA ERP
+                  Welcome to Alh. Ashiru Yanmusa
                 </h2>
                 <button
                   type="button"
@@ -190,7 +190,7 @@ export default function Home() {
                   onClick={() => navigate("/app/home")}
                 >
                   <PlayCircle className="size-4" />
-                  Overview of AA ERP
+                  Overview of Alh. Ashiru Yanmusa
                 </button>
               </div>
               <div className="w-full sm:w-48">

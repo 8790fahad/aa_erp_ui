@@ -207,7 +207,7 @@ const SalesReceipt = ({
           <Text style={styles.goodbyeText}>Thanks for patronizing us !</Text>
         </View>
         <View style={styles.goodbyeTextContainer}>
-          <Text style={styles.goodbyeText}>Powered by: brainstormng.com</Text>
+          <Text style={styles.goodbyeText}>This solution is powered by Nexifour Limited</Text>
         </View>
       </Page>
     </Document>

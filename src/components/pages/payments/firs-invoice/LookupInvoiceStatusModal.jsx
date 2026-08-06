@@ -48,7 +48,7 @@ export default function LookupInvoiceStatusModal({ isOpen, onClose }) {
               <div>
                 <h2 className="text-xl font-bold">Lookup Invoice Status</h2>
                 <p className="text-emerald-100 text-sm mt-1">
-                  Retrieve invoice status from AA ERP (issue date, due date, payment status, FIRS transmission)
+                  Retrieve invoice status from Alh. Ashiru Yanmusa (issue date, due date, payment status, FIRS transmission)
                 </p>
               </div>
             </div>

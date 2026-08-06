@@ -13,17 +13,16 @@ import {
 import { cn } from "@/lib/utils";
 import { getSidebarByAppType } from "./sidebarModules";
 import { useSelector } from "react-redux";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { Home, PanelLeftClose } from "lucide-react";
 
 export function AppSidebar(props) {
   // eslint-disable-next-line react/prop-types -- optional layout class from parent
   const { className: sidebarClassName, ...sidebarProps } = props;
-  const navigate = useNavigate();
   const { toggleSidebar } = useSidebar();
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
 
-  // AA ERP is retail-only — always use retailers modules regardless of business_type
+  // Alh. Ashiru Yanmusa is retail-only — always use retailers modules regardless of business_type
   const sidebarItems = useMemo(() => {
     return getSidebarByAppType("retailers")
       .map((module) => {
@@ -94,21 +93,6 @@ export function AppSidebar(props) {
             Collapse
           </span>
         </button>
-        <div className="px-3 pb-1 text-center group-data-[collapsible=icon]:hidden">
-          <p className="text-[10px] font-medium text-slate-500 leading-snug">
-            NDPC compliant · ISO 27001 · ISO 9001
-          </p>
-        </div>
-        {activeBusiness?.business_name && (
-          <button
-            type="button"
-            onClick={() => navigate("/app/home")}
-            className="mx-2 mb-1 truncate rounded px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100 group-data-[collapsible=icon]:hidden"
-            title={activeBusiness.business_name}
-          >
-            {activeBusiness.business_name}
-          </button>
-        )}
       </SidebarFooter>
     </Sidebar>
   );

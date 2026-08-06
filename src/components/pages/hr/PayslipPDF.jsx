@@ -392,16 +392,16 @@ const PayslipPDF = forwardRef(
       {/* Standard footer */}
       <div className="mt-6 pt-3 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-400">
-          Generated via AA ERP HR Infrastructure
+          This solution is powered by Nexifour Limited
         </p>
         <div className="flex items-center gap-2">
           <div className="size-7 rounded bg-slate-900 flex items-center justify-center shrink-0">
             <span className="text-[9px] font-black text-white tracking-tight">
-              FB
+              AY
             </span>
           </div>
           <span className="text-[10px] font-bold uppercase tracking-wide text-slate-800">
-            AA ERP
+            Alh. Ashiru Yanmusa
           </span>
         </div>
       </div>

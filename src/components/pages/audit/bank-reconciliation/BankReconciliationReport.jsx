@@ -810,7 +810,7 @@ const BankReconciliationReport = () => {
             {/* Footer */}
             <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400 font-bold uppercase tracking-[0.2em]">
               <span className="normal-case tracking-normal font-semibold text-slate-500">
-                Powered by AA ERP
+                This solution is powered by Nexifour Limited
               </span>
               <div className="bg-slate-50 px-4 py-1.5 rounded-full border border-slate-100">
                 {moment().format("DD/MM/YYYY HH:mm")}

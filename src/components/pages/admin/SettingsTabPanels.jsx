@@ -663,7 +663,7 @@ export default function SettingsTabPanels({
                     <div>
                       <h5 className="mb-0 fw-bold">Marketplace Space Link</h5>
                       <small className="text-muted">
-                        Your unique storefront URL on AA ERP Marketplace
+                        Your unique storefront URL on Alh. Ashiru Yanmusa Marketplace
                       </small>
                     </div>
                   </div>

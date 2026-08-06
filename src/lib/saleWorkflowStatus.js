@@ -1,7 +1,7 @@
 import React from "react";
 
 /**
- * User-facing process stages (AA ERP sales):
+ * User-facing process stages (Alh. Ashiru Yanmusa sales):
  * Invoice → Cashier → Separation → Warehouse → Done
  *
  * Raw DB statuses still exist for history; they map into these buckets.

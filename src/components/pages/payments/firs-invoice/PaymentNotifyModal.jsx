@@ -57,7 +57,7 @@ export default function PaymentNotifyModal({ isOpen, onClose }) {
               <div>
                 <h2 className="text-xl font-bold">Payment Notification</h2>
                 <p className="text-amber-100 text-sm mt-1">
-                  Notify AA ERP about invoice payment status (PENDING, PAID, REJECTED)
+                  Notify Alh. Ashiru Yanmusa about invoice payment status (PENDING, PAID, REJECTED)
                 </p>
               </div>
             </div>

@@ -154,7 +154,7 @@ export default function Login() {
       branding?.primary_color,
       branding?.secondary_color,
     );
-    const name = branding?.business_name || "AA ERP";
+    const name = branding?.business_name || "Alh. Ashiru Yanmusa";
     const isBranded = Boolean(branding);
     return {
       name,
@@ -233,7 +233,7 @@ export default function Login() {
 
             {brandingError ? (
               <p className="mt-4 rounded-lg border border-amber-200/80 bg-amber-50 px-3.5 py-2.5 text-left text-sm text-amber-800">
-                {brandingError}. Showing default AA ERP login.{" "}
+                {brandingError}. Showing default Alh. Ashiru Yanmusa login.{" "}
                 <Link to="/login" className="font-medium underline">
                   Continue here
                 </Link>
@@ -358,11 +358,9 @@ export default function Login() {
                 )}
               </button>
 
-              {brand.isBranded ? (
-                <p className="mt-auto pt-8 text-center text-[11px] tracking-wide text-slate-400">
-                  Powered by AA ERP
-                </p>
-              ) : null}
+              <p className="mt-auto pt-8 text-center text-[11px] tracking-wide text-slate-400">
+                This solution is powered by Nexifour Limited
+              </p>
             </form>
           </div>
 
@@ -422,7 +420,7 @@ export default function Login() {
       </div>
 
       <p className="relative z-10 mt-8 text-center text-xs text-slate-400">
-        © {new Date().getFullYear()}, AA ERP. All Rights Reserved.
+        © {new Date().getFullYear()}, Alh. Ashiru Yanmusa. All Rights Reserved.
       </p>
 
       <style>{`

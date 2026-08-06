@@ -1068,7 +1068,7 @@ const CorporateMemoPDF = ({ memoData }) => (
             DOCUMENT • AUTHORIZED PERSONNEL ONLY
           </Text>
           <Text style={styles.footerBrand}>
-            POWERED BY AA ERP
+            THIS SOLUTION IS POWERED BY NEXIFOUR LIMITED
               {" · NDPC | ISO 27001 | ISO 9001"}
           </Text>
         </View>

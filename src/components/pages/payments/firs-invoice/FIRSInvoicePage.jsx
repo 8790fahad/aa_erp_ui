@@ -13,7 +13,7 @@ export default function FIRSInvoicePage() {
     {
       title: "Create Invoice",
       description:
-        "Send invoices to FIRS via AA ERP. Complies with the FIRS e-Invoicing mandate. Response includes FIRS Verifiable QR Code for payers to verify invoices.",
+        "Send invoices to FIRS via Alh. Ashiru Yanmusa. Complies with the FIRS e-Invoicing mandate. Response includes FIRS Verifiable QR Code for payers to verify invoices.",
       icon: FileText,
       color: "from-blue-600 to-indigo-600",
       onClick: () => setCreateModalOpen(true),
@@ -21,7 +21,7 @@ export default function FIRSInvoicePage() {
     {
       title: "Lookup Invoice Status",
       description:
-        "Retrieve invoice status from AA ERP: issue date, due date, payment status, and FIRS transmission details.",
+        "Retrieve invoice status from Alh. Ashiru Yanmusa: issue date, due date, payment status, and FIRS transmission details.",
       icon: Search,
       color: "from-emerald-600 to-teal-600",
       onClick: () => setLookupModalOpen(true),
@@ -29,7 +29,7 @@ export default function FIRSInvoicePage() {
     {
       title: "Payment Notification",
       description:
-        "Notify AA ERP about payment status (PENDING, PAID, REJECTED) for an invoice processed through the gateway.",
+        "Notify Alh. Ashiru Yanmusa about payment status (PENDING, PAID, REJECTED) for an invoice processed through the gateway.",
       icon: Bell,
       color: "from-amber-600 to-orange-600",
       onClick: () => setNotifyModalOpen(true),
@@ -39,9 +39,9 @@ export default function FIRSInvoicePage() {
   return (
     <div className="p-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">AA ERP Invoice APIs</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Alh. Ashiru Yanmusa Invoice APIs</h1>
         <p className="text-gray-600 mt-1">
-          AA ERP Connect Gateway – Federal Inland Revenue Service (FIRS) e-Invoicing compliance
+          Alh. Ashiru Yanmusa Connect Gateway – Federal Inland Revenue Service (FIRS) e-Invoicing compliance
         </p>
       </div>
 
@@ -78,7 +78,7 @@ export default function FIRSInvoicePage() {
         <p className="mt-2">
           API documentation is available in Swagger at{" "}
           <code className="bg-gray-200 px-1 rounded">/api-docs</code> under the{" "}
-          <strong>AA ERP Invoice</strong> tag.
+          <strong>Alh. Ashiru Yanmusa Invoice</strong> tag.
         </p>
       </div>
 

@@ -1428,7 +1428,7 @@ const routeModules = {
 };
 
 export default function AppNavigation() {
-  // AA ERP is retail-only — never merge manufacturing/recycling (would pull Production)
+  // Alh. Ashiru Yanmusa is retail-only — never merge manufacturing/recycling (would pull Production)
   // Customers / Suppliers live under Sales / Purchase in the sidebar but keep their own routes
   // Expenses (Bill + cash expenses) is linked from Purchase but registered as its own module
   const allRouteKeys = new Set([

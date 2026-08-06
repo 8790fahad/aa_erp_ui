@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import moment from "moment";
 import { toast } from "sonner";
-import { FileText, RefreshCw, Wallet } from "lucide-react";
+import { ChevronLeft, FileText, RefreshCw, Wallet } from "lucide-react";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import SearchSupplierInput from "@/components/pages/purchase/SearchSuppliers";
-import CustomButton from "@/common/Custom/CustomButton";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -39,11 +38,20 @@ function billKey(bill) {
   return String(bill.invoice_ref || bill.invoiceRef || "");
 }
 
+const fieldClass =
+  "w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-slate-400 disabled:opacity-60 disabled:bg-slate-50";
+
 /**
  * Apply existing supplier deposit / advance to unpaid bills —
  * mirrors Customer Apply Advance and Vendor Credits → Apply to Bills.
+ *
+ * @param {{ asModal?: boolean, onSuccess?: () => void, onCancel?: () => void }} props
  */
-export default function ApplySupplierDeposit() {
+export default function ApplySupplierDeposit({
+  asModal = false,
+  onSuccess,
+  onCancel,
+} = {}) {
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id;
   const currency =
@@ -255,6 +263,7 @@ export default function ApplySupplierDeposit() {
           setNotes("");
           loadSupplierData(supplierNo);
           setApplyAmounts({});
+          onSuccess?.();
         } else {
           toast.error(res?.error || res?.message || "Failed to apply deposit");
         }
@@ -266,19 +275,48 @@ export default function ApplySupplierDeposit() {
     );
   };
 
+  const canSubmit =
+    !applying &&
+    !!selectedSupplier &&
+    allocatedSum > 0 &&
+    availableDeposit > 0;
+
   return (
-    <div className="bg-white">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="flex items-center gap-2 text-xl font-semibold text-gray-900">
-              <Wallet className="h-5 w-5 text-[var(--aa-accent)]" />
+    <div
+      className={
+        asModal
+          ? "overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+          : "min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-0"
+      }
+    >
+      <div
+        className={
+          asModal
+            ? "mx-auto w-full"
+            : "mx-auto max-w-5xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+        }
+      >
+        {/* Header — same pattern as Expenses Bill */}
+        <div className="flex items-center gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4">
+          {(asModal || onCancel) && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onCancel?.()}
+                className="gap-2"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="h-6 w-px bg-slate-300" />
+            </>
+          )}
+          <div className="flex flex-1 items-center gap-2.5">
+            <Wallet className="h-5 w-5 text-blue-600" />
+            <h2 className="text-base font-semibold text-slate-900">
               Apply Deposit
-            </h1>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Apply a vendor&apos;s existing deposit / advance to unpaid bills —
-              like Vendor Credits → Apply to Bills.
-            </p>
+            </h2>
           </div>
           {selectedSupplier && (
             <Button
@@ -297,21 +335,53 @@ export default function ApplySupplierDeposit() {
           )}
         </div>
 
-        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <label className="mb-1.5 block text-[13px] font-medium text-gray-700">
-            Vendor <span className="text-red-600">*</span>
-          </label>
-          <div className="max-w-md">
-            <SearchSupplierInput
-              onChange={handleSupplierChange}
-              selected={selectedSupplier ? [selectedSupplier] : []}
+        {/* Transaction details */}
+        <div className="bg-white p-6">
+          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Select Supplier <span className="text-red-500">*</span>
+              </label>
+              <SearchSupplierInput
+                onChange={handleSupplierChange}
+                selected={selectedSupplier ? [selectedSupplier] : []}
+                disabled={applying}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Date
+              </label>
+              <input
+                type="date"
+                value={paymentDate}
+                min={POSTING_DATE_MIN}
+                max={getPostingDateMax()}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                disabled={applying}
+                className={fieldClass}
+              />
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
+              <FileText className="h-4 w-4" />
+              Notes (optional)
+            </label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
               disabled={applying}
+              placeholder="Enter internal note..."
+              className={fieldClass}
             />
           </div>
 
           {selectedSupplier && (
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border-2 border-emerald-200 bg-emerald-50/80 px-3 py-2.5">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700">
                   Available deposit
                 </p>
@@ -319,7 +389,7 @@ export default function ApplySupplierDeposit() {
                   {currency} {formatNumber1(availableDeposit)}
                 </p>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="rounded-lg border-2 border-slate-200 bg-slate-50 px-3 py-2.5">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
                   Amount to apply
                 </p>
@@ -327,7 +397,7 @@ export default function ApplySupplierDeposit() {
                   {currency} {formatNumber1(allocatedSum)}
                 </p>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="rounded-lg border-2 border-slate-200 bg-slate-50 px-3 py-2.5">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
                   Remaining after apply
                 </p>
@@ -338,167 +408,142 @@ export default function ApplySupplierDeposit() {
               </div>
             </div>
           )}
+        </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-[13px] text-gray-700">Date</label>
-              <input
-                type="date"
-                value={paymentDate}
-                min={POSTING_DATE_MIN}
-                max={getPostingDateMax()}
-                onChange={(e) => setPaymentDate(e.target.value)}
-                disabled={applying}
-                className="h-9 w-full max-w-xs rounded border border-gray-300 px-2.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-[13px] text-gray-700">
-                Notes (optional)
-              </label>
-              <input
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                disabled={applying}
-                placeholder="Internal note"
-                className="h-9 w-full rounded border border-gray-300 px-2.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
+        {/* Unpaid Bills section — green bar like Add Items */}
+        <div className="flex items-center justify-between border-b-2 border-t-2 border-green-100 bg-gradient-to-r from-green-50 via-emerald-50 to-green-50 px-6 py-3.5">
+          <h2 className="flex items-center gap-2 text-base font-bold text-slate-800">
+            <FileText className="h-4 w-4 text-green-600" />
+            Unpaid Bills
+          </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={seedFifo}
+              disabled={applying || !selectedSupplier || availableDeposit <= 0}
+              className="cursor-pointer text-left font-medium text-blue-600 hover:text-blue-800 hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:no-underline"
+            >
+              Auto-allocate
+            </button>
+            <button
+              type="button"
+              onClick={clearApplied}
+              disabled={applying || allocatedSum <= 0}
+              className="cursor-pointer text-left font-medium text-blue-600 hover:text-blue-800 hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:no-underline"
+            >
+              Clear Applied
+            </button>
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900">
-              <FileText className="h-4 w-4 text-slate-500" />
-              Unpaid Bills
-            </h2>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={seedFifo}
-                disabled={
-                  applying || !selectedSupplier || availableDeposit <= 0
-                }
-                className="text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-40"
-              >
-                Auto-allocate
-              </button>
-              <button
-                type="button"
-                onClick={clearApplied}
-                disabled={applying || allocatedSum <= 0}
-                className="text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-40"
-              >
-                Clear Applied
-              </button>
-            </div>
-          </div>
-
+        <div className="bg-slate-50 p-6">
           {!selectedSupplier ? (
-            <div className="px-4 py-12 text-center text-sm text-slate-500">
+            <div className="rounded-lg border-2 border-dashed border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500">
               Select a vendor to see unpaid bills and available deposit.
             </div>
           ) : loading ? (
-            <div className="space-y-2 p-4">
+            <div className="space-y-2">
               {[...Array(3)].map((_, i) => (
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
           ) : availableDeposit <= 0 ? (
-            <div className="px-4 py-12 text-center text-sm text-slate-500">
+            <div className="rounded-lg border-2 border-dashed border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500">
               No available deposit for this vendor. Record one under Pay Bills →
               New Payment (pay more than the bill balance) first.
             </div>
           ) : bills.length === 0 ? (
-            <div className="px-4 py-12 text-center text-sm text-slate-500">
+            <div className="rounded-lg border-2 border-dashed border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500">
               No unpaid bills for this vendor.
             </div>
           ) : (
-            <table className="w-full min-w-[640px] text-sm">
-              <thead>
-                <tr className="border-b bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                  <th className="px-3 py-2">Date</th>
-                  <th className="px-3 py-2">Bill</th>
-                  <th className="px-3 py-2 text-right">Amount Due</th>
-                  <th className="px-3 py-2 text-right">Apply Deposit</th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {bills.map((bill) => {
-                  const k = billKey(bill);
-                  return (
-                    <tr key={k} className="hover:bg-slate-50/60">
-                      <td className="px-3 py-2 text-gray-700">
-                        {bill.transaction_date
-                          ? moment(bill.transaction_date).format("DD MMM YYYY")
-                          : "—"}
-                      </td>
-                      <td className="px-3 py-2 font-medium text-blue-600">
-                        {k}
-                      </td>
-                      <td className="px-3 py-2 text-right font-medium">
-                        {formatNumber1(bill.amount_due ?? bill.balance_due ?? 0)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={applyAmounts[k] || ""}
-                          onChange={(e) => setAmount(bill, e.target.value)}
-                          disabled={applying}
-                          placeholder="0.00"
-                          className="ml-auto w-28 rounded border border-gray-300 px-2 py-1 text-right text-sm outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => applyFull(bill)}
-                          disabled={applying}
-                          className="text-xs font-medium text-blue-600 hover:text-blue-700 disabled:opacity-40"
-                        >
-                          Apply Full
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="border-t bg-slate-50">
-                  <td colSpan={3} className="px-3 py-2 text-xs text-slate-500">
-                    Applying deposit does not pay new cash — it uses the
-                    vendor&apos;s existing advance.
-                  </td>
-                  <td
-                    colSpan={2}
-                    className="px-3 py-2 text-right text-sm font-semibold"
-                  >
-                    Total {formatNumber1(allocatedSum)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+            <div className="overflow-hidden rounded-lg border-2 border-slate-200 bg-white">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    <th className="px-3 py-2.5">Date</th>
+                    <th className="px-3 py-2.5">Bill</th>
+                    <th className="px-3 py-2.5 text-right">Amount Due</th>
+                    <th className="px-3 py-2.5 text-right">Apply Deposit</th>
+                    <th className="px-3 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {bills.map((bill) => {
+                    const k = billKey(bill);
+                    return (
+                      <tr key={k} className="hover:bg-slate-50/80">
+                        <td className="px-3 py-2.5 text-slate-700">
+                          {bill.transaction_date
+                            ? moment(bill.transaction_date).format(
+                                "DD MMM YYYY",
+                              )
+                            : "—"}
+                        </td>
+                        <td className="px-3 py-2.5 font-medium text-blue-600">
+                          {k}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-medium text-slate-800">
+                          {formatNumber1(
+                            bill.amount_due ?? bill.balance_due ?? 0,
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={applyAmounts[k] || ""}
+                            onChange={(e) => setAmount(bill, e.target.value)}
+                            disabled={applying}
+                            placeholder="0.00"
+                            className="ml-auto w-28 rounded-lg border-2 border-slate-300 px-2 py-1.5 text-right text-sm outline-none transition-all hover:border-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => applyFull(bill)}
+                            disabled={applying}
+                            className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-40"
+                          >
+                            Apply Full
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-slate-200 bg-slate-50">
+                    <td
+                      colSpan={3}
+                      className="px-3 py-2.5 text-xs text-slate-500"
+                    >
+                      Applying deposit does not pay new cash — it uses the
+                      vendor&apos;s existing advance.
+                    </td>
+                    <td
+                      colSpan={2}
+                      className="px-3 py-2.5 text-right text-sm font-semibold text-slate-900"
+                    >
+                      Total {formatNumber1(allocatedSum)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           )}
-        </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3 pb-6">
-          <CustomButton
-            className="!mb-0"
-            onClick={handleApply}
-            loading={applying}
-            disabled={
-              applying ||
-              !selectedSupplier ||
-              allocatedSum <= 0 ||
-              availableDeposit <= 0
-            }
-          >
-            Apply Deposit to Bills
-          </CustomButton>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={!canSubmit}
+              className="flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-md transition-all hover:bg-green-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {applying ? "Applying…" : "Apply Deposit to Bills"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

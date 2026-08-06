@@ -21,6 +21,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import ApplySupplierDeposit from "@/components/pages/payments/ApplySupplierDeposit";
 
 /**
  * Pay Bills — payment history list, matching Bill / app list layout.
@@ -35,6 +43,7 @@ export default function PaymentsMade() {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
+  const [applyDepositOpen, setApplyDepositOpen] = useState(false);
   const pageSize = 20;
 
   const fetchList = useCallback(() => {
@@ -73,8 +82,9 @@ export default function PaymentsMade() {
     setPage(1);
   };
 
-  const handleModeFilter = (mode) => {
-    setModeFilter(mode);
+  const handleModeFilter = (e) => {
+    const value = e.target.value;
+    setModeFilter(value === "all" ? null : value);
     setPage(1);
   };
 
@@ -193,28 +203,6 @@ export default function PaymentsMade() {
     },
   ];
 
-  const modeButtons = [
-    { key: null, label: "All", activeClass: "bg-[#4267B2] hover:bg-[#5A7EC1] text-white" },
-    {
-      key: "cash",
-      label: "Cash",
-      activeClass: "bg-green-600 hover:bg-green-700 text-white",
-      idleClass: "border-green-200 text-green-700 hover:bg-green-50",
-    },
-    {
-      key: "bank",
-      label: "Bank",
-      activeClass: "bg-yellow-600 hover:bg-yellow-700 text-white",
-      idleClass: "border-yellow-200 text-yellow-700 hover:bg-yellow-50",
-    },
-    {
-      key: "cheque",
-      label: "Cheque",
-      activeClass: "bg-red-600 hover:bg-red-700 text-white",
-      idleClass: "border-red-200 text-red-700 hover:bg-red-50",
-    },
-  ];
-
   return (
     <div className="p-2">
       <div className="mb-6 flex items-center justify-between">
@@ -223,17 +211,6 @@ export default function PaymentsMade() {
           <p className="text-muted-foreground">
             Record and track vendor bill payments
           </p>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="font-medium"
-            onClick={() => navigate("/app/payments/pay-bills/unpaid")}
-          >
-            Unpaid Bills
-          </Button>
         </div>
       </div>
 
@@ -247,35 +224,29 @@ export default function PaymentsMade() {
         </Col>
         <Col md="6">
           <div className="flex items-center justify-end gap-2">
-            <div className="flex gap-2">
-              {modeButtons.map((btn) => (
-                <Button
-                  key={btn.label}
-                  variant={modeFilter === btn.key ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleModeFilter(btn.key)}
-                  className={
-                    modeFilter === btn.key
-                      ? btn.activeClass
-                      : btn.idleClass || ""
-                  }
-                >
-                  {btn.label}
-                </Button>
-              ))}
-            </div>
+            <select
+              value={modeFilter || "all"}
+              onChange={handleModeFilter}
+              className="h-9 min-w-[9rem] rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[#4267B2] focus:ring-1 focus:ring-[#4267B2]"
+              aria-label="Filter by payment mode"
+            >
+              <option value="all">All</option>
+              <option value="cash">Cash</option>
+              <option value="bank">Bank</option>
+              <option value="cheque">Cheque</option>
+            </select>
             <Button
               variant="outline"
               size="sm"
-              className="flex items-center gap-2"
-              onClick={() => navigate("/app/payments/apply-deposit")}
+              className="h-9"
+              onClick={() => setApplyDepositOpen(true)}
             >
               Apply Deposit
             </Button>
             <Button
               variant="default"
               size="sm"
-              className="flex items-center gap-2 bg-[#4267B2] shadow-none hover:bg-[#5A7EC1]"
+              className="flex h-9 items-center gap-2 bg-[#4267B2] shadow-none hover:bg-[#5A7EC1]"
               onClick={() => navigate("/app/payments/pay-bills/new")}
             >
               <HandCoins className="h-4 w-4" />
@@ -388,6 +359,27 @@ export default function PaymentsMade() {
           </div>
         )}
       </div>
+
+      <Dialog open={applyDepositOpen} onOpenChange={setApplyDepositOpen}>
+        <DialogContent className="max-h-[92vh] w-[95vw] max-w-5xl overflow-y-auto border-0 bg-transparent p-0 shadow-none [&>button]:right-8 [&>button]:top-6 [&>button]:z-10">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Apply Deposit</DialogTitle>
+            <DialogDescription>
+              Apply a vendor deposit to unpaid bills
+            </DialogDescription>
+          </DialogHeader>
+          {applyDepositOpen ? (
+            <ApplySupplierDeposit
+              asModal
+              onCancel={() => setApplyDepositOpen(false)}
+              onSuccess={() => {
+                setApplyDepositOpen(false);
+                fetchList();
+              }}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

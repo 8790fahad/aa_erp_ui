@@ -315,7 +315,7 @@ const SupplierPaymentReceiptHTML = ({ paymentData, company, receiptRef }) => {
                 Thank you for doing business with us.
               </h6>
               <h6 className="text-xs text-blue-800 mt-0.5">
-                Powered by AA ERP · NDPC | ISO 27001 | ISO 9001
+                This solution is powered by Nexifour Limited · NDPC | ISO 27001 | ISO 9001
               </h6>
             </div>
           </div>

@@ -76,6 +76,19 @@ export default function CreditNoteCreateForm({
   const [bankList, setBankList] = useState([]);
   const [cashHeads, setCashHeads] = useState([]);
   const [lineItems, setLineItems] = useState([emptyLine()]);
+  const [reasons, setReasons] = useState([]);
+  const [reasonCategory, setReasonCategory] = useState("RETURN");
+  const [inventoryExplanation, setInventoryExplanation] = useState("");
+  const [branches, setBranches] = useState([]);
+  const [branchId, setBranchId] = useState("");
+
+  const selectedReason = useMemo(
+    () => reasons.find((r) => r.category === reasonCategory) || null,
+    [reasons, reasonCategory],
+  );
+  const needsInventory = !!(
+    selectedReason?.inventoryRelated && selectedReason?.restockInventory
+  );
 
   const numberQueryType = isVendor
     ? "credit_note_supplier"
@@ -217,11 +230,51 @@ export default function CreditNoteCreateForm({
     );
   }, [facilityId]);
 
+  const loadReasons = useCallback(() => {
+    const docType = isVendor ? "debit" : "credit";
+    _fetchApi(
+      `/api/credit-notes/reason-metadata?docType=${docType}`,
+      (resp) => {
+        const list = resp?.data?.reasons || [];
+        setReasons(Array.isArray(list) ? list : []);
+        if (Array.isArray(list) && list.length) {
+          const prefer =
+            list.find((r) => r.category === "RETURN") || list[0];
+          setReasonCategory(prefer.category);
+        }
+      },
+      () => setReasons([]),
+    );
+  }, [isVendor]);
+
+  const loadBranches = useCallback(() => {
+    if (!facilityId) return;
+    _fetchApi(
+      `/account/get/branches?facilityId=${facilityId}`,
+      (resp) => {
+        const list = resp?.results || resp?.data || resp?.branches || [];
+        const rows = Array.isArray(list) ? list : [];
+        setBranches(rows);
+        const def =
+          rows.find(
+            (b) =>
+              b.is_default === true ||
+              b.is_default === 1 ||
+              b.is_default === "1",
+          ) || rows[0];
+        if (def?.id != null) setBranchId(String(def.id));
+      },
+      () => setBranches([]),
+    );
+  }, [facilityId]);
+
   useEffect(() => {
     loadParties();
     loadAccounts();
     loadProducts();
-  }, [loadParties, loadAccounts, loadProducts]);
+    loadReasons();
+    loadBranches();
+  }, [loadParties, loadAccounts, loadProducts, loadReasons, loadBranches]);
 
   useEffect(() => {
     if (!facilityId || outcome !== "refund") return;
@@ -305,7 +358,14 @@ export default function CreditNoteCreateForm({
         : accCode
           ? { code: accCode, description: accCode, head: accCode }
           : null,
-      lineKind: product.item_type === "service" ? "service" : "product",
+      lineKind:
+        String(product.item_type || "").toLowerCase() === "service"
+          ? "service"
+          : "product",
+      product_id: product.sku || product.product_id || product.id || null,
+      cost_price: product.cost_price ?? product.unit_cost ?? 0,
+      inventory_account: product.inventory_account || null,
+      cogs_head: product.cogs_head || null,
     });
   };
 
@@ -342,9 +402,28 @@ export default function CreditNoteCreateForm({
       toast.error("Total must be greater than 0");
       return;
     }
+    if (needsInventory) {
+      if (!inventoryExplanation.trim() || inventoryExplanation.trim().length < 5) {
+        toast.error(
+          selectedReason?.inventoryExplanationPrompt ||
+            "Add a short inventory note (min 5 characters)",
+        );
+        return;
+      }
+      const missingProduct = validLines.some(
+        (l) =>
+          String(l.lineKind || "").toLowerCase() !== "service" &&
+          !(l.product_id || l.product?.sku || l.product?.product_id),
+      );
+      if (missingProduct) {
+        toast.error("Select a product on each return line so stock can be updated");
+        return;
+      }
+    }
 
     setLoading(true);
     const reason =
+      selectedReason?.value ||
       subject.trim() ||
       (isVendor
         ? "Vendor credit — returns, adjustments, or rebate"
@@ -360,7 +439,10 @@ export default function CreditNoteCreateForm({
       date,
       reference: reference.trim() || null,
       reason,
-      reasonCategory: "DISCOUNT",
+      reasonCategory: reasonCategory || "DISCOUNT",
+      inventoryExplanation: needsInventory
+        ? inventoryExplanation.trim()
+        : undefined,
       paymentAdjustmentMethod:
         outcome === "refund" ? "refund_bank" : "offset_outstanding",
       discount: { type: "fixed", scope: "document", value: totals.total },
@@ -373,7 +455,17 @@ export default function CreditNoteCreateForm({
         rate:
           parseFloat(parseNumberFromFormatted(String(item.rate ?? "0"))) || 0,
         amount: Number(item.amount) || 0,
-        lineKind: item.lineKind || "service",
+        lineKind: item.lineKind || "product",
+        product_id:
+          item.product_id ||
+          item.product?.sku ||
+          item.product?.product_id ||
+          null,
+        branchId: branchId ? parseInt(branchId, 10) : null,
+        cost_price: item.cost_price ?? item.product?.cost_price ?? 0,
+        inventory_account:
+          item.inventory_account || item.product?.inventory_account || null,
+        cogs_head: item.cogs_head || item.product?.cogs_head || null,
       })),
       subtotal: totals.subtotal,
       vatAmount: 0,
@@ -524,6 +616,64 @@ export default function CreditNoteCreateForm({
             onChange={(e) => setDate(e.target.value)}
             className="max-w-xs"
           />
+
+          <Label className="pt-2 text-sm text-slate-600">
+            Reason <span className="text-red-500">*</span>
+          </Label>
+          <select
+            value={reasonCategory}
+            onChange={(e) => setReasonCategory(e.target.value)}
+            className="h-9 max-w-md rounded-md border border-slate-200 bg-white px-2 text-sm"
+          >
+            {reasons.length === 0 ? (
+              <option value="RETURN">Customer returns goods</option>
+            ) : (
+              reasons.map((r) => (
+                <option key={r.category} value={r.category}>
+                  {r.label}
+                </option>
+              ))
+            )}
+          </select>
+          {selectedReason?.explanation ? (
+            <p className="text-[11px] text-slate-500 md:col-span-1 md:col-start-2">
+              {selectedReason.explanation}
+            </p>
+          ) : null}
+
+          {needsInventory ? (
+            <>
+              <Label className="pt-2 text-sm text-slate-600">
+                Warehouse / Store <span className="text-red-500">*</span>
+              </Label>
+              <select
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+                className="h-9 max-w-md rounded-md border border-slate-200 bg-white px-2 text-sm"
+              >
+                <option value="">Select store…</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.branch_name || b.name || b.id}
+                  </option>
+                ))}
+              </select>
+
+              <Label className="pt-2 text-sm text-slate-600">
+                Inventory note <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                value={inventoryExplanation}
+                onChange={(e) => setInventoryExplanation(e.target.value)}
+                placeholder={
+                  selectedReason?.inventoryExplanationPrompt ||
+                  "Describe how inventory is affected…"
+                }
+                rows={2}
+                className="resize-none"
+              />
+            </>
+          ) : null}
 
           <Label className="pt-2 text-sm text-slate-600">Subject</Label>
           <Textarea
@@ -821,11 +971,15 @@ function emptyLine() {
   return {
     id: `L-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     product: null,
+    product_id: null,
     description: "",
     account: null,
     quantity: "1",
     rate: "0",
     amount: 0,
-    lineKind: "service",
+    lineKind: "product",
+    cost_price: 0,
+    inventory_account: null,
+    cogs_head: null,
   };
 }
