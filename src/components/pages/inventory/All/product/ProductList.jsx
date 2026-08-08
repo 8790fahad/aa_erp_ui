@@ -58,7 +58,8 @@ const resolveProductImageUrl = (src) => {
   if (!src) return "";
   const trimmed = String(src).trim();
   if (!trimmed) return "";
-  if (trimmed.startsWith("data:") || trimmed.startsWith("blob:")) return trimmed;
+  if (trimmed.startsWith("data:") || trimmed.startsWith("blob:"))
+    return trimmed;
 
   const uploadsIndex = trimmed.indexOf("/public/uploads/");
   if (uploadsIndex !== -1) {
@@ -90,7 +91,7 @@ const resolveProductImageUrl = (src) => {
 
   if (
     trimmed.startsWith("/flowbooks/") ||
-    trimmed.startsWith("/inventria_new/") ||
+    trimmed.startsWith("/flowbooks/") ||
     trimmed.startsWith("/flowbooks_api/") ||
     trimmed.startsWith("/aa_erp_api/")
   ) {
@@ -111,10 +112,13 @@ export default function ProductList() {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const pageFromUrl = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+  const pageFromUrl = Math.max(
+    1,
+    parseInt(searchParams.get("page") || "1", 10),
+  );
   const pageSizeFromUrl = Math.max(
     1,
-    Math.min(100, parseInt(searchParams.get("pageSize") || "10", 10))
+    Math.min(100, parseInt(searchParams.get("pageSize") || "10", 10)),
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [itemTypeFilter, setItemTypeFilter] = useState("");
@@ -125,7 +129,11 @@ export default function ProductList() {
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
-  const [deleteModal, setDeleteModal] = useState({ open: false, productId: null, productName: "" });
+  const [deleteModal, setDeleteModal] = useState({
+    open: false,
+    productId: null,
+    productName: "",
+  });
   const [deleting, setDeleting] = useState(false);
   const [priceModal, setPriceModal] = useState({
     open: false,
@@ -153,16 +161,19 @@ export default function ProductList() {
     (page) => {
       setSearchParams(
         (prev) => {
-          const currentPage = Math.max(1, parseInt(prev.get("page") || "1", 10));
+          const currentPage = Math.max(
+            1,
+            parseInt(prev.get("page") || "1", 10),
+          );
           if (page === currentPage) return prev;
           const next = new URLSearchParams(prev);
           next.set("page", String(page));
           return next;
         },
-        { replace: true }
+        { replace: true },
       );
     },
-    [setSearchParams]
+    [setSearchParams],
   );
 
   const handlePageSizeChange = useCallback(
@@ -171,7 +182,7 @@ export default function ProductList() {
         (prev) => {
           const currentSize = Math.max(
             1,
-            Math.min(100, parseInt(prev.get("pageSize") || "10", 10))
+            Math.min(100, parseInt(prev.get("pageSize") || "10", 10)),
           );
           if (size === currentSize) return prev;
           const next = new URLSearchParams(prev);
@@ -179,10 +190,10 @@ export default function ProductList() {
           next.set("page", "1");
           return next;
         },
-        { replace: true }
+        { replace: true },
       );
     },
-    [setSearchParams]
+    [setSearchParams],
   );
 
   const handleSearchChange = (value) => {
@@ -196,7 +207,10 @@ export default function ProductList() {
     if (Array.isArray(item?.product_images)) {
       return item.product_images.filter(Boolean);
     }
-    if (typeof item?.product_images === "string" && item.product_images.trim()) {
+    if (
+      typeof item?.product_images === "string" &&
+      item.product_images.trim()
+    ) {
       try {
         const parsed = JSON.parse(item.product_images);
         return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
@@ -251,7 +265,7 @@ export default function ProductList() {
             taxable: newTaxable,
             facilityId: activeBusiness.id,
           }),
-        }
+        },
       );
 
       const resp = await response.json();
@@ -260,8 +274,8 @@ export default function ProductList() {
         // Update the local state
         setData((prevData) =>
           prevData.map((item) =>
-            item.id === productId ? { ...item, taxable: newTaxable } : item
-          )
+            item.id === productId ? { ...item, taxable: newTaxable } : item,
+          ),
         );
         toast.success(`Product marked as ${newTaxable}`);
       } else {
@@ -277,13 +291,13 @@ export default function ProductList() {
     if (!activeBusiness?.id) return;
 
     const newOnline = !(
-      currentOnline === true || currentOnline === "true" || currentOnline === 1
+      currentOnline === true ||
+      currentOnline === "true" ||
+      currentOnline === 1
     );
 
     if (newOnline && !isOnlineEligible(itemType)) {
-      toast.error(
-        "Online is only available for Goods and Service items"
-      );
+      toast.error("Online is only available for Goods and Service items");
       return;
     }
 
@@ -299,7 +313,7 @@ export default function ProductList() {
             online_enabled: newOnline,
             facilityId: activeBusiness.id,
           }),
-        }
+        },
       );
 
       const resp = await response.json();
@@ -307,12 +321,12 @@ export default function ProductList() {
       if (resp.success) {
         setData((prevData) =>
           prevData.map((item) =>
-            item.id === productId ? { ...item, online_enabled: newOnline } : item
-          )
+            item.id === productId
+              ? { ...item, online_enabled: newOnline }
+              : item,
+          ),
         );
-        toast.success(
-          `Product marked ${newOnline ? "Online" : "Offline"}`
-        );
+        toast.success(`Product marked ${newOnline ? "Online" : "Offline"}`);
       } else {
         toast.error(resp.message || "Failed to update online status");
       }
@@ -325,18 +339,21 @@ export default function ProductList() {
   const toggleProductStatus = async (productId, currentStatus) => {
     if (!activeBusiness?.id) return;
     try {
-      const response = await fetch(`${apiURL}/api/products/${productId}/status`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ facilityId: activeBusiness.id }),
-      });
+      const response = await fetch(
+        `${apiURL}/api/products/${productId}/status`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ facilityId: activeBusiness.id }),
+        },
+      );
       const resp = await response.json();
       if (resp.success) {
         const newStatus = resp.data.status;
         setData((prev) =>
           prev.map((item) =>
-            item.id === productId ? { ...item, status: newStatus } : item
-          )
+            item.id === productId ? { ...item, status: newStatus } : item,
+          ),
         );
         toast.success(`Product marked as ${newStatus}`);
       } else {
@@ -376,23 +393,31 @@ export default function ProductList() {
 
     setSavingPrice(true);
     try {
-      const response = await fetch(`${apiURL}/api/products/${productId}/price`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          facilityId: activeBusiness.id,
-          selling_price: price,
-        }),
-      });
+      const response = await fetch(
+        `${apiURL}/api/products/${productId}/price`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            facilityId: activeBusiness.id,
+            selling_price: price,
+          }),
+        },
+      );
       const resp = await response.json();
       if (resp.success) {
         setData((prev) =>
           prev.map((item) =>
-            item.id === productId ? { ...item, selling_price: price } : item
-          )
+            item.id === productId ? { ...item, selling_price: price } : item,
+          ),
         );
         toast.success("Product price updated");
-        setPriceModal({ open: false, productId: null, productName: "", sellingPrice: "" });
+        setPriceModal({
+          open: false,
+          productId: null,
+          productName: "",
+          sellingPrice: "",
+        });
       } else {
         toast.error(resp.message || "Failed to update price");
       }
@@ -440,8 +465,8 @@ export default function ProductList() {
             reader.onload = (e) => resolve(e.target?.result);
             reader.onerror = reject;
             reader.readAsDataURL(file);
-          })
-      )
+          }),
+      ),
     )
       .then((newImages) => {
         setImagesModal((prev) => ({
@@ -449,7 +474,7 @@ export default function ProductList() {
           images: [...prev.images, ...newImages.filter(Boolean)],
         }));
         toast.success(
-          `${newImages.filter(Boolean).length} image${newImages.filter(Boolean).length === 1 ? "" : "s"} added`
+          `${newImages.filter(Boolean).length} image${newImages.filter(Boolean).length === 1 ? "" : "s"} added`,
         );
       })
       .catch(() => toast.error("Failed to read image files"));
@@ -468,15 +493,18 @@ export default function ProductList() {
 
     setSavingImages(true);
     try {
-      const response = await fetch(`${apiURL}/api/products/${productId}/images`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          facilityId: activeBusiness.id,
-          product_images: images,
-          image_url: images[0] || null,
-        }),
-      });
+      const response = await fetch(
+        `${apiURL}/api/products/${productId}/images`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            facilityId: activeBusiness.id,
+            product_images: images,
+            image_url: images[0] || null,
+          }),
+        },
+      );
       const resp = await response.json();
       if (resp.success) {
         const updatedImages = resp.data?.product_images || images;
@@ -489,8 +517,8 @@ export default function ProductList() {
                   product_images: updatedImages,
                   image_url: primaryImage,
                 }
-              : item
-          )
+              : item,
+          ),
         );
         toast.success("Product images updated");
         setImagesModal({
@@ -534,7 +562,7 @@ export default function ProductList() {
             facilityId: activeBusiness.id,
             marketplace_description: description,
           }),
-        }
+        },
       );
       const resp = await response.json();
       if (resp.success) {
@@ -543,8 +571,8 @@ export default function ProductList() {
           prev.map((item) =>
             item.id === productId
               ? { ...item, marketplace_description: updatedDescription }
-              : item
-          )
+              : item,
+          ),
         );
         toast.success("Product description updated");
         setDescriptionModal({
@@ -571,7 +599,7 @@ export default function ProductList() {
     try {
       const response = await fetch(
         `${apiURL}/api/products/${productId}?facilityId=${activeBusiness.id}`,
-        { method: "DELETE" }
+        { method: "DELETE" },
       );
       const resp = await response.json();
       if (resp.success) {
@@ -641,7 +669,7 @@ export default function ProductList() {
 
   const toggleSelectAll = () => {
     const finishedGoods = filteredData.filter(
-      (item) => item.item_type === "Finished Good"
+      (item) => item.item_type === "Finished Good",
     );
     if (selectedProducts.length === finishedGoods.length) {
       setSelectedProducts([]);
@@ -683,7 +711,7 @@ export default function ProductList() {
 
   const totalPages = Math.max(
     1,
-    Math.ceil(filteredData.length / pageSizeFromUrl)
+    Math.ceil(filteredData.length / pageSizeFromUrl),
   );
 
   useEffect(() => {
@@ -694,7 +722,7 @@ export default function ProductList() {
           next.set("page", String(totalPages));
           return next;
         },
-        { replace: true }
+        { replace: true },
       );
     }
   }, [pageFromUrl, totalPages, setSearchParams]);
@@ -709,9 +737,7 @@ export default function ProductList() {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() =>
-          navigate(`/app/inventory/product-list/view/${item.id}`)
-        }
+        onClick={() => navigate(`/app/inventory/product-list/view/${item.id}`)}
         className="h-8 w-8 p-0 text-[var(--aa-accent)] hover:bg-[var(--aa-sidebar-active)] hover:text-[var(--aa-accent-hover)]"
         title="View"
       >
@@ -720,9 +746,7 @@ export default function ProductList() {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() =>
-          navigate(`/app/inventory/product-list/edit/${item.id}`)
-        }
+        onClick={() => navigate(`/app/inventory/product-list/edit/${item.id}`)}
         className="h-8 w-8 p-0 text-[var(--aa-navy)] hover:bg-[var(--aa-sidebar-active)]"
         title="Edit"
       >
@@ -998,7 +1022,8 @@ export default function ProductList() {
                           {item.unit_of_measure || "—"}
                         </td>
                         <td className="px-4 py-3 align-middle text-right font-medium text-[var(--aa-navy)]">
-                          {item.selling_price != null && item.selling_price !== ""
+                          {item.selling_price != null &&
+                          item.selling_price !== ""
                             ? formatNumber1(Number(item.selling_price))
                             : "—"}
                         </td>
@@ -1052,10 +1077,7 @@ export default function ProductList() {
                     ? 0
                     : (pageFromUrl - 1) * pageSizeFromUrl + 1}
                   –
-                  {Math.min(
-                    pageFromUrl * pageSizeFromUrl,
-                    filteredData.length
-                  )}
+                  {Math.min(pageFromUrl * pageSizeFromUrl, filteredData.length)}
                 </span>{" "}
                 of{" "}
                 <span className="font-medium text-slate-700">
@@ -1140,7 +1162,9 @@ export default function ProductList() {
             </div>
           }
           open={deleteModal.open}
-          onCancel={() => setDeleteModal({ open: false, productId: null, productName: "" })}
+          onCancel={() =>
+            setDeleteModal({ open: false, productId: null, productName: "" })
+          }
           onOk={confirmDeleteProduct}
           okText="Delete"
           cancelText="Cancel"
@@ -1155,7 +1179,8 @@ export default function ProductList() {
             <strong>"{deleteModal.productName}"</strong>?
           </p>
           <p className="text-sm text-gray-500 mt-1">
-            This action cannot be undone. Products with existing stock cannot be deleted.
+            This action cannot be undone. Products with existing stock cannot be
+            deleted.
           </p>
         </Modal>
 
@@ -1169,7 +1194,12 @@ export default function ProductList() {
           }
           open={priceModal.open}
           onCancel={() =>
-            setPriceModal({ open: false, productId: null, productName: "", sellingPrice: "" })
+            setPriceModal({
+              open: false,
+              productId: null,
+              productName: "",
+              sellingPrice: "",
+            })
           }
           onOk={saveProductPrice}
           okText="Save Price"
@@ -1189,7 +1219,10 @@ export default function ProductList() {
             step="0.01"
             value={priceModal.sellingPrice}
             onChange={(e) =>
-              setPriceModal((prev) => ({ ...prev, sellingPrice: e.target.value }))
+              setPriceModal((prev) => ({
+                ...prev,
+                sellingPrice: e.target.value,
+              }))
             }
             placeholder="Enter selling price"
             size="large"
@@ -1207,7 +1240,12 @@ export default function ProductList() {
           }
           open={imagesModal.open}
           onCancel={() =>
-            setImagesModal({ open: false, productId: null, productName: "", images: [] })
+            setImagesModal({
+              open: false,
+              productId: null,
+              productName: "",
+              images: [],
+            })
           }
           onOk={saveProductImages}
           okText="Save Images"
@@ -1217,8 +1255,8 @@ export default function ProductList() {
           width={640}
         >
           <p className="text-gray-600 mb-4">
-            Manage images for <strong>{imagesModal.productName}</strong>. The first
-            image is used as the primary product image.
+            Manage images for <strong>{imagesModal.productName}</strong>. The
+            first image is used as the primary product image.
           </p>
 
           <div className="mb-4">
@@ -1238,7 +1276,8 @@ export default function ProductList() {
               Add Images
             </label>
             <p className="text-xs text-gray-500 mt-2">
-              PNG, JPG, or GIF. Max 5MB per image. You can select multiple files.
+              PNG, JPG, or GIF. Max 5MB per image. You can select multiple
+              files.
             </p>
           </div>
 

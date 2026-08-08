@@ -205,7 +205,7 @@ DB_PASSWORD=your_password
 # API
 PORT=3000
 NODE_ENV=production
-API_BASE_URL=http://localhost:3000/inventria_new
+API_BASE_URL=http://localhost:3000/flowbooks
 
 # Security
 JWT_SECRET=your_jwt_secret
@@ -303,5 +303,3 @@ const features = {
 ---
 
 **🎉 The Production Automation system is now fully implemented and ready for production use!**
-
-

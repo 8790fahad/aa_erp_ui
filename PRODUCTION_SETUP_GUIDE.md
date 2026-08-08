@@ -71,7 +71,7 @@ Ensure your frontend is configured to call the correct API endpoint:
 
 ```javascript
 // In your axios configuration
-const API_BASE_URL = "http://localhost:3000/inventria_new";
+const API_BASE_URL = "http://localhost:3000/flowbooks";
 ```
 
 ### 3. User Authentication
@@ -259,5 +259,3 @@ Your Production Automation system is ready when:
 ---
 
 **🎉 Congratulations!** Your Production Automation system is now fully integrated and ready for use!
-
-
