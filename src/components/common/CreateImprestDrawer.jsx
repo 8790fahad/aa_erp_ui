@@ -700,9 +700,9 @@ export default function CreateImprestDrawer({
         if (!isOpen) onOpenChange(false);
       }}
     >
-      <DrawerContent
+        <DrawerContent
         side="right"
-        className="bg-white border-slate-200 flex flex-col sm:max-w-2xl"
+        className="bg-white border-slate-200 flex flex-col w-full sm:!max-w-4xl lg:!max-w-5xl"
       >
         <DrawerHeader className="border-b border-slate-200 shrink-0">
           <div className="flex items-start justify-between gap-3">
@@ -773,295 +773,257 @@ export default function CreateImprestDrawer({
                 </span>
               </div>
 
-              <div className="p-4 md:p-5 bg-slate-50 rounded-xl border-2 border-slate-200 space-y-4 max-w-full">
-                <h3 className="text-sm font-semibold text-slate-800">
-                  Add a line
-                </h3>
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="imprest-draft-line-date" className="text-xs">
-                      Payment date <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="imprest-draft-line-date"
-                      type="date"
-                      value={draft.linePaymentDate ?? paymentDate}
-                      onChange={(e) =>
-                        setDraft((d) => ({
-                          ...d,
-                          linePaymentDate: e.target.value,
-                        }))
-                      }
-                      className="border-slate-200 h-9 text-sm"
-                    />
-                    <p className="text-[11px] text-slate-500">
-                      Set the date for this line (new lines default to today).
-                    </p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="imprest-draft-expense" className="text-xs">
-                      Expense <span className="text-red-500">*</span>
-                    </Label>
-                    <Typeahead
-                      id="imprest-draft-expense"
-                      options={expenseList || []}
-                      placeholder="Select expense…"
-                      labelKey={(option) =>
-                        `${option.name || ""} (${option.code || ""})`
-                      }
-                      selected={
-                        draft.selectedExpense ? [draft.selectedExpense] : []
-                      }
-                      onChange={(sel) =>
-                        setDraft((d) => ({
-                          ...d,
-                          selectedExpense: sel?.[0] || null,
-                        }))
-                      }
-                      renderMenuItemChildren={(option) => (
-                        <div className="py-1">
-                          <div className="font-semibold text-slate-800">
-                            {option.name}
+              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                <table className="w-full min-w-[52rem] table-fixed border-collapse text-sm">
+                  <colgroup>
+                    <col className="w-[8.5rem]" />
+                    <col className="w-[22%]" />
+                    <col />
+                    <col className="w-[4.75rem]" />
+                    <col className="w-[7.5rem]" />
+                    <col className="w-[7rem]" />
+                    <col className="w-[4.25rem]" />
+                    <col className="w-[2.75rem]" />
+                  </colgroup>
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                      <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wide">
+                        Date
+                      </th>
+                      <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wide">
+                        Expense
+                      </th>
+                      <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wide">
+                        Description
+                      </th>
+                      <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-wide">
+                        Qty
+                      </th>
+                      <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-wide">
+                        Unit Cost
+                      </th>
+                      <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-wide">
+                        Total
+                      </th>
+                      <th className="px-1 py-2 text-center text-[11px] font-semibold uppercase tracking-wide">
+                        Tax
+                      </th>
+                      <th className="px-1 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {lines.map((ln) => (
+                      <tr
+                        key={ln.id}
+                        className="bg-white hover:bg-slate-50/80"
+                      >
+                        <td className="px-2 py-2 align-middle whitespace-nowrap tabular-nums text-slate-700">
+                          {ln.transaction_date
+                            ? moment(ln.transaction_date).format("DD/MM/YYYY")
+                            : "—"}
+                        </td>
+                        <td className="px-2 py-2 align-middle">
+                          <div className="truncate font-medium text-slate-900">
+                            {ln.expense.name}
                           </div>
-                          <small className="text-slate-600 text-xs">
-                            {option.code}
-                          </small>
-                        </div>
-                      )}
-                      clearButton
-                      positionFixed
-                      className="w-full [&_.rbt-input-main]:rounded-md [&_.rbt-input-main]:border [&_.rbt-input-main]:border-slate-200 [&_.rbt-input-main]:min-h-9 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="imprest-draft-desc" className="text-xs">
-                      Description <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="imprest-draft-desc"
-                      value={draft.description}
-                      onChange={(e) =>
-                        setDraft((d) => ({
-                          ...d,
-                          description: e.target.value,
-                        }))
-                      }
-                      placeholder="Enter description…"
-                      className="border-slate-200 h-9 text-sm"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">
-                        Quantity <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        inputMode="decimal"
-                        value={draft.quantity}
-                        onChange={(e) =>
-                          setDraft((d) => ({
-                            ...d,
-                            quantity: sanitizeAmountInput(e.target.value),
-                          }))
-                        }
-                        className="border-slate-200 h-9 text-sm text-right tabular-nums"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">
-                        Unit cost <span className="text-red-500">*</span>
-                      </Label>
-                      <div className="relative">
-                        <span className="pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-1/2 text-xs text-slate-500">
-                          ₦
-                        </span>
+                          <div className="truncate text-[11px] font-mono text-slate-500">
+                            {ln.expense.code}
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 align-middle text-slate-800">
+                          <span className="line-clamp-2 break-words">
+                            {ln.description}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 align-middle text-right tabular-nums text-slate-800">
+                          {ln.quantity}
+                        </td>
+                        <td className="px-2 py-2 align-middle text-right tabular-nums text-slate-800">
+                          ₦{formatNumber1(ln.unitCost)}
+                        </td>
+                        <td className="px-2 py-2 align-middle text-right font-semibold tabular-nums text-slate-900">
+                          ₦{formatNumber1(lineRowTotal(ln))}
+                        </td>
+                        <td className="px-1 py-2 align-middle text-center">
+                          <input
+                            type="checkbox"
+                            checked={ln.taxable === "Taxable"}
+                            onChange={(e) =>
+                              setLineTaxableCheckbox(ln.id, e.target.checked)
+                            }
+                            className="mx-auto h-4 w-4 rounded border-slate-300 text-[#4267B2] accent-[#4267B2] focus:ring-[#4267B2]/30"
+                            aria-label="Taxable"
+                          />
+                        </td>
+                        <td className="px-1 py-2 align-middle text-center">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="mx-auto h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            onClick={() => removeLine(ln.id)}
+                            aria-label="Remove line"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+
+                    <tr className="bg-slate-50/50">
+                      <td className="px-2 py-2 align-middle">
                         <Input
-                          inputMode="decimal"
-                          value={draft.unitCost}
+                          id="imprest-draft-line-date"
+                          type="date"
+                          value={draft.linePaymentDate ?? paymentDate}
                           onChange={(e) =>
                             setDraft((d) => ({
                               ...d,
-                              unitCost: formatNumberWithCommas(
-                                sanitizeAmountInput(e.target.value)
-                              ),
+                              linePaymentDate: e.target.value,
                             }))
                           }
-                          className="border-slate-200 h-9 pl-6 text-sm text-right tabular-nums"
+                          className="h-9 w-full border-slate-300 bg-white px-1.5 text-sm"
                         />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Total</Label>
-                      <Input
-                        readOnly
-                        disabled
-                        value={formatNumber1(draftLineNet)}
-                        className="border-slate-200 h-9 text-sm text-right font-semibold bg-slate-100 tabular-nums"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1 border-t border-slate-200">
-                    <div className="flex items-center gap-2 min-h-9">
-                      <input
-                        type="checkbox"
-                        id="imprest-draft-taxable-line"
-                        checked={draftIsTaxable}
-                        onChange={(e) =>
-                          setDraft((d) => ({
-                            ...d,
-                            taxableLine: e.target.checked,
-                          }))
-                        }
-                        className="w-5 h-5 text-[#4267B2] border-2 border-slate-300 rounded focus:ring-2 focus:ring-[#4267B2]/30 cursor-pointer shrink-0"
-                      />
-                      <label
-                        htmlFor="imprest-draft-taxable-line"
-                        className="text-sm text-slate-700 cursor-pointer"
-                      >
-                        Mark as Taxable
-                      </label>
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={addLineFromDraft}
-                      className="h-10 w-full gap-2 border-0 bg-[#4267B2] text-white shadow-none hover:bg-[#4267B2]/90 sm:w-auto sm:min-w-[7rem]"
-                      title="Add line"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add line
-                    </Button>
-                  </div>
-                </div>
+                      </td>
+                      <td className="px-2 py-2 align-middle">
+                        <Typeahead
+                          id="imprest-draft-expense"
+                          options={expenseList || []}
+                          placeholder="Select expense…"
+                          labelKey={(option) =>
+                            `${option.name || ""} (${option.code || ""})`
+                          }
+                          selected={
+                            draft.selectedExpense ? [draft.selectedExpense] : []
+                          }
+                          onChange={(sel) =>
+                            setDraft((d) => ({
+                              ...d,
+                              selectedExpense: sel?.[0] || null,
+                            }))
+                          }
+                          renderMenuItemChildren={(option) => (
+                            <div className="py-1">
+                              <div className="font-semibold text-slate-800">
+                                {option.name}
+                              </div>
+                              <small className="text-xs text-slate-600">
+                                {option.code}
+                              </small>
+                            </div>
+                          )}
+                          clearButton
+                          positionFixed
+                          className="w-full [&_.rbt-input-main]:h-9 [&_.rbt-input-main]:min-h-9 [&_.rbt-input-main]:rounded-md [&_.rbt-input-main]:border [&_.rbt-input-main]:border-slate-300 [&_.rbt-input-main]:bg-white [&_.rbt-input-main]:px-2 [&_.rbt-input-main]:py-1 [&_.rbt-input-main]:text-sm"
+                        />
+                      </td>
+                      <td className="px-2 py-2 align-middle">
+                        <Input
+                          id="imprest-draft-desc"
+                          value={draft.description}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              description: e.target.value,
+                            }))
+                          }
+                          placeholder="Description…"
+                          className="h-9 w-full border-slate-300 bg-white text-sm"
+                        />
+                      </td>
+                      <td className="px-2 py-2 align-middle">
+                        <Input
+                          inputMode="decimal"
+                          value={draft.quantity}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              quantity: sanitizeAmountInput(e.target.value),
+                            }))
+                          }
+                          placeholder="0"
+                          className="h-9 w-full border-slate-300 bg-white px-1.5 text-right text-sm tabular-nums"
+                        />
+                      </td>
+                      <td className="px-2 py-2 align-middle">
+                        <div className="relative">
+                          <span className="pointer-events-none absolute left-1.5 top-1/2 z-10 -translate-y-1/2 text-xs text-slate-500">
+                            ₦
+                          </span>
+                          <Input
+                            inputMode="decimal"
+                            value={draft.unitCost}
+                            onChange={(e) =>
+                              setDraft((d) => ({
+                                ...d,
+                                unitCost: formatNumberWithCommas(
+                                  sanitizeAmountInput(e.target.value)
+                                ),
+                              }))
+                            }
+                            placeholder="0.00"
+                            className="h-9 w-full border-slate-300 bg-white pl-5 pr-1.5 text-right text-sm tabular-nums"
+                          />
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 align-middle">
+                        <div className="flex h-9 w-full items-center justify-end rounded-md border border-slate-200 bg-slate-100 px-1.5 text-sm font-semibold tabular-nums text-slate-800">
+                          {formatNumber1(draftLineNet)}
+                        </div>
+                      </td>
+                      <td className="px-1 py-2 align-middle text-center">
+                        <input
+                          type="checkbox"
+                          id="imprest-draft-taxable-line"
+                          checked={draftIsTaxable}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              taxableLine: e.target.checked,
+                            }))
+                          }
+                          className="mx-auto h-4 w-4 rounded border-slate-300 text-[#4267B2] accent-[#4267B2] focus:ring-[#4267B2]/30"
+                          aria-label="Mark as taxable"
+                        />
+                      </td>
+                      <td className="px-1 py-2 align-middle" />
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
-              {lines.length > 0 && (
-                <div className="bg-white rounded-xl p-4 border-2 border-slate-200 shadow-sm">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                      <Package className="w-4 h-4 text-[#4267B2] shrink-0" />
-                      Lines list
-                    </h3>
-                    <span className="text-xs font-medium text-slate-600 bg-[var(--aa-sidebar-active)] px-2 py-1 rounded">
-                      {lines.length} line{lines.length !== 1 ? "s" : ""}
-                    </span>
-                  </div>
-                  <div className="overflow-x-auto rounded-lg border border-slate-200">
-                    <table className="w-full text-xs min-w-[720px]">
-                      <thead className="bg-slate-50">
-                        <tr className="border-b-2 border-slate-200">
-                          <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap">
-                            Payment date
-                          </th>
-                          <th className="px-2 py-2 text-left font-semibold text-slate-700">
-                            Expense
-                          </th>
-                          <th className="px-2 py-2 text-center font-semibold text-slate-700 w-24">
-                            Taxable
-                          </th>
-                          <th className="px-2 py-2 text-left font-semibold text-slate-700">
-                            Description
-                          </th>
-                          <th className="px-2 py-2 text-right font-semibold text-slate-700">
-                            Qty
-                          </th>
-                          <th className="px-2 py-2 text-right font-semibold text-slate-700">
-                            Unit
-                          </th>
-                          <th className="px-2 py-2 text-right font-semibold text-slate-700">
-                            Total
-                          </th>
-                          <th className="px-1 py-2 w-10" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {lines.map((ln) => (
-                          <tr
-                            key={ln.id}
-                            className="border-b border-slate-100 hover:bg-slate-50/80 align-top"
-                          >
-                            <td className="px-2 py-2 text-slate-700 whitespace-nowrap tabular-nums">
-                              {ln.transaction_date
-                                ? moment(ln.transaction_date).format(
-                                    "DD/MM/YYYY"
-                                  )
-                                : "—"}
-                            </td>
-                            <td className="px-2 py-2 text-slate-900 font-medium">
-                              {ln.expense.name}
-                              <div className="text-[10px] text-slate-500 font-mono">
-                                {ln.expense.code}
-                              </div>
-                            </td>
-                            <td className="px-2 py-2 text-center">
-                              <label className="inline-flex items-center justify-center cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={ln.taxable === "Taxable"}
-                                  onChange={(e) =>
-                                    setLineTaxableCheckbox(
-                                      ln.id,
-                                      e.target.checked
-                                    )
-                                  }
-                                  className="w-4 h-4 text-[#4267B2] border-slate-300 rounded focus:ring-[#4267B2]/30"
-                                />
-                                {ln.taxable === "Taxable" && (
-                                  <span className="ml-1 text-[10px] text-[#4267B2] font-medium">
-                                    Yes
-                                  </span>
-                                )}
-                              </label>
-                            </td>
-                            <td className="px-2 py-2 text-slate-800 max-w-[140px]">
-                              {ln.description}
-                            </td>
-                            <td className="px-2 py-2 text-right tabular-nums">
-                              {ln.quantity}
-                            </td>
-                            <td className="px-2 py-2 text-right tabular-nums">
-                              ₦{formatNumber1(ln.unitCost)}
-                            </td>
-                            <td className="px-2 py-2 text-right font-semibold tabular-nums">
-                              ₦{formatNumber1(lineRowTotal(ln))}
-                            </td>
-                            <td className="px-1 py-2">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                onClick={() => removeLine(ln.id)}
-                                aria-label="Remove line"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+              <div className="flex items-center justify-between gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addLineFromDraft}
+                  className="h-9 gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add line
+                </Button>
+              </div>
 
-              <div className="rounded-lg bg-[var(--aa-sidebar-active)] border border-[#4267B2]/25 px-3 py-3 space-y-2 text-sm">
-                <div className="flex justify-between text-slate-800">
+              <div className="ml-auto w-full max-w-xs space-y-2 rounded-lg border border-[#4267B2]/25 bg-[var(--aa-sidebar-active)] px-3 py-3 text-sm">
+                <div className="flex items-baseline justify-between gap-4 text-slate-800">
                   <span>Subtotal (net)</span>
-                  <span className="tabular-nums">₦{formatNumber1(subtotalNet)}</span>
+                  <span className="tabular-nums">
+                    ₦{formatNumber1(subtotalNet)}
+                  </span>
                 </div>
                 {Math.abs(totalVat) > 1e-9 && (
-                  <div className="flex justify-between gap-3 text-slate-700">
+                  <div className="flex items-baseline justify-between gap-4 text-slate-700">
                     <span className="min-w-0 break-words leading-snug">
                       {vatRowLabel}
                     </span>
-                    <span className="tabular-nums shrink-0">
+                    <span className="shrink-0 tabular-nums">
                       ₦{formatNumber1(totalVat)}
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between items-center pt-2 border-t border-[#4267B2]/25 font-semibold text-slate-900">
+                <div className="flex items-baseline justify-between gap-4 border-t border-[#4267B2]/25 pt-2 font-semibold text-slate-900">
                   <span>Grand total</span>
-                  <span className="text-lg font-bold tabular-nums text-[#4267B2]">
+                  <span className="text-base font-bold tabular-nums text-[#4267B2]">
                     ₦{formatNumber1(grandTotal)}
                   </span>
                 </div>
@@ -1103,7 +1065,7 @@ export default function CreateImprestDrawer({
                   {showTaxSelection && (
                     <>
                       {filteredTaxes.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-3 mt-2">
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
                           {filteredTaxes.map((tax) => {
                             const isSelected = draft.selectedTax?.id === tax.id;
                             const isInclusive =
@@ -1184,12 +1146,13 @@ export default function CreateImprestDrawer({
             </div>
           </div>
 
-          <DrawerFooter className="border-t border-slate-200 shrink-0 gap-2 flex-row flex-wrap justify-end">
+          <DrawerFooter className="shrink-0 flex-row flex-wrap items-center justify-end gap-2 border-t border-slate-200 sm:space-x-0">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={submitting}
+              className="m-0"
             >
               Cancel
             </Button>
@@ -1198,7 +1161,7 @@ export default function CreateImprestDrawer({
               variant="outline"
               onClick={openImpressHistory}
               disabled={submitting}
-              className="gap-1"
+              className="m-0 gap-1"
             >
               <ListOrdered className="h-4 w-4" />
               View imprest
@@ -1206,7 +1169,7 @@ export default function CreateImprestDrawer({
             <Button
               type="submit"
               disabled={submitting || lines.length === 0}
-              className="border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
+              className="m-0 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
             >
               {submitting ? (
                 <>

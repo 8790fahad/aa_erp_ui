@@ -252,7 +252,7 @@ const ProductServiceForm = () => {
   const isServicePurchaseEnabled = watch("purchase.isPurchased");
   const watchedBranchId = watch("settings.branchId");
 
-  // Retail Alh. Ashiru Yanmusa: only Goods (Resalable) and Service
+  // Retail YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES: only Goods (Resalable) and Service
   useEffect(() => {
     if (watchedItemType !== "Resalable" && watchedItemType !== "Service") {
       setValue("itemType", "Resalable");

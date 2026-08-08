@@ -1,4 +1,9 @@
 import { formatNumber1 } from "@/components/router/utilities";
+import {
+  formatNumberWithCommas,
+  parseNumberFromFormatted,
+  filterJournalAmountInput,
+} from "@/utilities";
 import { _postApi } from "@/redux/actions/api";
 
 import moment from "moment";
@@ -33,6 +38,30 @@ import {
 const poInputClass =
   "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]";
 const poLabelClass = "mb-1.5 block text-xs font-medium text-slate-600";
+const poQtyInputClass =
+  "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-right text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]";
+
+function formatAmountInput(value) {
+  const withoutCommas = String(value || "").replace(/,/g, "");
+  const sanitized = filterJournalAmountInput(withoutCommas);
+  const parts = sanitized.split(".");
+  const numericValue =
+    parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : sanitized;
+  return formatNumberWithCommas(numericValue);
+}
+
+function displayFormattedAmount(value) {
+  if (value === "" || value == null) return "";
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "";
+    return formatNumberWithCommas(String(value));
+  }
+  return String(value);
+}
+
+function parseQty(value) {
+  return parseFloat(parseNumberFromFormatted(value)) || 0;
+}
 
 function statusBadgeClass(status) {
   const s = String(status || "").toLowerCase();
@@ -262,8 +291,14 @@ export default function PurchaseRequisitionList() {
   };
 
   const handleAddExpense = () => {
-    if (newExpense.item && newExpense.quantity && newExpense.uom) {
-      setExpenses((prev) => [...prev, newExpense]);
+    if (newExpense.item && parseQty(newExpense.quantity) > 0 && newExpense.uom) {
+      setExpenses((prev) => [
+        ...prev,
+        {
+          ...newExpense,
+          quantity: displayFormattedAmount(newExpense.quantity) || "1",
+        },
+      ]);
       setNewExpense({
         item: "",
         quantity: "",
@@ -312,7 +347,7 @@ export default function PurchaseRequisitionList() {
       unit_code: unitOfMeasure || prev.unit_code || "",
       category: categoryObj?.category || prev.category || "",
       category_code: categoryObj?.category || prev.category_code || "",
-      quantity: prev.quantity || 1,
+      quantity: prev.quantity || formatNumberWithCommas("1"),
     }));
   };
 
@@ -342,7 +377,10 @@ export default function PurchaseRequisitionList() {
       const requisitionData = {
         ...form,
         prefix: activeBusiness.prefix,
-        expenses,
+        expenses: expenses.map((row) => ({
+          ...row,
+          quantity: parseQty(row.quantity),
+        })),
         user_id: user.id,
       };
 
@@ -750,7 +788,7 @@ export default function PurchaseRequisitionList() {
                         <th className="min-w-[220px] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
                           Item Details
                         </th>
-                        <th className="w-24 px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
+                        <th className="min-w-[8.5rem] w-36 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
                           Quantity
                         </th>
                         <th className="w-28 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
@@ -775,17 +813,19 @@ export default function PurchaseRequisitionList() {
                               </div>
                             ) : null}
                           </td>
-                          <td className="px-2 py-3 align-top text-right">
+                          <td className="min-w-[8.5rem] w-36 px-3 py-3 align-top text-right">
                             <input
-                              type="number"
-                              min="1"
-                              value={expense.quantity || ""}
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              placeholder="0.00"
+                              value={displayFormattedAmount(expense.quantity)}
                               onChange={(e) =>
                                 updateExpenseField(index, {
-                                  quantity: Number(e.target.value),
+                                  quantity: formatAmountInput(e.target.value),
                                 })
                               }
-                              className="ml-auto w-20 rounded border border-slate-300 bg-white px-2 py-1.5 text-right text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                              className={poQtyInputClass}
                             />
                           </td>
                           <td className="px-2 py-3 align-top">
@@ -865,13 +905,14 @@ export default function PurchaseRequisitionList() {
                             flip={true}
                           />
                         </td>
-                        <td className="px-2 py-3 align-top text-right">
+                        <td className="min-w-[8.5rem] w-36 px-3 py-3 align-top text-right">
                           <input
                             ref={quantityInputRef}
-                            type="number"
-                            min="1"
-                            value={newExpense.quantity || ""}
-                            placeholder="0"
+                            type="text"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            placeholder="0.00"
+                            value={displayFormattedAmount(newExpense.quantity)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
@@ -885,10 +926,10 @@ export default function PurchaseRequisitionList() {
                             onChange={(e) =>
                               setNewExpense({
                                 ...newExpense,
-                                quantity: Number(e.target.value),
+                                quantity: formatAmountInput(e.target.value),
                               })
                             }
-                            className="ml-auto w-20 rounded border border-slate-300 bg-white px-2 py-1.5 text-right text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                            className={poQtyInputClass}
                           />
                         </td>
                         <td className="px-2 py-3 align-top">
@@ -926,7 +967,7 @@ export default function PurchaseRequisitionList() {
                             onClick={handleAddExpense}
                             disabled={
                               !newExpense.item ||
-                              !newExpense.quantity ||
+                              parseQty(newExpense.quantity) <= 0 ||
                               !newExpense.uom
                             }
                             className="rounded p-1 text-[var(--aa-accent)] hover:bg-slate-100 disabled:opacity-40"
@@ -945,7 +986,7 @@ export default function PurchaseRequisitionList() {
                       onClick={() => {
                         if (
                           newExpense.item &&
-                          newExpense.quantity &&
+                          parseQty(newExpense.quantity) > 0 &&
                           newExpense.uom
                         ) {
                           handleAddExpense();

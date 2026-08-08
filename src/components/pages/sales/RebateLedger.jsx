@@ -1,12 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import moment from "moment";
 import { toast } from "sonner";
-import { RefreshCw, Percent, FileText, Printer, X } from "lucide-react";
+import { RefreshCw, Percent, FileText, Printer, X, Banknote, Plus } from "lucide-react";
+import { Typeahead } from "react-bootstrap-typeahead";
+import "react-bootstrap-typeahead/css/Typeahead.css";
 import { _fetchApi, _postApi, _deleteApi, _putApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 const PAGE_SIZE = 200;
 const TABS = [
@@ -99,6 +109,7 @@ export default function RebateLedger() {
 
   const [ruleForm, setRuleForm] = useState({
     name: "",
+    basis: "sales",
     product: "All products",
     productSku: "",
     period: "",
@@ -108,7 +119,48 @@ export default function RebateLedger() {
     rebatePercent: "",
   });
   const [issuingCnKey, setIssuingCnKey] = useState(null);
+  const [payingKey, setPayingKey] = useState(null);
+  const [addRuleOpen, setAddRuleOpen] = useState(false);
   const [creditNoteDoc, setCreditNoteDoc] = useState(null);
+  const productTypeaheadRef = useRef(null);
+  const ALL_PRODUCTS_OPTION = useMemo(
+    () => ({ id: "__all__", name: "All products", sku: "" }),
+    [],
+  );
+  const productTypeaheadOptions = useMemo(
+    () => [ALL_PRODUCTS_OPTION, ...products],
+    [ALL_PRODUCTS_OPTION, products],
+  );
+  const selectedProduct = useMemo(() => {
+    if (!ruleForm.product || ruleForm.product === "All products") {
+      return [ALL_PRODUCTS_OPTION];
+    }
+    if (ruleForm.productSku) {
+      const bySku = products.find((p) => p.sku === ruleForm.productSku);
+      if (bySku) return [bySku];
+    }
+    const byName = products.find((p) => p.name === ruleForm.product);
+    if (byName) return [byName];
+    return [
+      {
+        id: `custom-${ruleForm.product}`,
+        name: ruleForm.product,
+        sku: ruleForm.productSku || "",
+      },
+    ];
+  }, [ALL_PRODUCTS_OPTION, products, ruleForm.product, ruleForm.productSku]);
+  const [payForm, setPayForm] = useState({
+    modeOfPayment: "cash",
+    chequeNo: "",
+  });
+  const {
+    accountHead,
+    setAccountHead,
+    bankAccount,
+    setBankAccount,
+    accountList,
+    headList,
+  } = useAdvancePaymentAccounts(tab === "rebates", facilityId, payForm.modeOfPayment);
 
   const loadRulesAndStatuses = useCallback(() => {
     if (!facilityId) return;
@@ -200,15 +252,22 @@ export default function RebateLedger() {
     }
     setLoadingBilling(true);
     try {
-      const rows = await fetchAllSalesLines({
+      const common = {
         facilityId,
         userId: String(userId),
         fromDate,
         toDate,
         search: search.trim(),
         branchId: branchIds,
-      });
-      setBilling(rows);
+      };
+      const [salesRows, purchaseRows] = await Promise.all([
+        fetchAllSalesLines(common),
+        fetchAllPurchaseLines(common),
+      ]);
+      setBilling([
+        ...salesRows.map((r) => ({ ...r, basis: r.basis || "sales" })),
+        ...purchaseRows.map((r) => ({ ...r, basis: r.basis || "purchase" })),
+      ]);
     } catch (e) {
       console.error(e);
       toast.error("Unable to load billing lines");
@@ -264,6 +323,7 @@ export default function RebateLedger() {
         facilityId,
         userId,
         name: ruleForm.name.trim(),
+        basis: ruleForm.basis === "purchase" ? "purchase" : "sales",
         product: ruleForm.product.trim() || "All products",
         productSku: ruleForm.productSku || "",
         period: ruleForm.period.trim(),
@@ -278,6 +338,7 @@ export default function RebateLedger() {
           setRules((r) => [resp.result, ...r]);
           setRuleForm({
             name: "",
+            basis: "sales",
             product: "All products",
             productSku: "",
             period: "",
@@ -286,6 +347,8 @@ export default function RebateLedger() {
             minQty: "",
             rebatePercent: "",
           });
+          productTypeaheadRef.current?.clear?.();
+          setAddRuleOpen(false);
           toast.success("Rule saved");
         } else {
           toast.error(resp?.message || "Failed to save rule");
@@ -323,19 +386,22 @@ export default function RebateLedger() {
   };
 
   const ledger = useMemo(() => {
-    const customers = [
-      ...new Set(
-        billing
-          .map((p) => (p.customer_name || "").trim())
-          .filter((c) => c && c !== "—"),
-      ),
-    ];
     const rows = [];
-    for (const customer of customers) {
-      for (const rule of rules) {
+    for (const rule of rules) {
+      const ruleBasis = rule.basis === "purchase" ? "purchase" : "sales";
+      const parties = [
+        ...new Set(
+          billing
+            .filter((p) => (p.basis || "sales") === ruleBasis)
+            .map((p) => (p.customer_name || p.supplier_name || "").trim())
+            .filter((c) => c && c !== "—"),
+        ),
+      ];
+      for (const party of parties) {
         const matches = billing.filter((p) => {
-          const name = (p.customer_name || "").trim();
-          if (name !== customer) return false;
+          if ((p.basis || "sales") !== ruleBasis) return false;
+          const name = (p.customer_name || p.supplier_name || "").trim();
+          if (name !== party) return false;
           const d = lineDate(p);
           if (!inRange(d, rule.fromDate, rule.toDate)) return false;
           return productMatchesRule(p, rule);
@@ -353,14 +419,17 @@ export default function RebateLedger() {
         const rebateAmount = qualifies
           ? totalValue * (rule.rebatePercent / 100)
           : 0;
-        const key = `${customer}|${rule.id}`;
+        const key = `${party}|${rule.id}`;
         const customerNo =
-          matches.find((m) => m.customer_no)?.customer_no || "";
+          matches.find((m) => m.customer_no || m.supplier_no)?.customer_no ||
+          matches.find((m) => m.supplier_no)?.supplier_no ||
+          "";
         rows.push({
           key,
-          customer,
+          customer: party,
           customerNo,
-          rule,
+          basis: ruleBasis,
+          rule: { ...rule, basis: ruleBasis },
           totalQty,
           totalValue,
           qualifies,
@@ -369,6 +438,9 @@ export default function RebateLedger() {
           status: statuses[key]?.status || "pending",
           payoutType: statuses[key]?.payoutType || "credit",
           creditNoteNumber: statuses[key]?.creditNoteNumber || "",
+          modeOfPayment: statuses[key]?.modeOfPayment || "",
+          paymentReference: statuses[key]?.paymentReference || "",
+          chequeNo: statuses[key]?.chequeNo || "",
         });
       }
     }
@@ -383,7 +455,10 @@ export default function RebateLedger() {
       date: overrides.date || moment().format("YYYY-MM-DD"),
       reason:
         overrides.reason ||
-        `Post-sale volume rebate: ${row.rule.name} (${row.rule.period})`,
+        (row.basis === "purchase"
+          ? `Post-purchase volume rebate: ${row.rule.name} (${row.rule.period})`
+          : `Post-sale volume rebate: ${row.rule.name} (${row.rule.period})`),
+      basis: row.basis || "sales",
       lineDescription:
         overrides.lineDescription ||
         `Volume rebate — ${row.rule.name} (${row.rule.period}) · ${row.rule.product}`,
@@ -462,6 +537,85 @@ export default function RebateLedger() {
     );
   };
 
+  const issuePayment = (row) => {
+    if (!facilityId || !userId) return;
+    if (!row.customerNo) {
+      toast.error("Customer number missing on this rebate — refresh billing.");
+      return;
+    }
+    if (row.paymentReference || row.creditNoteNumber) {
+      toast.info(
+        row.paymentReference
+          ? `Already paid: ${row.paymentReference}`
+          : `Already credited: ${row.creditNoteNumber}`,
+      );
+      return;
+    }
+    const mode = payForm.modeOfPayment;
+    if (mode === "cash" && !accountHead?.head && !accountHead?.code) {
+      toast.error("Select a cash account");
+      return;
+    }
+    if (["bank", "cheque"].includes(mode) && !bankAccount?.id) {
+      toast.error("Select a bank account");
+      return;
+    }
+    if (mode === "cheque" && !String(payForm.chequeNo || "").trim()) {
+      toast.error("Enter cheque number");
+      return;
+    }
+
+    setPayingKey(row.key);
+    _postApi(
+      "/api/v1/rebate-ledger/issue-payment",
+      {
+        facilityId,
+        userId,
+        ruleId: row.rule.id,
+        customer: row.customer,
+        customerNo: row.customerNo,
+        rebateAmount: row.rebateAmount,
+        modeOfPayment: mode,
+        accountHead:
+          mode === "cash"
+            ? { head: accountHead.head || accountHead.code }
+            : undefined,
+        bankAccount:
+          ["bank", "cheque"].includes(mode) && bankAccount
+            ? { id: bankAccount.id }
+            : undefined,
+        chequeNo: mode === "cheque" ? payForm.chequeNo : undefined,
+      },
+      (resp) => {
+        setPayingKey(null);
+        if (!resp?.success) {
+          toast.error(resp?.message || "Failed to pay rebate");
+          return;
+        }
+        const data = resp.data || {};
+        setStatuses((s) => ({
+          ...s,
+          [row.key]: {
+            ...s[row.key],
+            status: "paid",
+            payoutType: "cash",
+            paymentReference: data.paymentReference,
+            modeOfPayment: data.modeOfPayment,
+            chequeNo: data.chequeNo || "",
+            customerNo: row.customerNo,
+          },
+        }));
+        toast.success(
+          `Rebate paid via ${String(data.modeOfPayment || mode).toUpperCase()} · ${data.paymentReference}`,
+        );
+      },
+      () => {
+        setPayingKey(null);
+        toast.error("Failed to pay rebate");
+      },
+    );
+  };
+
   const updateStatus = (row, patch) => {
     if (!facilityId) return;
     const next = {
@@ -515,7 +669,10 @@ export default function RebateLedger() {
             Rebate Ledger
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Rules apply against billed sales invoices — not purchase orders.
+            Each rule is based on{" "}
+            <span className="font-medium text-slate-700">Sales</span> (customer invoices)
+            or <span className="font-medium text-slate-700">Purchase</span> (supplier bills).
+            Settle with credit note / vendor credit, or mode of payment.
           </p>
         </div>
         <div className="flex gap-6 text-right">
@@ -557,123 +714,233 @@ export default function RebateLedger() {
 
       {tab === "rules" && (
         <section className="space-y-4">
-          <form
-            onSubmit={addRule}
-            className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 p-3"
-          >
-            <input
-              className={`${inputClass} min-w-[140px] flex-1`}
-              placeholder="Rule name"
-              value={ruleForm.name}
-              onChange={(e) =>
-                setRuleForm({ ...ruleForm, name: e.target.value })
-              }
-            />
-            <div className="min-w-[200px] flex-[1.2]">
-              <select
-                className={`${inputClass} w-full`}
-                value={
-                  ruleForm.productSku
-                    ? `sku:${ruleForm.productSku}`
-                    : ruleForm.product === "All products"
-                      ? "__all__"
-                      : `name:${ruleForm.product}`
-                }
-                disabled={loadingProducts}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "__all__") {
-                    setRuleForm((f) => ({
-                      ...f,
-                      product: "All products",
-                      productSku: "",
-                    }));
-                    return;
-                  }
-                  if (v.startsWith("sku:")) {
-                    const sku = v.slice(4);
-                    const item = products.find((p) => p.sku === sku);
-                    setRuleForm((f) => ({
-                      ...f,
-                      product: item?.name || sku,
-                      productSku: sku,
-                    }));
-                    return;
-                  }
-                  const name = v.replace(/^name:/, "");
-                  setRuleForm((f) => ({
-                    ...f,
-                    product: name,
-                    productSku: "",
-                  }));
-                }}
-              >
-                <option value="__all__">
-                  {loadingProducts ? "Loading products…" : "All products"}
-                </option>
-                {products.map((p) => (
-                  <option
-                    key={p.id || p.sku || p.name}
-                    value={p.sku ? `sku:${p.sku}` : `name:${p.name}`}
-                  >
-                    {p.sku ? `${p.name} (${p.sku})` : p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <input
-              className={`${inputClass} w-[120px]`}
-              placeholder="Period e.g. Q1 2026"
-              value={ruleForm.period}
-              onChange={(e) => onPeriodChange(e.target.value)}
-            />
-            <input
-              className={`${inputClass} w-[130px]`}
-              type="date"
-              title="From"
-              value={ruleForm.fromDate}
-              onChange={(e) =>
-                setRuleForm({ ...ruleForm, fromDate: e.target.value })
-              }
-            />
-            <input
-              className={`${inputClass} w-[130px]`}
-              type="date"
-              title="To"
-              value={ruleForm.toDate}
-              onChange={(e) =>
-                setRuleForm({ ...ruleForm, toDate: e.target.value })
-              }
-            />
-            <input
-              className={`${inputClass} w-[100px] font-mono`}
-              type="number"
-              placeholder="Min qty"
-              value={ruleForm.minQty}
-              onChange={(e) =>
-                setRuleForm({ ...ruleForm, minQty: e.target.value })
-              }
-            />
-            <input
-              className={`${inputClass} w-[100px] font-mono`}
-              type="number"
-              step="0.1"
-              placeholder="Rebate %"
-              value={ruleForm.rebatePercent}
-              onChange={(e) =>
-                setRuleForm({ ...ruleForm, rebatePercent: e.target.value })
-              }
-            />
-            <Button type="submit" size="sm" disabled={savingRule}>
-              {savingRule ? "Saving…" : "Add rule"}
+          <div className="flex items-center justify-end">
+            <Button
+              type="button"
+              size="sm"
+              className="bg-[var(--aa-navy,#0f2744)] text-white hover:bg-[var(--aa-navy,#0f2744)]/90"
+              onClick={() => setAddRuleOpen(true)}
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Add rule
             </Button>
-          </form>
+          </div>
+
+          <Sheet open={addRuleOpen} onOpenChange={setAddRuleOpen}>
+            <SheetContent
+              side="right"
+              className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-md [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100"
+            >
+              <SheetHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-navy,#0f2744)] px-5 py-4 pr-12 text-left">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-md bg-white/10 p-2">
+                    <Percent className="h-4 w-4 text-[var(--aa-accent,#c4a35a)]" />
+                  </div>
+                  <div className="min-w-0">
+                    <SheetTitle className="text-lg font-semibold leading-tight text-white">
+                      Add rebate rule
+                    </SheetTitle>
+                    <SheetDescription className="mt-0.5 text-xs text-white/70">
+                      Sales or Purchase basis, product, period, and rebate %
+                    </SheetDescription>
+                  </div>
+                </div>
+              </SheetHeader>
+
+              <form
+                onSubmit={addRule}
+                className="flex min-h-0 flex-1 flex-col"
+              >
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-white px-5 py-5">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-600">
+                      Rule name
+                    </label>
+                    <input
+                      className={`${inputClass} w-full`}
+                      placeholder="e.g. E2E Rice Rebate"
+                      value={ruleForm.name}
+                      onChange={(e) =>
+                        setRuleForm({ ...ruleForm, name: e.target.value })
+                      }
+                      autoFocus
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600">
+                        Basis
+                      </label>
+                      <select
+                        className={`${inputClass} w-full`}
+                        value={ruleForm.basis || "sales"}
+                        onChange={(e) =>
+                          setRuleForm({ ...ruleForm, basis: e.target.value })
+                        }
+                      >
+                        <option value="sales">Sales</option>
+                        <option value="purchase">Purchase</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600">
+                        Product
+                      </label>
+                      <Typeahead
+                        id="rebate-rule-product-typeahead"
+                        ref={productTypeaheadRef}
+                        labelKey={(p) =>
+                          p?.id === "__all__" || p?.name === "All products"
+                            ? "All products"
+                            : p?.sku
+                              ? `${p.name} (${p.sku})`
+                              : p?.name || ""
+                        }
+                        options={productTypeaheadOptions}
+                        selected={selectedProduct}
+                        placeholder={
+                          loadingProducts
+                            ? "Loading products…"
+                            : "Type to search product…"
+                        }
+                        disabled={loadingProducts}
+                        clearButton
+                        highlightOnlyResult
+                        onChange={(selected) => {
+                          if (!selected?.length) {
+                            setRuleForm((f) => ({
+                              ...f,
+                              product: "All products",
+                              productSku: "",
+                            }));
+                            return;
+                          }
+                          const product = selected[0];
+                          if (
+                            product?.id === "__all__" ||
+                            product?.name === "All products"
+                          ) {
+                            setRuleForm((f) => ({
+                              ...f,
+                              product: "All products",
+                              productSku: "",
+                            }));
+                            return;
+                          }
+                          setRuleForm((f) => ({
+                            ...f,
+                            product: product.name || "",
+                            productSku: product.sku || "",
+                          }));
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-600">
+                      Period label
+                    </label>
+                    <input
+                      className={`${inputClass} w-full`}
+                      placeholder="e.g. Q3 2026"
+                      value={ruleForm.period}
+                      onChange={(e) => onPeriodChange(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600">
+                        From
+                      </label>
+                      <input
+                        className={`${inputClass} w-full`}
+                        type="date"
+                        value={ruleForm.fromDate}
+                        onChange={(e) =>
+                          setRuleForm({
+                            ...ruleForm,
+                            fromDate: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600">
+                        To
+                      </label>
+                      <input
+                        className={`${inputClass} w-full`}
+                        type="date"
+                        value={ruleForm.toDate}
+                        onChange={(e) =>
+                          setRuleForm({ ...ruleForm, toDate: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600">
+                        Min qty
+                      </label>
+                      <input
+                        className={`${inputClass} w-full font-mono`}
+                        type="number"
+                        placeholder="1"
+                        value={ruleForm.minQty}
+                        onChange={(e) =>
+                          setRuleForm({ ...ruleForm, minQty: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600">
+                        Rebate %
+                      </label>
+                      <input
+                        className={`${inputClass} w-full font-mono`}
+                        type="number"
+                        step="0.1"
+                        placeholder="2.5"
+                        value={ruleForm.rebatePercent}
+                        onChange={(e) =>
+                          setRuleForm({
+                            ...ruleForm,
+                            rebatePercent: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setAddRuleOpen(false)}
+                    disabled={savingRule}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={savingRule}
+                    className="bg-[var(--aa-navy,#0f2744)] text-white hover:bg-[var(--aa-navy,#0f2744)]/90"
+                  >
+                    {savingRule ? "Saving…" : "Save rule"}
+                  </Button>
+                </div>
+              </form>
+            </SheetContent>
+          </Sheet>
 
           <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
                   <th className="px-3 py-2.5">Rule</th>
+                  <th className="px-3 py-2.5">Basis</th>
                   <th className="px-3 py-2.5">Product</th>
                   <th className="px-3 py-2.5">Period</th>
                   <th className="px-3 py-2.5 text-right">Min Qty</th>
@@ -685,7 +952,7 @@ export default function RebateLedger() {
                 {loadingRules &&
                   Array.from({ length: 3 }).map((_, i) => (
                     <tr key={`sk-${i}`}>
-                      <td colSpan={6} className="px-3 py-2">
+                      <td colSpan={7} className="px-3 py-2">
                         <Skeleton className="h-6 w-full" />
                       </td>
                     </tr>
@@ -695,6 +962,17 @@ export default function RebateLedger() {
                   <tr key={r.id} className="border-b border-slate-100">
                     <td className="px-3 py-2.5 font-medium text-slate-800">
                       {r.name}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span
+                        className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                          r.basis === "purchase"
+                            ? "border-violet-200 bg-violet-50 text-violet-800"
+                            : "border-sky-200 bg-sky-50 text-sky-800"
+                        }`}
+                      >
+                        {r.basis === "purchase" ? "Purchase" : "Sales"}
+                      </span>
                     </td>
                     <td className="bg-white px-3 py-2.5 text-slate-600">
                       {r.product}
@@ -732,10 +1010,10 @@ export default function RebateLedger() {
                 {!loadingRules && rules.length === 0 && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-3 py-8 text-center text-slate-500"
                     >
-                      No rules yet. Add one above — it saves to your database.
+                      No rules yet. Click Add rule to create one.
                     </td>
                   </tr>
                 )}
@@ -808,9 +1086,10 @@ export default function RebateLedger() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
-                  <th className="px-3 py-2.5">Invoice</th>
+                  <th className="px-3 py-2.5">Doc</th>
                   <th className="px-3 py-2.5">Date</th>
-                  <th className="px-3 py-2.5">Customer</th>
+                  <th className="px-3 py-2.5">Basis</th>
+                  <th className="px-3 py-2.5">Party</th>
                   <th className="px-3 py-2.5">Product</th>
                   <th className="px-3 py-2.5 text-right">Qty</th>
                   <th className="px-3 py-2.5 text-right">Unit Price</th>
@@ -821,7 +1100,7 @@ export default function RebateLedger() {
                 {loadingBilling &&
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i}>
-                      <td colSpan={7} className="px-3 py-2">
+                      <td colSpan={8} className="px-3 py-2">
                         <Skeleton className="h-6 w-full" />
                       </td>
                     </tr>
@@ -844,7 +1123,23 @@ export default function RebateLedger() {
                           : "—"}
                       </td>
                       <td className="bg-white px-3 py-2.5">
-                        {p.customer_name || "—"}
+                        <span
+                          className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                            p.basis === "purchase"
+                              ? "border-violet-200 bg-violet-50 text-violet-800"
+                              : "border-sky-200 bg-sky-50 text-sky-800"
+                          }`}
+                        >
+                          {p.basis === "purchase" ? "Purchase" : "Sales"}
+                        </span>
+                      </td>
+                      <td className="bg-white px-3 py-2.5">
+                        {p.customer_name || p.supplier_name || "—"}
+                        {(p.customer_no || p.supplier_no) && (
+                          <span className="mt-0.5 block font-mono text-[11px] text-slate-400">
+                            {p.customer_no || p.supplier_no}
+                          </span>
+                        )}
                       </td>
                       <td className="bg-white px-3 py-2.5 text-slate-600">
                         {p.product_name || "—"}
@@ -907,8 +1202,8 @@ export default function RebateLedger() {
 
           {!loadingBilling && ledger.length === 0 && (
             <div className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm text-slate-500">
-              No billing lines match a rebate rule yet. Check Rules dates and
-              product names against invoiced sales.
+              No billing lines match a rebate rule yet. Check Rules basis (Sales /
+              Purchase), dates, and product names.
             </div>
           )}
 
@@ -925,6 +1220,15 @@ export default function RebateLedger() {
                         {row.customer}
                       </div>
                       <div className="mt-0.5 text-xs text-slate-500">
+                        <span
+                          className={`mr-1.5 inline-flex rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                            row.basis === "purchase"
+                              ? "border-violet-200 bg-violet-50 text-violet-800"
+                              : "border-sky-200 bg-sky-50 text-sky-800"
+                          }`}
+                        >
+                          {row.basis === "purchase" ? "Purchase" : "Sales"}
+                        </span>
                         {row.rule.name} · {row.rule.period}
                       </div>
                     </div>
@@ -997,9 +1301,14 @@ export default function RebateLedger() {
                             })
                           }
                           className={`${inputClass} flex-1`}
+                          disabled={row.status === "paid"}
                         >
-                          <option value="credit">Credit note</option>
-                          <option value="cash">Cash payment</option>
+                          <option value="credit">
+                            {row.basis === "purchase"
+                              ? "Vendor credit"
+                              : "Customer credit note"}
+                          </option>
+                          <option value="cash">Mode of payment</option>
                         </select>
                       </div>
                       {row.payoutType === "credit" && (
@@ -1031,8 +1340,126 @@ export default function RebateLedger() {
                               <FileText className="mr-1.5 h-3.5 w-3.5" />
                               {issuingCnKey === row.key
                                 ? "Issuing…"
-                                : "Issue credit note"}
+                                : row.basis === "purchase"
+                                  ? "Issue vendor credit"
+                                  : "Issue credit note"}
                             </Button>
+                          )}
+                        </div>
+                      )}
+                      {row.payoutType === "cash" && (
+                        <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50/80 p-2.5">
+                          {row.paymentReference ? (
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-700">
+                              <span className="font-mono font-semibold">
+                                {row.paymentReference}
+                              </span>
+                              <span className="uppercase tracking-wide text-slate-500">
+                                {row.modeOfPayment || "paid"}
+                              </span>
+                              {row.chequeNo ? (
+                                <span>Chq {row.chequeNo}</span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex flex-wrap gap-2">
+                                <select
+                                  className={`${inputClass} min-w-[120px] flex-1`}
+                                  value={payForm.modeOfPayment}
+                                  onChange={(e) =>
+                                    setPayForm({
+                                      ...payForm,
+                                      modeOfPayment: e.target.value,
+                                      chequeNo: "",
+                                    })
+                                  }
+                                >
+                                  <option value="cash">Cash</option>
+                                  <option value="bank">Bank</option>
+                                  <option value="cheque">Cheque</option>
+                                </select>
+                                {payForm.modeOfPayment === "cash" ? (
+                                  <select
+                                    className={`${inputClass} min-w-[160px] flex-[1.4]`}
+                                    value={accountHead?.head || ""}
+                                    onChange={(e) => {
+                                      const head = e.target.value;
+                                      const found =
+                                        headList.find(
+                                          (h) =>
+                                            String(h.head || h.code) === head,
+                                        ) || {};
+                                      setAccountHead({
+                                        ...found,
+                                        head: found.head || found.code || head,
+                                      });
+                                    }}
+                                  >
+                                    <option value="">Cash account…</option>
+                                    {headList.map((h) => {
+                                      const code = h.head || h.code;
+                                      return (
+                                        <option key={code} value={code}>
+                                          {h.description || h.name || code} (
+                                          {code})
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                ) : (
+                                  <select
+                                    className={`${inputClass} min-w-[160px] flex-[1.4]`}
+                                    value={bankAccount?.id || ""}
+                                    onChange={(e) => {
+                                      const id = e.target.value;
+                                      const found =
+                                        accountList.find(
+                                          (a) => String(a.id) === String(id),
+                                        ) || null;
+                                      setBankAccount(found);
+                                    }}
+                                  >
+                                    <option value="">Bank account…</option>
+                                    {accountList.map((a) => (
+                                      <option key={a.id} value={a.id}>
+                                        {a.account_name}
+                                        {a.head ? ` (${a.head})` : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                )}
+                                {payForm.modeOfPayment === "cheque" ? (
+                                  <input
+                                    className={`${inputClass} min-w-[120px]`}
+                                    placeholder="Cheque no."
+                                    value={payForm.chequeNo}
+                                    onChange={(e) =>
+                                      setPayForm({
+                                        ...payForm,
+                                        chequeNo: e.target.value,
+                                      })
+                                    }
+                                  />
+                                ) : null}
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-8 bg-[var(--aa-navy,#0f2744)] text-white hover:bg-[var(--aa-navy,#0f2744)]/90"
+                                disabled={payingKey === row.key}
+                                onClick={() => issuePayment(row)}
+                              >
+                                <Banknote className="mr-1.5 h-3.5 w-3.5" />
+                                {payingKey === row.key
+                                  ? row.basis === "purchase"
+                                    ? "Receiving…"
+                                    : "Paying…"
+                                  : row.basis === "purchase"
+                                    ? "Receive rebate"
+                                    : "Pay rebate claim"}
+                              </Button>
+                            </>
                           )}
                         </div>
                       )}
@@ -1105,7 +1532,7 @@ function CreditNotePreviewModal({ doc, onClose }) {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                  Credit to
+                  {doc.basis === "purchase" ? "Credit from vendor" : "Credit to"}
                 </div>
                 <div className="mt-1 font-semibold text-slate-900">
                   {doc.customer}
@@ -1246,6 +1673,52 @@ function fetchSalesLinePage({
   page,
   pageSize,
 }) {
+  return fetchLineReportPage({
+    facilityId,
+    userId,
+    fromDate,
+      toDate,
+    search,
+    branchId,
+    page,
+    pageSize,
+    endpoint: "/api/v1/transactions/sales-line-report",
+  });
+}
+
+async function fetchAllPurchaseLines(args) {
+  let page = 1;
+  let all = [];
+  let totalCount = Infinity;
+  while (all.length < totalCount) {
+    const batch = await fetchLineReportPage({
+      ...args,
+      page,
+      pageSize: PAGE_SIZE,
+      endpoint: "/api/v1/transactions/purchase-line-report",
+    });
+    all = all.concat(batch.rows);
+    totalCount = Number.isFinite(batch.totalCount)
+      ? batch.totalCount
+      : all.length;
+    if (!batch.rows.length) break;
+    page += 1;
+    if (page > 50) break;
+  }
+  return all;
+}
+
+function fetchLineReportPage({
+  facilityId,
+  userId,
+  fromDate,
+  toDate,
+  search,
+  branchId,
+  page,
+  pageSize,
+  endpoint,
+}) {
   return new Promise((resolve, reject) => {
     const params = new URLSearchParams({
       facilityId: String(facilityId),
@@ -1259,7 +1732,7 @@ function fetchSalesLinePage({
     if (branchId) params.set("branchId", String(branchId));
 
     _fetchApi(
-      `/api/v1/transactions/sales-line-report?${params.toString()}`,
+      `${endpoint}?${params.toString()}`,
       (res) => {
         if (res?.success) {
           resolve({
@@ -1267,7 +1740,7 @@ function fetchSalesLinePage({
             totalCount: parseInt(res.totalCount || 0, 10),
           });
         } else {
-          reject(new Error(res?.message || "Failed to fetch sales lines"));
+          reject(new Error(res?.message || "Failed to fetch lines"));
         }
       },
       (err) => reject(err),

@@ -453,7 +453,7 @@ export default function CashFlowList() {
             style={headerGradient}
           >
             <p className="text-xs uppercase tracking-wider text-white/80">
-              {activeBusiness?.business_name || "Alh. Ashiru Yanmusa"}
+              {activeBusiness?.business_name || "YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES"}
             </p>
             <h3 className="text-lg font-bold mt-1">Funds Transfer</h3>
             <p className="text-sm text-white/90 mt-1">

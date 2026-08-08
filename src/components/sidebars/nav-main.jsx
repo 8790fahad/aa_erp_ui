@@ -26,7 +26,7 @@ const navBtn =
   "text-slate-700 hover:bg-[var(--aa-sidebar-active)] hover:text-[var(--aa-accent)] data-[active=true]:bg-[var(--aa-sidebar-active)] data-[active=true]:text-[var(--aa-accent)] data-[active=true]:font-semibold";
 
 /**
- * Alh. Ashiru Yanmusa retail nav: show all retailer modules from props.
+ * YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES retail nav: show all retailer modules from props.
  * Sub-items still respect functionalities when that list is present.
  */
 export function NavMain({ items }) {

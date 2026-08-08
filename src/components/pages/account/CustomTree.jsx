@@ -55,7 +55,7 @@ class CustomTree extends Component {
     }
 
     return (
-      <div style={{ height: 600 }}>
+      <div style={{ height: 720 }}>
         <SortableTree
           canDrag={false}
           treeData={this.state.treeData}

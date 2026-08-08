@@ -663,7 +663,7 @@ export default function SettingsTabPanels({
                     <div>
                       <h5 className="mb-0 fw-bold">Marketplace Space Link</h5>
                       <small className="text-muted">
-                        Your unique storefront URL on Alh. Ashiru Yanmusa Marketplace
+                        Your unique storefront URL on YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES Marketplace
                       </small>
                     </div>
                   </div>

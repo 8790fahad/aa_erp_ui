@@ -150,14 +150,14 @@ export function AppTopBar() {
         >
             <img
               src={logo}
-              alt="Alh. Ashiru Yanmusa"
+              alt={activeBusiness?.business_name || "YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES"}
               className="h-8 w-8 rounded-lg object-contain ring-1 ring-white/25"
               onError={(e) => {
                 e.currentTarget.style.display = "none";
               }}
             />
-            <span className="hidden sm:inline text-[13px] whitespace-nowrap">
-              Alh. Ashiru Yanmusa
+            <span className="hidden lg:inline text-[13px] whitespace-nowrap max-w-[220px] truncate" title={activeBusiness?.business_name || "YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES"}>
+              {activeBusiness?.business_name || "YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES"}
             </span>
         </Link>
       </div>
@@ -169,7 +169,7 @@ export function AppTopBar() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search in Alh. Ashiru Yanmusa"
+            placeholder="Search…"
             className="h-9 w-full rounded-full border-0 bg-[#13244d] pl-9 pr-3 text-sm text-white placeholder:text-white/50 outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-[var(--aa-accent)]"
           />
         </label>

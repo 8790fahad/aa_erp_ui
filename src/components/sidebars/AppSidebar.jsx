@@ -22,7 +22,7 @@ export function AppSidebar(props) {
   const { toggleSidebar } = useSidebar();
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
 
-  // Alh. Ashiru Yanmusa is retail-only — always use retailers modules regardless of business_type
+  // YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES is retail-only — always use retailers modules regardless of business_type
   const sidebarItems = useMemo(() => {
     return getSidebarByAppType("retailers")
       .map((module) => {

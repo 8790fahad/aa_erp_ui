@@ -89,7 +89,7 @@ export default function ForgotPasswordForm() {
             <div className="relative inline-block">
               <img
                 src={logo}
-                alt="Alh. Ashiru Yanmusa logo"
+                alt="YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES logo"
                 className="mx-auto animate-scale-in"
                 style={{ width: "9rem", height: "3.5rem" }}
               />
@@ -179,7 +179,7 @@ export default function ForgotPasswordForm() {
         <div className="relative z-10 flex items-center justify-center h-full p-8">
           <div className="text-white space-y-6 max-w-md animate-fade-in">
             <h3 className="text-4xl font-bold animate-slide-right">
-              Welcome to Alh. Ashiru Yanmusa
+              Welcome to YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES
             </h3>
             <p
               className="text-lg text-blue-100 leading-relaxed animate-slide-right"

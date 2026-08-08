@@ -81,7 +81,7 @@ export default function AccountingTreatmentByScenarioPanel({
             <p>
               <span className="font-medium text-slate-800">General Ledger:</span> Expand a
               head (e.g. cash, receivables), then an account, to see transactions. Lines
-              posted from Alh. Ashiru Yanmusa may include scenario and method detail in the memo.
+              posted from YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES may include scenario and method detail in the memo.
             </p>
           </div>
         )}

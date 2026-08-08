@@ -28,7 +28,7 @@ export default function NotFound() {
           <div className="relative inline-block mx-auto">
             <img
               src={logo}
-              alt="Alh. Ashiru Yanmusa logo"
+              alt="YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES logo"
               className="mx-auto animate-scale-in"
               style={{ width: "9rem", height: "3.5rem" }}
             />

@@ -15,6 +15,9 @@ import {
   Download,
   BookOpen,
   Search,
+  List,
+  Network,
+  Box,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +56,83 @@ import {
 import moment from "moment";
 import ExcelJS from "exceljs";
 import jsPDF from "jspdf";
+import StructureTree from "../StructureTree";
+import { AccountChart3D } from "../3d";
+
+function natureLabel(a) {
+  const nature = (a?.accountNature || a?.account_nature || "").toString().trim();
+  if (nature === "ASSET") return "Assets";
+  if (nature === "LIABILITY") return "Liabilities";
+  if (nature === "EQUITY") return "Equity";
+  if (nature === "REVENUE") return "Revenue";
+  if (nature === "EXPENSE") return "Expenses";
+  if (nature) return nature;
+  const type = String(a?.type || "").toLowerCase();
+  if (type.includes("asset")) return "Assets";
+  if (type.includes("liabil")) return "Liabilities";
+  if (type.includes("equity")) return "Equity";
+  if (type.includes("revenue") || type.includes("income")) return "Revenue";
+  if (type.includes("expense")) return "Expenses";
+  return "Assets";
+}
+
+function mapAccountsFor3D(list = []) {
+  return (list || [])
+    .map((a) => {
+      const id = String(a.code || a.head || a.id || "").trim();
+      if (!id) return null;
+      return {
+        id,
+        name: a.description || a.category || id,
+        type: natureLabel(a),
+        balance:
+          parseFloat(
+            a.balance ?? a.opening_balance ?? a.openingBalance ?? 0,
+          ) || 0,
+      };
+    })
+    .filter(Boolean);
+}
+
+function isRootParentCode(parent) {
+  const p = parent == null ? "" : String(parent).trim();
+  return p === "" || p === "0" || p.toLowerCase() === "null";
+}
+
+function buildTreeFromFlat(items = []) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  const build = (parentCode = null) =>
+    items
+      .filter((item) => {
+        const itemParent = item.subhead ?? item.parent_code ?? item.parentCode;
+        if (parentCode == null) return isRootParentCode(itemParent);
+        return String(itemParent || "").trim() === String(parentCode).trim();
+      })
+      .map((item) => {
+        const head = item.head || item.code;
+        const children = build(head);
+        return {
+          ...item,
+          head,
+          code: item.code || head,
+          description: item.description || item.category || head,
+          children,
+        };
+      });
+
+  return build(null);
+}
+
+function normalizeTreeNodes(nodes = []) {
+  if (!Array.isArray(nodes)) return [];
+  return nodes.map((node) => ({
+    ...node,
+    head: node.head || node.code || "",
+    description: node.description || node.category || "",
+    children: normalizeTreeNodes(node.children || []),
+  }));
+}
 
 export default function AccountChart() {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
@@ -66,6 +146,7 @@ export default function AccountChart() {
   const [selectedAccounts, setSelectedAccounts] = useState(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState("list"); // list | tree | 3d
 
   const getAccounts = useCallback(() => {
     if (!activeBusiness?.id) return;
@@ -80,11 +161,17 @@ export default function AccountChart() {
           flat: Array.isArray(resp?.flat) ? resp.flat.length : null,
         });
         if (resp.success) {
-          setAccounts(resp.results || []);
-          if (resp.flat && resp.flat.length > 0) {
-            setFlatAccounts(resp.flat);
-          } else if (resp.results && resp.results.length > 0) {
-            setFlatAccounts(resp.results);
+          const flat = Array.isArray(resp.flat) ? resp.flat : [];
+          const treeFromApi = Array.isArray(resp.results) ? resp.results : [];
+          const tree =
+            treeFromApi.length > 0
+              ? treeFromApi
+              : buildTreeFromFlat(flat);
+          setAccounts(tree);
+          if (flat.length > 0) {
+            setFlatAccounts(flat);
+          } else if (tree.length > 0) {
+            setFlatAccounts(tree);
           } else {
             setFlatAccounts([]);
           }
@@ -688,6 +775,27 @@ export default function AccountChart() {
           />
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+          <div className="inline-flex h-9 items-center rounded-md border border-slate-200 bg-white p-0.5">
+            {[
+              { id: "list", label: "List", Icon: List },
+              { id: "tree", label: "Tree", Icon: Network },
+              { id: "3d", label: "3D", Icon: Box },
+            ].map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setViewMode(id)}
+                className={`inline-flex h-8 items-center gap-1.5 rounded px-2.5 text-xs font-medium transition ${
+                  viewMode === id
+                    ? "bg-[#4267B2] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
           <Button
             type="button"
             variant="outline"
@@ -712,6 +820,53 @@ export default function AccountChart() {
 
       {loading ? (
         <AccountListSkeleton />
+      ) : viewMode === "3d" ? (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-900 shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-700 px-4 py-2.5">
+            <p className="text-sm font-medium text-white">
+              Chart of Accounts — 3D view
+            </p>
+            <p className="text-xs text-slate-400">
+              Drag to rotate · scroll to zoom
+            </p>
+          </div>
+          <AccountChart3D accounts={mapAccountsFor3D(filteredAccounts)} />
+        </div>
+      ) : viewMode === "tree" ? (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
+            <p className="text-sm font-medium text-slate-800">
+              Chart of Accounts — tree view
+            </p>
+            <p className="text-xs text-slate-500">
+              Expand nodes to browse the hierarchy
+            </p>
+          </div>
+          <div className="p-3">
+            <StructureTree
+              treeData={normalizeTreeNodes(
+                accounts?.length
+                  ? accounts
+                  : buildTreeFromFlat(flatAccounts),
+              )}
+              editNode={(node) => {
+                const code = node.code || node.head;
+                const match =
+                  (flatAccounts.length ? flatAccounts : accounts).find(
+                    (a) => String(a.code || a.head) === String(code),
+                  ) || node;
+                setEditAccount(match);
+              }}
+              addChild={() => setAddModalOpen(true)}
+              deleteNode={(node) => {
+                const code = node.code || node.head;
+                if (!code) return;
+                setSelectedAccounts(new Set([String(code)]));
+                setDeleteDialogOpen(true);
+              }}
+            />
+          </div>
+        </div>
       ) : (
         <AccountList
           accounts={filteredAccounts}

@@ -219,7 +219,6 @@ import PayBills from "../pages/payments/PayBills";
 import CreditNote from "../pages/payments/CreditNote";
 import ApplyCustomerAdvance from "../pages/payments/ApplyCustomerAdvance";
 import ApplySupplierDeposit from "../pages/payments/ApplySupplierDeposit";
-import FIRSInvoicePage from "../pages/payments/firs-invoice/FIRSInvoicePage";
 import ProductSupplierBill from "../pages/expenses/ProductSupplierBill";
 import CashExpenseSource from "../pages/expenses/CashExpenseSource";
 import BillSources from "../pages/expenses/BillSources";
@@ -576,10 +575,6 @@ const routeModules = {
             element: <SupplierPaymentForm />,
           },
         ],
-      },
-      {
-        path: "firs-invoice",
-        element: <FIRSInvoicePage />,
       },
     ],
   },
@@ -1428,7 +1423,7 @@ const routeModules = {
 };
 
 export default function AppNavigation() {
-  // Alh. Ashiru Yanmusa is retail-only — never merge manufacturing/recycling (would pull Production)
+  // YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES is retail-only — never merge manufacturing/recycling (would pull Production)
   // Customers / Suppliers live under Sales / Purchase in the sidebar but keep their own routes
   // Expenses (Bill + cash expenses) is linked from Purchase but registered as its own module
   const allRouteKeys = new Set([

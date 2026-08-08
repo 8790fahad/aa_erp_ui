@@ -312,7 +312,7 @@ export default function InvoiceList() {
               </p>
               {!searchFromUrl && !statusFromUrl && (
                 <Button
-                  onClick={() => navigate("/app/sales/sale?view=cards")}
+                  onClick={() => navigate("/app/sales/sale?view=lines")}
                   className="mx-auto flex items-center gap-2 border-0 bg-[var(--aa-accent)] text-white hover:bg-[var(--aa-accent)]/90"
                 >
                   <Plus className="h-4 w-4" />
