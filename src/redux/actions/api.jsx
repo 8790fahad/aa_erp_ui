@@ -4,10 +4,9 @@
 import store from "../store";
 
 // let remoteEndpoint = "http://localhost:42843";
-// /flowbooks is not proxied on production (Apache 404). Live API path:
 let remoteEndpoint = "https://server.brainstorm.ng/flowbooks";
 let localEndpoint = "http://localhost:42843";
-// let remoteEndpoint = "https://server.brainstorm.ng/flowbooks";
+// let remoteEndpoint = "https://server.brainstorm.ng/inventria_new";
 // let localEndpoint = "http://192.168.1.87:42844"
 export const ipAddr = "127.0.0.1";
 export const apiURL =
