@@ -42,44 +42,26 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
+        // Avoid fine-grained manualChunks: splitting react-bootstrap/antd/redux/etc.
+        // produced circular ESM graphs and blank-page TDZ crashes in production
+        // ("Cannot access 'w' before initialization", antd reading React.version).
+        // Only isolate heavy leaf libs that do not share init cycles with React.
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
-          if (id.includes("antd") || id.includes("@ant-design")) return "antd";
-          if (id.includes("exceljs") || id.includes("xlsx")) return "excel";
-          if (
-            id.includes("jspdf") ||
-            id.includes("html2canvas") ||
-            id.includes("@react-pdf")
-          ) {
+          if (id.includes("exceljs") || id.includes("node_modules/xlsx")) {
+            return "excel";
+          }
+          if (id.includes("jspdf") || id.includes("html2canvas")) {
             return "pdf";
           }
           if (
-            id.includes("three") ||
-            id.includes("@react-three") ||
-            id.includes("troika")
+            id.includes("node_modules/three/") ||
+            id.includes("node_modules/three\\")
           ) {
             return "three";
           }
-          if (id.includes("recharts") || id.includes("d3-")) return "charts";
-          if (id.includes("evergreen-ui")) return "evergreen";
-          if (id.includes("react-icons")) return "icons";
-          if (
-            id.includes("react-bootstrap") ||
-            id.includes("bootstrap") ||
-            id.includes("reactstrap")
-          ) {
-            return "bootstrap";
-          }
-          if (id.includes("moment") || id.includes("date-fns")) return "dates";
-          if (id.includes("lucide-react") || id.includes("@radix-ui")) {
-            return "ui";
-          }
-          if (id.includes("redux") || id.includes("react-redux")) return "redux";
-          if (id.includes("react-router")) return "router";
-          if (id.includes("react-dom") || id.includes("/react/")) return "vendor";
-          return "deps";
+          return "vendor";
         },
-        // Ensure consistent chunk naming for better caching
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
