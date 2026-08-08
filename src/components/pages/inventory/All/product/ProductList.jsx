@@ -83,9 +83,13 @@ const resolveProductImageUrl = (src) => {
 
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
 
-  const apiOrigin = apiURL.replace(/\/(inventria_new|flowbooks_api|aa_erp_api)\/?$/, "");
+  const apiOrigin = apiURL.replace(
+    /\/(flowbooks|inventria_new|flowbooks_api|aa_erp_api)\/?$/,
+    "",
+  );
 
   if (
+    trimmed.startsWith("/flowbooks/") ||
     trimmed.startsWith("/inventria_new/") ||
     trimmed.startsWith("/flowbooks_api/") ||
     trimmed.startsWith("/aa_erp_api/")
