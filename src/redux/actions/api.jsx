@@ -5,7 +5,7 @@ import store from "../store";
 
 // let remoteEndpoint = "http://localhost:42843";
 let remoteEndpoint = "https://server.brainstorm.ng/flowbooks";
-let localEndpoint = "http://localhost:42843";
+let localEndpoint = "http://localhost:42844";
 // let remoteEndpoint = "https://server.brainstorm.ng/inventria_new";
 // let localEndpoint = "http://192.168.1.87:42844"
 export const ipAddr = "127.0.0.1";

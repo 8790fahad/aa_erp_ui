@@ -64,6 +64,9 @@ export default function ProductSupplierBill() {
     supplier_subhead: "",
     remark: "",
     terms: "",
+    payment_type: "credit", // credit | cash
+    mode_of_payment: "",
+    cheque_number: "",
   });
 
   const [items, setItems] = useState([]);
@@ -74,6 +77,12 @@ export default function ProductSupplierBill() {
   const [selectedTaxes, setSelectedTaxes] = useState([]);
   const [loadingTaxes, setLoadingTaxes] = useState(false);
   const hasAutoSelectedSupplier = useRef(false);
+  const [accountList, setAccountList] = useState([]);
+  const [headList, setHeadList] = useState([]);
+  const [bankAccount, setBankAccount] = useState({});
+  const [accountHead, setAccountHead] = useState({});
+  const cashAccountTypeaheadRef = useRef();
+  const isCashPayment = form.payment_type === "cash";
 
   // Editing state (legacy top-form edit; table is inline)
   const [editingItem, setEditingItem] = useState(null);
@@ -107,7 +116,7 @@ export default function ProductSupplierBill() {
       (res) => {
         if (res.success) setBranches(res.results || []);
       },
-      (err) => console.error("Error fetching warehouses:", err)
+      (err) => console.error("Error fetching warehouses:", err),
     );
   }, [activeBusiness?.id]);
 
@@ -124,6 +133,38 @@ export default function ProductSupplierBill() {
       return defaultBranch ? defaultBranch.id : 0;
     });
   }, [branches]);
+
+  useEffect(() => {
+    setBankAccount({});
+    setAccountHead({});
+    setAccountList([]);
+    setHeadList([]);
+    if (!isCashPayment || !activeBusiness?.id) return;
+
+    if (form.mode_of_payment === "cash") {
+      _postApi(
+        `/inventory/product-list?query_type=cash`,
+        { facilityId: activeBusiness.id },
+        (resp) => {
+          if (resp.success) setHeadList(resp?.results || []);
+          else toast.error("Failed to load cash accounts.");
+        },
+        () => toast.error("Something went wrong while fetching cash accounts."),
+      );
+    } else if (
+      form.mode_of_payment === "bank" ||
+      form.mode_of_payment === "cheque"
+    ) {
+      _fetchApi(
+        `/api/get/bank-accounts?facilityId=${activeBusiness.id}`,
+        (data) => {
+          if (data.success) setAccountList(data.results || []);
+          else toast.error("Failed to load bank accounts");
+        },
+        () => toast.error("Failed to load bank accounts"),
+      );
+    }
+  }, [form.mode_of_payment, form.payment_type, activeBusiness?.id]);
 
   const termOptions = [
     { value: "15", label: "15 days" },
@@ -283,10 +324,14 @@ export default function ProductSupplierBill() {
       total: qty * cost,
     };
     if (lineTaxId) {
-      const tax = lineTaxOptions.find((t) => String(t.id) === String(lineTaxId));
+      const tax = lineTaxOptions.find(
+        (t) => String(t.id) === String(lineTaxId),
+      );
       if (tax) {
         setSelectedTaxes((prev) =>
-          prev.some((t) => String(t.id) === String(tax.id)) ? prev : [...prev, tax]
+          prev.some((t) => String(t.id) === String(tax.id))
+            ? prev
+            : [...prev, tax],
         );
       }
     }
@@ -364,8 +409,8 @@ export default function ProductSupplierBill() {
               cost: cost, // Store as number
               total: qty * cost,
             }
-          : item
-      )
+          : item,
+      ),
     );
 
     setEditingItem(null);
@@ -421,20 +466,20 @@ export default function ProductSupplierBill() {
       return taxes.filter(
         (tax) =>
           tax.inclusive_type === "inclusive" ||
-          (tax.inclusive_type === undefined && tax.tax_type === "inclusive")
+          (tax.inclusive_type === undefined && tax.tax_type === "inclusive"),
       );
     }
     return taxes.filter(
       (tax) =>
         tax.inclusive_type === "exclusive" ||
-        (tax.inclusive_type === undefined && tax.tax_type === "exclusive")
+        (tax.inclusive_type === undefined && tax.tax_type === "exclusive"),
     );
   }, [taxes, vatPolicy]);
 
   const lineTaxOptions = filteredTaxes;
   const defaultLineTaxId = useMemo(
     () => lineTaxOptions[0]?.id ?? null,
-    [lineTaxOptions]
+    [lineTaxOptions],
   );
 
   // Calculate tax amount based on tax's inclusive_type
@@ -461,9 +506,8 @@ export default function ProductSupplierBill() {
   const getLineTax = (item) => {
     if (!item?.line_tax_id) return null;
     return (
-      lineTaxOptions.find(
-        (t) => String(t.id) === String(item.line_tax_id)
-      ) || null
+      lineTaxOptions.find((t) => String(t.id) === String(item.line_tax_id)) ||
+      null
     );
   };
 
@@ -479,11 +523,9 @@ export default function ProductSupplierBill() {
     const usedIds = new Set(
       items
         .filter((i) => i.taxable === "Taxable" && i.line_tax_id)
-        .map((i) => String(i.line_tax_id))
+        .map((i) => String(i.line_tax_id)),
     );
-    setSelectedTaxes(
-      lineTaxOptions.filter((t) => usedIds.has(String(t.id)))
-    );
+    setSelectedTaxes(lineTaxOptions.filter((t) => usedIds.has(String(t.id))));
   }, [items, lineTaxOptions]);
 
   // Calculate taxable subtotal (only from taxable items)
@@ -528,7 +570,7 @@ export default function ProductSupplierBill() {
       (err) => {
         console.error("Error checking supplier balance:", err);
         callback(0);
-      }
+      },
     );
   };
 
@@ -568,7 +610,7 @@ export default function ProductSupplierBill() {
   // Actual save function
   const savePurchase = (
     usePrepayment = false,
-    shouldPrintAfterSave = false
+    shouldPrintAfterSave = false,
   ) => {
     const resetSaving = () => {
       setLoading(false);
@@ -596,7 +638,7 @@ export default function ProductSupplierBill() {
     const zeroCostItem = findInvalidCostItem();
     if (zeroCostItem) {
       toast.error(
-        `Unit cost cannot be zero for "${zeroCostItem.item_name || zeroCostItem.sku || "item"}"`
+        `Unit cost cannot be zero for "${zeroCostItem.item_name || zeroCostItem.sku || "item"}"`,
       );
       resetSaving();
       return;
@@ -606,6 +648,32 @@ export default function ProductSupplierBill() {
       toast.error("Payable code is not set");
       resetSaving();
       return;
+    }
+
+    if (isCashPayment) {
+      if (!form.mode_of_payment) {
+        toast.error("Please select mode of payment");
+        resetSaving();
+        return;
+      }
+      if (form.mode_of_payment === "cash" && !accountHead?.head) {
+        toast.error("Please select a cash account");
+        resetSaving();
+        return;
+      }
+      if (
+        ["bank", "cheque"].includes(form.mode_of_payment) &&
+        !bankAccount?.id
+      ) {
+        toast.error("Please select a bank account");
+        resetSaving();
+        return;
+      }
+      if (form.mode_of_payment === "cheque" && !form.cheque_number) {
+        toast.error("Please enter a cheque number");
+        resetSaving();
+        return;
+      }
     }
 
     // Prepare purchase data with items - parse formatted values
@@ -645,25 +713,32 @@ export default function ProductSupplierBill() {
     });
     const taxesArray = Array.from(taxTotals.values());
 
-    // Save purchase to stock
+    // Credit → A/P via purchase-stock. Cash → inventory Dr / cash-bank Cr via direct-consumables.
+    const endpoint = isCashPayment
+      ? `/account/direct-consumables`
+      : `/account/purchase-stock`;
     _postApi(
-      `/account/purchase-stock`,
+      endpoint,
       {
         target_department: null,
         target_branch_id: targetBranch || 0,
         data: purchaseData,
-        facilityId: activeBusiness._id,
+        facilityId: activeBusiness._id || activeBusiness.id,
         payable_code: activeBusiness.payable_code,
         supplier_advance: activeBusiness.payable_accural_code,
         user_id: user.id,
         supplier_no: form.supplier_number,
-        terms: form.terms,
+        terms: isCashPayment ? "0" : form.terms,
         remark: form.remark,
         transaction_date: form.date,
-        due_date: form.due_date,
-        apply_prepayment: usePrepayment,
+        due_date: isCashPayment ? form.date : form.due_date,
+        apply_prepayment: isCashPayment ? false : usePrepayment,
         tax_amount: taxAmount,
         taxes: taxesArray,
+        mode_of_payment: isCashPayment ? form.mode_of_payment : undefined,
+        bankAccount: isCashPayment ? bankAccount : undefined,
+        accountHead: isCashPayment ? accountHead : undefined,
+        cheque_number: isCashPayment ? form.cheque_number : undefined,
       },
       (res) => {
         if (res.success) {
@@ -684,7 +759,7 @@ export default function ProductSupplierBill() {
             console.log("Navigation Debug - Invoice Ref:", invoiceRef);
             console.log(
               "Navigation Debug - Should Print:",
-              shouldPrintAfterSave
+              shouldPrintAfterSave,
             );
 
             if (invoiceRef) {
@@ -702,13 +777,13 @@ export default function ProductSupplierBill() {
                 const printUrl = `/app/expenses/billing/product-supplier-bill-pdf?invoice_ref=${transactionRef}`;
                 console.log(
                   "Navigation Debug - Using transaction ref:",
-                  printUrl
+                  printUrl,
                 );
                 navigate(printUrl);
               } else {
                 console.error("Purchase response for debugging:", res);
                 toast.error(
-                  "Unable to generate print page. Invoice reference not found."
+                  "Unable to generate print page. Invoice reference not found.",
                 );
                 navigate(-1);
               }
@@ -728,7 +803,7 @@ export default function ProductSupplierBill() {
         console.error(err);
         setLoading(false);
         isSavingRef.current = false;
-      }
+      },
     );
   };
 
@@ -756,7 +831,7 @@ export default function ProductSupplierBill() {
     const zeroCostItem = findInvalidCostItem();
     if (zeroCostItem) {
       toast.error(
-        `Unit cost cannot be zero for "${zeroCostItem.item_name || zeroCostItem.sku || "item"}"`
+        `Unit cost cannot be zero for "${zeroCostItem.item_name || zeroCostItem.sku || "item"}"`,
       );
       return;
     }
@@ -770,6 +845,12 @@ export default function ProductSupplierBill() {
     // buttons cannot be clicked again until the save finishes.
     isSavingRef.current = true;
     setLoading(true);
+
+    // Cash bills pay immediately — skip supplier-advance prepayment modal.
+    if (isCashPayment) {
+      savePurchase(false, printAfterSave);
+      return;
+    }
 
     // Check supplier balance before saving
     checkSupplierBalance(form.supplier_number, (balance) => {
@@ -829,7 +910,7 @@ export default function ProductSupplierBill() {
       (err) => {
         console.error("API Error:", err);
         toast.error("Something went wrong while fetching products.");
-      }
+      },
     );
   };
 
@@ -853,7 +934,7 @@ export default function ProductSupplierBill() {
       (err) => {
         console.error("Error fetching taxes:", err);
         setLoadingTaxes(false);
-      }
+      },
     );
   };
 
@@ -879,7 +960,7 @@ export default function ProductSupplierBill() {
         console.error("Error fetching requisitions:", err);
         toast.error("Error fetching requisitions");
         setRequisitions([]);
-      }
+      },
     );
   };
 
@@ -912,12 +993,10 @@ export default function ProductSupplierBill() {
       const matchedProduct =
         productList.find(
           (p) =>
-            p.sku === (item.item_code || item.sku) ||
-            p.name === item.item_name
+            p.sku === (item.item_code || item.sku) || p.name === item.item_name,
         ) || null;
 
-      const taxable =
-        matchedProduct?.taxable || item.taxable || "Not Taxable";
+      const taxable = matchedProduct?.taxable || item.taxable || "Not Taxable";
       return {
         _id: uuidv4(),
         item_name: item.item_name || "",
@@ -955,11 +1034,11 @@ export default function ProductSupplierBill() {
 
     // Track which PRs were already added (still allow adding other PRs)
     setSelectedRequisitionIds((prev) =>
-      prev.includes(requisition.pr_no) ? prev : [...prev, requisition.pr_no]
+      prev.includes(requisition.pr_no) ? prev : [...prev, requisition.pr_no],
     );
 
     toast.success(
-      `Added ${requisitionItems.length} item(s) from requisition ${requisition.pr_no}`
+      `Added ${requisitionItems.length} item(s) from requisition ${requisition.pr_no}`,
     );
     return true;
   };
@@ -981,7 +1060,8 @@ export default function ProductSupplierBill() {
     ) {
       const supplier = supplierList.find(
         (s) =>
-          s.supplier_code === supplierCode || s.supplier_number === supplierCode
+          s.supplier_code === supplierCode ||
+          s.supplier_number === supplierCode,
       );
       if (supplier) {
         hasAutoSelectedSupplier.current = true;
@@ -1073,6 +1153,62 @@ export default function ProductSupplierBill() {
         <div className="shrink-0 space-y-4 border-b border-slate-100 bg-white px-6 py-5">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
             <label className="text-sm font-medium text-slate-600 lg:text-right">
+              Payment Type <span className="text-red-500">*</span>
+            </label>
+            <div className="flex items-center gap-3">
+              <span
+                className={`text-sm font-medium transition-colors ${
+                  !isCashPayment
+                    ? "text-[var(--aa-accent)]"
+                    : "text-slate-400"
+                }`}
+              >
+                Credit
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isCashPayment}
+                aria-label="Payment type"
+                onClick={() =>
+                  setForm((p) => {
+                    const next = p.payment_type === "cash" ? "credit" : "cash";
+                    return {
+                      ...p,
+                      payment_type: next,
+                      mode_of_payment:
+                        next === "credit" ? "" : p.mode_of_payment,
+                      cheque_number:
+                        next === "credit" ? "" : p.cheque_number,
+                    };
+                  })
+                }
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--aa-accent)] focus-visible:ring-offset-2 ${
+                  isCashPayment
+                    ? "bg-[var(--aa-accent)]"
+                    : "bg-slate-300"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    isCashPayment ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+              <span
+                className={`text-sm font-medium transition-colors ${
+                  isCashPayment
+                    ? "text-[var(--aa-accent)]"
+                    : "text-slate-400"
+                }`}
+              >
+                Cash
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+            <label className="text-sm font-medium text-slate-600 lg:text-right">
               Supplier <span className="text-red-500">*</span>
             </label>
             <div>
@@ -1081,7 +1217,7 @@ export default function ProductSupplierBill() {
                 value={form.supplier_number}
                 onChange={(e) => {
                   const selectedSupplier = supplierList.find(
-                    (s) => s.supplier_number === e.target.value
+                    (s) => s.supplier_number === e.target.value,
                   );
                   if (selectedSupplier) {
                     setForm((p) => ({
@@ -1108,7 +1244,7 @@ export default function ProductSupplierBill() {
                 <option value="">Select supplier...</option>
                 {form.supplier_number &&
                   !supplierList?.some(
-                    (s) => s.supplier_number === form.supplier_number
+                    (s) => s.supplier_number === form.supplier_number,
                   ) && (
                     <option value={form.supplier_number}>
                       {form.supplier_name || form.supplier_number}
@@ -1144,75 +1280,82 @@ export default function ProductSupplierBill() {
                 onChange={handleFormChange}
                 className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
               />
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-slate-600">Terms</label>
-                <div className="w-44">
-                  <CreatableSelect
-                    className="w-full text-sm"
-                    classNamePrefix="react-select"
-                    placeholder="Terms"
-                    options={termOptions}
-                    value={
-                      termOptions.find((opt) => opt.value === form.terms) ||
-                      (form.terms
-                        ? { value: form.terms, label: `${form.terms} days` }
-                        : null)
-                    }
-                    onChange={(selected) => {
-                      const termsValue = selected?.value || "";
-                      handleFormChange({
-                        target: { name: "terms", value: termsValue },
-                      });
-                      if (termsValue && form.date) {
-                        const days = parseInt(termsValue, 10);
-                        if (!isNaN(days) && days > 0) {
-                          const dueDate = moment(form.date)
-                            .add(days, "days")
-                            .format("YYYY-MM-DD");
-                          setForm((prev) => ({ ...prev, due_date: dueDate }));
+              {!isCashPayment && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-slate-600">Terms</label>
+                    <div className="w-44">
+                      <CreatableSelect
+                        className="w-full text-sm"
+                        classNamePrefix="react-select"
+                        placeholder="Terms"
+                        options={termOptions}
+                        value={
+                          termOptions.find((opt) => opt.value === form.terms) ||
+                          (form.terms
+                            ? { value: form.terms, label: `${form.terms} days` }
+                            : null)
                         }
-                      }
-                    }}
-                    isClearable
-                    formatCreateLabel={(input) => `Add "${input} days"`}
-                    styles={{
-                      control: (base, state) => ({
-                        ...base,
-                        minHeight: 36,
-                        height: 36,
-                        borderRadius: 6,
-                        borderColor: state.isFocused
-                          ? "var(--aa-accent)"
-                          : "#cbd5e1",
-                        boxShadow: state.isFocused
-                          ? "0 0 0 1px var(--aa-accent)"
-                          : "none",
-                        "&:hover": { borderColor: "#cbd5e1" },
-                      }),
-                      valueContainer: (base) => ({
-                        ...base,
-                        paddingTop: 0,
-                        paddingBottom: 0,
-                      }),
-                      indicatorsContainer: (base) => ({
-                        ...base,
-                        height: 34,
-                      }),
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-slate-600">Due Date</label>
-                <input
-                  type="date"
-                  name="due_date"
-                  value={form.due_date}
-                  onChange={handleFormChange}
-                  min={form.date}
-                  className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                />
-              </div>
+                        onChange={(selected) => {
+                          const termsValue = selected?.value || "";
+                          handleFormChange({
+                            target: { name: "terms", value: termsValue },
+                          });
+                          if (termsValue && form.date) {
+                            const days = parseInt(termsValue, 10);
+                            if (!isNaN(days) && days > 0) {
+                              const dueDate = moment(form.date)
+                                .add(days, "days")
+                                .format("YYYY-MM-DD");
+                              setForm((prev) => ({
+                                ...prev,
+                                due_date: dueDate,
+                              }));
+                            }
+                          }
+                        }}
+                        isClearable
+                        formatCreateLabel={(input) => `Add "${input} days"`}
+                        styles={{
+                          control: (base, state) => ({
+                            ...base,
+                            minHeight: 36,
+                            height: 36,
+                            borderRadius: 6,
+                            borderColor: state.isFocused
+                              ? "var(--aa-accent)"
+                              : "#cbd5e1",
+                            boxShadow: state.isFocused
+                              ? "0 0 0 1px var(--aa-accent)"
+                              : "none",
+                            "&:hover": { borderColor: "#cbd5e1" },
+                          }),
+                          valueContainer: (base) => ({
+                            ...base,
+                            paddingTop: 0,
+                            paddingBottom: 0,
+                          }),
+                          indicatorsContainer: (base) => ({
+                            ...base,
+                            height: 34,
+                          }),
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-slate-600">Due Date</label>
+                    <input
+                      type="date"
+                      name="due_date"
+                      value={form.due_date}
+                      onChange={handleFormChange}
+                      min={form.date}
+                      className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -1236,23 +1379,115 @@ export default function ProductSupplierBill() {
             </select>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
-            <label className="text-sm font-medium text-slate-600 lg:text-right">
-              Accounts Payable
-            </label>
-            <input
-              type="text"
-              readOnly
-              value={
-                activeBusiness?.payable_code
-                  ? `${activeBusiness.payable_code}${
-                      form.supplier_name ? ` · ${form.supplier_name}` : ""
-                    }`
-                  : "Default payable account"
-              }
-              className="h-9 w-full max-w-md rounded-md border border-slate-300 bg-slate-50 px-3 text-sm text-slate-700 outline-none"
-            />
-          </div>
+          {!isCashPayment ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+              <label className="text-sm font-medium text-slate-600 lg:text-right">
+                Accounts Payable
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={
+                  activeBusiness?.payable_code
+                    ? `${activeBusiness.payable_code}${
+                        form.supplier_name ? ` · ${form.supplier_name}` : ""
+                      }`
+                    : "Default payable account"
+                }
+                className="h-9 w-full max-w-md rounded-md border border-slate-300 bg-slate-50 px-3 text-sm text-slate-700 outline-none"
+              />
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+                <label className="text-sm font-medium text-slate-600 lg:text-right">
+                  Mode of Payment <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="mode_of_payment"
+                  value={form.mode_of_payment}
+                  onChange={handleFormChange}
+                  className="h-9 w-full max-w-xs rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                >
+                  <option value="">Select mode...</option>
+                  <option value="cash">Cash</option>
+                  <option value="bank">Bank Transfer</option>
+                  <option value="cheque">Cheque</option>
+                </select>
+              </div>
+              {(form.mode_of_payment === "bank" ||
+                form.mode_of_payment === "cheque") && (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+                  <label className="text-sm font-medium text-slate-600 lg:text-right">
+                    Bank Account <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={bankAccount?.id || ""}
+                    onChange={(e) => {
+                      const selected = accountList.find(
+                        (a) => a.id === Number(e.target.value),
+                      );
+                      setBankAccount(selected || {});
+                    }}
+                    className="h-9 w-full max-w-md rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                  >
+                    <option value="">Select bank account...</option>
+                    {accountList.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.account_name} ({account.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {form.mode_of_payment === "cash" && (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+                  <label className="text-sm font-medium text-slate-600 lg:text-right">
+                    Cash Account <span className="text-red-500">*</span>
+                  </label>
+                  <Typeahead
+                    ref={cashAccountTypeaheadRef}
+                    id="product-bill-cash-account"
+                    labelKey={(option) =>
+                      `${option.head || ""} ${option.description || ""}`
+                    }
+                    options={headList}
+                    placeholder="Select cash account..."
+                    onChange={(selectedItems) => {
+                      if (selectedItems?.length) {
+                        const cash = selectedItems[0];
+                        setAccountHead({
+                          head: cash.head || "",
+                          description: cash.description || "",
+                        });
+                      } else setAccountHead({});
+                    }}
+                    selected={
+                      accountHead?.head
+                        ? headList.filter((c) => c.head === accountHead.head)
+                        : []
+                    }
+                    clearButton
+                  />
+                </div>
+              )}
+              {form.mode_of_payment === "cheque" && (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+                  <label className="text-sm font-medium text-slate-600 lg:text-right">
+                    Cheque No <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="cheque_number"
+                    value={form.cheque_number}
+                    onChange={handleFormChange}
+                    placeholder="Enter cheque number..."
+                    className="h-9 w-full max-w-xs rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                  />
+                </div>
+              )}
+            </>
+          )}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-start">
             <label className="pt-2 text-sm font-medium text-slate-600 lg:text-right">
@@ -1335,8 +1570,8 @@ export default function ProductSupplierBill() {
                                     ? item.quantity
                                     : parseFloat(
                                         parseNumberFromFormatted(
-                                          item.quantity || ""
-                                        )
+                                          item.quantity || "",
+                                        ),
                                       ) || 0;
                                 const costNum =
                                   parseFloat(product.cost_price || 0) || 0;
@@ -1361,13 +1596,13 @@ export default function ProductSupplierBill() {
                                           cost:
                                             costNum > 0
                                               ? formatNumberWithCommas(
-                                                  String(costNum)
+                                                  String(costNum),
                                                 )
                                               : "",
                                           total,
                                         }
-                                      : i
-                                  )
+                                      : i,
+                                  ),
                                 );
                               } else {
                                 setItems((prev) =>
@@ -1379,8 +1614,8 @@ export default function ProductSupplierBill() {
                                           sku: "",
                                           item_type: "",
                                         }
-                                      : i
-                                  )
+                                      : i,
+                                  ),
                                 );
                               }
                             }}
@@ -1389,7 +1624,7 @@ export default function ProductSupplierBill() {
                                 ? productList.filter(
                                     (product) =>
                                       product.sku === item.sku &&
-                                      product.name === item.item_name
+                                      product.name === item.item_name,
                                   )
                                 : []
                             }
@@ -1430,7 +1665,7 @@ export default function ProductSupplierBill() {
                                         line_tax_id:
                                           i.line_tax_id || defaultLineTaxId,
                                       };
-                                    })
+                                    }),
                                   );
                                 }}
                                 className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
@@ -1458,11 +1693,11 @@ export default function ProductSupplierBill() {
                             value={displayFormattedAmount(item.quantity)}
                             onChange={(e) => {
                               const formattedQty = formatAmountInput(
-                                e.target.value
+                                e.target.value,
                               );
                               const qty =
                                 parseFloat(
-                                  parseNumberFromFormatted(formattedQty)
+                                  parseNumberFromFormatted(formattedQty),
                                 ) || 0;
                               const cost = getItemCost(item);
                               setItems((prev) =>
@@ -1473,8 +1708,8 @@ export default function ProductSupplierBill() {
                                         quantity: formattedQty,
                                         total: qty * cost,
                                       }
-                                    : i
-                                )
+                                    : i,
+                                ),
                               );
                             }}
                             className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-right text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
@@ -1489,11 +1724,11 @@ export default function ProductSupplierBill() {
                             value={displayFormattedAmount(item.cost)}
                             onChange={(e) => {
                               const formattedCost = formatAmountInput(
-                                e.target.value
+                                e.target.value,
                               );
                               const cost =
                                 parseFloat(
-                                  parseNumberFromFormatted(formattedCost)
+                                  parseNumberFromFormatted(formattedCost),
                                 ) || 0;
                               const qty = getItemQty(item);
                               setItems((prev) =>
@@ -1504,8 +1739,8 @@ export default function ProductSupplierBill() {
                                         cost: formattedCost,
                                         total: qty * cost,
                                       }
-                                    : i
-                                )
+                                    : i,
+                                ),
                               );
                             }}
                             className={`h-9 w-full rounded-md border bg-white px-3 text-right text-sm outline-none focus:ring-1 ${
@@ -1531,8 +1766,8 @@ export default function ProductSupplierBill() {
                                           ? "Taxable"
                                           : "Not Taxable",
                                       }
-                                    : i
-                                )
+                                    : i,
+                                ),
                               );
                             }}
                             className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)] disabled:bg-slate-50"
@@ -1563,7 +1798,7 @@ export default function ProductSupplierBill() {
                             <Trash2 size={16} />
                           </button>
                         </td>
-                      </tr>
+                      </tr>,
                     );
                   });
 
@@ -1636,7 +1871,7 @@ export default function ProductSupplierBill() {
                             <Trash2 size={16} />
                           </button>
                         </td>
-                      </tr>
+                      </tr>,
                     );
                   }
 
@@ -1688,8 +1923,7 @@ export default function ProductSupplierBill() {
                       return sum;
                     }
                     return (
-                      sum +
-                      calculateTaxAmount(parseFloat(item.total || 0), tax)
+                      sum + calculateTaxAmount(parseFloat(item.total || 0), tax)
                     );
                   }, 0);
                   return (
@@ -1764,7 +1998,7 @@ export default function ProductSupplierBill() {
               <div className="text-xs text-slate-500">
                 Total Quantity:{" "}
                 {formatNumber(
-                  items.reduce((sum, item) => sum + getItemQty(item), 0)
+                  items.reduce((sum, item) => sum + getItemQty(item), 0),
                 )}
               </div>
             </div>
@@ -1997,8 +2231,7 @@ export default function ProductSupplierBill() {
                                       >
                                         <div className="min-w-0 flex-1">
                                           <h4 className="truncate text-sm font-medium text-slate-900">
-                                            {item.item_name}{" "}
-                                            {item.unit_measure}
+                                            {item.item_name} {item.unit_measure}
                                           </h4>
                                           <p className="font-mono text-xs text-slate-400">
                                             {item.item_code}
@@ -2182,7 +2415,10 @@ export default function ProductSupplierBill() {
                   <p className="text-xl font-bold text-slate-900">
                     ₦
                     {formatNumber(
-                      Math.max(0, getTotalWithTax() - Math.abs(supplierBalance))
+                      Math.max(
+                        0,
+                        getTotalWithTax() - Math.abs(supplierBalance),
+                      ),
                     )}
                   </p>
                   {Math.abs(supplierBalance) >= getTotalWithTax() && (
@@ -2198,19 +2434,26 @@ export default function ProductSupplierBill() {
                   <p className="text-xl font-bold text-slate-900">
                     ₦
                     {formatNumber(
-                      Math.max(0, Math.abs(supplierBalance) - getTotalWithTax())
+                      Math.max(
+                        0,
+                        Math.abs(supplierBalance) - getTotalWithTax(),
+                      ),
                     )}
                   </p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    after this bill
-                  </p>
+                  <p className="text-xs text-slate-500 mt-1">after this bill</p>
                 </div>
               </div>
 
               {/* Accounting Treatment (collapsible) */}
               {(() => {
-                const settleAmount = Math.min(getTotalWithTax(), Math.abs(supplierBalance));
-                const stillPayable = Math.max(0, getTotalWithTax() - Math.abs(supplierBalance));
+                const settleAmount = Math.min(
+                  getTotalWithTax(),
+                  Math.abs(supplierBalance),
+                );
+                const stillPayable = Math.max(
+                  0,
+                  getTotalWithTax() - Math.abs(supplierBalance),
+                );
                 return (
                   <div className="border-t border-slate-200">
                     <button
@@ -2221,18 +2464,28 @@ export default function ProductSupplierBill() {
                       <span className="flex items-center gap-2">
                         Accounting Treatment
                       </span>
-                      <span className="text-gray-400 text-xs">{showAdvanceAccounting ? "▲ Hide" : "▼ Show"}</span>
+                      <span className="text-gray-400 text-xs">
+                        {showAdvanceAccounting ? "▲ Hide" : "▼ Show"}
+                      </span>
                     </button>
                     {showAdvanceAccounting && (
                       <div className="px-4 py-3 bg-white space-y-1.5 text-xs">
-                        <p className="text-gray-500 mb-2">Journal entries that will be posted when you confirm:</p>
+                        <p className="text-gray-500 mb-2">
+                          Journal entries that will be posted when you confirm:
+                        </p>
                         <div className="overflow-x-auto">
                           <table className="w-full text-xs border-collapse">
                             <thead>
                               <tr className="bg-gray-50 text-gray-600 uppercase tracking-wide">
-                                <th className="text-left px-3 py-2 border border-gray-200">Account</th>
-                                <th className="text-right px-3 py-2 border border-gray-200">Dr (₦)</th>
-                                <th className="text-right px-3 py-2 border border-gray-200">Cr (₦)</th>
+                                <th className="text-left px-3 py-2 border border-gray-200">
+                                  Account
+                                </th>
+                                <th className="text-right px-3 py-2 border border-gray-200">
+                                  Dr (₦)
+                                </th>
+                                <th className="text-right px-3 py-2 border border-gray-200">
+                                  Cr (₦)
+                                </th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -2243,21 +2496,29 @@ export default function ProductSupplierBill() {
                                 <td className="px-3 py-2 border border-gray-200 text-right font-semibold text-gray-800">
                                   {formatNumber(settleAmount)}
                                 </td>
-                                <td className="px-3 py-2 border border-gray-200 text-right text-gray-400">—</td>
+                                <td className="px-3 py-2 border border-gray-200 text-right text-gray-400">
+                                  —
+                                </td>
                               </tr>
                               <tr className="hover:bg-gray-50">
                                 <td className="px-3 py-2 border border-gray-200 font-medium text-gray-800">
                                   Advance to Suppliers Account
                                 </td>
-                                <td className="px-3 py-2 border border-gray-200 text-right text-gray-400">—</td>
+                                <td className="px-3 py-2 border border-gray-200 text-right text-gray-400">
+                                  —
+                                </td>
                                 <td className="px-3 py-2 border border-gray-200 text-right font-semibold text-gray-800">
                                   {formatNumber(settleAmount)}
                                 </td>
                               </tr>
                               {stillPayable > 0 && (
                                 <tr className="bg-amber-50">
-                                  <td className="px-3 py-2 border border-gray-200 font-medium text-amber-800" colSpan={3}>
-                                    ⚠ Remaining ₦{formatNumber(stillPayable)} stays open as payable — pay via Pay Bills
+                                  <td
+                                    className="px-3 py-2 border border-gray-200 font-medium text-amber-800"
+                                    colSpan={3}
+                                  >
+                                    ⚠ Remaining ₦{formatNumber(stillPayable)}{" "}
+                                    stays open as payable — pay via Pay Bills
                                   </td>
                                 </tr>
                               )}
@@ -2303,4 +2564,3 @@ export default function ProductSupplierBill() {
     </div>
   );
 }
-

@@ -5061,12 +5061,14 @@ function MakeSale() {
                             {formatNumber1(taxableSubtotal)}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-slate-600">Not taxable</span>
-                          <span className="tabular-nums text-slate-600">
-                            {formatNumber1(nonTaxableSubtotal)}
-                          </span>
-                        </div>
+                        {nonTaxableSubtotal > 0 && (
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-slate-600">Not taxable</span>
+                            <span className="tabular-nums text-slate-600">
+                              {formatNumber1(nonTaxableSubtotal)}
+                            </span>
+                          </div>
+                        )}
                       </>
                     )}
                     {discountAmount > 0 && (
@@ -5522,12 +5524,14 @@ function MakeSale() {
                         ₦{formatNumber1(taxableSubtotal)}
                       </span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Not taxable:</span>
-                      <span className="font-semibold text-gray-600">
-                        ₦{formatNumber1(nonTaxableSubtotal)}
-                      </span>
-                    </div>
+                    {nonTaxableSubtotal > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Not taxable:</span>
+                        <span className="font-semibold text-gray-600">
+                          ₦{formatNumber1(nonTaxableSubtotal)}
+                        </span>
+                      </div>
+                    )}
                   </>
                 )}
 

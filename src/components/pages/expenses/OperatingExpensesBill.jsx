@@ -71,7 +71,8 @@ export default function OperatingExpenses() {
     supplier_subhead: "",
     remark: "",
     terms: "",
-    mode_of_payment: "",
+    payment_type: "credit", // credit | cash
+    mode_of_payment: "", // cash | bank | cheque (when payment_type === cash)
     mod_account_code: "",
     cheque_number: "",
   });
@@ -82,9 +83,14 @@ export default function OperatingExpenses() {
   // eslint-disable-next-line no-unused-vars
   const [productList, setProductList] = useState([]);
   const [expenseList, setExpenseList] = useState([]);
-  // eslint-disable-next-line no-unused-vars
   const [accountList, setAccountList] = useState([]);
+  const [headList, setHeadList] = useState([]);
+  const [bankAccount, setBankAccount] = useState({});
+  const [accountHead, setAccountHead] = useState({});
+  const cashAccountTypeaheadRef = useRef();
   const hasAutoSelectedSupplier = useRef(false);
+  const isCashPayment = form.payment_type === "cash";
+
 
   // Tax-related state
   const [taxes, setTaxes] = useState([]);
@@ -95,6 +101,7 @@ export default function OperatingExpenses() {
 
   // Editing state
   const [editingItem, setEditingItem] = useState(null);
+  const [extraEmptyRows, setExtraEmptyRows] = useState(0);
 
   // Expenses memo drawer state
   const [isMemoDrawerOpen, setIsMemoDrawerOpen] = useState(false);
@@ -259,6 +266,41 @@ export default function OperatingExpenses() {
     }
 
     toast.success("Item added");
+  };
+
+  const addExpenseRow = (expense) => {
+    if (!expense?.name || !expense?.code) {
+      toast.error("Please select an expense account");
+      return;
+    }
+    const newItem = {
+      _id: uuidv4(),
+      item_name: expense.name || "",
+      head: expense.code || "",
+      account_type: expense.account_type || "",
+      description: expense.name || "",
+      quantity: "1",
+      cost: "",
+      total: 0,
+      taxable: "Not Taxable",
+    };
+    setItems((prev) => [...prev, newItem]);
+  };
+
+  const updateItemField = (id, patch) => {
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i._id !== id) return i;
+        const next = { ...i, ...patch };
+        const qty =
+          parseFloat(parseNumberFromFormatted(String(next.quantity || ""))) ||
+          0;
+        const cost =
+          parseFloat(parseNumberFromFormatted(String(next.cost || ""))) || 0;
+        next.total = qty * cost;
+        return next;
+      }),
+    );
   };
 
   // Function to handle double-click on items table row to start editing
@@ -535,6 +577,36 @@ export default function OperatingExpenses() {
       return;
     }
 
+    if (isCashPayment) {
+      if (!form.mode_of_payment) {
+        toast.error("Please select mode of payment");
+        setLoading(false);
+        isSavingRef.current = false;
+        return;
+      }
+      if (form.mode_of_payment === "cash" && !accountHead?.head) {
+        toast.error("Please select a cash account");
+        setLoading(false);
+        isSavingRef.current = false;
+        return;
+      }
+      if (
+        ["bank", "cheque"].includes(form.mode_of_payment) &&
+        !bankAccount?.id
+      ) {
+        toast.error("Please select a bank account");
+        setLoading(false);
+        isSavingRef.current = false;
+        return;
+      }
+      if (form.mode_of_payment === "cheque" && !form.cheque_number) {
+        toast.error("Please enter a cheque number");
+        setLoading(false);
+        isSavingRef.current = false;
+        return;
+      }
+    }
+
     // Calculate tax amounts
     const taxableItems = items.filter((item) => item.taxable === "Taxable");
     const taxableSubtotal = taxableItems.reduce((sum, item) => {
@@ -556,7 +628,9 @@ export default function OperatingExpenses() {
       };
 
       const inclusiveTaxes = selectedTaxes.filter(isTaxInclusive);
-      const exclusiveTaxes = selectedTaxes.filter((tax) => !isTaxInclusive(tax));
+      const exclusiveTaxes = selectedTaxes.filter(
+        (tax) => !isTaxInclusive(tax),
+      );
 
       // Calculate inclusive taxes: extract VAT from the taxable amount
       if (inclusiveTaxes.length > 0) {
@@ -644,7 +718,7 @@ export default function OperatingExpenses() {
       };
     });
 
-    // Save purchase to stock
+    // Credit → A/P (purchase-expenses). Cash/bank/cheque → cash/bank CR (same endpoint with mode).
     _postApi(
       `/account/purchase-expenses`,
       {
@@ -656,13 +730,17 @@ export default function OperatingExpenses() {
           activeBusiness.payable_accrual_code,
         user_id: user.id,
         supplier_no: form.supplier_number,
-        terms: form.terms || "30",
+        terms: isCashPayment ? "0" : form.terms || "30",
         remark: form.remark || "",
         transaction_date: form.date,
-        due_date: form.due_date,
-        apply_prepayment: usePrepayment,
+        due_date: isCashPayment ? form.date : form.due_date,
+        apply_prepayment: isCashPayment ? false : usePrepayment,
         tax_amount: taxAmount,
         taxes: taxesArray,
+        mode_of_payment: isCashPayment ? form.mode_of_payment : "credit",
+        bankAccount: isCashPayment ? bankAccount : undefined,
+        accountHead: isCashPayment ? accountHead : undefined,
+        cheque_number: isCashPayment ? form.cheque_number : undefined,
       },
       (res) => {
         if (res.success) {
@@ -769,6 +847,12 @@ export default function OperatingExpenses() {
     // buttons cannot be clicked again until the save finishes.
     isSavingRef.current = true;
     setLoading(true);
+
+    // Cash bills are paid immediately — skip supplier-advance prepayment flow.
+    if (isCashPayment) {
+      savePurchase(false, printAfterSave);
+      return;
+    }
 
     // Check supplier balance before saving
     checkSupplierBalance(form.supplier_number, (balance) => {
@@ -956,7 +1040,8 @@ export default function OperatingExpenses() {
         supplier_name: memo.supplier_name || prev.supplier_name,
         supplier_code: memo.supplier_code || prev.supplier_code,
         supplier_number: memo.supplier_number || prev.supplier_number,
-        supplier_subhead: memo.account_code || memo.supplier_subhead || prev.supplier_subhead,
+        supplier_subhead:
+          memo.account_code || memo.supplier_subhead || prev.supplier_subhead,
       }));
     }
 
@@ -1057,30 +1142,50 @@ export default function OperatingExpenses() {
   }, [supplierList, query, form.supplier_number]);
 
   useEffect(() => {
-    if (
-      form.mode_of_payment === "bank" ||
-      form.mode_of_payment === "cash" ||
-      form.mode_of_payment === "cheque"
-    ) {
+    setBankAccount({});
+    setAccountHead({});
+    setAccountList([]);
+    setHeadList([]);
+
+    if (!isCashPayment || !activeBusiness?.id) return;
+
+    if (form.mode_of_payment === "cash") {
       _postApi(
-        `/inventory/product-list?query_type=${form.mode_of_payment}`,
+        `/inventory/product-list?query_type=cash`,
         { facilityId: activeBusiness.id },
         (resp) => {
           if (resp.success) {
-            setAccountList(resp.results);
+            setHeadList(resp?.results || []);
           } else {
-            toast.error("Failed to load list of items.");
+            toast.error("Failed to load cash accounts.");
           }
         },
         (err) => {
           console.error("API Error:", err);
-          toast.error("Something went wrong while fetching data.");
+          toast.error("Something went wrong while fetching cash accounts.");
         },
       );
-    } else {
-      setAccountList([]);
+    } else if (
+      form.mode_of_payment === "cheque" ||
+      form.mode_of_payment === "bank"
+    ) {
+      _fetchApi(
+        `/api/get/bank-accounts?facilityId=${activeBusiness.id}`,
+        (data) => {
+          if (data.success) {
+            setAccountList(data.results || []);
+          } else {
+            toast.error("Failed to load bank accounts");
+          }
+        },
+        (err) => {
+          console.error(err);
+          toast.error("Failed to load bank accounts");
+        },
+      );
     }
-  }, [form.mode_of_payment]);
+  }, [form.mode_of_payment, form.payment_type, activeBusiness?.id]);
+
 
   const formatNumber = (num) => {
     return new Intl.NumberFormat("en-US", {
@@ -1090,784 +1195,747 @@ export default function OperatingExpenses() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-0">
-      <div className="max-w-7xl mx-auto">
-        {/* Main Form Card */}
-        <div className="bg-white rounded-xl shadow-xl overflow-hidden border border-slate-200">
-          {/* Transaction Details Section */}
-          <div className="flex items-center gap-4 bg-slate-50 border-b border-slate-200 px-6 py-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(-1)}
-              className="gap-2"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <div className="h-6 w-px bg-slate-300" /> {/* Divider */}
-            <div className="flex items-center gap-2.5">
-              <Banknote className="w-5 h-5 text-blue-600" />
-              <h2 className="text-base font-semibold text-slate-900">
-                Expenses Bill
-              </h2>
-            </div>
+    <div className="relative min-h-screen bg-white">
+      {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="flex flex-col items-center rounded-lg bg-white p-8 shadow-2xl">
+            <div className="mb-4 h-16 w-16 animate-spin rounded-full border-b-4 border-[var(--aa-accent)]" />
+            <h3 className="mb-2 text-xl font-bold text-gray-800">
+              Processing Bill...
+            </h3>
+            <p className="text-sm text-gray-600">
+              Please wait while we record your expense
+            </p>
           </div>
+        </div>
+      )}
 
-          <div className="p-6 bg-white">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Transaction Date
-                </label>
-                <input
-                  type="date"
-                  name="date"
-                  value={form.date}
-                  onChange={handleFormChange}
-                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-slate-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Due Date
-                </label>
-                <input
-                  type="date"
-                  name="due_date"
-                  value={form.due_date}
-                  onChange={handleFormChange}
-                  min={form.date}
-                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-slate-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Select Supplier <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="supplier_number"
-                  value={form.supplier_number}
-                  onChange={(e) => {
-                    const selectedSupplier = supplierList.find(
-                      (s) => s.supplier_number === e.target.value,
-                    );
-                    if (selectedSupplier) {
-                      setForm((p) => ({
-                        ...p,
-                        supplier_name: selectedSupplier.supplier_name,
-                        supplier_code: selectedSupplier.supplier_code,
-                        supplier_subhead: selectedSupplier.supplier_subhead,
-                        supplier_number: selectedSupplier.supplier_number,
-                      }));
-                    } else if (e.target.value === "") {
-                      setForm((p) => ({
-                        ...p,
-                        supplier_name: "",
-                        supplier_code: "",
-                        supplier_subhead: "",
-                        supplier_number: "",
-                      }));
-                    }
-                  }}
-                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white hover:border-slate-400"
-                >
-                  <option value="">Select supplier...</option>
-                  {/* Show memo's supplier when added from memo but not yet in supplierList */}
-                  {form.supplier_number &&
-                    !supplierList?.some(
-                      (s) => s.supplier_number === form.supplier_number,
-                    ) && (
-                      <option value={form.supplier_number}>
-                        {form.supplier_name || form.supplier_number}
-                      </option>
-                    )}
-                  {supplierList?.map((supplier) => (
-                    <option
-                      key={supplier.supplier_number}
-                      value={supplier.supplier_number}
-                    >
-                      {supplier.supplier_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Payment Terms
-                </label>
-                <CreatableSelect
-                  className="w-full text-sm"
-                  classNamePrefix="react-select"
-                  placeholder="Select or type payment terms"
-                  options={termOptions}
-                  /* ✅ supports both predefined & custom values */
-                  value={
-                    termOptions.find((opt) => opt.value === form.terms) ||
-                    (form.terms
-                      ? { value: form.terms, label: `${form.terms} days` }
-                      : null)
-                  }
-                  onChange={(selected) => {
-                    const termsValue = selected?.value || "";
-                    handleFormChange({
-                      target: {
-                        name: "terms",
-                        value: termsValue,
-                      },
-                    });
-
-                    // Recalculate due date when terms change
-                    if (termsValue && form.date) {
-                      const days = parseInt(termsValue, 10);
-                      if (!isNaN(days) && days > 0) {
-                        const dueDate = moment(form.date)
-                          .add(days, "days")
-                          .format("YYYY-MM-DD");
-                        setForm((prev) => ({ ...prev, due_date: dueDate }));
-                      }
-                    }
-                  }}
-                  isClearable
-                  formatCreateLabel={(input) => `Add "${input} days"`}
-                />
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Remark/Description <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                name="remark"
-                value={form.remark}
-                onChange={handleFormChange}
-                rows="2"
-                placeholder="Enter transaction description..."
-                className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none hover:border-slate-400"
+      <div className="flex min-h-screen flex-col bg-white">
+        <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <FileText
+                className="size-6 text-[var(--aa-accent)]"
+                strokeWidth={1.75}
               />
+              <div>
+                <h1 className="text-xl font-semibold text-slate-900">
+                  Expenses Bill
+                </h1>
+                <p className="text-xs text-slate-500">
+                  Record supplier operating expenses (credit or cash)
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={handleOpenMemoDrawer}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--aa-accent)] hover:underline"
+            >
+              View Expenses Memos
+            </button>
           </div>
+          {(!form.supplier_number ||
+            !String(form.remark || "").trim() ||
+            items.length === 0) && (
+            <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {!form.supplier_number && (
+                <span className="mr-3">Select a supplier.</span>
+              )}
+              {!String(form.remark || "").trim() && (
+                <span className="mr-3">Enter a remark / description.</span>
+              )}
+              {items.length === 0 && (
+                <span className="mr-3">Add at least one expense line.</span>
+              )}
+            </div>
+          )}
+        </div>
 
-          {/* Add Items Section */}
-          <div className="bg-gradient-to-r from-green-50 via-emerald-50 to-green-50 px-6 py-3.5 border-t-2 border-b-2 border-green-100 flex items-center justify-between">
-            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <Package className="w-4 h-4 text-green-600" />
-              Add Items
-            </h2>
-            <div className="flex flex-wrap items-center gap-3">
-
-              <button
-                onClick={handleOpenMemoDrawer}
-                className="text-blue-600 hover:text-blue-800 hover:underline font-medium cursor-pointer text-left"
+        <div className="shrink-0 space-y-4 border-b border-slate-100 bg-white px-6 py-5">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+            <label className="text-sm font-medium text-slate-600 lg:text-right">
+              Payment Type <span className="text-red-500">*</span>
+            </label>
+            <div className="flex items-center gap-3">
+              <span
+                className={`text-sm font-medium transition-colors ${
+                  !isCashPayment
+                    ? "text-[var(--aa-accent)]"
+                    : "text-slate-400"
+                }`}
               >
-                View Expenses Memos
+                Credit
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isCashPayment}
+                aria-label="Payment type"
+                onClick={() =>
+                  setForm((p) => {
+                    const next = p.payment_type === "cash" ? "credit" : "cash";
+                    return {
+                      ...p,
+                      payment_type: next,
+                      mode_of_payment:
+                        next === "credit" ? "" : p.mode_of_payment,
+                      cheque_number:
+                        next === "credit" ? "" : p.cheque_number,
+                    };
+                  })
+                }
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--aa-accent)] focus-visible:ring-offset-2 ${
+                  isCashPayment
+                    ? "bg-[var(--aa-accent)]"
+                    : "bg-slate-300"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    isCashPayment ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
               </button>
+              <span
+                className={`text-sm font-medium transition-colors ${
+                  isCashPayment
+                    ? "text-[var(--aa-accent)]"
+                    : "text-slate-400"
+                }`}
+              >
+                Cash
+              </span>
             </div>
           </div>
 
-          <div className="p-6 bg-slate-50">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4 items-end">
-              <div className="md:col-span-3">
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Expense <span className="text-red-500">*</span>
-                </label>
-                <Typeahead
-                  ref={expenseSelectRef}
-                  id="expense-typeahead"
-                  labelKey={(option) =>
-                    `${option.name || ""} (${option.code || ""})`
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+            <label className="text-sm font-medium text-slate-600 lg:text-right">
+              Supplier <span className="text-red-500">*</span>
+            </label>
+            <div>
+              <select
+                name="supplier_number"
+                value={form.supplier_number}
+                onChange={(e) => {
+                  const selectedSupplier = supplierList.find(
+                    (s) => s.supplier_number === e.target.value,
+                  );
+                  if (selectedSupplier) {
+                    setForm((p) => ({
+                      ...p,
+                      supplier_name: selectedSupplier.supplier_name,
+                      supplier_code: selectedSupplier.supplier_code,
+                      supplier_subhead: selectedSupplier.supplier_subhead,
+                      supplier_number: selectedSupplier.supplier_number,
+                    }));
+                  } else if (e.target.value === "") {
+                    setForm((p) => ({
+                      ...p,
+                      supplier_name: "",
+                      supplier_code: "",
+                      supplier_subhead: "",
+                      supplier_number: "",
+                    }));
                   }
-                  options={expenseList}
-                  placeholder="Select expense..."
-                  onChange={(selectedItems) => {
-                    if (selectedItems && selectedItems.length > 0) {
-                      const expense = selectedItems[0];
-                      setCurrentItem((prev) => ({
-                        ...prev,
-                        item_name: expense.name || "",
-                        head: expense.code || "",
-                        account_type: expense.account_type || "",
-                        // Don't auto-set description - keep existing or empty
-                      }));
-                    } else {
-                      // Clear selection when user deselects
-                      setCurrentItem((prev) => ({
-                        ...prev,
-                        item_name: "",
-                        head: "",
-                        // Keep existing description when clearing
-                      }));
-                    }
-                  }}
-                  selected={
-                    currentItem.item_name && currentItem.head
-                      ? expenseList.filter(
-                          (expense) =>
-                            expense.code === currentItem.head &&
-                            expense.name === currentItem.item_name,
-                        )
-                      : []
-                  }
-                  clearButton
-                  allowNew={false}
-                  renderMenuItemChildren={(option) => (
-                    <div className="py-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-slate-800">
-                          {option.name || "Description"}
-                        </span>
-                        <span className="text-slate-600 text-xs">
-                          ({option.code})
-                        </span>
-                      </div>
-                      {option.account_type && (
-                        <small className="text-slate-500 text-xs">
-                          Type: {option.account_type}
-                        </small>
-                      )}
-                    </div>
+                }}
+                className={`h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)] ${
+                  !form.supplier_number ? "text-slate-400" : "text-slate-800"
+                }`}
+              >
+                <option value="">Select supplier...</option>
+                {form.supplier_number &&
+                  !supplierList?.some(
+                    (s) => s.supplier_number === form.supplier_number,
+                  ) && (
+                    <option value={form.supplier_number}>
+                      {form.supplier_name || form.supplier_number}
+                    </option>
                   )}
-                  inputProps={{
-                    style: {
-                      padding: "0.5rem 0.75rem",
-                      fontSize: "0.875rem",
-                      border: "2px solid rgb(203 213 225)",
-                      borderRadius: "0.5rem",
-                      minHeight: "40px",
-                    },
-                    className:
-                      "focus:border-green-500 focus:ring-2 focus:ring-green-500",
-                  }}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Description <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="description"
-                  value={currentItem.description || ""}
-                  onChange={handleItemChange}
-                  placeholder="Enter description..."
-                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-slate-400 bg-white"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Quantity <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="quantity"
-                  value={currentItem.quantity || ""}
-                  onChange={handleItemChange}
-                  placeholder="0"
-                  inputMode="decimal"
-                  className="text-center w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-slate-400 bg-white"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Unit Cost <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="cost"
-                  value={currentItem.cost || ""}
-                  onChange={handleItemChange}
-                  placeholder="0.00"
-                  inputMode="decimal"
-                  className="text-right w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-slate-400 bg-white"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Total
-                </label>
-                <input
-                  type="text"
-                  value={formatNumber(currentItem.total)}
-                  disabled
-                  readOnly
-                  className="text-center w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700 font-semibold cursor-not-allowed"
-                />
-              </div>
-              <div className="md:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Taxable
-                </label>
-                <div className="flex items-center h-10">
-                  <input
-                    type="checkbox"
-                    name="taxable"
-                    checked={currentItem.taxable === "Taxable"}
-                    onChange={(e) => {
-                      handleItemChange({
-                        target: {
-                          name: "taxable",
-                          value: e.target.checked ? "Taxable" : "Not Taxable",
-                        },
-                      });
-                    }}
-                    className="w-5 h-5 text-green-600 border-2 border-slate-300 rounded focus:ring-2 focus:ring-green-500 focus:ring-offset-0 cursor-pointer"
-                  />
-                  <label className="ml-2 text-sm text-slate-700 cursor-pointer">
-                    Mark as Taxable
-                  </label>
-                </div>
-              </div>
-
-              <div className="md:col-span-1">
-                {editingItem ? (
-                  <div className="flex gap-1">
-                    <button
-                      onClick={saveEditedItem}
-                      className="flex-1 px-2 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center justify-center gap-1 font-medium shadow-md hover:shadow-lg"
-                      title="Save changes"
-                    >
-                      <Check className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={cancelEditing}
-                      className="flex-1 px-2 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all flex items-center justify-center gap-1 font-medium shadow-md hover:shadow-lg"
-                      title="Cancel editing"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-1.5 w-full">
-                   
-                    <button
-                      type="button"
-                      onClick={addItem}
-                      className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all flex items-center justify-center gap-2 font-medium shadow-md hover:shadow-lg"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
+                {supplierList?.map((supplier) => (
+                  <option
+                    key={supplier.supplier_number}
+                    value={supplier.supplier_number}
+                  >
+                    {supplier.supplier_name}
+                  </option>
+                ))}
+              </select>
+              {form.supplier_number && (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Supplier No:{" "}
+                  <span className="font-medium">{form.supplier_number}</span>
+                </p>
+              )}
             </div>
+          </div>
 
-            {/* Items Table */}
-            {items.length > 0 && (
-              <div className="bg-white rounded-xl p-4 border-2 border-slate-200 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                    <Package className="w-4 h-4 text-blue-600" />
-                    Items List
-                  </h3>
-                  <span className="text-xs font-medium text-slate-600 bg-blue-50 px-2 py-1 rounded">
-                    {items.length} item{items.length !== 1 ? "s" : ""}
-                  </span>
-                </div>
-
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="w-full">
-                    <thead className="bg-slate-50">
-                      <tr className="border-b-2 border-slate-200">
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700">
-                          #
-                        </th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700">
-                          Account Description
-                        </th>
-                        <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700">
-                          Taxable
-                        </th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700">
-                          Description
-                        </th>
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700">
-                          Quantity
-                        </th>
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700">
-                          Unit Cost
-                        </th>
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700">
-                          Total
-                        </th>
-                        <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700">
-                          Action
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((item, idx) => (
-                        <tr
-                          key={item._id}
-                          className={`border-b border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer ${
-                            editingItem === item._id ? "bg-blue-50" : ""
-                          }`}
-                          onDoubleClick={() => handleItemDoubleClick(item)}
-                        >
-                          <td className="px-3 py-2 text-xs text-slate-600">
-                            {idx + 1}
-                          </td>
-                          <td className="px-3 py-2">
-                            <Typeahead
-                              id={`expense-typeahead-${item._id}`}
-                              labelKey={(option) =>
-                                `${option.name || ""} (${option.code || ""})`
-                              }
-                              options={expenseList}
-                              placeholder="Select expense..."
-                              onChange={(selectedItems) => {
-                                if (selectedItems && selectedItems.length > 0) {
-                                  const expense = selectedItems[0];
-                                  setItems(
-                                    items.map((i) =>
-                                      i._id === item._id
-                                        ? {
-                                            ...i,
-                                            item_name: expense.name || "",
-                                            head: expense.code || "",
-                                            account_type:
-                                              expense.account_type || "",
-                                            // Don't auto-set description - keep existing
-                                          }
-                                        : i,
-                                    ),
-                                  );
-                                } else {
-                                  setItems(
-                                    items.map((i) =>
-                                      i._id === item._id
-                                        ? { ...i, item_name: "", head: "" }
-                                        : i,
-                                    ),
-                                  );
-                                }
-                              }}
-                              selected={
-                                item.item_name && item.head
-                                  ? expenseList.filter(
-                                      (expense) =>
-                                        expense.code === item.head &&
-                                        expense.name === item.item_name,
-                                    )
-                                  : []
-                              }
-                              clearButton
-                              allowNew={false}
-                              renderMenuItemChildren={(option) => (
-                                <div className="py-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-slate-800">
-                                      {option.name || "Description"}
-                                    </span>
-                                    <span className="text-slate-600 text-xs">
-                                      ({option.code})
-                                    </span>
-                                  </div>
-                                  {option.account_type && (
-                                    <small className="text-slate-500 text-xs">
-                                      Type: {option.account_type}
-                                    </small>
-                                  )}
-                                </div>
-                              )}
-                              inputProps={{
-                                style: {
-                                  padding: "0.5rem 0.75rem",
-                                  fontSize: "0.875rem",
-                                  border: "2px solid rgb(203 213 225)",
-                                  borderRadius: "0.5rem",
-                                  minHeight: "40px",
-                                },
-                                className:
-                                  "focus:border-green-500 focus:ring-2 focus:ring-green-500",
-                              }}
-                              positionFixed={true}
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <label className="flex items-center justify-center cursor-pointer group">
-                              <input
-                                type="checkbox"
-                                checked={item.taxable === "Taxable"}
-                                onChange={(e) => {
-                                  setItems(
-                                    items.map((i) =>
-                                      i._id === item._id
-                                        ? {
-                                            ...i,
-                                            taxable: e.target.checked
-                                              ? "Taxable"
-                                              : "Not Taxable",
-                                          }
-                                        : i,
-                                    ),
-                                  );
-                                }}
-                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
-                              />
-                              {item.taxable === "Taxable" && (
-                                <span className="ml-2 text-xs text-green-600 font-medium">
-                                  Taxable
-                                </span>
-                              )}
-                            </label>
-                          </td>
-                          <td className="px-3 py-2 text-xs font-medium text-slate-800">
-                            <span>{item.description}</span>
-                          </td>
-                          <td className="px-3 py-2 text-xs text-slate-600 text-right">
-                            {formatNumber(
-                              parseFloat(
-                                parseNumberFromFormatted(item.quantity || ""),
-                              ) || 0,
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-xs text-slate-600 text-right">
-                            {editingItem === item._id ? (
-                              <input
-                                type="text"
-                                name="cost"
-                                value={item.cost || ""}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  // Remove commas first, then sanitize
-                                  const withoutCommas = value.replace(/,/g, "");
-                                  const sanitizedValue =
-                                    handleNumericInput(withoutCommas);
-
-                                  // Prevent multiple decimal points
-                                  const parts = sanitizedValue.split(".");
-                                  const numericValue =
-                                    parts.length > 2
-                                      ? parts[0] + "." + parts.slice(1).join("")
-                                      : sanitizedValue;
-
-                                  // Format with commas for display
-                                  const formattedValue =
-                                    formatNumberWithCommas(numericValue);
-
-                                  // Calculate total using parsed values
-                                  const costParsed =
-                                    parseNumberFromFormatted(formattedValue);
-                                  const qtyParsed = parseNumberFromFormatted(
-                                    item.quantity || "",
-                                  );
-                                  const cost =
-                                    costParsed === ""
-                                      ? 0
-                                      : parseFloat(costParsed) || 0;
-                                  const qty =
-                                    qtyParsed === ""
-                                      ? 0
-                                      : parseFloat(qtyParsed) || 0;
-
-                                  const updatedItems = items.map((i) =>
-                                    i._id === item._id
-                                      ? {
-                                          ...i,
-                                          cost: formattedValue,
-                                          total: cost * qty,
-                                        }
-                                      : i,
-                                  );
-                                  setItems(updatedItems);
-                                }}
-                                inputMode="decimal"
-                                className="text-right px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-slate-400 bg-white w-full"
-                              />
-                            ) : (
-                              "₦" +
-                              formatNumber(
-                                parseFloat(
-                                  parseNumberFromFormatted(item.cost || ""),
-                                ) || 0,
-                              )
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-xs font-semibold text-slate-800 text-right">
-                            ₦{formatNumber(item.total)}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={() => handleItemDoubleClick(item)}
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                title="Edit item"
-                              >
-                                <Edit2 className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => removeItem(item._id)}
-                                className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                title="Remove item"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Grand Total */}
-                <div className="mt-4 space-y-2">
-                  <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-2 border-green-200">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium text-slate-700">
-                        Subtotal:
-                      </span>
-                      <span className="text-lg font-semibold text-slate-800">
-                        ₦{formatNumber(calculateTotal())}
-                      </span>
-                    </div>
-
-                    {/* Tax Display */}
-                    {selectedTaxes.length > 0 && calculateTotalTax() > 0 && (
-                      <>
-                        {selectedTaxes.map((tax) => {
-                          const taxableItems = items.filter(
-                            (item) => item.taxable === "Taxable",
-                          );
-                          const taxableSubtotal = taxableItems.reduce(
-                            (sum, item) => {
-                              const itemTotal =
-                                parseFloat(
-                                  parseNumberFromFormatted(
-                                    item.total?.toString() || "",
-                                  ),
-                                ) || 0;
-                              return sum + itemTotal;
-                            },
-                            0,
-                          );
-
-                          // Determine if tax is inclusive or exclusive
-                          const isInclusive =
-                            tax.inclusive_type === "inclusive" ||
-                            (tax.inclusive_type === undefined &&
-                              tax.tax_type === "inclusive") ||
-                            (tax.inclusive_type === undefined &&
-                              vatPolicy === "vat_inclusive" &&
-                              vatPolicy !== "all");
-
-                          let taxAmountForDisplay = 0;
-
-                          if (isInclusive) {
-                            // For inclusive taxes, calculate proportionally
-                            const inclusiveTaxes = selectedTaxes.filter((t) => {
-                              if (vatPolicy === "all") {
-                                return (
-                                  t.inclusive_type === "inclusive" ||
-                                  (t.inclusive_type === undefined &&
-                                    t.tax_type === "inclusive")
-                                );
-                              }
-                              return (
-                                t.inclusive_type === "inclusive" ||
-                                (t.inclusive_type === undefined &&
-                                  vatPolicy === "vat_inclusive")
-                              );
-                            });
-
-                            const totalRate = inclusiveTaxes.reduce(
-                              (sum, t) => {
-                                if (t.rate_type === "percentage") {
-                                  return sum + parseFloat(t.rate || 0) / 100;
-                                }
-                                return sum;
-                              },
-                              0,
-                            );
-
-                            if (totalRate > 0) {
-                              const netAmount =
-                                taxableSubtotal / (1 + totalRate);
-                              const totalVAT = taxableSubtotal - netAmount;
-                              const taxRate = parseFloat(tax.rate || 0) / 100;
-                              taxAmountForDisplay =
-                                (totalVAT * taxRate) / totalRate;
-                            }
-                          } else {
-                            // For exclusive taxes
-                            if (tax.rate_type === "percentage") {
-                              taxAmountForDisplay =
-                                (taxableSubtotal * parseFloat(tax.rate || 0)) /
-                                100;
-                            } else {
-                              taxAmountForDisplay = parseFloat(tax.rate || 0);
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,1fr)] lg:items-start">
+            <span className="pt-2 text-sm font-medium text-slate-600 lg:text-right">
+              Bill Date <span className="text-red-500">*</span>
+            </span>
+            <div className="flex flex-wrap gap-3">
+              <input
+                type="date"
+                name="date"
+                value={form.date}
+                onChange={handleFormChange}
+                className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+              />
+              {!isCashPayment && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-slate-600">Terms</label>
+                    <div className="w-44">
+                      <CreatableSelect
+                        className="w-full text-sm"
+                        classNamePrefix="react-select"
+                        placeholder="Terms"
+                        options={termOptions}
+                        value={
+                          termOptions.find((opt) => opt.value === form.terms) ||
+                          (form.terms
+                            ? { value: form.terms, label: `${form.terms} days` }
+                            : null)
+                        }
+                        onChange={(selected) => {
+                          const termsValue = selected?.value || "";
+                          handleFormChange({
+                            target: { name: "terms", value: termsValue },
+                          });
+                          if (termsValue && form.date) {
+                            const days = parseInt(termsValue, 10);
+                            if (!isNaN(days) && days > 0) {
+                              const dueDate = moment(form.date)
+                                .add(days, "days")
+                                .format("YYYY-MM-DD");
+                              setForm((prev) => ({
+                                ...prev,
+                                due_date: dueDate,
+                              }));
                             }
                           }
-
-                          return (
-                            <div
-                              key={tax.id}
-                              className="flex justify-between items-center mb-1"
-                            >
-                              <span className="text-sm text-slate-600">
-                                {tax.description} ({tax.rate}%)
-                                {isInclusive ? (
-                                  <span className="ml-1.5 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
-                                    Inc
-                                  </span>
-                                ) : (
-                                  <span className="ml-1.5 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
-                                    Exc
-                                  </span>
-                                )}
-                                :
-                              </span>
-                              <span className="text-sm font-semibold text-slate-800">
-                                ₦{formatNumber(taxAmountForDisplay)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                        {selectedTaxes.length > 1 && (
-                          <div className="flex justify-between items-center mb-2 pt-1 border-t border-green-200">
-                            <span className="text-sm font-medium text-slate-700">
-                              Total Tax:
-                            </span>
-                            <span className="text-sm font-semibold text-slate-800">
-                              ₦{formatNumber(calculateTotalTax())}
-                            </span>
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    <div className="flex justify-between items-center pt-2 border-t-2 border-green-300">
-                      <div className="flex items-center gap-2">
-                        <div className="p-2 bg-green-100 rounded-lg">
-                          <Package className="w-4 h-4 text-green-700" />
-                        </div>
-                        <span className="text-sm font-bold text-slate-800">
-                          Grand Total
-                        </span>
-                      </div>
-                      <span className="text-2xl font-bold text-green-700">
-                        ₦{formatNumber(getTotal())}
-                      </span>
+                        }}
+                        isClearable
+                        formatCreateLabel={(input) => `Add "${input} days"`}
+                        styles={{
+                          control: (base, state) => ({
+                            ...base,
+                            minHeight: 36,
+                            height: 36,
+                            borderRadius: 6,
+                            borderColor: state.isFocused
+                              ? "var(--aa-accent)"
+                              : "#cbd5e1",
+                            boxShadow: state.isFocused
+                              ? "0 0 0 1px var(--aa-accent)"
+                              : "none",
+                            "&:hover": { borderColor: "#cbd5e1" },
+                          }),
+                          valueContainer: (base) => ({
+                            ...base,
+                            paddingTop: 0,
+                            paddingBottom: 0,
+                          }),
+                          indicatorsContainer: (base) => ({
+                            ...base,
+                            height: 34,
+                          }),
+                        }}
+                      />
                     </div>
                   </div>
-                </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-slate-600">Due Date</label>
+                    <input
+                      type="date"
+                      name="due_date"
+                      value={form.due_date}
+                      onChange={handleFormChange}
+                      min={form.date}
+                      className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {!isCashPayment ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+              <label className="text-sm font-medium text-slate-600 lg:text-right">
+                Accounts Payable
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={
+                  activeBusiness?.payable_code
+                    ? `${activeBusiness.payable_code}${
+                        form.supplier_name ? ` · ${form.supplier_name}` : ""
+                      }`
+                    : "Default payable account"
+                }
+                className="h-9 w-full max-w-md rounded-md border border-slate-300 bg-slate-50 px-3 text-sm text-slate-700 outline-none"
+              />
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+                <label className="text-sm font-medium text-slate-600 lg:text-right">
+                  Mode of Payment <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="mode_of_payment"
+                  value={form.mode_of_payment}
+                  onChange={handleFormChange}
+                  className="h-9 w-full max-w-xs rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                >
+                  <option value="">Select mode...</option>
+                  <option value="cash">Cash</option>
+                  <option value="bank">Bank Transfer</option>
+                  <option value="cheque">Cheque</option>
+                </select>
               </div>
+              {(form.mode_of_payment === "bank" ||
+                form.mode_of_payment === "cheque") && (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+                  <label className="text-sm font-medium text-slate-600 lg:text-right">
+                    Bank Account <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={bankAccount?.id || ""}
+                    onChange={(e) => {
+                      const selectedAccount = accountList.find(
+                        (account) => account.id === Number(e.target.value),
+                      );
+                      setBankAccount(selectedAccount || {});
+                    }}
+                    className="h-9 w-full max-w-md rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                  >
+                    <option value="">Select bank account...</option>
+                    {accountList.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.account_name} ({account.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {form.mode_of_payment === "cash" && (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+                  <label className="text-sm font-medium text-slate-600 lg:text-right">
+                    Cash Account <span className="text-red-500">*</span>
+                  </label>
+                  <Typeahead
+                    ref={cashAccountTypeaheadRef}
+                    id="expense-bill-cash-account"
+                    labelKey={(option) =>
+                      `${option.head || ""} ${option.description || ""}`
+                    }
+                    options={headList}
+                    placeholder="Select cash account..."
+                    onChange={(selectedItems) => {
+                      if (selectedItems?.length) {
+                        const cash = selectedItems[0];
+                        setAccountHead({
+                          head: cash.head || "",
+                          description: cash.description || "",
+                        });
+                      } else {
+                        setAccountHead({});
+                      }
+                    }}
+                    selected={
+                      accountHead?.head
+                        ? headList.filter((c) => c.head === accountHead.head)
+                        : []
+                    }
+                    clearButton
+                  />
+                </div>
+              )}
+              {form.mode_of_payment === "cheque" && (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+                  <label className="text-sm font-medium text-slate-600 lg:text-right">
+                    Cheque No <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="cheque_number"
+                    value={form.cheque_number}
+                    onChange={handleFormChange}
+                    placeholder="Enter cheque number..."
+                    className="h-9 w-full max-w-xs rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-start">
+            <label className="pt-2 text-sm font-medium text-slate-600 lg:text-right">
+              Remark <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              name="remark"
+              value={form.remark}
+              onChange={handleFormChange}
+              placeholder="Enter transaction description..."
+              rows={2}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+            />
+          </div>
+        </div>
+
+        {/* Item Table — invoice style */}
+        <div className="flex w-full flex-1 flex-col bg-white">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-6 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Item Table
+            </p>
+            <span className="text-xs text-slate-500">
+              VAT:{" "}
+              {activeBusiness?.vat_policy === "vat_inclusive"
+                ? "Inclusive"
+                : activeBusiness?.vat_policy === "vat_exclusive"
+                  ? "Exclusive"
+                  : "All"}
+            </span>
+          </div>
+
+          <div className="w-full overflow-x-auto px-4 sm:px-6">
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                  <th className="min-w-[260px] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
+                    Expense Account
+                  </th>
+                  <th className="min-w-[200px] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
+                    Description
+                  </th>
+                  <th className="min-w-[8.5rem] w-36 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
+                    Quantity
+                  </th>
+                  <th className="min-w-[10rem] w-44 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
+                    Unit Cost
+                  </th>
+                  <th className="w-28 px-2 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide">
+                    Taxable
+                  </th>
+                  <th className="w-32 px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
+                    Amount
+                  </th>
+                  <th className="w-10 px-1 py-2.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {(() => {
+                  const emptyRowCount = Math.max(1, 1 + extraEmptyRows);
+                  const rows = [];
+
+                  items.forEach((item) => {
+                    rows.push(
+                      <tr
+                        key={item._id}
+                        className="bg-white hover:bg-slate-50/80"
+                      >
+                        <td className="px-3 py-3 align-top">
+                          <Typeahead
+                            id={`expense-row-typeahead-${item._id}`}
+                            labelKey={(option) =>
+                              `${option.name || ""} (${option.code || ""})`
+                            }
+                            options={expenseList}
+                            placeholder="Select expense account"
+                            onChange={(selectedItems) => {
+                              if (selectedItems?.length) {
+                                const expense = selectedItems[0];
+                                updateItemField(item._id, {
+                                  item_name: expense.name || "",
+                                  head: expense.code || "",
+                                  account_type: expense.account_type || "",
+                                  description:
+                                    item.description || expense.name || "",
+                                });
+                              } else {
+                                updateItemField(item._id, {
+                                  item_name: "",
+                                  head: "",
+                                  account_type: "",
+                                });
+                              }
+                            }}
+                            selected={
+                              item.item_name && item.head
+                                ? expenseList.filter(
+                                    (expense) =>
+                                      expense.code === item.head &&
+                                      expense.name === item.item_name,
+                                  )
+                                : []
+                            }
+                            clearButton
+                            allowNew={false}
+                            renderMenuItemChildren={(option) => (
+                              <div className="flex w-full items-center justify-between py-1">
+                                <span className="text-sm">{option.name}</span>
+                                <span className="text-xs text-slate-500">
+                                  {option.code}
+                                </span>
+                              </div>
+                            )}
+                            inputProps={{
+                              className:
+                                "w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none placeholder:text-slate-400 focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]",
+                            }}
+                            positionFixed
+                          />
+                          {item.head && (
+                            <div className="mt-1.5 text-[11px] text-slate-500">
+                              Code: {item.head}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 align-top">
+                          <input
+                            type="text"
+                            value={item.description || ""}
+                            placeholder="Enter description..."
+                            onChange={(e) =>
+                              updateItemField(item._id, {
+                                description: e.target.value,
+                              })
+                            }
+                            className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                          />
+                        </td>
+                        <td className="min-w-[8.5rem] w-36 px-3 py-3 text-right align-top">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            placeholder="0.00"
+                            value={item.quantity || ""}
+                            onChange={(e) => {
+                              const withoutCommas = e.target.value.replace(
+                                /,/g,
+                                "",
+                              );
+                              const sanitized =
+                                handleNumericInput(withoutCommas);
+                              const parts = sanitized.split(".");
+                              const numericValue =
+                                parts.length > 2
+                                  ? parts[0] + "." + parts.slice(1).join("")
+                                  : sanitized;
+                              updateItemField(item._id, {
+                                quantity: formatNumberWithCommas(numericValue),
+                              });
+                            }}
+                            className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-right text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                          />
+                        </td>
+                        <td className="min-w-[10rem] w-44 px-3 py-3 text-right align-top">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            placeholder="0.00"
+                            value={item.cost || ""}
+                            onChange={(e) => {
+                              const withoutCommas = e.target.value.replace(
+                                /,/g,
+                                "",
+                              );
+                              const sanitized =
+                                handleNumericInput(withoutCommas);
+                              const parts = sanitized.split(".");
+                              const numericValue =
+                                parts.length > 2
+                                  ? parts[0] + "." + parts.slice(1).join("")
+                                  : sanitized;
+                              updateItemField(item._id, {
+                                cost: formatNumberWithCommas(numericValue),
+                              });
+                            }}
+                            className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-right text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                          />
+                        </td>
+                        <td className="px-2 py-3 text-center align-top">
+                          <button
+                            type="button"
+                            title="Click to toggle taxable"
+                            onClick={() =>
+                              updateItemField(item._id, {
+                                taxable:
+                                  item.taxable === "Taxable"
+                                    ? "Not Taxable"
+                                    : "Taxable",
+                              })
+                            }
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                              item.taxable === "Taxable"
+                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            }`}
+                          >
+                            {item.taxable === "Taxable"
+                              ? "Taxable"
+                              : "Not taxable"}
+                          </button>
+                        </td>
+                        <td className="px-2 py-3 text-right align-top text-sm font-medium tabular-nums text-slate-900">
+                          {formatNumber(item.total)}
+                        </td>
+                        <td className="px-1 py-3 text-center align-top">
+                          <button
+                            type="button"
+                            onClick={() => removeItem(item._id)}
+                            className="rounded-md p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+                            aria-label="Remove row"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>,
+                    );
+                  });
+
+                  for (let i = 0; i < emptyRowCount; i++) {
+                    rows.push(
+                      <tr
+                        key={`empty-expense-row-${i}`}
+                        className="bg-white hover:bg-slate-50/80"
+                      >
+                        <td className="px-3 py-3 align-top">
+                          <Typeahead
+                            key={`empty-expense-${i}-${items.length}`}
+                            id={`empty-expense-typeahead-${i}`}
+                            labelKey={(option) =>
+                              `${option.name || ""} (${option.code || ""})`
+                            }
+                            options={expenseList}
+                            placeholder="Select expense account"
+                            onChange={(selected) => {
+                              if (selected?.length) {
+                                addExpenseRow(selected[0]);
+                                setExtraEmptyRows((n) => n - 1);
+                              }
+                            }}
+                            selected={[]}
+                            renderMenuItemChildren={(option) => (
+                              <div className="flex w-full items-center justify-between py-1">
+                                <span className="text-sm">{option.name}</span>
+                                <span className="text-xs text-slate-500">
+                                  {option.code}
+                                </span>
+                              </div>
+                            )}
+                            inputProps={{
+                              className:
+                                "w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none placeholder:text-slate-400 focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]",
+                            }}
+                            positionFixed
+                          />
+                        </td>
+                        <td className="px-3 py-3 align-top text-sm text-slate-400">
+                          —
+                        </td>
+                        <td className="min-w-[8.5rem] w-36 px-3 py-3 text-right align-top text-sm text-slate-400">
+                          1.00
+                        </td>
+                        <td className="min-w-[10rem] w-44 px-3 py-3 text-right align-top text-sm text-slate-400">
+                          0.00
+                        </td>
+                        <td className="px-2 py-3 text-center align-top text-sm text-slate-400">
+                          —
+                        </td>
+                        <td className="px-2 py-3 text-right align-top text-sm text-slate-400">
+                          0.00
+                        </td>
+                        <td className="px-1 py-3 text-center align-top">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (emptyRowCount <= 1) return;
+                              setExtraEmptyRows((n) => n - 1);
+                            }}
+                            disabled={emptyRowCount <= 1}
+                            className="rounded-md p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+                            aria-label="Remove empty row"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>,
+                    );
+                  }
+
+                  return rows;
+                })()}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 px-6 pt-3">
+            <button
+              type="button"
+              onClick={() => setExtraEmptyRows((n) => n + 1)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-[var(--aa-accent)] hover:bg-slate-50"
+            >
+              <Plus size={15} />
+              Add New Row
+            </button>
+            {items.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setItems([]);
+                  setExtraEmptyRows(0);
+                }}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Clear all lines
+              </button>
             )}
           </div>
 
+          <div className="mt-4 flex justify-end px-6 pb-4">
+            <div className="w-full max-w-xs space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-slate-600">Sub Total</span>
+                <span className="tabular-nums text-slate-900">
+                  {formatNumber(calculateTotal())}
+                </span>
+              </div>
+              {selectedTaxes.length > 0 && calculateTotalTax() > 0 && (
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-slate-600">Tax</span>
+                  <span className="tabular-nums text-slate-900">
+                    {formatNumber(calculateTotalTax())}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-3">
+                <span className="text-base font-semibold text-slate-900">
+                  Total (NGN)
+                </span>
+                <span className="text-lg font-bold tabular-nums text-slate-900">
+                  {formatNumber(getTotal())}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Tax Selection Section */}
-          <div className="px-6 py-3 bg-blue-50 border-b border-blue-200">
+          <div className="border-t border-slate-200 px-6 py-3">
             <div className="mb-2">
               <div className="flex items-center justify-between mb-1">
                 <button
                   type="button"
                   onClick={() => setShowTaxSelection(!showTaxSelection)}
-                  className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors"
+                  className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-[var(--aa-accent)] transition-colors"
                 >
                   <span>Apply Taxes</span>
                   {showTaxSelection ? (
@@ -1876,110 +1944,48 @@ export default function OperatingExpenses() {
                     <ChevronLeft className="w-4 h-4 -rotate-90" />
                   )}
                 </button>
-                {activeBusiness?.vat_policy && (
-                  <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-medium">
-                    VAT:{" "}
-                    {activeBusiness.vat_policy === "vat_inclusive"
-                      ? "Inclusive"
-                      : activeBusiness.vat_policy === "vat_exclusive"
-                        ? "Exclusive"
-                        : "All"}
-                  </span>
-                )}
               </div>
-              {showTaxSelection && filteredTaxes.length > 0 && (
-                <p className="text-xs text-blue-600 mb-2">
-                  Both inclusive and exclusive taxes are available. Select taxes
-                  to apply.
-                </p>
-              )}
-
-              {/* Tax Selection Toggles - Show when expanded */}
               {showTaxSelection && (
                 <>
                   {filteredTaxes.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-3 mt-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
                       {filteredTaxes.map((tax) => {
                         const isSelected = selectedTaxes.some(
                           (t) => t.id === tax.id,
                         );
-                        // Determine if tax is inclusive or exclusive
                         const isInclusive =
                           tax.inclusive_type === "inclusive" ||
                           (tax.inclusive_type === undefined &&
                             tax.tax_type === "inclusive");
-                        const isExclusive =
-                          tax.inclusive_type === "exclusive" ||
-                          (tax.inclusive_type === undefined &&
-                            tax.tax_type === "exclusive");
                         return (
-                          <div
+                          <button
                             key={tax.id}
-                            className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors"
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedTaxes((prev) =>
+                                  prev.filter((t) => t.id !== tax.id),
+                                );
+                              } else {
+                                setSelectedTaxes((prev) => [...prev, tax]);
+                              }
+                            }}
+                            className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                              isSelected
+                                ? "border-[var(--aa-accent)] bg-[var(--aa-accent)]/10 text-[var(--aa-accent)]"
+                                : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                            }`}
                           >
-                            <div className="relative">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedTaxes((prev) => [...prev, tax]);
-                                  } else {
-                                    setSelectedTaxes((prev) =>
-                                      prev.filter((t) => t.id !== tax.id),
-                                    );
-                                  }
-                                }}
-                                className="sr-only"
-                              />
-                              <div
-                                onClick={() => {
-                                  if (isSelected) {
-                                    setSelectedTaxes((prev) =>
-                                      prev.filter((t) => t.id !== tax.id),
-                                    );
-                                  } else {
-                                    setSelectedTaxes((prev) => [...prev, tax]);
-                                  }
-                                }}
-                                className={`w-10 h-5 rounded-full transition-colors cursor-pointer ${
-                                  isSelected ? "bg-green-600" : "bg-gray-300"
-                                }`}
-                              >
-                                <div
-                                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
-                                    isSelected ? "transform translate-x-5" : ""
-                                  }`}
-                                ></div>
-                              </div>
-                            </div>
-                            <label className="text-xs font-semibold text-gray-700 cursor-pointer whitespace-nowrap">
-                              {tax.description} ({tax.rate}%)
-                              {(isInclusive || isExclusive) && (
-                                <span
-                                  className={`ml-1.5 px-1.5 py-0.5 rounded text-xs font-medium ${
-                                    isInclusive
-                                      ? "bg-blue-100 text-blue-700"
-                                      : "bg-green-100 text-green-700"
-                                  }`}
-                                >
-                                  {isInclusive ? "Inc" : "Exc"}
-                                </span>
-                              )}
-                            </label>
-                          </div>
+                            {tax.description} ({tax.rate}%)
+                            {isInclusive ? " · Inc" : " · Exc"}
+                          </button>
                         );
                       })}
                     </div>
                   )}
                   {filteredTaxes.length === 0 && !loadingTaxes && (
-                    <p className="text-xs text-gray-500 mt-2">
+                    <p className="mt-2 text-xs text-slate-500">
                       No taxes available for purchase category
-                    </p>
-                  )}
-                  {loadingTaxes && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      Loading taxes...
                     </p>
                   )}
                 </>
@@ -1987,65 +1993,48 @@ export default function OperatingExpenses() {
             </div>
           </div>
 
-          {/* Action Footer */}
-          <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-5 border-t-2 border-slate-200">
-            <div className="flex items-center justify-between">
-              {/* Summary Info */}
-              <div className="flex items-center gap-4">
-                <div className="text-sm text-slate-600">
-                  <span className="font-medium">Items:</span> {items.length}
-                </div>
-                {items.length > 0 && (
-                  <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-slate-200">
-                    <span className="text-sm font-medium text-slate-700">
-                      Total Amount:
-                    </span>
-                    <span className="text-lg font-bold text-green-600">
-                      ₦{formatNumber(getTotal())}
-                    </span>
-                  </div>
+          <div className="sticky bottom-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-[#f7f7f8] px-6 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleDirectPurchase(false)}
+                disabled={loading || items.length === 0}
+                className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {loading ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white" />
+                    Processing...
+                  </>
+                ) : (
+                  "Save Bill"
                 )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => navigate(-1)}
-                  disabled={loading}
-                  className="px-3 py-2.5 text-sm bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-300 rounded-lg transition-all flex items-center gap-2 font-semibold shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <X className="w-4 h-4" />
-                  <span className="hidden lg:inline">Cancel</span>
-                </button>
-                <button
-                  onClick={() => handleDirectPurchase(true)}
-                  disabled={loading}
-                  className="px-3 py-2.5 text-sm bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Printer className="w-4 h-4" />
-                  {loading ? (
-                    <>
-                      <span className="animate-pulse">Processing...</span>
-                    </>
-                  ) : (
-                    <span className="hidden lg:inline">Save and print</span>
-                  )}
-                </button>
-                <button
-                  onClick={() => handleDirectPurchase(false)}
-                  disabled={loading}
-                  className="px-3 py-2.5 text-sm bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Save className="w-4 h-4" />
-                  {loading ? (
-                    <>
-                      <span className="animate-pulse">Processing...</span>
-                    </>
-                  ) : (
-                    <span className="hidden lg:inline">Save Expense</span>
-                  )}
-                </button>
-              </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDirectPurchase(true)}
+                disabled={loading || items.length === 0}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save and print
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoading(false);
+                  isSavingRef.current = false;
+                  navigate(-1);
+                }}
+                className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+              >
+                Cancel
+              </button>
+            </div>
+            <div className="text-right text-sm">
+              <span className="text-slate-500">Total </span>
+              <span className="font-bold tabular-nums text-slate-900">
+                ₦{formatNumber(getTotal())}
+              </span>
             </div>
           </div>
         </div>
