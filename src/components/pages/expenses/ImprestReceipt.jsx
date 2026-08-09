@@ -455,7 +455,7 @@ export default function ImprestReceipt() {
               <div className="overflow-x-auto rounded-sm border border-slate-300">
                 <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                    <tr className="bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white">
                       <th className="w-10 border-r border-blue-500 px-1.5 py-1.5 text-center text-xs font-semibold">
                         #
                       </th>

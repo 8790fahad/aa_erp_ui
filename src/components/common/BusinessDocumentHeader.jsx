@@ -31,6 +31,7 @@ function companyBits(business = {}) {
 /**
  * Shared HTML document/print header used across receipts, invoices, and reports.
  * Style is chosen in Settings → Header Settings (`document_header_style`: text | logo).
+ * Color comes from CSS `--aa-doc-header` (defaults to `--aa-navy`) so one token controls the system.
  */
 export default function BusinessDocumentHeader({
   business,
@@ -63,7 +64,7 @@ export default function BusinessDocumentHeader({
 
   return (
     <div
-      className={`bg-[var(--aa-navy,#0f2744)] text-white ${pad} mb-1.5 shadow-md print:bg-[var(--aa-navy,#0f2744)] ${className}`}
+      className={`bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white ${pad} mb-1.5 shadow-md print:bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] ${className}`}
     >
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div className={`flex-1 min-w-0 ${showLogo ? "flex gap-3 items-start" : ""}`}>

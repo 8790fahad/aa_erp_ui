@@ -15,8 +15,9 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 
-const APP_COLOR = "#4267B2";
+const APP_COLOR = "#1a2d5e"; // matches --aa-doc-header / --aa-navy
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function fmtQty(v, dp = 2) {
@@ -327,47 +328,14 @@ export default function OperatorProductionReport() {
 
           {data && (
             <div ref={reportRef} className="print-content space-y-0">
-
-              {/* ── Report header band ── */}
-              <div style={{ backgroundColor: APP_COLOR }} className="text-white px-5 py-4 shadow-md">
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-baseline gap-2">
-                      <h1 className="text-xl font-bold uppercase tracking-wide">{businessName}</h1>
-                      {(business.rc || business.registration_number) && (
-                        <span className="text-blue-200 text-sm font-semibold">
-                          RC. {business.rc || business.registration_number}
-                        </span>
-                      )}
-                    </div>
-                    {business.description && (
-                      <p className="text-blue-100 text-sm italic mt-0.5">{business.description}</p>
-                    )}
-                    {(business.business_address || business.address) && (
-                      <p className="text-blue-100 text-xs mt-1">{business.business_address || business.address}</p>
-                    )}
-                    {(business.business_phone || business.phone || business.business_email || business.email) && (
-                      <p className="text-blue-100 text-xs mt-0.5">
-                        {(business.business_phone || business.phone) && <>Tel: {business.business_phone || business.phone}</>}
-                        {(business.business_email || business.email) && <> | Email: {business.business_email || business.email}</>}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-2 text-right shrink-0">
-                    <div className="bg-white/20 rounded px-4 py-2 min-w-[260px] text-center">
-                      <p className="text-blue-200 text-[10px] uppercase tracking-widest font-bold">
-                        Operator Production Report
-                      </p>
-                      <p className="text-base font-bold text-white mt-0.5">
-                        {moment(fromDate).format("DD MMM YYYY")} – {moment(toDate).format("DD MMM YYYY")}
-                      </p>
-                    </div>
-                    <p className="text-blue-200 text-[11px]">
-                      Generated: {moment().format("ddd, DD MMM YYYY hh:mm A")}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <BusinessDocumentHeader
+                business={business}
+                title="OPERATOR PRODUCTION REPORT"
+                numberLabel={`${moment(fromDate).format("DD MMM YYYY")} – ${moment(toDate).format("DD MMM YYYY")}`}
+                date={new Date()}
+                dateFormat="ddd, DD MMM YYYY hh:mm A"
+                className="mb-0"
+              />
 
               {/* ── 6-card Summary ── */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-px bg-gray-200 border border-gray-200 mb-0">

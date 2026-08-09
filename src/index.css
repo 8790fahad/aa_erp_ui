@@ -24,6 +24,8 @@
   --aa-topbar-height: 3.5rem;
   --aa-navy: #1a2d5e;
   --aa-navy-hover: #243a73;
+  /* Shared document/report print header (BusinessDocumentHeader) */
+  --aa-doc-header: var(--aa-navy);
   --aa-accent: #2c7be5;
   --aa-accent-hover: #1a68d1;
   --aa-sidebar-bg: #f3f4f7;

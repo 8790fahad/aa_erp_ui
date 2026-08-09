@@ -139,7 +139,7 @@ const OperatingExpenseBillHTML = ({ billData, company, invoiceRef }) => {
         <div className="mb-1">
           <table className="w-full border-collapse border border-gray-300 overflow-hidden shadow-sm">
             <thead>
-              <tr className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+              <tr className="bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white">
                 <th className="border-r border-blue-500 px-2 py-1.5 text-center text-xs font-semibold">
                   #
                 </th>
@@ -470,7 +470,7 @@ const OperatingExpenseBillPdf = () => {
           <div className="h-8 w-20 bg-gray-200 animate-pulse rounded" />
         </div>
         <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
-          <div className="bg-blue-900 p-4 space-y-3">
+          <div className="bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] p-4 space-y-3">
             <div className="h-8 bg-blue-800/50 animate-pulse rounded w-3/4" />
             <div className="h-4 bg-blue-800/50 animate-pulse rounded w-1/2" />
           </div>

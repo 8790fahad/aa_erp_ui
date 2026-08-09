@@ -321,10 +321,33 @@ const DebtorsReport = () => {
             </thead>
             <tbody>
               {rows.map((row, idx) => (
-                <tr key={row.id} className="border-b">
+                <tr
+                  key={row.id}
+                  className="border-b hover:bg-slate-50 cursor-pointer"
+                  onClick={() => {
+                    if (!row.customerId || row.customerId === "-") return;
+                    const params = new URLSearchParams({
+                      customerNo: String(row.customerId),
+                      customerName: String(row.customerName || ""),
+                    });
+                    if (asAtDate) params.set("asAt", asAtDate);
+                    navigate(
+                      `/app/reports/accounting-reports/receivable-ledger-aging?${params.toString()}`,
+                    );
+                  }}
+                  title="Open individual receivable ledger"
+                >
                   <td className="px-3 py-2 text-sm">{idx + 1}</td>
-                  <td className="px-3 py-2 text-sm">{row.customerId}</td>
-                  <td className="px-3 py-2 text-sm">{row.customerName}</td>
+                  <td className="px-3 py-2 text-sm">
+                    <span className="text-blue-600 hover:text-blue-800 hover:underline">
+                      {row.customerId}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-sm">
+                    <span className="text-blue-600 hover:text-blue-800 hover:underline">
+                      {row.customerName}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-sm text-right font-semibold">
                     {renderNairaDrCr(row.balance)}
                   </td>

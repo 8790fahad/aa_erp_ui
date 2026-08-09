@@ -71,7 +71,7 @@ const CompanyHeader = ({
 
 const styles = StyleSheet.create({
   modernHeader: {
-    backgroundColor: "#1a2d5e",
+    backgroundColor: "#1a2d5e", // --aa-doc-header / --aa-navy
     padding: 10,
     color: "white",
     marginBottom: 0,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, X, Printer, Download } from "lucide-react";
 import { useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { _postApi, _fetchApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,10 +16,12 @@ import ExcelJS from "exceljs";
 import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
 import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
+import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 
 const ReceivableLedger = () => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const facilityId = activeBusiness?.id;
 
   const [fromDate, setFromDate] = useState("");
@@ -30,18 +32,26 @@ const ReceivableLedger = () => {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const printRef = useRef(null);
+  const preselectedAppliedRef = useRef(false);
 
-  // Initialize dates - default to current month-to-date
+  // Initialize dates - default to current month-to-date (or asAt from query)
   useEffect(() => {
+    const asAt = searchParams.get("asAt") || searchParams.get("toDate");
+    const fromQ = searchParams.get("fromDate");
     const today = new Date();
     const todayStr = today.toISOString().split("T")[0];
+    const end = asAt || todayStr;
+    const endDate = new Date(end);
+    const yearStart = Number.isNaN(endDate.getTime())
+      ? new Date(today.getFullYear(), 0, 1).toISOString().split("T")[0]
+      : new Date(endDate.getFullYear(), 0, 1).toISOString().split("T")[0];
     const firstDayStr = new Date(today.getFullYear(), today.getMonth(), 1)
       .toISOString()
       .split("T")[0];
 
-    setFromDate(firstDayStr);
-    setToDate(todayStr);
-  }, []);
+    setFromDate(fromQ || (asAt ? yearStart : firstDayStr));
+    setToDate(end);
+  }, [searchParams]);
 
   // Load customers using getCustomersList from customer.js controller
   useEffect(() => {
@@ -52,14 +62,13 @@ const ReceivableLedger = () => {
       (response) => {
         if (response.success) {
           const customersList = response.results || response.data || [];
-          setCustomers(
-            customersList.map((customer) => ({
-              id: customer.customerNo || customer.id,
-              name: customer.fullname || customer.name,
-              customerNo: customer.customerNo,
-              address: customer.address || "",
-            })),
-          );
+          const mapped = customersList.map((customer) => ({
+            id: customer.customerNo || customer.id,
+            name: customer.fullname || customer.name,
+            customerNo: customer.customerNo,
+            address: customer.address || "",
+          }));
+          setCustomers(mapped);
         }
       },
       (err) => {
@@ -67,6 +76,33 @@ const ReceivableLedger = () => {
       },
     );
   }, [facilityId]);
+
+  // Preselect customer from Receivable Report drill-down
+  useEffect(() => {
+    if (preselectedAppliedRef.current || !customers.length) return;
+    const customerNo =
+      searchParams.get("customerNo") || searchParams.get("customerId");
+    if (!customerNo) return;
+    const match = customers.find(
+      (c) =>
+        String(c.customerNo || c.id).toLowerCase() ===
+        String(customerNo).toLowerCase(),
+    );
+    if (match) {
+      setSelectedCustomer(match);
+      preselectedAppliedRef.current = true;
+    } else {
+      // Customer may not be in list yet — still seed selection from query
+      const name = searchParams.get("customerName") || customerNo;
+      setSelectedCustomer({
+        id: customerNo,
+        name,
+        customerNo,
+        address: "",
+      });
+      preselectedAppliedRef.current = true;
+    }
+  }, [customers, searchParams]);
 
   const fetchReceivableLedgerData = useCallback(async () => {
     if (!facilityId || !fromDate || !toDate || !selectedCustomer) {
@@ -593,63 +629,19 @@ const ReceivableLedger = () => {
             ledgerData &&
             hasReceivableReportBody && (
               <div ref={printRef} className="print-content space-y-4 ">
-                <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-800 text-white p-2 mb-1 shadow-md rounded-t-sm">
-                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex flex-wrap items-baseline gap-2">
-                        <h1 className="text-2xl font-bold uppercase tracking-wide">
-                          {activeBusiness?.business_name ||
-                            activeBusiness?.name ||
-                            "Business Name"}
-                        </h1>
-                        {(activeBusiness?.rc ||
-                          activeBusiness?.registration_number) && (
-                          <span className="text-blue-100 text-sm font-semibold">
-                            RC.{" "}
-                            {activeBusiness?.rc ||
-                              activeBusiness?.registration_number}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-blue-100 text-sm italic mt-1">
-                        {activeBusiness?.description ||
-                          "Committed to excellence in every delivery"}
-                      </p>
-                      <p className="text-blue-100 text-xs mt-2">
-                        {activeBusiness?.business_address ||
-                          activeBusiness?.address ||
-                          "Address not available"}
-                      </p>
-                      <p className="text-blue-100 text-xs mt-1">
-                        Tel:{" "}
-                        {activeBusiness?.business_phone ||
-                          activeBusiness?.phone ||
-                          "N/A"}{" "}
-                        | Fax: {activeBusiness?.fax || "N/A"} | Email:{" "}
-                        {activeBusiness?.business_email ||
-                          activeBusiness?.email ||
-                          "N/A"}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-stretch gap-3 text-right">
-                      <div className="bg-white/20 rounded-sm px-2 py-2 text-center">
-                        <p className="text-gray-200 text-xs uppercase tracking-[0.2em] font-semibold">
-                          RECEIVABLE LEDGER
-                        </p>
-                        <p className="text-lg font-bold">
-                          Period: {formatDate(fromDate)} - {formatDate(toDate)}
-                        </p>
-                      </div>
-                      <p className="text-gray-200 text-sm font-semibold">
-                        From: {formatDate(fromDate)} {"-"} {formatDate(toDate)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <BusinessDocumentHeader
+                  business={activeBusiness}
+                  title="RECEIVABLE LEDGER"
+                  numberLabel={`Period: ${formatDate(fromDate)} - ${formatDate(toDate)}`}
+                  extraLine={`From: ${formatDate(fromDate)} - ${formatDate(toDate)}`}
+                  date={new Date()}
+                  dateFormat="dddd, DD MMMM YYYY hh:mm A [GMT]Z"
+                  className="mb-0"
+                />
 
                 <div className="grid gap-1 ">
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-2 rounded-sm">
-                    <h6 className="text-xs font-semibold text-blue-800 mb-1 uppercase tracking-wide">
+                  <div className="bg-slate-50 border border-slate-200 p-2 rounded-sm">
+                    <h6 className="text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wide">
                       Customer
                     </h6>
                     <div className="text-xs text-gray-700 leading-relaxed">
@@ -658,7 +650,7 @@ const ReceivableLedger = () => {
                           <span className="font-semibold text-gray-600">
                             Name:
                           </span>{" "}
-                          <span className="text-gray-900">
+                          <span className="text-blue-600 hover:text-blue-800 hover:underline font-medium">
                             {selectedCustomer?.name || "N/A"}
                           </span>{" "}
                           {selectedCustomer?.customerNo && (
@@ -667,7 +659,7 @@ const ReceivableLedger = () => {
                               <span className="font-semibold text-gray-600">
                                 Code:
                               </span>{" "}
-                              <span className="text-gray-900">
+                              <span className="text-blue-600 hover:text-blue-800 hover:underline font-medium">
                                 {selectedCustomer.customerNo}
                               </span>
                             </>

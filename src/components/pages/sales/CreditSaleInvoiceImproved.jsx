@@ -976,7 +976,7 @@ export default function CreditSaleInvoice({
           <div className="mb-1">
             <table className="w-full border-collapse border border-gray-300  overflow-hidden shadow-sm">
               <thead>
-                <tr className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                <tr className="bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white">
                   <th className="border-r border-blue-500 px-2 py-1.5 text-center text-xs font-semibold">
                     #
                   </th>
