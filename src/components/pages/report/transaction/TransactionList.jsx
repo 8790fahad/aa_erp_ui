@@ -5,7 +5,7 @@ import { Plus, FileText, Eye, Printer, Edit, Filter } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { _fetchApi } from '@/redux/actions/api';
 import { toast } from 'sonner';
-import { formatNumber1 } from '@/components/router/utilities';
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import moment from 'moment';
 
 const TransactionList = () => {

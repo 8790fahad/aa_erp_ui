@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { _postApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -59,7 +59,6 @@ export default function InventoryValuationReport() {
 
   const [asOfDate, setAsOfDate] = useState(moment().format("YYYY-MM-DD"));
   const [valuationMethod, setValuationMethod] = useState(businessMethod);
-  const [itemTypeFilter, setItemTypeFilter] = useState("raw"); // "raw" | "finished"
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -112,70 +111,13 @@ export default function InventoryValuationReport() {
       const headerFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2E8F0" } };
       const sectionFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
 
-      // ── Raw Materials sheet ──
-      const wsRaw = wb.addWorksheet("Raw Materials");
-      wsRaw.columns = [
-        { width: 32 }, { width: 14 }, { width: 12 }, { width: 14 },
-        { width: 14 }, { width: 16 }, { width: 18 }, { width: 20 },
-      ];
-      let r = 1;
-      wsRaw.mergeCells(r, 1, r, 8);
-      wsRaw.getCell(r, 1).value = businessName;
-      wsRaw.getCell(r, 1).font = { bold: true, size: 14 };
-      wsRaw.getCell(r, 1).alignment = { horizontal: "center" };
-      r++;
-      wsRaw.mergeCells(r, 1, r, 8);
-      wsRaw.getCell(r, 1).value = "INVENTORY VALUATION REPORT — RAW MATERIALS";
-      wsRaw.getCell(r, 1).font = { bold: true, size: 12 };
-      wsRaw.getCell(r, 1).alignment = { horizontal: "center" };
-      r++;
-      wsRaw.mergeCells(r, 1, r, 8);
-      wsRaw.getCell(r, 1).value = `As of ${moment(asOfDate).format("DD MMMM YYYY")}  |  Method: ${valuationMethod}`;
-      wsRaw.getCell(r, 1).alignment = { horizontal: "center" };
-      r += 2;
-
-      const rawHeaders = ["Item Name", "SKU", "Unit", "Qty on Hand", "Unit Cost (₦)", "Total Value (₦)", "Reorder Level", "Stock Status"];
-      rawHeaders.forEach((h, i) => {
-        const c = wsRaw.getCell(r, i + 1);
-        c.value = h;
-        c.font = { bold: true, color: { argb: "FFFFFFFF" } };
-        c.fill = sectionFill;
-        c.border = borderThin;
-        c.alignment = i >= 3 ? { horizontal: "right" } : { horizontal: "left" };
-      });
-      r++;
-
-      const rawItems = data.rawMaterials?.items || [];
-      for (const item of rawItems) {
-        wsRaw.getCell(r, 1).value = item.name || "";
-        wsRaw.getCell(r, 2).value = item.sku || "";
-        wsRaw.getCell(r, 3).value = item.unit || "";
-        wsRaw.getCell(r, 4).value = Number(item.stock_qty) || 0;
-        wsRaw.getCell(r, 5).value = Number(item.unit_cost) || 0;
-        wsRaw.getCell(r, 6).value = Number(item.total_value) || 0;
-        wsRaw.getCell(r, 7).value = Number(item.reorder_level) || 0;
-        wsRaw.getCell(r, 8).value = item.stock_status || "";
-        [5, 6].forEach((col) => { wsRaw.getCell(r, col).numFmt = "#,##0.00"; });
-        [4, 5, 6, 7].forEach((col) => { wsRaw.getCell(r, col).alignment = { horizontal: "right" }; });
-        for (let col = 1; col <= 8; col++) wsRaw.getCell(r, col).border = borderThin;
-        r++;
-      }
-      r++;
-      wsRaw.getCell(r, 5).value = "TOTAL";
-      wsRaw.getCell(r, 5).font = { bold: true };
-      wsRaw.getCell(r, 6).value = Number(data.rawMaterials?.totalValue) || 0;
-      wsRaw.getCell(r, 6).font = { bold: true };
-      wsRaw.getCell(r, 6).numFmt = "#,##0.00";
-      wsRaw.getCell(r, 6).alignment = { horizontal: "right" };
-      [5, 6].forEach((col) => { wsRaw.getCell(r, col).border = borderThin; wsRaw.getCell(r, col).fill = headerFill; });
-
       // ── Finished Goods sheet ──
       const wsFG = wb.addWorksheet("Finished Goods");
       wsFG.columns = [
         { width: 32 }, { width: 16 }, { width: 14 }, { width: 14 },
         { width: 16 }, { width: 20 }, { width: 14 },
       ];
-      r = 1;
+      let r = 1;
       wsFG.mergeCells(r, 1, r, 7);
       wsFG.getCell(r, 1).value = businessName;
       wsFG.getCell(r, 1).font = { bold: true, size: 14 };
@@ -245,11 +187,9 @@ export default function InventoryValuationReport() {
       r += 2;
 
       const summaryRows = [
-        ["Raw Materials", data.summary?.rawMaterialsTotal],
         ["Finished Goods", data.summary?.finishedGoodsTotal],
         ["TOTAL INVENTORY VALUE", data.summary?.totalInventoryValue],
         ["", ""],
-        ["Raw Materials Items", data.rawMaterials?.itemCount],
         ["Finished Goods Items", data.finishedGoods?.itemCount],
         ["Low Stock Alerts", data.summary?.lowStockItems],
       ];
@@ -315,17 +255,10 @@ export default function InventoryValuationReport() {
   }, [asOfDate]);
 
   // ── Render ────────────────────────────────────────────────────────────────
-  const summary = data?.summary || {};
   // Filter out zero-qty items before rendering
-  const rawItems = (data?.rawMaterials?.items || []).filter(
-    (item) => parseFloat(item.stock_qty) > 0
-  );
   const fgItems = (data?.finishedGoods?.items || []).filter(
     (item) => parseFloat(item.quantity) > 0
   );
-  // Both tables always visible; filter only hides one when a specific type is selected
-  const showRaw = itemTypeFilter !== "finished";
-  const showFinished = itemTypeFilter !== "raw";
 
   return (
     <>
@@ -356,9 +289,6 @@ export default function InventoryValuationReport() {
                 <div className="flex min-w-[11rem] flex-col gap-1">
                   <label className="text-sm font-semibold text-gray-700">
                     Valuation Method
-                    {business.inv_ev_m && (
-                      <span className="ml-1 text-xs text-gray-400 font-normal">(business default)</span>
-                    )}
                   </label>
                   <select
                     value={valuationMethod}
@@ -368,17 +298,6 @@ export default function InventoryValuationReport() {
                     <option value="FIFO">FIFO</option>
                     <option value="LIFO">LIFO</option>
                     <option value="AVCO">Weighted Average (AVCO)</option>
-                  </select>
-                </div>
-                <div className="flex min-w-[11rem] flex-col gap-1">
-                  <label className="text-sm font-semibold text-gray-700">Show</label>
-                  <select
-                    value={itemTypeFilter}
-                    onChange={(e) => setItemTypeFilter(e.target.value)}
-                    className="h-10 rounded border border-gray-300 bg-white px-3 text-sm"
-                  >
-                    <option value="raw">Raw Materials</option>
-                    <option value="finished">Finished Goods</option>
                   </select>
                 </div>
               </div>
@@ -463,58 +382,15 @@ export default function InventoryValuationReport() {
                 ))}
               </div> */}
 
-              {/* ── Raw Materials table ── */}
-              {showRaw && (
+              {/* ── Goods table ── */}
               <div className="bg-white border border-gray-300 rounded-sm overflow-hidden shadow-sm mb-4">
                 <div className="bg-gray-600 px-3 py-2">
                   <h2 className="text-sm font-bold text-white uppercase tracking-wide">
-                    Raw Materials — {data.rawMaterials?.itemCount ?? 0} items
-                  </h2>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm border-collapse">
-                    <thead className="bg-gray-100 border-b-2 border-gray-300">
-                      <tr>
-                        {["Item Name", "SKU", "Unit", "Qty on Hand", "Unit Cost (₦)", "Total Value (₦)"].map((h, i) => (
-                          <th key={h} className={`px-3 py-2 text-xs font-bold text-gray-700 uppercase border-r border-gray-200 ${i >= 3 ? "text-right" : "text-left"}`}>
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rawItems.length === 0 ? (
-                        <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400 text-sm">No raw materials found</td></tr>
-                      ) : rawItems.map((item, idx) => (
-                        <tr key={item.id ?? idx} className="border-b border-gray-100 hover:bg-gray-50/80">
-                          <td className="px-3 py-1.5 text-gray-900 border-r border-gray-100">{item.name}</td>
-                          <td className="px-3 py-1.5 text-gray-600 border-r border-gray-100 text-xs">{item.sku || "—"}</td>
-                          <td className="px-3 py-1.5 text-gray-600 border-r border-gray-100">{item.unit || "—"}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">{formatCell(item.stock_qty)}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">{formatCell(item.unit_cost)}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums font-semibold border-r border-gray-100">{formatCell(item.total_value)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-gray-50 border-t-2 border-gray-400">
-                      <tr>
-                        <td colSpan={5} className="px-3 py-2 font-bold text-gray-900 text-right border-r border-gray-200">Total Raw Materials</td>
-                        <td className="px-3 py-2 text-right font-bold tabular-nums text-gray-900 border-r border-gray-200">
-                          ₦{formatNumber1(data.rawMaterials?.totalValue || 0)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-              )}
-
-              {/* ── Finished Goods table ── */}
-              {showFinished && (
-              <div className="bg-white border border-gray-300 rounded-sm overflow-hidden shadow-sm mb-4">
-                <div className="bg-gray-600 px-3 py-2">
-                  <h2 className="text-sm font-bold text-white uppercase tracking-wide">
-                    Finished Goods — {data.finishedGoods?.itemCount ?? 0} items
+                    Finished Goods / Resalable — {fgItems.length} items
+                      {data.finishedGoods?.itemCount != null &&
+                      data.finishedGoods.itemCount !== fgItems.length
+                        ? ` (${data.finishedGoods.itemCount} total)`
+                        : ""}
                   </h2>
                 </div>
                 <div className="overflow-x-auto">
@@ -530,30 +406,29 @@ export default function InventoryValuationReport() {
                     </thead>
                     <tbody>
                       {fgItems.length === 0 ? (
-                        <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400 text-sm">No finished goods found</td></tr>
+                        <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400 text-sm">No goods found</td></tr>
                       ) : fgItems.map((item, idx) => (
                         <tr key={item.id ?? idx} className="border-b border-gray-100 hover:bg-gray-50/80">
                           <td className="px-3 py-1.5 text-gray-900 border-r border-gray-100">{item.product_name}</td>
                           <td className="px-3 py-1.5 text-gray-600 text-xs border-r border-gray-100">{item.batch_no || "—"}</td>
                           <td className="px-3 py-1.5 text-gray-600 border-r border-gray-100">{item.unit || "—"}</td>
                           <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">{formatCell(item.quantity)}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">{formatCell(item.cost_per_unit)}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums font-semibold border-r border-gray-100">{formatCell(item.total_value)}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">{formatNaira(item.cost_per_unit)}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums font-semibold border-r border-gray-100">{formatNaira(item.total_value)}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="bg-gray-50 border-t-2 border-gray-400">
                       <tr>
-                        <td colSpan={5} className="px-3 py-2 font-bold text-gray-900 text-right border-r border-gray-200">Total Finished Goods</td>
+                        <td colSpan={5} className="px-3 py-2 font-bold text-gray-900 text-right border-r border-gray-200">Total Goods</td>
                         <td className="px-3 py-2 text-right font-bold tabular-nums text-gray-900 border-r border-gray-200">
-                          ₦{formatNumber1(data.finishedGoods?.totalValue || 0)}
+                          {formatNaira(data.finishedGoods?.totalValue || 0)}
                         </td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
               </div>
-              )}
 
               {/* ── Grand total footer ── */}
               {/* <div className="bg-blue-900 text-white rounded-sm px-4 py-3 flex items-center justify-between">

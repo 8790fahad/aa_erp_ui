@@ -32,7 +32,7 @@ import {
 // import html2canvas from "html2canvas";
 // import { getNextYear } from "../getBudgetYear";
 import { Card, Container, Table } from "reactstrap/lib";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { useNavigate } from "react-router-dom";
 import { unflatten, unflattenBalance } from "@/utilities";
 import StructureTree from "../account/StructureTree";

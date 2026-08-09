@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { _fetchApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";

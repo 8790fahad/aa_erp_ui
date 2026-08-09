@@ -3,7 +3,7 @@ import { Loader2, X, FileSpreadsheet, FileDown, ChevronDown } from "lucide-react
 import { useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import { _postApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import moment from "moment";
 import { Button } from "@/components/ui/button";
 import {
@@ -331,11 +331,11 @@ export default function InventriaEquityChanges() {
                       </td>
                       {openingByAccount.map((value, idx) => (
                         <td key={`open-${idx}`} className="px-3 py-2 text-right tabular-nums">
-                          {formatNumber1(value)}
+                          {formatNaira(value)}
                         </td>
                       ))}
                       <td className="px-3 py-2 text-right tabular-nums font-semibold">
-                        {formatNumber1(sum(openingByAccount))}
+                        {formatNaira(sum(openingByAccount))}
                       </td>
                     </tr>
 
@@ -343,11 +343,11 @@ export default function InventriaEquityChanges() {
                       <td className="px-3 py-2 font-medium">Movement for the year</td>
                       {movementByAccount.map((value, idx) => (
                         <td key={`move-${idx}`} className="px-3 py-2 text-right tabular-nums">
-                          {formatNumber1(value)}
+                          {formatNaira(value)}
                         </td>
                       ))}
                       <td className="px-3 py-2 text-right tabular-nums font-semibold">
-                        {formatNumber1(sum(movementByAccount))}
+                        {formatNaira(sum(movementByAccount))}
                       </td>
                     </tr>
 
@@ -357,11 +357,11 @@ export default function InventriaEquityChanges() {
                       </td>
                       {closingByAccount.map((value, idx) => (
                         <td key={`close-${idx}`} className="px-3 py-2 text-right tabular-nums">
-                          {formatNumber1(value)}
+                          {formatNaira(value)}
                         </td>
                       ))}
                       <td className="px-3 py-2 text-right tabular-nums">
-                        {formatNumber1(sum(closingByAccount))}
+                        {formatNaira(sum(closingByAccount))}
                       </td>
                     </tr>
                   </tbody>

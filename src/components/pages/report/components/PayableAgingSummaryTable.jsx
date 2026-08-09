@@ -11,19 +11,19 @@ export default function PayableAgingSummaryTable({ rows, totals, formatCurrency 
               supplier
             </th>
             <th className="text-right text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
-              current
+              current (₦)
             </th>
             <th className="text-right text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
-              1-30 days
+              1-30 days (₦)
             </th>
             <th className="text-right text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
-              31-60 days
+              31-60 days (₦)
             </th>
             <th className="text-right text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
-              61+ days
+              61+ days (₦)
             </th>
             <th className="text-right text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
-              total
+              total (₦)
             </th>
           </tr>
         </thead>

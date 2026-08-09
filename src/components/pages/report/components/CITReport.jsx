@@ -10,7 +10,7 @@ import {
   Badge,
 } from "react-bootstrap";
 import { _postApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 
 const CITReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
   const [data, setData] = useState(null);
@@ -56,37 +56,37 @@ const CITReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
       ["Period", `${data.period.from} to ${data.period.to}`],
       ["", ""],
       ["COMPUTATION", "Amount (₦)"],
-      ["Gross Revenue", formatNumber1(data.computation.grossRevenue)],
+      ["Gross Revenue", formatNaira(data.computation.grossRevenue)],
       ["", ""],
       ["Allowable Deductions", ""],
       [
         "Operating Expenses",
-        formatNumber1(data.computation.allowableDeductions.operatingExpenses),
+        formatNaira(data.computation.allowableDeductions.operatingExpenses),
       ],
       [
         "Capital Allowances",
-        formatNumber1(data.computation.allowableDeductions.capitalAllowances),
+        formatNaira(data.computation.allowableDeductions.capitalAllowances),
       ],
       [
         "Total Allowable Deductions",
-        formatNumber1(data.computation.allowableDeductions.total),
+        formatNaira(data.computation.allowableDeductions.total),
       ],
       ["", ""],
-      ["Adjusted Profit", formatNumber1(data.computation.adjustedProfit)],
+      ["Adjusted Profit", formatNaira(data.computation.adjustedProfit)],
       ["", ""],
       ["CIT CALCULATION", ""],
       ["CIT Rate", data.computation.citCalculation.citRate],
       [
         "CIT on Profit",
-        formatNumber1(data.computation.citCalculation.citOnProfit),
+        formatNaira(data.computation.citCalculation.citOnProfit),
       ],
       [
         "Minimum Tax",
-        formatNumber1(data.computation.citCalculation.minimumTax),
+        formatNaira(data.computation.citCalculation.minimumTax),
       ],
       [
         "Final CIT Liability",
-        formatNumber1(data.computation.citCalculation.finalCITLiability),
+        formatNaira(data.computation.citCalculation.finalCITLiability),
       ],
     ]
       .map((row) => row.join(","))
@@ -152,7 +152,7 @@ const CITReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                 <tr className="table-success">
                   <th>Gross Revenue</th>
                   <td className="text-end">
-                    {formatNumber1(data.computation.grossRevenue)}
+                    {formatNaira(data.computation.grossRevenue)}
                   </td>
                 </tr>
                 <tr>
@@ -164,7 +164,7 @@ const CITReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                   <td className="ps-4">Operating Expenses</td>
                   <td className="text-end">
                     (
-                    {formatNumber1(
+                    {formatNaira(
                       data.computation.allowableDeductions.operatingExpenses
                     )}
                     )
@@ -174,7 +174,7 @@ const CITReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                   <td className="ps-4">Capital Allowances</td>
                   <td className="text-end">
                     (
-                    {formatNumber1(
+                    {formatNaira(
                       data.computation.allowableDeductions.capitalAllowances
                     )}
                     )
@@ -183,14 +183,14 @@ const CITReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                 <tr className="table-warning">
                   <th>Total Allowable Deductions</th>
                   <td className="text-end">
-                    ({formatNumber1(data.computation.allowableDeductions.total)}
+                    ({formatNaira(data.computation.allowableDeductions.total)}
                     )
                   </td>
                 </tr>
                 <tr className="table-info">
                   <th>Adjusted Profit</th>
                   <td className="text-end">
-                    {formatNumber1(data.computation.adjustedProfit)}
+                    {formatNaira(data.computation.adjustedProfit)}
                   </td>
                 </tr>
               </tbody>
@@ -211,19 +211,19 @@ const CITReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                 <tr>
                   <th>CIT on Profit</th>
                   <td className="text-end">
-                    {formatNumber1(data.computation.citCalculation.citOnProfit)}
+                    {formatNaira(data.computation.citCalculation.citOnProfit)}
                   </td>
                 </tr>
                 <tr>
                   <th>Minimum Tax (1% of gross turnover)</th>
                   <td className="text-end">
-                    {formatNumber1(data.computation.citCalculation.minimumTax)}
+                    {formatNaira(data.computation.citCalculation.minimumTax)}
                   </td>
                 </tr>
                 <tr className="table-danger">
                   <th>Final CIT Liability (Higher of CIT or Minimum Tax)</th>
                   <td className="text-end">
-                    {formatNumber1(
+                    {formatNaira(
                       data.computation.citCalculation.finalCITLiability
                     )}
                   </td>
@@ -247,7 +247,7 @@ const CITReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                   <tr key={index}>
                     <td>{deduction.account_category}</td>
                     <td className="text-end">
-                      {formatNumber1(deduction.amount)}
+                      {formatNaira(deduction.amount)}
                     </td>
                   </tr>
                 ))}
@@ -256,7 +256,7 @@ const CITReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                 <tr>
                   <th>Total Operating Expenses</th>
                   <th className="text-end">
-                    {formatNumber1(
+                    {formatNaira(
                       data.computation.allowableDeductions.operatingExpenses
                     )}
                   </th>
@@ -283,10 +283,10 @@ const CITReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                   <tr key={index}>
                     <td>{allowance.asset_type}</td>
                     <td className="text-end">
-                      {formatNumber1(allowance.cost)}
+                      {formatNaira(allowance.cost)}
                     </td>
                     <td className="text-end">
-                      {formatNumber1(allowance.annual_allowance)}
+                      {formatNaira(allowance.annual_allowance)}
                     </td>
                   </tr>
                 ))}
@@ -295,12 +295,12 @@ const CITReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                 <tr>
                   <th>Total Capital Allowances</th>
                   <th className="text-end">
-                    {formatNumber1(
+                    {formatNaira(
                       data.computation.allowableDeductions.capitalAllowances
                     )}
                   </th>
                   <th className="text-end">
-                    {formatNumber1(
+                    {formatNaira(
                       data.computation.allowableDeductions.capitalAllowances
                     )}
                   </th>
@@ -316,19 +316,19 @@ const CITReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                   <h6>Tax Summary</h6>
                   <p>
                     <strong>Gross Revenue:</strong> ₦
-                    {formatNumber1(data.computation.grossRevenue)}
+                    {formatNaira(data.computation.grossRevenue)}
                   </p>
                   <p>
                     <strong>Total Deductions:</strong> ₦
-                    {formatNumber1(data.computation.allowableDeductions.total)}
+                    {formatNaira(data.computation.allowableDeductions.total)}
                   </p>
                   <p>
                     <strong>Adjusted Profit:</strong> ₦
-                    {formatNumber1(data.computation.adjustedProfit)}
+                    {formatNaira(data.computation.adjustedProfit)}
                   </p>
                   <p>
                     <strong>CIT Liability:</strong> ₦
-                    {formatNumber1(
+                    {formatNaira(
                       data.computation.citCalculation.finalCITLiability
                     )}
                   </p>

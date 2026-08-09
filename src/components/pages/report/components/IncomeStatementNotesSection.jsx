@@ -1,6 +1,6 @@
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 
-const formatCurrency = (amount) => formatNumber1(amount);
+const formatCurrency = formatNaira;
 
 const formatDate = (dateString) => {
   if (!dateString) return "";

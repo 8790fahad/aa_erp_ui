@@ -4,7 +4,7 @@ import { Table } from "react-bootstrap";
 import { _fetchApi } from "@/redux/actions/api";
 import CustomCard from "@/common/Custom/CustomCard2";
 import { useLocation, useNavigate } from "react-router-dom";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 
 const LedgerSupliers = () => {
   const [trialBalanceData, setTrialBalanceData] = useState([]);

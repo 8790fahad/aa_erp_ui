@@ -46,6 +46,20 @@ export function formatNumber1(n = 0) {
   return formattedNumber;
 }
 
+/** Naira display for reports: ₦1,234.56 or (₦1,234.56) for negatives. */
+export function formatNaira(n = 0, options = {}) {
+  const { empty = "—", showZero = true } = options;
+  if (typeof n !== "number" && typeof n !== "string") {
+    return empty;
+  }
+  const v = parseFloat(n);
+  if (!Number.isFinite(v)) return empty;
+  if (!showZero && Math.abs(v) < 0.005) return empty;
+  const formatted = `₦${formatNumber1(Math.abs(v))}`;
+  if (v < 0) return `(${formatted})`;
+  return formatted;
+}
+
 export function formatNumber2(n = 0) {
   if (typeof n !== "number" && typeof n !== "string") {
     return "0";

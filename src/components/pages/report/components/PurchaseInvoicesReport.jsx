@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import { _fetchApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -203,7 +203,7 @@ export default function PurchaseInvoicesReport() {
                       {r.dueDate ? moment(r.dueDate).format("MMM D") : "-"}
                     </td>
                     <td className="py-3 px-3 text-right font-semibold">
-                      {formatNumber1(r.amount)}
+                      {formatNaira(r.amount)}
                     </td>
                   </tr>
                 ))}
@@ -212,7 +212,7 @@ export default function PurchaseInvoicesReport() {
                     <td className="py-4 px-6" colSpan={4}>
                       Total
                     </td>
-                    <td className="py-4 px-3 text-right">{formatNumber1(totalAmount)}</td>
+                    <td className="py-4 px-3 text-right">{formatNaira(totalAmount)}</td>
                   </tr>
                 )}
                 {rows.length === 0 && (

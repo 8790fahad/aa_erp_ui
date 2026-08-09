@@ -3,7 +3,7 @@ import { Table } from "react-bootstrap";
 import { _postApi } from "@/redux/actions/api";
 import CustomCard from "@/common/Custom/CustomCard2";
 import { useNavigate } from "react-router-dom";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 
 const Trailbalance = () => {
   const [trialBalanceData, setTrialBalanceData] = useState([]);

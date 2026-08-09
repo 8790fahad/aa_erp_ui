@@ -24,7 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import moment from "moment";
 import ExcelJS from "exceljs";
 import html2canvas from "html2canvas";
@@ -82,17 +82,11 @@ function formatReportDate(dateString) {
 }
 
 function formatCell(value) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return "—";
-  }
+  if (value === null || value === undefined || value === "") return "—";
   const v = Number(value);
-  if (Math.abs(v) < 0.005) {
-    return "—";
-  }
-  if (v < 0) {
-    return `(${formatNumber1(Math.abs(v))})`;
-  }
-  return formatNumber1(v);
+  if (!Number.isFinite(v)) return "—";
+  if (Math.abs(v) < 0.005) return "—";
+  return formatNaira(v);
 }
 
 function shouldHideTopLevelNatureGroup(row) {

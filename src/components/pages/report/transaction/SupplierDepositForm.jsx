@@ -9,7 +9,7 @@ import { formatNumber } from "@/utilities";
 import moment from "moment";
 // import SearchCustomerInput from "../../customer/components/SearchCustomerInput";
 import SearchSupplierInput from "../../purchase/SearchSuppliers";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import useQuery from "@/hooks/useQuery";
 import { getSuppliers } from "@/redux/actions/suppliers";

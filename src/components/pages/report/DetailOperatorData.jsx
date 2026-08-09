@@ -4,7 +4,7 @@ import CustomCard from "@/common/Custom/CustomCard2";
 import CustomTable from "@/common/Custom/CustomTable";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import Loading from "@/common/Custom/Loading";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { _postApi } from "@/redux/actions/api";
 
 import moment from "moment";

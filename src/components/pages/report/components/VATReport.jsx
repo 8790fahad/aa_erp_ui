@@ -10,7 +10,7 @@ import {
   Badge,
 } from "react-bootstrap";
 import { _postApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 
 const VATReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
   const [data, setData] = useState(null);
@@ -70,9 +70,9 @@ const VATReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
         txn.transaction_description,
         txn.reference_number,
         txn.payee,
-        formatNumber1(txn.gross_amount),
-        formatNumber1(txn.net_amount),
-        formatNumber1(txn.vat_amount),
+        formatNaira(txn.gross_amount),
+        formatNaira(txn.net_amount),
+        formatNaira(txn.vat_amount),
       ]),
       [
         "Total Input VAT",
@@ -81,7 +81,7 @@ const VATReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
         "",
         "",
         "",
-        formatNumber1(data.inputVAT.total),
+        formatNaira(data.inputVAT.total),
       ],
       ["", ""],
       ["OUTPUT VAT", ""],
@@ -99,9 +99,9 @@ const VATReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
         txn.transaction_description,
         txn.reference_number,
         txn.payee,
-        formatNumber1(txn.gross_amount),
-        formatNumber1(txn.net_amount),
-        formatNumber1(txn.vat_amount),
+        formatNaira(txn.gross_amount),
+        formatNaira(txn.net_amount),
+        formatNaira(txn.vat_amount),
       ]),
       [
         "Total Output VAT",
@@ -110,13 +110,13 @@ const VATReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
         "",
         "",
         "",
-        formatNumber1(data.outputVAT.total),
+        formatNaira(data.outputVAT.total),
       ],
       ["", ""],
       ["VAT SUMMARY", ""],
-      ["Total Input VAT", formatNumber1(data.summary.totalInputVAT)],
-      ["Total Output VAT", formatNumber1(data.summary.totalOutputVAT)],
-      ["Net VAT Payable/Refundable", formatNumber1(data.summary.netVATPayable)],
+      ["Total Input VAT", formatNaira(data.summary.totalInputVAT)],
+      ["Total Output VAT", formatNaira(data.summary.totalOutputVAT)],
+      ["Net VAT Payable/Refundable", formatNaira(data.summary.netVATPayable)],
       ["Status", data.summary.status],
     ]
       .map((row) => row.join(","))
@@ -198,13 +198,13 @@ const VATReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                       <td>{txn.reference_number}</td>
                       <td>{txn.payee}</td>
                       <td className="text-end">
-                        {formatNumber1(txn.gross_amount)}
+                        {formatNaira(txn.gross_amount)}
                       </td>
                       <td className="text-end">
-                        {formatNumber1(txn.net_amount)}
+                        {formatNaira(txn.net_amount)}
                       </td>
                       <td className="text-end text-success">
-                        {formatNumber1(txn.vat_amount)}
+                        {formatNaira(txn.vat_amount)}
                       </td>
                     </tr>
                   ))
@@ -220,7 +220,7 @@ const VATReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                 <tr>
                   <th colSpan="6">Total Input VAT</th>
                   <th className="text-end">
-                    {formatNumber1(data.inputVAT.total)}
+                    {formatNaira(data.inputVAT.total)}
                   </th>
                 </tr>
               </tfoot>
@@ -251,13 +251,13 @@ const VATReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                       <td>{txn.reference_number}</td>
                       <td>{txn.payee}</td>
                       <td className="text-end">
-                        {formatNumber1(txn.gross_amount)}
+                        {formatNaira(txn.gross_amount)}
                       </td>
                       <td className="text-end">
-                        {formatNumber1(txn.net_amount)}
+                        {formatNaira(txn.net_amount)}
                       </td>
                       <td className="text-end text-danger">
-                        {formatNumber1(txn.vat_amount)}
+                        {formatNaira(txn.vat_amount)}
                       </td>
                     </tr>
                   ))
@@ -273,7 +273,7 @@ const VATReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                 <tr>
                   <th colSpan="6">Total Output VAT</th>
                   <th className="text-end">
-                    {formatNumber1(data.outputVAT.total)}
+                    {formatNaira(data.outputVAT.total)}
                   </th>
                 </tr>
               </tfoot>
@@ -288,13 +288,13 @@ const VATReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                 <tr>
                   <th>Total Input VAT</th>
                   <td className="text-end text-success">
-                    {formatNumber1(data.summary.totalInputVAT)}
+                    {formatNaira(data.summary.totalInputVAT)}
                   </td>
                 </tr>
                 <tr>
                   <th>Total Output VAT</th>
                   <td className="text-end text-danger">
-                    {formatNumber1(data.summary.totalOutputVAT)}
+                    {formatNaira(data.summary.totalOutputVAT)}
                   </td>
                 </tr>
                 <tr className="table-warning">
@@ -306,7 +306,7 @@ const VATReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                         : "text-success"
                     }`}
                   >
-                    {formatNumber1(data.summary.netVATPayable)}
+                    {formatNaira(data.summary.netVATPayable)}
                   </td>
                 </tr>
                 <tr>
@@ -345,7 +345,7 @@ const VATReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                       <td>{account.account_code}</td>
                       <td>{account.account_name}</td>
                       <td className="text-end">
-                        {formatNumber1(account.balance)}
+                        {formatNaira(account.balance)}
                       </td>
                     </tr>
                   ))}
@@ -361,15 +361,15 @@ const VATReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                   <h6>VAT Summary</h6>
                   <p>
                     <strong>Input VAT:</strong> ₦
-                    {formatNumber1(data.summary.totalInputVAT)}
+                    {formatNaira(data.summary.totalInputVAT)}
                   </p>
                   <p>
                     <strong>Output VAT:</strong> ₦
-                    {formatNumber1(data.summary.totalOutputVAT)}
+                    {formatNaira(data.summary.totalOutputVAT)}
                   </p>
                   <p>
                     <strong>Net VAT:</strong> ₦
-                    {formatNumber1(data.summary.netVATPayable)}
+                    {formatNaira(data.summary.netVATPayable)}
                   </p>
                   <p>
                     <strong>Status:</strong> {data.summary.status}

@@ -3,7 +3,7 @@ import { ChevronDown, FileDown, FileSpreadsheet, Loader2, X } from "lucide-react
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { _fetchApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,7 +40,7 @@ export default function ReceivableAgingReport() {
     setAsAtDate(today);
   }, []);
 
-  const formatCurrency = (amount) => formatNumber1(amount);
+  const formatCurrency = formatNaira;
 
   const fetchAllOutstandingInvoices = useCallback(() => {
     if (!facilityId) {

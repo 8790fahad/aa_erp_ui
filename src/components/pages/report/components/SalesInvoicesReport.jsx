@@ -9,7 +9,7 @@ import {
 import { useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import { _fetchApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -473,13 +473,13 @@ export default function SalesInvoicesReport() {
                       {r.dueDate ? moment(r.dueDate).format("MMM D") : "-"}
                     </td>
                     <td className="py-3 px-3 text-right">
-                      {formatNumber1(r.amount)}
+                      {formatNaira(r.amount)}
                     </td>
                     <td className="py-3 px-3 text-right">
-                      {formatNumber1(r.paid)}
+                      {formatNaira(r.paid)}
                     </td>
                     <td className="py-3 px-3 text-right font-semibold">
-                      {formatNumber1(r.balance)}
+                      {formatNaira(r.balance)}
                     </td>
                     <td className="py-3 px-3 text-center">
                       <span
@@ -498,13 +498,13 @@ export default function SalesInvoicesReport() {
                       Total
                     </td>
                     <td className="py-4 px-3 text-right">
-                      {formatNumber1(totals.amount)}
+                      {formatNaira(totals.amount)}
                     </td>
                     <td className="py-4 px-3 text-right">
-                      {formatNumber1(totals.paid)}
+                      {formatNaira(totals.paid)}
                     </td>
                     <td className="py-4 px-3 text-right">
-                      {formatNumber1(totals.balance)}
+                      {formatNaira(totals.balance)}
                     </td>
                     <td className="py-4 px-3" />
                   </tr>
@@ -645,7 +645,7 @@ function ProgressRow({ label, amount, percent, barClass }) {
         />
       </div>
       <p className="text-2xl font-semibold text-gray-900 whitespace-nowrap leading-none">
-        ₦{formatNumber1(amount)} · {percent}%
+        {formatNaira(amount)} · {percent}%
       </p>
     </div>
   );

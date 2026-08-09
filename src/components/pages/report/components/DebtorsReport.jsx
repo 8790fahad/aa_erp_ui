@@ -315,7 +315,7 @@ const DebtorsReport = () => {
                   customer name
                 </th>
                 <th className="text-right text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
-                  balance
+                  Balance (₦)
                 </th>
               </tr>
             </thead>

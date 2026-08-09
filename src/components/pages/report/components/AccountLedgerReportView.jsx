@@ -40,7 +40,7 @@ import {
 import { toast } from "sonner";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 import { _fetchApi, _postApi, _deleteApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import ExcelJS from "exceljs";
 import { useReactToPrint } from "react-to-print";
 import moment from "moment";
@@ -561,7 +561,7 @@ export default function AccountLedgerReportView({
     });
   };
 
-  const formatCurrency = (amount) => formatNumber1(amount);
+  const formatCurrency = formatNaira;
 
   const netDrCr = (debit, credit) => {
     const dr = parseFloat(debit || 0);

@@ -10,7 +10,7 @@ import {
   Badge,
 } from "react-bootstrap";
 import { _postApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 
 const TaxSummaryReport = ({
   facilityId,
@@ -67,11 +67,11 @@ const TaxSummaryReport = ({
         account.account_code,
         account.account_name,
         account.account_category,
-        formatNumber1(account.balance),
+        formatNaira(account.balance),
       ]),
       ["", ""],
       ["TAX SUMMARY", ""],
-      ["Total Tax Liability", formatNumber1(data.summary.totalTaxLiability)],
+      ["Total Tax Liability", formatNaira(data.summary.totalTaxLiability)],
       ["Number of Tax Accounts", data.summary.accountCount],
     ]
       .map((row) => row.join(","))
@@ -178,7 +178,7 @@ const TaxSummaryReport = ({
                             : "text-success"
                         }`}
                       >
-                        {formatNumber1(account.balance)}
+                        {formatNaira(account.balance)}
                       </td>
                     </tr>
                   ))
@@ -194,7 +194,7 @@ const TaxSummaryReport = ({
                 <tr>
                   <th colSpan="4">Total Tax Liability</th>
                   <th className="text-end">
-                    {formatNumber1(data.summary.totalTaxLiability)}
+                    {formatNaira(data.summary.totalTaxLiability)}
                   </th>
                 </tr>
               </tfoot>
@@ -219,7 +219,7 @@ const TaxSummaryReport = ({
                 <Card className="text-center h-100">
                   <Card.Body>
                     <h3 className="text-success">
-                      ₦{formatNumber1(data.summary.totalTaxLiability)}
+                      {formatNaira(data.summary.totalTaxLiability)}
                     </h3>
                     <p className="mb-0">Total Tax Liability</p>
                   </Card.Body>
@@ -326,11 +326,11 @@ const TaxSummaryReport = ({
                         </p>
                         <p>
                           <strong>Total Balance:</strong> ₦
-                          {formatNumber1(categoryTotal)}
+                          {formatNaira(categoryTotal)}
                         </p>
                         <p>
                           <strong>Average Balance:</strong> ₦
-                          {formatNumber1(
+                          {formatNaira(
                             categoryAccounts.length > 0
                               ? categoryTotal / categoryAccounts.length
                               : 0
@@ -355,11 +355,11 @@ const TaxSummaryReport = ({
                   </p>
                   <p>
                     <strong>Total Tax Liability:</strong> ₦
-                    {formatNumber1(data.summary.totalTaxLiability)}
+                    {formatNaira(data.summary.totalTaxLiability)}
                   </p>
                   <p>
                     <strong>Average per Account:</strong> ₦
-                    {formatNumber1(
+                    {formatNaira(
                       data.summary.accountCount > 0
                         ? data.summary.totalTaxLiability /
                             data.summary.accountCount

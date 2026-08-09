@@ -6,7 +6,7 @@ import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { toast } from "sonner";
 import moment from "moment";
 import SearchCustomerInput from "../../customer/components/SearchCustomerInput";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import useQuery from "@/hooks/useQuery";
 import { getCustomers } from "@/redux/actions/customer";

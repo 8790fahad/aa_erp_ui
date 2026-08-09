@@ -10,7 +10,7 @@ import {
 import { useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import { _postApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import moment from "moment";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -115,9 +115,7 @@ const InventriaGeneralLedger = () => {
     setExpandedAccounts((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const formatCurrency = (amount) => {
-    return formatNumber1(amount);
-  };
+  const formatCurrency = formatNaira;
 
   const formatDate = (dateString) => {
     if (!dateString) return "";

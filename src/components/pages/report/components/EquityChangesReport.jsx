@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Table, Card, Row, Col, Alert, Spinner, Button } from "react-bootstrap";
 import { _postApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 
 const EquityChangesReport = ({
   facilityId,

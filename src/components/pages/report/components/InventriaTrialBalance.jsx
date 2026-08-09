@@ -6,11 +6,12 @@ import {
   FileDown,
   ChevronDown,
   Printer,
+  Settings,
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import { _postApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +20,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { toast } from "sonner";
 import ExcelJS from "exceljs";
 import html2canvas from "html2canvas";
@@ -132,9 +138,7 @@ const InventriaTrialBalance = () => {
     }
   }, [asOfDate, facilityId, fetchTrialBalanceData]);
 
-  const formatCurrency = (amount) => {
-    return formatNumber1(amount);
-  };
+  const formatCurrency = formatNaira;
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
@@ -465,28 +469,42 @@ const InventriaTrialBalance = () => {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              </div>
-              <div className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2">
-                <p className="text-xs font-semibold text-gray-700 mb-2">
-                  Margins (inches)
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {(["top", "bottom", "left", "right"]).map((side) => (
-                    <label key={side} className="text-[11px] text-gray-600">
-                      <span className="capitalize block mb-0.5">{side}</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.1"
-                        value={printMargins[side]}
-                        onChange={(e) =>
-                          handlePrintMarginChange(side, e.target.value)
-                        }
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                      />
-                    </label>
-                  ))}
-                </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 border-gray-300"
+                    title="Print margins"
+                    aria-label="Print margins"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-72 p-3">
+                  <p className="text-xs font-semibold text-gray-700 mb-2">
+                    Margins (inches)
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["top", "bottom", "left", "right"]).map((side) => (
+                      <label key={side} className="text-[11px] text-gray-600">
+                        <span className="capitalize block mb-0.5">{side}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={printMargins[side]}
+                          onChange={(e) =>
+                            handlePrintMarginChange(side, e.target.value)
+                          }
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
               </div>
             </div>
           </div>

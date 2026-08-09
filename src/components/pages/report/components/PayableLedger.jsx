@@ -3,7 +3,7 @@ import { Loader2, X, Printer, Download } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { _postApi, _fetchApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -108,9 +108,7 @@ const PayableLedger = () => {
     }
   }, [fromDate, toDate, facilityId, selectedSupplier, fetchPayableLedgerData]);
 
-  const formatCurrency = (amount) => {
-    return formatNumber1(amount);
-  };
+  const formatCurrency = formatNaira;
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
@@ -628,10 +626,7 @@ const PayableLedger = () => {
                                 : "text-gray-900"
                             }`}
                           >
-                            ₦
-                            {formatNumber1(
-                              Math.abs(ledgerData?.finalBalance || 0),
-                            )}
+                            {formatCurrency(ledgerData?.finalBalance || 0)}
                           </span>
                         </div>
                       </div>
@@ -654,13 +649,13 @@ const PayableLedger = () => {
                             Description
                           </th>
                           <th className="px-4 py-3 text-right text-xs font-bold text-white uppercase border-r border-gray-500">
-                            Debit
+                            Debit (₦)
                           </th>
                           <th className="px-4 py-3 text-right text-xs font-bold text-white uppercase border-r border-gray-500">
-                            Credit
+                            Credit (₦)
                           </th>
                           <th className="px-4 py-3 text-right text-xs font-bold text-white uppercase bg-gray-700">
-                            Balance
+                            Balance (₦)
                           </th>
                         </tr>
                       </thead>

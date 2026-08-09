@@ -37,7 +37,7 @@ import { Button } from "@/components/ui/button";
 import { useSelector } from "react-redux";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { toast } from "sonner";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 
 const methods_of_payment = [
   { value: "cash", label: "Cash" },

@@ -10,7 +10,7 @@ import {
   Badge,
 } from "react-bootstrap";
 import { _postApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 
 const GeneralLedgerReport = ({ facilityId, asOfDate, loading, setLoading }) => {
   const [data, setData] = useState(null);

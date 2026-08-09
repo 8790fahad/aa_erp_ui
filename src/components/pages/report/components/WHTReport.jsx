@@ -10,7 +10,7 @@ import {
   Badge,
 } from "react-bootstrap";
 import { _postApi } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 
 const WHTReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
   const [data, setData] = useState(null);
@@ -71,16 +71,16 @@ const WHTReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
         txn.transaction_description,
         txn.reference_number,
         txn.payee,
-        formatNumber1(txn.gross_payment),
+        formatNaira(txn.gross_payment),
         txn.wht_rate,
-        formatNumber1(txn.wht_amount),
-        formatNumber1(txn.net_payment),
+        formatNaira(txn.wht_amount),
+        formatNaira(txn.net_payment),
       ]),
       ["", ""],
       ["WHT SUMMARY", ""],
-      ["Total Gross Payments", formatNumber1(data.summary.totalGrossPayments)],
-      ["Total WHT Deductions", formatNumber1(data.summary.totalWHTDeductions)],
-      ["Total Net Payments", formatNumber1(data.summary.totalNetPayments)],
+      ["Total Gross Payments", formatNaira(data.summary.totalGrossPayments)],
+      ["Total WHT Deductions", formatNaira(data.summary.totalWHTDeductions)],
+      ["Total Net Payments", formatNaira(data.summary.totalNetPayments)],
       ["Average WHT Rate", data.summary.averageWHTRate],
     ]
       .map((row) => row.join(","))
@@ -176,7 +176,7 @@ const WHTReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                       <td>{txn.reference_number}</td>
                       <td>{txn.payee}</td>
                       <td className="text-end">
-                        {formatNumber1(txn.gross_payment)}
+                        {formatNaira(txn.gross_payment)}
                       </td>
                       <td className="text-center">
                         <Badge bg={getWHTBadgeVariant(txn.wht_rate)}>
@@ -184,10 +184,10 @@ const WHTReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                         </Badge>
                       </td>
                       <td className="text-end text-danger">
-                        {formatNumber1(txn.wht_amount)}
+                        {formatNaira(txn.wht_amount)}
                       </td>
                       <td className="text-end text-success">
-                        {formatNumber1(txn.net_payment)}
+                        {formatNaira(txn.net_payment)}
                       </td>
                     </tr>
                   ))
@@ -220,11 +220,11 @@ const WHTReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                       </p>
                       <p>
                         <strong>Total WHT:</strong> ₦
-                        {formatNumber1(rateData.total)}
+                        {formatNaira(rateData.total)}
                       </p>
                       <p>
                         <strong>Average per Transaction:</strong> ₦
-                        {formatNumber1(rateData.total / rateData.count)}
+                        {formatNaira(rateData.total / rateData.count)}
                       </p>
                     </Card.Body>
                   </Card>
@@ -241,19 +241,19 @@ const WHTReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                 <tr>
                   <th>Total Gross Payments</th>
                   <td className="text-end">
-                    {formatNumber1(data.summary.totalGrossPayments)}
+                    {formatNaira(data.summary.totalGrossPayments)}
                   </td>
                 </tr>
                 <tr>
                   <th>Total WHT Deductions</th>
                   <td className="text-end text-danger">
-                    {formatNumber1(data.summary.totalWHTDeductions)}
+                    {formatNaira(data.summary.totalWHTDeductions)}
                   </td>
                 </tr>
                 <tr>
                   <th>Total Net Payments</th>
                   <td className="text-end text-success">
-                    {formatNumber1(data.summary.totalNetPayments)}
+                    {formatNaira(data.summary.totalNetPayments)}
                   </td>
                 </tr>
                 <tr className="table-info">
@@ -271,15 +271,15 @@ const WHTReport = ({ facilityId, fromDate, toDate, loading, setLoading }) => {
                   <h6>WHT Summary</h6>
                   <p>
                     <strong>Total Gross Payments:</strong> ₦
-                    {formatNumber1(data.summary.totalGrossPayments)}
+                    {formatNaira(data.summary.totalGrossPayments)}
                   </p>
                   <p>
                     <strong>Total WHT Deductions:</strong> ₦
-                    {formatNumber1(data.summary.totalWHTDeductions)}
+                    {formatNaira(data.summary.totalWHTDeductions)}
                   </p>
                   <p>
                     <strong>Total Net Payments:</strong> ₦
-                    {formatNumber1(data.summary.totalNetPayments)}
+                    {formatNaira(data.summary.totalNetPayments)}
                   </p>
                   <p>
                     <strong>Average WHT Rate:</strong>{" "}

@@ -3,7 +3,7 @@ import { Table } from "react-bootstrap";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import CustomCard from "@/common/Custom/CustomCard2";
 import { useLocation } from "react-router-dom";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 
 const SupplierIndividualLedger = () => {
   const [trialBalanceData, setTrialBalanceData] = useState([]);

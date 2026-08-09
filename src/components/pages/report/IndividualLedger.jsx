@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Table } from "react-bootstrap";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { _postApi } from "@/redux/actions/api";
 import CustomCard from "@/common/Custom/CustomCard2";
 import { useLocation, useNavigate } from "react-router-dom";

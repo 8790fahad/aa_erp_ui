@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, FileText, Download, TrendingUp, Package, DollarSign, BarChart3, Receipt } from "lucide-react";
 import { apiURL } from "@/redux/actions/api";
-import { formatNumber1 } from "@/components/router/utilities";
+import { formatNumber1, formatNaira } from "@/components/router/utilities";
 
 const ProductionReports = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
