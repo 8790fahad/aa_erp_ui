@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, Badge, Button, Col, Input, Label, Row } from "reactstrap";
+import { Alert, Button, Col, Input, Label, Row } from "reactstrap";
 import { useSelector } from "react-redux";
 import { FaEdit, FaEye } from "react-icons/fa";
 import moment from "moment";
@@ -279,11 +279,12 @@ function MemoReviewal() {
         memo_id: item.memo_id,
         date: moment().format("YYYY-MM-DD"),
         user_id: user.id,
+        facilityId: activeBusiness.id,
       },
       (res) => {
         if (res.success) {
-          setItemList(res.results);
-          const serverFiles = res.attachments.map((doc) => ({
+          setItemList(res.results || []);
+          const serverFiles = (res.attachments || []).map((doc) => ({
             name: doc.original_name,
             type: doc.mime_type,
             size: doc.file_size,
@@ -291,10 +292,12 @@ function MemoReviewal() {
             fromServer: true,
           }));
           setFiles(serverFiles);
+        } else {
+          toast.error(res.message || "Could not load memo items");
         }
       },
       (err) => {
-        toast.error("Error Occurred");
+        toast.error(err?.message || "Error Occurred");
       }
     );
   };
@@ -361,9 +364,15 @@ function MemoReviewal() {
       custom: true,
       component: (item) => (
         <div className="d-flex justify-content-center align-items-center">
-          <Badge color={item.status === "pending" ? "primary" : "danger"}>
+          <span
+            className={`inline-flex rounded-md px-2.5 py-1 text-xs font-medium capitalize ${
+              item.status === "pending"
+                ? "bg-[var(--aa-navy,#0f2744)] text-white"
+                : "bg-red-600 text-white"
+            }`}
+          >
             {item.status}
-          </Badge>
+          </span>
         </div>
       ),
     },
@@ -372,14 +381,14 @@ function MemoReviewal() {
       custom: true,
       component: (item) => (
         <div className="text-center">
-          <CustomButton
-            color="success"
-            size={"sm"}
-            className="m-1"
-            handleSubmit={() => viewList(item)}
+          <button
+            type="button"
+            className="m-1 inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--aa-navy,#0f2744)] text-white hover:bg-[var(--aa-navy-hover,#243a73)]"
+            onClick={() => viewList(item)}
+            aria-label="View memo"
           >
-            <FaEye size="20" />
-          </CustomButton>
+            <FaEye size={16} />
+          </button>
         </div>
       ),
     },
@@ -392,7 +401,7 @@ function MemoReviewal() {
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
             <div>
               <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-                <FileText className="h-5 w-5 text-[var(--aa-accent)]" />
+                <FileText className="h-5 w-5 text-[var(--aa-navy,#0f2744)]" />
                 Initiate Memo
               </h1>
               <p className="mt-0.5 text-xs text-slate-500">
@@ -407,7 +416,7 @@ function MemoReviewal() {
                 placeholder="Search by warehouse or memo ID…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-9 w-56 rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                className="h-9 w-56 rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-[var(--aa-navy,#0f2744)] focus:ring-1 focus:ring-[var(--aa-navy,#0f2744)]"
               />
             </div>
           </div>

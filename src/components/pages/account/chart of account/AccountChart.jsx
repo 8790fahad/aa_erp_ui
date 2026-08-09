@@ -60,7 +60,9 @@ import StructureTree from "../StructureTree";
 import { AccountChart3D } from "../3d";
 
 function natureLabel(a) {
-  const nature = (a?.accountNature || a?.account_nature || "").toString().trim();
+  const nature = (a?.accountNature || a?.account_nature || "")
+    .toString()
+    .trim();
   if (nature === "ASSET") return "Assets";
   if (nature === "LIABILITY") return "Liabilities";
   if (nature === "EQUITY") return "Equity";
@@ -86,9 +88,8 @@ function mapAccountsFor3D(list = []) {
         name: a.description || a.category || id,
         type: natureLabel(a),
         balance:
-          parseFloat(
-            a.balance ?? a.opening_balance ?? a.openingBalance ?? 0,
-          ) || 0,
+          parseFloat(a.balance ?? a.opening_balance ?? a.openingBalance ?? 0) ||
+          0,
       };
     })
     .filter(Boolean);
@@ -164,9 +165,7 @@ export default function AccountChart() {
           const flat = Array.isArray(resp.flat) ? resp.flat : [];
           const treeFromApi = Array.isArray(resp.results) ? resp.results : [];
           const tree =
-            treeFromApi.length > 0
-              ? treeFromApi
-              : buildTreeFromFlat(flat);
+            treeFromApi.length > 0 ? treeFromApi : buildTreeFromFlat(flat);
           setAccounts(tree);
           if (flat.length > 0) {
             setFlatAccounts(flat);
@@ -209,8 +208,7 @@ export default function AccountChart() {
       fsSection: form.fsSection || form.fs_section || "balance_sheet",
       reportingBehavior:
         form.reportingBehavior || form.reporting_behavior || "fixed",
-      alternateNature:
-        form.alternateNature || form.alternate_nature || null,
+      alternateNature: form.alternateNature || form.alternate_nature || null,
       accountRole: form.accountRole || form.account_role || "general",
       plLine: form.plLine || form.pl_line || null,
       display: form.display,
@@ -361,7 +359,9 @@ export default function AccountChart() {
     }
     const params = new URLSearchParams();
     params.set("accounts", validCodes.join(","));
-    navigate(`/app/reports/accounting-reports/custom-reports?${params.toString()}`);
+    navigate(
+      `/app/reports/accounting-reports/custom-reports?${params.toString()}`,
+    );
   };
 
   const handleRunReportForSelected = () => {
@@ -377,9 +377,12 @@ export default function AccountChart() {
     const allCodes = new Set(
       list.map((a) => String(a.code || a.head || "").trim()).filter(Boolean),
     );
-    const exportAll = allCodes.size > 0 && selectedAccounts.size >= allCodes.size;
+    const exportAll =
+      allCodes.size > 0 && selectedAccounts.size >= allCodes.size;
     const byCode = new Map(
-      list.map((a) => [String(a.code || a.head || "").trim(), a]).filter(([c]) => !!c),
+      list
+        .map((a) => [String(a.code || a.head || "").trim(), a])
+        .filter(([c]) => !!c),
     );
     const depthMemo = new Map();
     const getDepth = (code, seen = new Set()) => {
@@ -389,7 +392,9 @@ export default function AccountChart() {
       seen.add(code);
       const row = byCode.get(code);
       if (!row) return 0;
-      const parent = String(row.parent_code || row.parentCode || row.subhead || "").trim();
+      const parent = String(
+        row.parent_code || row.parentCode || row.subhead || "",
+      ).trim();
       if (!parent || parent === "0" || !byCode.has(parent)) {
         depthMemo.set(code, 0);
         return 0;
@@ -406,7 +411,9 @@ export default function AccountChart() {
       })
       .map((a) => {
         const code = String(a.code || a.head || "").trim();
-        const natureRaw = (a.accountNature || a.account_nature || "").toString().trim();
+        const natureRaw = (a.accountNature || a.account_nature || "")
+          .toString()
+          .trim();
         const nature =
           natureRaw === "ASSET"
             ? "Assets"
@@ -454,10 +461,17 @@ export default function AccountChart() {
 
     let row = 1;
     const title = worksheet.getCell(row, 1);
-    title.value = activeBusiness?.business_name || activeBusiness?.name || "Chart of Accounts";
+    title.value =
+      activeBusiness?.business_name ||
+      activeBusiness?.name ||
+      "Chart of Accounts";
     title.style = {
       font: { bold: true, size: 14, color: { argb: "FFFFFFFF" } },
-      fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A8A" } },
+      fill: {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF1E3A8A" },
+      },
       alignment: { horizontal: "center", vertical: "middle" },
     };
     worksheet.mergeCells(row, 1, row, 5);
@@ -472,14 +486,24 @@ export default function AccountChart() {
     worksheet.mergeCells(row, 1, row, 5);
     row += 2;
 
-    const headers = ["Code", "Account Description", "Account Type", "Nature", "Status"];
+    const headers = [
+      "Code",
+      "Account Description",
+      "Account Type",
+      "Nature",
+      "Status",
+    ];
     const headerRow = worksheet.getRow(row);
     headers.forEach((h, i) => {
       const cell = headerRow.getCell(i + 1);
       cell.value = h;
       cell.style = {
         font: { bold: true, color: { argb: "FFFFFFFF" } },
-        fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FF374151" } },
+        fill: {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF374151" },
+        },
         alignment: { horizontal: "center" },
         border: {
           top: { style: "thin" },
@@ -534,13 +558,23 @@ export default function AccountChart() {
       return;
     }
 
-    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "pt",
+      format: "a4",
+    });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const marginX = 26;
     const tableX = marginX;
     const tableWidth = pageWidth - marginX * 2;
-    const headers = ["Code", "Account Description", "Account Type", "Nature", "Status"];
+    const headers = [
+      "Code",
+      "Account Description",
+      "Account Type",
+      "Nature",
+      "Status",
+    ];
     const colWidths = [72, 182, 116, 92, 74];
     const rowH = 22;
     const headerBlue = [30, 58, 138];
@@ -549,12 +583,18 @@ export default function AccountChart() {
       doc.setFillColor(...headerBlue);
       doc.rect(tableX, y0, tableWidth, 78, "F");
 
-      const businessName =
-        String(activeBusiness?.business_name || activeBusiness?.name || "Business Name").toUpperCase();
+      const businessName = String(
+        activeBusiness?.business_name ||
+          activeBusiness?.name ||
+          "Business Name",
+      ).toUpperCase();
       const rc = activeBusiness?.rc || activeBusiness?.registration_number;
-      const description = activeBusiness?.description || "Manufacturers of Industrial Gases";
+      const description =
+        activeBusiness?.description || "Manufacturers of Industrial Gases";
       const address =
-        activeBusiness?.business_address || activeBusiness?.address || "Address not available";
+        activeBusiness?.business_address ||
+        activeBusiness?.address ||
+        "Address not available";
       const contact = `Tel: ${activeBusiness?.business_phone || activeBusiness?.phone || "N/A"} | Fax: ${activeBusiness?.fax || "N/A"} | Email: ${activeBusiness?.business_email || activeBusiness?.email || "N/A"}`;
       const rightW = 240;
       const rightX = tableX + tableWidth - rightW - 8;
@@ -582,11 +622,18 @@ export default function AccountChart() {
       doc.roundedRect(rightX, rightY, rightW, 46, 3, 3, "F");
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text("CHART OF ACCOUNT", rightX + rightW / 2, rightY + 18, { align: "center" });
-      doc.setFontSize(10);
-      doc.text(`Date: ${moment().format("DD/MM/YYYY")}`, rightX + rightW / 2, rightY + 35, {
+      doc.text("CHART OF ACCOUNT", rightX + rightW / 2, rightY + 18, {
         align: "center",
       });
+      doc.setFontSize(10);
+      doc.text(
+        `Date: ${moment().format("DD/MM/YYYY")}`,
+        rightX + rightW / 2,
+        rightY + 35,
+        {
+          align: "center",
+        },
+      );
       doc.setFontSize(8.5);
       doc.text(
         `Date: ${moment().format("dddd, DD MMMM YYYY hh:mm A [GMT]Z")}`,
@@ -600,7 +647,13 @@ export default function AccountChart() {
 
     const drawTableHeader = (y) => {
       doc.setFillColor(55, 65, 81);
-      doc.rect(tableX, y, colWidths.reduce((a, b) => a + b, 0), rowH, "F");
+      doc.rect(
+        tableX,
+        y,
+        colWidths.reduce((a, b) => a + b, 0),
+        rowH,
+        "F",
+      );
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
@@ -629,9 +682,21 @@ export default function AccountChart() {
     rows.forEach((r) => {
       const [fr, fg, fb] = depthFill(r._depth || 0);
       doc.setFillColor(fr, fg, fb);
-      doc.rect(tableX, y, colWidths.reduce((a, b) => a + b, 0), rowH, "F");
+      doc.rect(
+        tableX,
+        y,
+        colWidths.reduce((a, b) => a + b, 0),
+        rowH,
+        "F",
+      );
       doc.setDrawColor(229, 231, 235);
-      doc.rect(tableX, y, colWidths.reduce((a, b) => a + b, 0), rowH, "S");
+      doc.rect(
+        tableX,
+        y,
+        colWidths.reduce((a, b) => a + b, 0),
+        rowH,
+        "S",
+      );
 
       const vals = [
         r.Code,
@@ -669,18 +734,30 @@ export default function AccountChart() {
   }, [getAccounts]);
 
   const sourceAccounts =
-    flatAccounts.length > 0 ? flatAccounts : accounts.length > 0 ? accounts : [];
+    flatAccounts.length > 0
+      ? flatAccounts
+      : accounts.length > 0
+        ? accounts
+        : [];
 
   const filteredAccounts = sourceAccounts.filter((a) => {
-    const q = String(searchTerm || "").trim().toLowerCase();
+    const q = String(searchTerm || "")
+      .trim()
+      .toLowerCase();
     if (!q) return true;
     const code = String(a.code || a.head || "").toLowerCase();
     const description = String(a.description || "").toLowerCase();
     const type = String(a.type || "").toLowerCase();
     const subcategory = String(
-      a.sub_class_category || a.subClassCategory || a.detail || a.detail_type || "",
+      a.sub_class_category ||
+        a.subClassCategory ||
+        a.detail ||
+        a.detail_type ||
+        "",
     ).toLowerCase();
-    const nature = String(a.accountNature || a.account_nature || "").toLowerCase();
+    const nature = String(
+      a.accountNature || a.account_nature || "",
+    ).toLowerCase();
     return (
       code.includes(q) ||
       description.includes(q) ||
@@ -699,7 +776,8 @@ export default function AccountChart() {
             Chart of Accounts
           </h1>
           <p className="mt-0.5 text-xs text-slate-500">
-            Manage your financial structure for P&amp;L, Trial Balance, and Balance Sheet
+            Manage your financial structure for P&amp;L, Trial Balance, and
+            Balance Sheet
           </p>
         </div>
       </div>
@@ -845,9 +923,7 @@ export default function AccountChart() {
           <div className="p-3">
             <StructureTree
               treeData={normalizeTreeNodes(
-                accounts?.length
-                  ? accounts
-                  : buildTreeFromFlat(flatAccounts),
+                accounts?.length ? accounts : buildTreeFromFlat(flatAccounts),
               )}
               editNode={(node) => {
                 const code = node.code || node.head;
@@ -896,7 +972,9 @@ export default function AccountChart() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="max-w-md border-slate-200">
           <DialogHeader>
-            <DialogTitle className="text-slate-900">Permanent Delete</DialogTitle>
+            <DialogTitle className="text-slate-900">
+              Permanent Delete
+            </DialogTitle>
             <DialogDescription className="text-slate-500">
               Are you sure you want to delete {selectedAccounts.size} selected
               account(s)? This action cannot be undone. Only accounts with no
@@ -948,7 +1026,9 @@ const AccountList = ({
   onRunReport,
 }) => {
   const deriveNature = (a) => {
-    const nature = (a.accountNature || a.account_nature || "").toString().trim();
+    const nature = (a.accountNature || a.account_nature || "")
+      .toString()
+      .trim();
     if (nature) {
       if (nature === "ASSET") return "Assets";
       if (nature === "LIABILITY") return "Liabilities";
@@ -1039,7 +1119,10 @@ const AccountList = ({
 
     // In case some rows were neither linked nor marked as root.
     map.forEach((node) => {
-      if (!linked.has(node._code) && !roots.find((r) => r._code === node._code)) {
+      if (
+        !linked.has(node._code) &&
+        !roots.find((r) => r._code === node._code)
+      ) {
         roots.push(node);
       }
     });
@@ -1063,14 +1146,16 @@ const AccountList = ({
 
     const walk = (nodes, depth = 0) => {
       const out = [];
-      nodes.sort(depth === 0 ? sortByNatureTypeCode : sortByTypeCode).forEach((n) => {
-        out.push({
-          ...n,
-          _depth: depth,
-          _hasChildren: (n._children || []).length > 0,
+      nodes
+        .sort(depth === 0 ? sortByNatureTypeCode : sortByTypeCode)
+        .forEach((n) => {
+          out.push({
+            ...n,
+            _depth: depth,
+            _hasChildren: (n._children || []).length > 0,
+          });
+          if (n._children?.length) out.push(...walk(n._children, depth + 1));
         });
-        if (n._children?.length) out.push(...walk(n._children, depth + 1));
-      });
       return out;
     };
 
@@ -1087,7 +1172,9 @@ const AccountList = ({
     {
       title: (
         <Checkbox
-          checked={allCodes.length > 0 && selectedAccounts.size === allCodes.length}
+          checked={
+            allCodes.length > 0 && selectedAccounts.size === allCodes.length
+          }
           onCheckedChange={() => onToggleSelectAll(allCodes)}
           aria-label="Select all accounts"
         />
@@ -1111,36 +1198,44 @@ const AccountList = ({
       title: "Code",
       className: "text-left",
       custom: true,
-      component: (a) => (
+      component: (a) =>
         a._isGroupHeader ? (
           <div className="font-bold text-slate-900">{a._groupLabel}</div>
         ) : (
-          <span className={`${a._hasChildren ? "font-bold" : "font-medium"} text-slate-900`}>
+          <span
+            className={`${a._hasChildren ? "font-bold" : "font-medium"} text-slate-900`}
+          >
             {a.code || a.head || "NULL"}
           </span>
-        )
-      ),
+        ),
     },
     {
       title: "Account Description",
       className: "text-left",
       custom: true,
-      component: (a) => (
+      component: (a) =>
         a._isGroupHeader ? (
-          <span className="text-xs text-slate-500">{a._groupCount} account(s)</span>
-        ) : (
-          <span className={`${a._hasChildren ? "font-semibold" : "font-normal"} text-slate-900`}>
-            {a.description || <span className="text-gray-400 italic">NULL</span>}
+          <span className="text-xs text-slate-500">
+            {a._groupCount} account(s)
           </span>
-        )
-      ),
+        ) : (
+          <span
+            className={`${a._hasChildren ? "font-semibold" : "font-normal"} text-slate-900`}
+          >
+            {a.description || (
+              <span className="text-gray-400 italic">NULL</span>
+            )}
+          </span>
+        ),
     },
     {
       title: "Account Type",
       className: "text-left",
       custom: true,
       component: (a) =>
-        a._isGroupHeader ? null : <span className="text-slate-900">{a.type || "—"}</span>,
+        a._isGroupHeader ? null : (
+          <span className="text-slate-900">{a.type || "—"}</span>
+        ),
     },
     // {
     //   title: "Sub  Category",
@@ -1218,7 +1313,9 @@ const AccountList = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit?.(a)}>Edit</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onEdit?.(a)}>
+                Edit
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onRunReport(a.code || a.head)}>
                 Report
               </DropdownMenuItem>
@@ -1478,7 +1575,11 @@ export const AddAccountForm = ({ onSave, onCancel }) => {
 export const EditAccountForm = ({ account, onSave, onCancel }) => {
   const pick = (...keys) => {
     for (const k of keys) {
-      if (account?.[k] !== undefined && account?.[k] !== null && account?.[k] !== "") {
+      if (
+        account?.[k] !== undefined &&
+        account?.[k] !== null &&
+        account?.[k] !== ""
+      ) {
         return account[k];
       }
     }
@@ -1486,19 +1587,23 @@ export const EditAccountForm = ({ account, onSave, onCancel }) => {
   };
 
   const primaryNature = String(
-    pick("accountNature", "account_nature", "account_type") || ""
+    pick("accountNature", "account_nature", "account_type") || "",
   ).toUpperCase();
 
   const [form, setForm] = useState(() => {
     const fsRaw = String(pick("fsSection", "fs_section") || "").toLowerCase();
     let fsSection = "balance_sheet";
-    if (fsRaw === "pl" || fsRaw === "profit_and_loss") fsSection = "profit_and_loss";
+    if (fsRaw === "pl" || fsRaw === "profit_and_loss")
+      fsSection = "profit_and_loss";
     else if (fsRaw === "off_statement") fsSection = "off_statement";
-    else if (fsRaw === "bs" || fsRaw === "balance_sheet") fsSection = "balance_sheet";
+    else if (fsRaw === "bs" || fsRaw === "balance_sheet")
+      fsSection = "balance_sheet";
     else if (["REVENUE", "EXPENSE"].includes(primaryNature))
       fsSection = "profit_and_loss";
 
-    const nb = String(pick("normalBalance", "normal_balance") || "").toLowerCase();
+    const nb = String(
+      pick("normalBalance", "normal_balance") || "",
+    ).toLowerCase();
     return {
       ...account,
       level: account?.level ?? account?.Level ?? "",
@@ -1507,29 +1612,38 @@ export const EditAccountForm = ({ account, onSave, onCancel }) => {
       type: pick("type"),
       accountNature: primaryNature,
       description: pick("description"),
-      normalBalance: nb === "credit" ? "credit" : nb === "debit" ? "debit" : (
-        ["ASSET", "EXPENSE"].includes(primaryNature) ? "debit" : "credit"
-      ),
+      normalBalance:
+        nb === "credit"
+          ? "credit"
+          : nb === "debit"
+            ? "debit"
+            : ["ASSET", "EXPENSE"].includes(primaryNature)
+              ? "debit"
+              : "credit",
       fsSection,
       reportingBehavior:
         pick("reportingBehavior", "reporting_behavior") || "fixed",
       alternateNature: String(
-        pick("alternateNature", "alternate_nature") || ""
+        pick("alternateNature", "alternate_nature") || "",
       ).toUpperCase(),
       accountRole: pick("accountRole", "account_role") || "general",
       plLine: pick("plLine", "pl_line"),
       display:
         account?.display === undefined || account?.display === null
           ? true
-          : Boolean(account.display === true || account.display === 1 || account.display === "1"),
+          : Boolean(
+              account.display === true ||
+              account.display === 1 ||
+              account.display === "1",
+            ),
       isActive:
         account?.is_active === undefined && account?.isActive === undefined
           ? true
           : Boolean(
               account?.isActive === true ||
-                account?.isActive === 1 ||
-                account?.is_active === true ||
-                account?.is_active === 1
+              account?.isActive === 1 ||
+              account?.is_active === true ||
+              account?.is_active === 1,
             ),
     };
   });
@@ -1540,10 +1654,7 @@ export const EditAccountForm = ({ account, onSave, onCancel }) => {
       toast.error("Description is required");
       return;
     }
-    if (
-      form.reportingBehavior === "balance_switch" &&
-      !form.alternateNature
-    ) {
+    if (form.reportingBehavior === "balance_switch" && !form.alternateNature) {
       toast.error("Alternate nature is required for balance-switch accounts");
       return;
     }
@@ -1560,7 +1671,7 @@ export const EditAccountForm = ({ account, onSave, onCancel }) => {
           account?.account_nature ||
           account?.account_type,
       },
-      true
+      true,
     );
   };
 
@@ -1598,7 +1709,11 @@ export const EditAccountForm = ({ account, onSave, onCancel }) => {
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-white px-5 py-5 md:px-6">
             <div>
               <Label>Code</Label>
-              <Input value={form.head || form.code || ""} disabled className="mt-1 font-mono" />
+              <Input
+                value={form.head || form.code || ""}
+                disabled
+                className="mt-1 font-mono"
+              />
             </div>
             <div>
               <Label>Description</Label>
@@ -1650,7 +1765,7 @@ export const EditAccountForm = ({ account, onSave, onCancel }) => {
                         ...f,
                         accountNature,
                         normalBalance: ["ASSET", "EXPENSE"].includes(
-                          accountNature
+                          accountNature,
                         )
                           ? "debit"
                           : "credit",
@@ -1663,7 +1778,7 @@ export const EditAccountForm = ({ account, onSave, onCancel }) => {
                         <option key={n} value={n}>
                           {n}
                         </option>
-                      )
+                      ),
                     )}
                   </select>
                 </div>
@@ -1749,8 +1864,9 @@ export const EditAccountForm = ({ account, onSave, onCancel }) => {
               {form.reportingBehavior === "balance_switch" && (
                 <div className="rounded-md border border-[#4267B2]/25 bg-[var(--aa-sidebar-active,#eff4fb)] p-3 space-y-2">
                   <p className="text-xs text-slate-600">
-                    Debit balance → asset side; credit balance → liability side
-                    (VAT / clearing).
+                    Closing debit → Assets; closing credit → Liabilities. Works
+                    for VAT, WHT, clearing, suspense, or any dual-nature
+                    account — not tax-only.
                   </p>
                   <div>
                     <Label>Alternate nature</Label>
@@ -1798,18 +1914,14 @@ export const EditAccountForm = ({ account, onSave, onCancel }) => {
                 <span>Show in account lists</span>
                 <Checkbox
                   checked={!!form.display}
-                  onCheckedChange={(c) =>
-                    setForm({ ...form, display: !!c })
-                  }
+                  onCheckedChange={(c) => setForm({ ...form, display: !!c })}
                 />
               </label>
               <label className="flex items-center justify-between gap-4 text-sm text-slate-700 cursor-pointer">
                 <span>Active</span>
                 <Checkbox
                   checked={!!form.isActive}
-                  onCheckedChange={(c) =>
-                    setForm({ ...form, isActive: !!c })
-                  }
+                  onCheckedChange={(c) => setForm({ ...form, isActive: !!c })}
                 />
               </label>
             </div>
@@ -1851,7 +1963,10 @@ const AccountListSkeleton = () => (
         <Skeleton className="h-5 w-16" />
       </div>
       {[...Array(10)].map((_, i) => (
-        <div key={i} className="mb-3 grid grid-cols-5 gap-4 border-b border-slate-100 pb-3">
+        <div
+          key={i}
+          className="mb-3 grid grid-cols-5 gap-4 border-b border-slate-100 pb-3"
+        >
           <Skeleton className="h-4 w-16" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-24" />

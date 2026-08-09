@@ -195,7 +195,7 @@ const Allowances = () => {
     try {
       const res = await fetch(`/api/hr/allowances/${allowanceToDelete.id}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: localStorage.getItem("@@__token") || "" },
         body: JSON.stringify({ facilityId, updatedBy: user?.id || user?.userId }),
       });
       const data = await res.json();
@@ -221,7 +221,7 @@ const Allowances = () => {
       const url = selectedAllowance ? `/api/hr/allowances/${selectedAllowance.id}` : "/api/hr/allowances";
       const res = await fetch(url, {
         method: selectedAllowance ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: localStorage.getItem("@@__token") || "" },
         body: JSON.stringify({ ...formData, isRoleBased: formData.basis === "role", facilityId, createdBy: user?.id || user?.userId, updatedBy: user?.id || user?.userId }),
       });
       const data = await res.json();

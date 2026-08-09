@@ -63,7 +63,7 @@ export default function BusinessDocumentHeader({
 
   return (
     <div
-      className={`bg-blue-900 text-white ${pad} mb-1.5 shadow-md print:bg-blue-900 ${className}`}
+      className={`bg-[var(--aa-navy,#0f2744)] text-white ${pad} mb-1.5 shadow-md print:bg-[var(--aa-navy,#0f2744)] ${className}`}
     >
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div className={`flex-1 min-w-0 ${showLogo ? "flex gap-3 items-start" : ""}`}>
@@ -82,36 +82,36 @@ export default function BusinessDocumentHeader({
                 {c.name}
               </h1>
               {c.rc ? (
-                <span className="text-blue-100 text-sm font-semibold">
+                <span className="text-sm font-semibold text-white/80">
                   RC. {c.rc}
                 </span>
               ) : null}
             </div>
             {c.description ? (
-              <p className="text-blue-100 text-sm italic mt-0.5">{c.description}</p>
+              <p className="mt-0.5 text-sm italic text-white/80">{c.description}</p>
             ) : null}
             {c.address ? (
-              <p className="text-blue-100 text-xs mt-1">{c.address}</p>
+              <p className="mt-1 text-xs text-white/75">{c.address}</p>
             ) : null}
             {contactLine ? (
-              <p className="text-blue-100 text-xs mt-0.5">{contactLine}</p>
+              <p className="mt-0.5 text-xs text-white/75">{contactLine}</p>
             ) : null}
           </div>
         </div>
 
         <div className="flex flex-col items-stretch gap-1.5 text-right md:items-end shrink-0">
-          <div className="bg-white/20 rounded-sm px-2 py-2 text-center md:min-w-[200px]">
-            <p className="text-blue-100 text-xs uppercase tracking-[0.2em] font-semibold">
+          <div className="rounded-sm bg-white/15 px-2 py-2 text-center md:min-w-[200px]">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/80">
               {title}
             </p>
             {numberLabel ? (
-              <p className="text-lg font-bold leading-tight mt-0.5">{numberLabel}</p>
+              <p className="mt-0.5 text-lg font-bold leading-tight">{numberLabel}</p>
             ) : null}
             {extraLine ? (
-              <p className="text-sm text-blue-100 mt-1">{extraLine}</p>
+              <p className="mt-1 text-sm text-white/80">{extraLine}</p>
             ) : null}
           </div>
-          <p className="text-blue-100 text-sm font-semibold">Date: {dateText}</p>
+          <p className="text-sm font-semibold text-white/80">Date: {dateText}</p>
         </div>
       </div>
     </div>

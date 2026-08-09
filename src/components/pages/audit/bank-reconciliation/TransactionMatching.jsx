@@ -571,7 +571,7 @@ const TransactionMatching = ({ selectedAccount, onMatchSaved }) => {
           onClick={() => setIsUploadOpen(!isUploadOpen)}
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+            <div className="rounded-lg bg-[var(--aa-sidebar-active,#eff4fb)] p-2 text-[var(--aa-navy,#0f2744)]">
               <UploadCloud className="h-5 w-5" />
             </div>
             <div>
@@ -627,7 +627,7 @@ const TransactionMatching = ({ selectedAccount, onMatchSaved }) => {
                 <Button
                   onClick={runAutoMatch}
                   variant="default"
-                  className="h-10 gap-2 bg-[#4267B2] hover:bg-[#365899] transition-colors shadow-sm"
+                  className="h-10 gap-2 border-0 bg-[var(--aa-navy,#0f2744)] text-white shadow-sm transition-colors hover:bg-[var(--aa-navy,#0f2744)] hover:opacity-90"
                 >
                   <Sparkles className="h-4 w-4" />
                   Auto-Match All
@@ -662,12 +662,12 @@ const TransactionMatching = ({ selectedAccount, onMatchSaved }) => {
           {/* Match Pair Cards Banner */}
           <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto flex-1">
-              <div className={`flex-1 w-full p-2.5 rounded-md border text-sm flex items-center justify-between transition-colors ${selectedBankIds.length > 0 ? 'border-blue-200 bg-blue-50/50 text-blue-800' : 'border-slate-200 bg-white text-slate-400 border-dashed'}`}>
+              <div className={`flex-1 w-full p-2.5 rounded-md border text-sm flex items-center justify-between transition-colors ${selectedBankIds.length > 0 ? 'border-[var(--aa-navy,#0f2744)]/25 bg-[var(--aa-sidebar-active,#eff4fb)] text-[var(--aa-navy,#0f2744)]' : 'border-slate-200 bg-white text-slate-400 border-dashed'}`}>
                 <span className="truncate max-w-[200px] pr-2">{selectedBanks.length > 0 ? `${selectedBanks.length} bank row(s) selected` : 'Select statement row(s)'}</span>
                 <span className="font-semibold">{selectedBankIds.length > 0 ? `₦${totalBankSelectedAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}` : ''}</span>
               </div>
               <Link className="h-4 w-4 text-slate-300 flex-shrink-0" />
-              <div className={`flex-1 w-full p-2.5 rounded-md border text-sm flex items-center justify-between transition-colors ${selectedAppIds.length > 0 ? 'border-indigo-200 bg-indigo-50/50 text-indigo-800' : 'border-slate-200 bg-white text-slate-400 border-dashed'}`}>
+              <div className={`flex-1 w-full p-2.5 rounded-md border text-sm flex items-center justify-between transition-colors ${selectedAppIds.length > 0 ? 'border-[var(--aa-navy,#0f2744)]/25 bg-[var(--aa-sidebar-active,#eff4fb)] text-[var(--aa-navy,#0f2744)]' : 'border-slate-200 bg-white text-slate-400 border-dashed'}`}>
                  <span className="truncate max-w-[200px] pr-2">{selectedApps.length > 0 ? `${selectedApps.length} ledger row(s) selected` : 'Select ledger row(s)'}</span>
                  <span className="font-semibold">{selectedAppIds.length > 0 ? `₦${totalAppSelectedAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}` : ''}</span>
               </div>
@@ -701,7 +701,7 @@ const TransactionMatching = ({ selectedAccount, onMatchSaved }) => {
                <Button
                 onClick={() => setIsModalOpen(true)}
                 disabled={selectedBankIds.length === 0 || selectedAppIds.length === 0}
-                className="w-full md:w-32 h-10 font-medium shadow-sm flex-shrink-0"
+                className="h-10 w-full flex-shrink-0 border-0 bg-[var(--aa-navy,#0f2744)] font-medium text-white shadow-sm hover:bg-[var(--aa-navy,#0f2744)] hover:opacity-90 disabled:opacity-50 md:w-32"
                 size="default"
               >
                 Match Pair
@@ -739,7 +739,7 @@ const TransactionMatching = ({ selectedAccount, onMatchSaved }) => {
           <Button
             onClick={applyDateFilters}
             size="sm"
-            className="h-8 px-3 bg-slate-800 hover:bg-slate-900 text-white ml-1"
+            className="ml-1 h-8 border-0 bg-[var(--aa-navy,#0f2744)] px-3 text-white hover:bg-[var(--aa-navy,#0f2744)] hover:opacity-90"
           >
             Apply
           </Button>
@@ -814,7 +814,7 @@ const TransactionMatching = ({ selectedAccount, onMatchSaved }) => {
                       <TableRow
                         key={transaction.id}
                         className={`cursor-pointer transition-colors border-b-slate-100 ${
-                          isSelected ? "bg-blue-50 hover:bg-blue-50 border-l-2 border-l-blue-500" : "bg-white hover:bg-slate-50 border-l-2 border-l-transparent"
+                          isSelected ? "border-l-2 border-l-[var(--aa-navy,#0f2744)] bg-[var(--aa-sidebar-active,#eff4fb)] hover:bg-[var(--aa-sidebar-active,#eff4fb)]" : "bg-white hover:bg-slate-50 border-l-2 border-l-transparent"
                         }`}
                         onClick={() => toggleBankSelection(transaction.id)}
                       >
@@ -823,7 +823,7 @@ const TransactionMatching = ({ selectedAccount, onMatchSaved }) => {
                       </TableCell>
                       <TableCell className="text-[11px] whitespace-nowrap text-slate-500 py-2.5">{transaction.date}</TableCell>
                       <TableCell className="py-2.5">
-                        <div className={`font-medium text-sm leading-tight ${isSelected ? 'text-blue-900' : 'text-slate-700'}`}>{transaction.description}</div>
+                        <div className={`font-medium text-sm leading-tight ${isSelected ? 'text-[var(--aa-navy,#0f2744)]' : 'text-slate-700'}`}>{transaction.description}</div>
                         {transaction.reference && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{transaction.reference}</div>}
                       </TableCell>
                       <TableCell
@@ -906,7 +906,7 @@ const TransactionMatching = ({ selectedAccount, onMatchSaved }) => {
                       <TableRow
                         key={transaction.id}
                         className={`cursor-pointer transition-colors border-b-slate-100 ${
-                          isSelected ? "bg-indigo-50 hover:bg-indigo-50 border-l-2 border-l-indigo-500" : "bg-white hover:bg-slate-50 border-l-2 border-l-transparent"
+                          isSelected ? "border-l-2 border-l-[var(--aa-navy,#0f2744)] bg-[var(--aa-sidebar-active,#eff4fb)] hover:bg-[var(--aa-sidebar-active,#eff4fb)]" : "bg-white hover:bg-slate-50 border-l-2 border-l-transparent"
                         }`}
                         onClick={() => toggleAppSelection(transaction.id)}
                       >
@@ -915,7 +915,7 @@ const TransactionMatching = ({ selectedAccount, onMatchSaved }) => {
                       </TableCell>
                       <TableCell className="text-[11px] whitespace-nowrap text-slate-500 py-2.5">{transaction.date}</TableCell>
                       <TableCell className="py-2.5">
-                        <div className={`font-medium text-sm leading-tight ${isSelected ? 'text-indigo-900' : 'text-slate-700'}`}>{transaction.description}</div>
+                        <div className={`font-medium text-sm leading-tight ${isSelected ? 'text-[var(--aa-navy,#0f2744)]' : 'text-slate-700'}`}>{transaction.description}</div>
                         {transaction.reference && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{transaction.reference}</div>}
                       </TableCell>
                       <TableCell

@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select as UISelect,
   SelectContent,
@@ -18,6 +18,7 @@ import {
   Save,
   ArrowLeft,
   AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { useNavigate, useParams } from "react-router-dom";
@@ -33,86 +34,89 @@ import {
   validatePostingDateClient,
 } from "@/utilities";
 
-// Custom styles for React Select to match app colors (#4267B2)
+// React Select styles aligned with CoA / Journal list (#4267B2, slate borders)
 const customSelectStyles = {
   control: (provided, state) => ({
     ...provided,
-    minHeight: "42px",
-    borderColor: state.isFocused ? "#4267B2" : "#d1d5db",
+    minHeight: "36px",
+    height: "36px",
+    borderColor: state.isFocused ? "#4267B2" : "#e2e8f0",
     borderWidth: "1px",
-    borderRadius: "0.5rem",
-    boxShadow: state.isFocused ? "0 0 0 3px rgb(66 103 178 / 0.2)" : "none",
+    borderRadius: "0.375rem",
+    boxShadow: state.isFocused ? "0 0 0 2px rgb(66 103 178 / 0.2)" : "none",
     backgroundColor: "white",
-    fontSize: "14px",
+    fontSize: "13px",
     "&:hover": {
-      borderColor: state.isFocused ? "#4267B2" : "#d1d5db",
+      borderColor: state.isFocused ? "#4267B2" : "#cbd5e1",
     },
   }),
   valueContainer: (provided) => ({
     ...provided,
-    padding: "0.25rem 0.75rem",
+    padding: "0 0.625rem",
+    height: "34px",
   }),
   input: (provided) => ({
     ...provided,
     margin: "0",
     padding: "0",
-    color: "#111827",
-    fontSize: "14px",
+    color: "#0f172a",
+    fontSize: "13px",
   }),
   placeholder: (provided) => ({
     ...provided,
-    color: "#9ca3af",
-    fontSize: "14px",
+    color: "#94a3b8",
+    fontSize: "13px",
   }),
   singleValue: (provided) => ({
     ...provided,
-    color: "#111827",
-    fontSize: "14px",
+    color: "#0f172a",
+    fontSize: "13px",
   }),
   menu: (provided) => ({
     ...provided,
     zIndex: 9999,
     borderRadius: "0.5rem",
-    border: "1px solid #d1d5db",
+    border: "1px solid #e2e8f0",
     boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
     marginTop: "0.25rem",
   }),
   menuList: (provided) => ({
     ...provided,
     padding: "0.25rem",
-    maxHeight: "300px",
+    maxHeight: "280px",
   }),
   option: (provided, state) => ({
     ...provided,
     backgroundColor: state.isSelected
-      ? "#e6f0ff"
+      ? "#eff4fb"
       : state.isFocused
-      ? "#f3f4f6"
-      : "white",
-    color: state.isSelected ? "#4267B2" : "#374151",
-    fontSize: "14px",
-    padding: "10px 12px",
+        ? "#f8fafc"
+        : "white",
+    color: state.isSelected ? "#4267B2" : "#334155",
+    fontSize: "13px",
+    padding: "8px 10px",
     cursor: "pointer",
     "&:active": {
-      backgroundColor: "#e6f0ff",
+      backgroundColor: "#eff4fb",
     },
   }),
-  indicatorSeparator: (provided) => ({
-    ...provided,
-    backgroundColor: "#d1d5db",
+  indicatorSeparator: () => ({
+    display: "none",
   }),
   dropdownIndicator: (provided, state) => ({
     ...provided,
-    color: state.isFocused ? "#6b7280" : "#9ca3af",
+    padding: "4px",
+    color: state.isFocused ? "#64748b" : "#94a3b8",
     "&:hover": {
-      color: "#6b7280",
+      color: "#64748b",
     },
   }),
   clearIndicator: (provided) => ({
     ...provided,
-    color: "#9ca3af",
+    padding: "4px",
+    color: "#94a3b8",
     "&:hover": {
-      color: "#6b7280",
+      color: "#64748b",
     },
   }),
 };
@@ -807,35 +811,45 @@ const JournalEntryForm = () => {
   const totals = calculateTotals();
   const displayBalanced = isOpeningBalance ? true : totals.balanced;
   const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const fieldClass =
+    "h-9 border-slate-200 bg-white text-sm focus-visible:border-[#4267B2] focus-visible:ring-[#4267B2]/20";
+  const labelClass = "mb-1.5 text-xs font-medium text-slate-600";
 
   return (
-    <div className="">
-      <div>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle
-              className="flex items-center gap-2"
-              style={{ color: primaryColor }}
-            >
-              <BookOpen className="h-6 w-6" style={{ color: primaryColor }} />
-              {isEdit ? "Edit Journal Entry" : "New Journal Entry"}
-            </CardTitle>
-            <Button
-              variant="outline"
-              onClick={() => navigate("/app/account/journal-entries")}
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to List
-            </Button>
-          </div>
-        </CardHeader>
+    <div className="min-h-[70vh] px-3 py-4 sm:px-4 lg:px-6">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
+            <BookOpen className="h-5 w-5" style={{ color: primaryColor }} />
+            {isEdit ? "Edit Journal Entry" : "New Journal Entry"}
+          </h1>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Post balanced debit and credit lines from your Chart of Accounts
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gap-2 border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          onClick={() => navigate("/app/account/journal-entries")}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to list
+        </Button>
+      </div>
 
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Header Information */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-4 py-2.5">
+            <p className="text-sm font-medium text-slate-800">Entry details</p>
+          </div>
+          <div className="space-y-4 p-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div>
-                <Label htmlFor="reference_number">Reference Number *</Label>
+                <Label htmlFor="reference_number" className={labelClass}>
+                  Reference number <span className="text-red-500">*</span>
+                </Label>
                 <div className="flex gap-2">
                   <Input
                     id="reference_number"
@@ -846,45 +860,35 @@ const JournalEntryForm = () => {
                         reference_number: e.target.value,
                       })
                     }
-                    placeholder="Auto-generated..."
+                    placeholder="Auto-generated…"
                     required
                     readOnly={!isEdit}
-                    className={!isEdit ? "bg-gray-50" : ""}
+                    className={`${fieldClass} ${!isEdit ? "bg-slate-50" : ""}`}
                   />
                   {!isEdit && (
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={generateReferenceNumber}
                       size="sm"
+                      className="h-9 shrink-0 border-slate-200 px-2.5 text-slate-600"
+                      onClick={generateReferenceNumber}
                       title="Regenerate reference number"
                     >
-                      ↻
+                      <RefreshCw className="h-3.5 w-3.5" />
                     </Button>
                   )}
                 </div>
                 {!isEdit && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Auto-generated from number generator (JE prefix)
+                  <p className="mt-1 text-xs text-slate-500">
+                    Auto-generated (JE prefix)
                   </p>
                 )}
               </div>
 
-              {/* <div>
-                <Label htmlFor="entry_date">Date</Label>
-                <Input
-                  id="entry_date"
-                  type="date"
-                  value={formData.entry_date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, entry_date: e.target.value })
-                  }
-                required
-                />
-              </div> */}
-
               <div>
-                <Label htmlFor="currency">Currency</Label>
+                <Label htmlFor="currency" className={labelClass}>
+                  Currency
+                </Label>
                 <UISelect
                   value={formData.currency}
                   disabled
@@ -892,7 +896,7 @@ const JournalEntryForm = () => {
                     setFormData({ ...formData, currency: value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={fieldClass}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -906,8 +910,8 @@ const JournalEntryForm = () => {
             </div>
 
             <div>
-              <Label htmlFor="notes">
-                Notes/Narration <span className="text-red-500">*</span>
+              <Label htmlFor="notes" className={labelClass}>
+                Notes / narration <span className="text-red-500">*</span>
               </Label>
               <Textarea
                 id="notes"
@@ -915,493 +919,433 @@ const JournalEntryForm = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, notes: e.target.value })
                 }
-                placeholder="Additional notes/narration..."
+                placeholder="Additional notes / narration…"
                 rows={3}
+                className="border-slate-200 bg-white text-sm focus-visible:border-[#4267B2] focus-visible:ring-[#4267B2]/20"
               />
             </div>
 
-            {/* Journal Entry Summary - Display when editing */}
             {isEdit && formData.reference_number && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4
-                  className="text-sm font-semibold mb-3"
+              <div className="rounded-lg border border-[#4267B2]/20 bg-[var(--aa-sidebar-active,#eff4fb)] p-3">
+                <p
+                  className="mb-2 text-xs font-semibold"
                   style={{ color: primaryColor }}
                 >
-                  Journal Entry Summary
-                </h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  Journal entry summary
+                </p>
+                <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
                   <div>
-                    <span className="text-gray-600">Reference:</span>
-                    <p className="font-medium">{formData.reference_number}</p>
+                    <span className="text-xs text-slate-500">Reference</span>
+                    <p className="font-medium text-slate-800">
+                      {formData.reference_number}
+                    </p>
                   </div>
                   <div>
-                    <span className="text-gray-600">Status:</span>
-                    <p className="font-medium capitalize">
+                    <span className="text-xs text-slate-500">Status</span>
+                    <p className="font-medium capitalize text-slate-800">
                       {formData.status || "Draft"}
                     </p>
                   </div>
                   <div>
-                    <span className="text-gray-600">Total Debit:</span>
-                    <p className="font-medium">₦{totals.totalDebit}</p>
+                    <span className="text-xs text-slate-500">Total debit</span>
+                    <p className="font-medium tabular-nums text-slate-800">
+                      ₦{totals.totalDebit}
+                    </p>
                   </div>
                   <div>
-                    <span className="text-gray-600">Total Credit:</span>
-                    <p className="font-medium">₦{totals.totalCredit}</p>
+                    <span className="text-xs text-slate-500">Total credit</span>
+                    <p className="font-medium tabular-nums text-slate-800">
+                      ₦{totals.totalCredit}
+                    </p>
                   </div>
                 </div>
               </div>
             )}
+          </div>
+        </div>
 
-            {/* Line Items */}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5">
             <div>
-              <div className="flex justify-between items-center mb-4">
-                <div>
-                  <h3
-                    className="text-lg font-semibold"
-                    style={{ color: primaryColor }}
-                  >
-                    Line Items
-                  </h3>
-                  {accounts.length > 0 ? (
-                    <p className="text-xs text-green-600 mt-1">
-                      ✓ {accounts.length} accounts loaded from Chart of Accounts
-                    </p>
-                  ) : (
-                    <p className="text-xs text-orange-600 mt-1">
-                      ⚠ Loading Chart of Accounts...
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 text-xs text-gray-700">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      checked={isOpeningBalance}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setIsOpeningBalance(checked);
-                        if (checked && lines.length > 1) {
-                          // For opening balance, keep only the first line
-                          setLines([lines[0]]);
-                        }
-                      }}
-                    />
-                    <span className="font-medium">
-                      Opening balance (auto-balance to equity)
-                    </span>
-                  </label>
-                  {isOpeningBalance && (
-                    <div className="text-xs text-gray-600">
-                      Equity code:{" "}
-                      <span className="font-semibold">
-                        {activeBusiness?.opening_balance_equity
-                          ? String(activeBusiness.opening_balance_equity)
-                          : "Not set"}
-                      </span>
-                      {activeBusiness?.opening_balance_equity &&
-                        accounts.length > 0 &&
-                        !accounts.some(
-                          (acc) =>
-                            acc.code ===
-                            String(activeBusiness.opening_balance_equity)
-                        ) && (
-                          <span className="ml-2 text-orange-600">
-                            (not found in Chart of Accounts)
-                          </span>
-                        )}
-                    </div>
-                  )}
-                  <Button
-                    type="button"
-                    onClick={addLine}
-                    variant="outline"
-                    size="sm"
-                    disabled={isOpeningBalance}
-                    style={{
-                      borderColor: primaryColor,
-                      color: primaryColor,
-                    }}
-                    className="hover:bg-opacity-10 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Line
-                  </Button>
-                </div>
-              </div>
-              {/* {JSON.stringify(names)  } */}
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border rounded-lg">
-                  <thead style={{ backgroundColor: `${primaryColor}15` }}>
-                    <tr>
-                      <th
-                        className="text-left p-3 font-medium border-b w-[140px]"
-                        style={{ color: primaryColor }}
-                      >
-                        Line Date *
-                      </th>
-                      <th
-                        className="text-left p-3 font-medium border-b w-[280px]"
-                        style={{ color: primaryColor }}
-                      >
-                        Account Code (from CoA) *
-                      </th>
-                      <th
-                        className="text-left p-3 font-medium border-b w-[240px]"
-                        style={{ color: primaryColor }}
-                      >
-                        Description
-                      </th>
-
-                      <th
-                        className="text-left p-3 font-medium border-b w-[140px]"
-                        style={{ color: primaryColor }}
-                      >
-                        Debit (₦)
-                      </th>
-                      <th
-                        className="text-left p-3 font-medium border-b w-[140px]"
-                        style={{ color: primaryColor }}
-                      >
-                        Credit (₦)
-                      </th>
-                      {/* Conditionally show Supplier/Customer column header if any line has A/R or A/P */}
-
-                      <th
-                        className="text-left p-3 font-medium border-b w-[200px]"
-                        style={{ color: primaryColor }}
-                      >
-                        Supplier/Customer
-                      </th>
-
-                      <th
-                        className="text-center p-3 font-medium border-b w-[50px]"
-                        style={{ color: primaryColor }}
-                      ></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lines.map((line, index) => (
-                      <tr key={index} className="border-b hover:bg-gray-50">
-                        <td className="p-3">
-                          <Input
-                            type="date"
-                            value={line.line_date || ""}
-                            min={POSTING_DATE_MIN}
-                            max={getPostingDateMax()}
-                            onChange={(e) =>
-                              updateLine(index, "line_date", e.target.value)
-                            }
-                            className="w-full"
-                          />
-                        </td>
-                        <td className="p-3">
-                          {accounts.length > 0 ? (
-                            <Select
-                              options={accounts.map((account) => ({
-                                value: account.code,
-                                label: `${account.code} - ${account.name}`,
-                                account_type: account.type,
-                                category: account.category,
-                                ...account,
-                              }))}
-                              value={
-                                line.account_code
-                                  ? {
-                                      value: line.account_code,
-                                      label: `${line.account_code} - ${line.account_name}`,
-                                      account_type: accounts.find(
-                                        (acc) => acc.code === line.account_code
-                                      )?.type,
-                                      category: accounts.find(
-                                        (acc) => acc.code === line.account_code
-                                      )?.category,
-                                    }
-                                  : null
-                              }
-                              onChange={(option) => {
-                                if (option) {
-                                  updateLineAccount(index, option.value);
-                                } else {
-                                  updateLine(index, "account_code", "");
-                                  updateLine(index, "account_name", "");
-                                }
-                              }}
-                              formatOptionLabel={({
-                                label,
-                                account_type,
-                                category,
-                              }) => (
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "center",
-                                  }}
-                                >
-                                  <div>
-                                    <div className="font-medium text-sm">
-                                      {label}
-                                    </div>
-                                    <div className="text-xs text-gray-500">
-                                      {account_type}{" "}
-                                      {category && `• ${category}`}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              placeholder="Type to search accounts..."
-                              isClearable
-                              isSearchable
-                              styles={customSelectStyles}
-                              menuPortalTarget={document.body}
-                              menuPosition="fixed"
-                            />
-                          ) : (
-                            <div>
-                              <Input
-                                value={line.account_code}
-                                onChange={(e) =>
-                                  updateLine(
-                                    index,
-                                    "account_code",
-                                    e.target.value
-                                  )
-                                }
-                                placeholder="Account code"
-                                className="w-full"
-                              />
-                              <p className="text-xs text-red-500 mt-1">
-                                ⚠ No accounts found. Set up Chart of Accounts
-                                first.
-                              </p>
-                            </div>
-                          )}
-                        </td>
-
-                        <td className="p-3">
-                          <Input
-                            type="text"
-                            value={line.line_description || ""}
-                            onChange={(e) =>
-                              updateLine(
-                                index,
-                                "line_description",
-                                e.target.value
-                              )
-                            }
-                            placeholder="Description (optional)"
-                            className="w-full"
-                          />
-                        </td>
-
-                        <td className="p-3">
-                          <Input
-                            type="text"
-                            value={line.debit}
-                            onChange={(e) =>
-                              updateLine(index, "debit", e.target.value)
-                            }
-                            placeholder="0.00"
-                            className="w-full text-right"
-                          />
-                        </td>
-                        <td className="p-3">
-                          <Input
-                            type="text"
-                            value={line.credit}
-                            onChange={(e) =>
-                              updateLine(index, "credit", e.target.value)
-                            }
-                            placeholder="0.00"
-                            className="w-full text-right"
-                          />
-                        </td>
-
-                        {/* Conditionally show Supplier/Customer cell only if account is A/R or A/P */}
-
-                        <td className="p-3">
-                          {names.length > 0 ? (
-                            <Select
-                              options={getFilteredOptions(line.account_code)}
-                              value={
-                                line.number_id
-                                  ? getFilteredOptions(line.account_code).find(
-                                      (item) => item.value === line.number_id
-                                    ) || null
-                                  : null
-                              }
-                              onChange={(option) => {
-                                const newLines = [...lines];
-                                if (option) {
-                                  newLines[index].number_id = option.value;
-                                  newLines[index].supplier_customer_name =
-                                    option.name;
-                                  newLines[index].supplier_customer_type =
-                                    option.type;
-                                } else {
-                                  newLines[index].number_id = null;
-                                  newLines[index].supplier_customer_name = "";
-                                  newLines[index].supplier_customer_type = "";
-                                }
-                                setLines(newLines);
-                              }}
-                              formatOptionLabel={({ label, type }) => (
-                                <div>
-                                  <div className="font-medium text-sm">
-                                    {label} ({type})
-                                  </div>
-                                </div>
-                              )}
-                              placeholder={
-                                isARAccount(line.account_code)
-                                  ? "Select customer..."
-                                  : isAPAccount(line.account_code)
-                                  ? "Select supplier..."
-                                  : "supplier/customer..."
-                              }
-                              isClearable
-                              isSearchable
-                              styles={customSelectStyles}
-                              menuPortalTarget={document.body}
-                              menuPosition="fixed"
-                              isDisabled={!isARorAPAccount(line.account_code)}
-                            />
-                          ) : (
-                            <Input
-                              value=""
-                              placeholder="Loading suppliers/customers..."
-                              className="w-full bg-gray-50"
-                              disabled
-                            />
-                          )}
-                        </td>
-
-                        <td className="p-3 text-center">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => removeLine(index)}
-                            disabled={lines.length === 2 || isOpeningBalance}
-                            title="Remove line"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Totals Summary */}
-              <div
-                className={`mt-4 p-6 rounded-lg border-2 ${
-                  displayBalanced
-                    ? "bg-green-50 border-green-200"
-                    : "bg-red-50 border-red-200"
-                }`}
-                style={{
-                  borderColor: totals.balanced ? "#10b981" : "#ef4444",
-                }}
-              >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="text-center">
-                    <div className="text-sm text-gray-600 mb-1">
-                      Total Debit
-                    </div>
-                    <div className="text-2xl font-bold text-gray-900">
-                      ₦{totals.totalDebit}
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm text-gray-600 mb-1">
-                      Total Credit
-                    </div>
-                    <div className="text-2xl font-bold text-gray-900">
-                      ₦{totals.totalCredit}
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm text-gray-600 mb-1">Difference</div>
-                    <div
-                      className={`text-2xl font-bold ${
-                        displayBalanced ? "text-green-600" : "text-red-600"
-                      }`}
-                    >
-                      ₦{totals.difference}
-                    </div>
-                    <div
-                      className={`text-sm mt-1 font-medium ${
-                        displayBalanced ? "text-green-600" : "text-red-600"
-                      }`}
-                    >
-                      {displayBalanced ? "✓ Balanced" : "✗ Not Balanced"}
-                    </div>
-                  </div>
-                </div>
-                {!displayBalanced && (
-                  <div className="mt-4 pt-4 border-t border-red-200 flex items-center gap-2 text-red-700">
-                    <AlertCircle className="h-5 w-5" />
-                    <span className="text-sm font-medium">
-                      Entry is not balanced. Debits must equal credits before
-                      saving.
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Error Messages - Only show if form has errors and is not balanced/valid */}
-            {errors.length > 0 &&
-              (!totals.balanced ||
-                errors.some(
-                  (err) =>
-                    err.field === "reference_number" ||
-                    err.field === "entry_date" ||
-                    err.field === "notes" ||
-                    err.field?.includes("account_code")
-                )) && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <h4 className="text-red-800 font-semibold mb-2">
-                    Please fix the following errors:
-                  </h4>
-                  <ul className="list-disc list-inside space-y-1">
-                    {errors.map((error, index) => (
-                      <li key={index} className="text-red-700 text-sm">
-                        {error.message}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              <p className="text-sm font-medium text-slate-800">Line items</p>
+              {accounts.length > 0 ? (
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {accounts.length} accounts loaded from Chart of Accounts
+                </p>
+              ) : (
+                <p className="mt-0.5 text-xs text-amber-600">
+                  Loading Chart of Accounts…
+                </p>
               )}
-
-            {/* Submit Buttons */}
-            <div className="flex justify-end gap-2">
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-xs text-slate-600">
+                <Checkbox
+                  checked={isOpeningBalance}
+                  onCheckedChange={(checked) => {
+                    const on = Boolean(checked);
+                    setIsOpeningBalance(on);
+                    if (on && lines.length > 1) {
+                      setLines([lines[0]]);
+                    }
+                  }}
+                />
+                <span className="font-medium">
+                  Opening balance (auto-balance to equity)
+                </span>
+              </label>
+              {isOpeningBalance && (
+                <p className="text-xs text-slate-500">
+                  Equity code:{" "}
+                  <span className="font-semibold text-slate-700">
+                    {activeBusiness?.opening_balance_equity
+                      ? String(activeBusiness.opening_balance_equity)
+                      : "Not set"}
+                  </span>
+                  {activeBusiness?.opening_balance_equity &&
+                    accounts.length > 0 &&
+                    !accounts.some(
+                      (acc) =>
+                        acc.code ===
+                        String(activeBusiness.opening_balance_equity),
+                    ) && (
+                      <span className="ml-1 text-amber-600">
+                        (not found in CoA)
+                      </span>
+                    )}
+                </p>
+              )}
               <Button
                 type="button"
+                size="sm"
                 variant="outline"
-                onClick={() => navigate("/app/account/journal-entries")}
+                onClick={addLine}
+                disabled={isOpeningBalance}
+                className="h-8 gap-1.5 border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={loading || (!totals.balanced && !isOpeningBalance)}
-                className="flex items-center gap-2"
-                style={{
-                  backgroundColor: primaryColor,
-                  borderColor: primaryColor,
-                }}
-              >
-                <Save className="h-4 w-4" />
-                {loading ? "Saving..." : isEdit ? "Update" : "Save"}
+                <Plus className="h-3.5 w-3.5" style={{ color: primaryColor }} />
+                Add line
               </Button>
             </div>
-          </form>
-        </CardContent>
-      </div>
+          </div>
+
+          <div className="overflow-x-auto p-3">
+            <table className="w-full min-w-[960px] border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  {[
+                    ["w-[140px]", "Line date *"],
+                    ["w-[280px]", "Account code (from CoA) *"],
+                    ["w-[220px]", "Description"],
+                    ["w-[130px]", "Debit (₦)"],
+                    ["w-[130px]", "Credit (₦)"],
+                    ["w-[200px]", "Supplier / customer"],
+                    ["w-[48px]", ""],
+                  ].map(([w, label]) => (
+                    <th
+                      key={label || "actions"}
+                      className={`px-2.5 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 ${w}`}
+                    >
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line, index) => (
+                  <tr
+                    key={index}
+                    className="border-b border-slate-100 align-top hover:bg-slate-50/70"
+                  >
+                    <td className="p-2">
+                      <Input
+                        type="date"
+                        value={line.line_date || ""}
+                        min={POSTING_DATE_MIN}
+                        max={getPostingDateMax()}
+                        onChange={(e) =>
+                          updateLine(index, "line_date", e.target.value)
+                        }
+                        className={fieldClass}
+                      />
+                    </td>
+                    <td className="p-2">
+                      {accounts.length > 0 ? (
+                        <Select
+                          options={accounts.map((account) => ({
+                            value: account.code,
+                            label: `${account.code} - ${account.name}`,
+                            account_type: account.type,
+                            category: account.category,
+                            ...account,
+                          }))}
+                          value={
+                            line.account_code
+                              ? {
+                                  value: line.account_code,
+                                  label: `${line.account_code} - ${
+                                    line.account_name ||
+                                    accounts.find(
+                                      (acc) => acc.code === line.account_code,
+                                    )?.name ||
+                                    ""
+                                  }`,
+                                  account_type: accounts.find(
+                                    (acc) => acc.code === line.account_code,
+                                  )?.type,
+                                  category: accounts.find(
+                                    (acc) => acc.code === line.account_code,
+                                  )?.category,
+                                }
+                              : null
+                          }
+                          onChange={(option) => {
+                            if (option) {
+                              updateLineAccount(index, option.value);
+                            } else {
+                              updateLine(index, "account_code", "");
+                              updateLine(index, "account_name", "");
+                            }
+                          }}
+                          formatOptionLabel={({
+                            label,
+                            account_type,
+                            category,
+                          }) => (
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-sm font-medium text-slate-800">
+                                  {label}
+                                </div>
+                                <div className="text-xs text-slate-500">
+                                  {account_type}
+                                  {category ? ` · ${category}` : ""}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          placeholder="Search accounts…"
+                          isClearable
+                          isSearchable
+                          styles={customSelectStyles}
+                          menuPortalTarget={document.body}
+                          menuPosition="fixed"
+                        />
+                      ) : (
+                        <div>
+                          <Input
+                            value={line.account_code}
+                            onChange={(e) =>
+                              updateLine(index, "account_code", e.target.value)
+                            }
+                            placeholder="Account code"
+                            className={fieldClass}
+                          />
+                          <p className="mt-1 text-xs text-red-500">
+                            No accounts found. Set up Chart of Accounts first.
+                          </p>
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-2">
+                      <Input
+                        type="text"
+                        value={line.line_description || ""}
+                        onChange={(e) =>
+                          updateLine(index, "line_description", e.target.value)
+                        }
+                        placeholder="Optional"
+                        className={fieldClass}
+                      />
+                    </td>
+                    <td className="p-2">
+                      <Input
+                        type="text"
+                        value={line.debit}
+                        onChange={(e) =>
+                          updateLine(index, "debit", e.target.value)
+                        }
+                        placeholder="0.00"
+                        className={`${fieldClass} text-right tabular-nums`}
+                      />
+                    </td>
+                    <td className="p-2">
+                      <Input
+                        type="text"
+                        value={line.credit}
+                        onChange={(e) =>
+                          updateLine(index, "credit", e.target.value)
+                        }
+                        placeholder="0.00"
+                        className={`${fieldClass} text-right tabular-nums`}
+                      />
+                    </td>
+                    <td className="p-2">
+                      {names.length > 0 ? (
+                        <Select
+                          options={getFilteredOptions(line.account_code)}
+                          value={
+                            line.number_id
+                              ? getFilteredOptions(line.account_code).find(
+                                  (item) => item.value === line.number_id,
+                                ) || null
+                              : null
+                          }
+                          onChange={(option) => {
+                            const newLines = [...lines];
+                            if (option) {
+                              newLines[index].number_id = option.value;
+                              newLines[index].supplier_customer_name =
+                                option.name;
+                              newLines[index].supplier_customer_type =
+                                option.type;
+                            } else {
+                              newLines[index].number_id = null;
+                              newLines[index].supplier_customer_name = "";
+                              newLines[index].supplier_customer_type = "";
+                            }
+                            setLines(newLines);
+                          }}
+                          formatOptionLabel={({ label, type }) => (
+                            <div className="text-sm font-medium text-slate-800">
+                              {label} ({type})
+                            </div>
+                          )}
+                          placeholder={
+                            isARAccount(line.account_code)
+                              ? "Select customer…"
+                              : isAPAccount(line.account_code)
+                                ? "Select supplier…"
+                                : "Supplier / customer…"
+                          }
+                          isClearable
+                          isSearchable
+                          styles={customSelectStyles}
+                          menuPortalTarget={document.body}
+                          menuPosition="fixed"
+                          isDisabled={!isARorAPAccount(line.account_code)}
+                        />
+                      ) : (
+                        <Input
+                          value=""
+                          placeholder="Loading…"
+                          className={`${fieldClass} bg-slate-50`}
+                          disabled
+                        />
+                      )}
+                    </td>
+                    <td className="p-2 text-center">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                        onClick={() => removeLine(index)}
+                        disabled={lines.length === 2 || isOpeningBalance}
+                        title="Remove line"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div
+            className={`mx-3 mb-3 rounded-lg border px-4 py-3 ${
+              displayBalanced
+                ? "border-[#4267B2]/20 bg-[var(--aa-sidebar-active,#eff4fb)]"
+                : "border-red-200 bg-red-50"
+            }`}
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="text-center md:text-left">
+                <div className="text-xs text-slate-500">Total debit</div>
+                <div className="text-lg font-semibold tabular-nums text-slate-900">
+                  ₦{totals.totalDebit}
+                </div>
+              </div>
+              <div className="text-center md:text-left">
+                <div className="text-xs text-slate-500">Total credit</div>
+                <div className="text-lg font-semibold tabular-nums text-slate-900">
+                  ₦{totals.totalCredit}
+                </div>
+              </div>
+              <div className="text-center md:text-left">
+                <div className="text-xs text-slate-500">Difference</div>
+                <div
+                  className={`text-lg font-semibold tabular-nums ${
+                    displayBalanced ? "text-[#4267B2]" : "text-red-600"
+                  }`}
+                >
+                  ₦{totals.difference}
+                </div>
+                <div
+                  className={`mt-0.5 text-xs font-medium ${
+                    displayBalanced ? "text-[#4267B2]" : "text-red-600"
+                  }`}
+                >
+                  {displayBalanced ? "Balanced" : "Not balanced"}
+                </div>
+              </div>
+            </div>
+            {!displayBalanced && (
+              <div className="mt-3 flex items-center gap-2 border-t border-red-200 pt-3 text-red-700">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span className="text-xs font-medium">
+                  Debits must equal credits before saving.
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {errors.length > 0 &&
+          (!totals.balanced ||
+            errors.some(
+              (err) =>
+                err.field === "reference_number" ||
+                err.field === "entry_date" ||
+                err.field === "notes" ||
+                err.field?.includes("account_code"),
+            )) && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+              <h4 className="mb-2 text-sm font-semibold text-red-800">
+                Please fix the following errors:
+              </h4>
+              <ul className="list-inside list-disc space-y-1">
+                {errors.map((error, index) => (
+                  <li key={index} className="text-sm text-red-700">
+                    {error.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="border-slate-200 bg-white text-slate-700"
+            onClick={() => navigate("/app/account/journal-entries")}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={loading || (!totals.balanced && !isOpeningBalance)}
+            className="h-8 gap-2 border-0 bg-[var(--aa-navy,#0f2744)] text-white shadow-none hover:opacity-90 disabled:opacity-50"
+          >
+            <Save className="h-4 w-4" />
+            {loading ? "Saving…" : isEdit ? "Update" : "Save"}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 };

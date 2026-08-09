@@ -542,9 +542,20 @@ const EmployeeList = ({
 
       {/* STATUS CHANGE MODAL */}
       {showStatusModal && selectedForStatus && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[200]">
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[200]"
+          style={{ ["--app-primary"]: primaryColor }}
+        >
           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col border border-slate-200 animate-in zoom-in-95 duration-200">
-            <div className={`p-6 text-white ${selectedForStatus.salaryStatus !== 'Stopped' ? 'bg-red-600' : 'bg-emerald-600'}`}>
+            <div
+              className="p-6 text-white"
+              style={{
+                background:
+                  selectedForStatus.salaryStatus !== "Stopped"
+                    ? "#dc2626"
+                    : `linear-gradient(to right, ${primaryColor}, ${primaryColor}dd)`,
+              }}
+            >
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-xl font-black italic uppercase tracking-tight">
                   {selectedForStatus.salaryStatus !== 'Stopped' ? 'Stop Salary' : 'Restore Salary'}
@@ -630,14 +641,19 @@ const EmployeeList = ({
                 Go Back
               </Button>
               <Button 
-                className={`flex-1 h-12 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg ${selectedForStatus.salaryStatus !== 'Stopped' ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'}`}
+                className={`flex-1 h-12 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg text-white ${selectedForStatus.salaryStatus !== 'Stopped' ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'hover:brightness-95'}`}
+                style={
+                  selectedForStatus.salaryStatus === "Stopped"
+                    ? { backgroundColor: primaryColor, borderColor: primaryColor }
+                    : undefined
+                }
                 disabled={!statusReason.trim()}
                 onClick={async () => {
                   try {
                     const newStatus = selectedForStatus.salaryStatus !== 'Stopped' ? 'Stopped' : 'Active';
                     const response = await fetch(`/api/hr/employees/${selectedForStatus.id}/salary-status`, {
                       method: "PUT",
-                      headers: { "Content-Type": "application/json" },
+                      headers: { "Content-Type": "application/json", Authorization: localStorage.getItem("@@__token") || "" },
                       body: JSON.stringify({
                         facilityId: activeBusiness?.id || user?.facilityId,
                         salaryStatus: newStatus,

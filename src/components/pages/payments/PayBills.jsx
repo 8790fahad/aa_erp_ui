@@ -161,39 +161,7 @@ export default function PayBills() {
                 parseFloat(bill.amount || 0) - parseFloat(bill.total_paid || 0),
             }));
 
-            // Auto-heal: silently apply available supplier advance to any fully
-            // unpaid bill where the supplier actually has advance available.
-            // Fire-and-forget — reload the list after all settle calls finish.
-            const unpaidFullyBills = billsWithBalance.filter(
-              (b) =>
-                (b.status || "").toLowerCase() === "unpaid" &&
-                parseFloat(b.total_paid || 0) === 0 &&
-                parseFloat(b.available_advance || 0) > 0
-            );
-            if (unpaidFullyBills.length > 0 && activeBusiness?.id) {
-              Promise.all(
-                unpaidFullyBills.map((bill) =>
-                  new Promise((resolve) => {
-                    _postApi(
-                      "/account/apply-advance-to-bill",
-                      {
-                        invoice_ref: bill.invoice_ref || bill.ref_number,
-                        facilityId: activeBusiness.id,
-                      },
-                      (res) => resolve(res?.success ? bill.invoice_ref : null),
-                      () => resolve(null)
-                    );
-                  })
-                )
-              ).then((settled) => {
-                const anySettled = settled.some(Boolean);
-                if (anySettled) {
-                  // Refresh so settled bills disappear from the list
-                  fetchBills({ search, page, limit, fromDate, toDate, status });
-                }
-              });
-            }
-
+            // Advances are applied only via explicit user action (Apply Deposit)
             setFilteredBills(billsWithBalance);
 
             if (data.pagination) {

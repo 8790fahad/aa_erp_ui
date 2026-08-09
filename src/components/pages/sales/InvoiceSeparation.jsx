@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   CheckCircle2,
@@ -21,6 +21,7 @@ import {
 
 export default function InvoiceSeparation() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const saleFromUrl = searchParams.get("sale_code") || "";
 
@@ -130,13 +131,15 @@ export default function InvoiceSeparation() {
         setPrintingId(null);
         if (res.success) {
           fetchPacks();
-          window.open(
+          // Same in-app invoice preview as "Full invoice" (no new tab / popup).
+          navigate(
             `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
               pack.sale_code,
             )}&branch_id=${pack.branch_id}&pack_code=${encodeURIComponent(
               pack.pack_code,
+            )}&branch_name=${encodeURIComponent(
+              pack.branch_name || `Warehouse ${pack.branch_id}`,
             )}`,
-            "_blank",
           );
         } else {
           toast.error(res.message || "Could not open branch invoice");
@@ -164,11 +167,10 @@ export default function InvoiceSeparation() {
       if (failed) {
         toast.error("Some copies could not be marked printed");
       }
-      window.open(
+      navigate(
         `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
           selected.sale_code,
-        )}&print_all=1&auto_print=1`,
-        "_blank",
+        )}&print_all=1`,
       );
     };
 
@@ -400,8 +402,8 @@ export default function InvoiceSeparation() {
                   </h3>
                   <p className="text-xs text-violet-800 mb-3">
                     One copy per warehouse branch. Use{" "}
-                    <strong>Print all</strong> to print every branch invoice in
-                    one go, or print individually. Then mark separated to send
+                    <strong>Print all</strong> to print every branch (A4 or
+                    thermal from system settings). Then mark separated to send
                     packs to warehouse.
                   </p>
 

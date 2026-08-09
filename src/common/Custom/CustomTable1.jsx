@@ -42,7 +42,6 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import PropTypes from "prop-types";
-import { Alert } from "reactstrap";
 
 export default function CustomTable1({
   data: initialData,
@@ -52,6 +51,7 @@ export default function CustomTable1({
   loading = false,
   pageSize = 10,
   message = "No Data",
+  emptyHint = "Try adjusting your filters",
   initialPageIndex = 0,
   onPageChange,
   onPageSizeChange,
@@ -228,7 +228,7 @@ export default function CustomTable1({
                 className="text-center py-8"
               >
                 <div className="flex justify-center">
-                  <Loader2 className="animate-spin h-8 w-8" />
+                  <Loader2 className="h-7 w-7 animate-spin text-[#4267B2]" />
                 </div>
               </TableCell>
             </TableRow>
@@ -264,10 +264,16 @@ export default function CustomTable1({
             })
           ) : (
             <TableRow>
-              <TableCell colSpan={columns.length} className="text-center w-auto">
-                <Alert className="m-0" color="info">
-                  {message}
-                </Alert>
+              <TableCell
+                colSpan={columns.length}
+                className="h-28 text-center align-middle"
+              >
+                <div className="mx-auto flex max-w-md flex-col items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-4 py-5">
+                  <p className="text-sm font-medium text-slate-700">{message}</p>
+                  {emptyHint ? (
+                    <p className="text-xs text-slate-500">{emptyHint}</p>
+                  ) : null}
+                </div>
               </TableCell>
             </TableRow>
           )}
@@ -288,7 +294,10 @@ export default function CustomTable1({
         )}
         <div className="flex w-full items-center gap-8 lg:w-fit">
           <div className="hidden items-center gap-2 lg:flex">
-            <Label htmlFor="rows-per-page" className="text-sm font-medium">
+            <Label
+              htmlFor="rows-per-page"
+              className="text-xs font-medium text-slate-600"
+            >
               Rows per page
             </Label>
             <Select
@@ -302,7 +311,10 @@ export default function CustomTable1({
                 }
               }}
             >
-              <SelectTrigger className="w-20" id="rows-per-page">
+              <SelectTrigger
+                className="h-8 w-20 border-slate-200 text-xs"
+                id="rows-per-page"
+              >
                 <SelectValue
                   placeholder={table.getState().pagination.pageSize}
                 />
@@ -316,14 +328,14 @@ export default function CustomTable1({
               </SelectContent>
             </Select>
           </div>
-          <div className="flex w-fit items-center justify-center text-sm font-medium">
-            Page {table.getState().pagination.pageIndex + 1} of   {""}
-            {table.getPageCount()}
+          <div className="flex w-fit items-center justify-center text-xs font-medium text-slate-600">
+            Page {table.getState().pagination.pageIndex + 1} of{" "}
+            {Math.max(table.getPageCount(), 1)}
           </div>
           <div className="ml-auto flex items-center gap-2 lg:ml-0">
             <Button
               variant="outline"
-              className="hidden h-8 w-8 p-0 lg:flex"
+              className="hidden h-8 w-8 border-slate-200 p-0 text-slate-600 lg:flex"
               onClick={() => {
                 if (isPaginationControlled) {
                   onPageChange(1);
@@ -334,11 +346,11 @@ export default function CustomTable1({
               disabled={!table.getCanPreviousPage()}
             >
               <span className="sr-only">Go to first page</span>
-              <ChevronsLeftIcon />
+              <ChevronsLeftIcon className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
-              className="size-8"
+              className="size-8 border-slate-200 text-slate-600"
               size="icon"
               onClick={() => {
                 if (isPaginationControlled) {
@@ -350,11 +362,11 @@ export default function CustomTable1({
               disabled={!table.getCanPreviousPage()}
             >
               <span className="sr-only">Go to previous page</span>
-              <ChevronLeftIcon />
+              <ChevronLeftIcon className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
-              className="size-8"
+              className="size-8 border-slate-200 text-slate-600"
               size="icon"
               onClick={() => {
                 if (isPaginationControlled) {
@@ -366,11 +378,11 @@ export default function CustomTable1({
               disabled={!table.getCanNextPage()}
             >
               <span className="sr-only">Go to next page</span>
-              <ChevronRightIcon />
+              <ChevronRightIcon className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
-              className="hidden size-8 lg:flex"
+              className="hidden size-8 border-slate-200 text-slate-600 lg:flex"
               size="icon"
               onClick={() => {
                 if (isPaginationControlled) {
@@ -382,7 +394,7 @@ export default function CustomTable1({
               disabled={!table.getCanNextPage()}
             >
               <span className="sr-only">Go to last page</span>
-              <ChevronsRightIcon />
+              <ChevronsRightIcon className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -399,6 +411,7 @@ CustomTable1.propTypes = {
   loading: PropTypes.bool,
   pageSize: PropTypes.number,
   message: PropTypes.string,
+  emptyHint: PropTypes.string,
   initialPageIndex: PropTypes.number,
   onPageChange: PropTypes.func,
   onPageSizeChange: PropTypes.func,

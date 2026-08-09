@@ -5,10 +5,6 @@ import {
   Button,
   Input,
   Label,
-  Modal,
-  ModalBody,
-  ModalFooter,
-  ModalHeader,
   Row,
   Col,
   Collapse,
@@ -17,17 +13,24 @@ import moment from "moment";
 import { formatNumber1 } from "@/components/router/utilities";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
-import { map } from "@nosferatu500/react-sortable-tree";
 import { toast } from "sonner";
 import { _fetchApi } from "@/redux/actions/api";
+import { FileText } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 const CustomMemoModal = ({
   isOpen,
   toggle,
   header,
-  itemList,
+  itemList = [],
   items,
-  files,
+  files = [],
   activeBusiness,
   cancel,
   returnMemo,
@@ -38,7 +41,7 @@ const CustomMemoModal = ({
   setRemark,
   amount,
   setAmount,
-  logs,
+  logs = [],
   mode,
   form,
   handleChange,
@@ -80,10 +83,40 @@ const CustomMemoModal = ({
       getJustification();
     }
   }, [getJustification, isOpen]);
+
+  const handleOpenChange = (open) => {
+    if (!open) {
+      if (typeof cancel === "function") cancel();
+      else if (typeof toggle === "function") toggle();
+    }
+  };
+
   return (
-    <Modal isOpen={isOpen} toggle={toggle} size="lg">
-      <ModalHeader toggle={toggle}>{header}</ModalHeader>
-      <ModalBody>
+    <Sheet open={isOpen} onOpenChange={handleOpenChange}>
+      <SheetContent
+        side="right"
+        className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-xl md:!max-w-2xl lg:!max-w-3xl [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100"
+      >
+        <SheetHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-navy,#0f2744)] px-5 py-4 pr-12 text-left">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-md bg-white/10 p-2">
+              <FileText className="h-4 w-4 text-white/90" />
+            </div>
+            <div className="min-w-0">
+              <SheetTitle className="text-lg font-semibold leading-tight text-white">
+                {header || "Preview"}
+              </SheetTitle>
+              <SheetDescription className="mt-0.5 text-xs text-white/70">
+                {items?.memo_id || "Internal memo"}
+                {items?.date
+                  ? ` · ${moment(items.date).format("DD MMM YYYY")}`
+                  : ""}
+              </SheetDescription>
+            </div>
+          </div>
+        </SheetHeader>
+
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-5 py-5">
         {/* {JSON.stringify(logs)} */}
         <div>
           {mode !== "review_rejected" && (
@@ -168,7 +201,7 @@ const CustomMemoModal = ({
                           </tr>
                         </thead>
                         <tbody>
-                          {logs.map((log, idx) => (
+                          {(logs || []).map((log, idx) => (
                             <tr key={idx}>
                               <td className="text-center">{idx + 1}</td>
                               <td>{log.date}</td>
@@ -328,8 +361,8 @@ const CustomMemoModal = ({
                       </tr>
                     </thead>
                     <tbody>
-                      {itemList.map((item, idx) => (
-                        <tr key={item.item_list_id}>
+                      { (itemList || []).map((item, idx) => (
+                        <tr key={item.item_list_id || idx}>
                           <td className="text-center">{idx + 1}</td>
                           <td>{item.item_name|| item.description}</td>
                           <td className="text-right">
@@ -343,6 +376,13 @@ const CustomMemoModal = ({
                           </td>
                         </tr>
                       ))}
+                      {(itemList || []).length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="text-center text-slate-500">
+                            No line items
+                          </td>
+                        </tr>
+                      )}
                       <tr>
                         <td colSpan={4} className="text-right fw-bold">
                           Total(₦):
@@ -382,13 +422,13 @@ const CustomMemoModal = ({
                 </div>
               </div>
 
-              {mode === "preview" || mode === "review" || mode === "approve" &&
+              {(mode === "preview" || mode === "review" || mode === "approve") &&
                 <>
-                {files.length > 0 && (
+                {(files || []).length > 0 && (
                     <>
                       <div className="fw-bold">Attachments:</div>
                       <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        {files.map((file, i) => {
+                        {(files || []).map((file, i) => {
                           const parts = file.name.split(".");
                           const ext = parts.length > 1 ? "." + parts.pop() : "";
                           const baseName = parts.join(".");
@@ -451,8 +491,9 @@ const CustomMemoModal = ({
                   <div className="mt-3">
                     <center>
                       <button
+                        type="button"
                         onClick={toggleCollapse}
-                        className="btn btn-primary"
+                        className="inline-flex h-9 items-center rounded-md bg-[var(--aa-navy,#0f2744)] px-4 text-sm font-semibold text-white hover:bg-[var(--aa-navy-hover,#243a73)]"
                       >
                         {isCollapsed ? "View Logs" : "Hide Logs"}
                       </button>
@@ -483,8 +524,8 @@ const CustomMemoModal = ({
                                 <td></td>
                               </tr> */}
                               {mode === "preview" &&
-                                logs.length > 0 &&
-                                logs.map((log, idx) => (
+                                (logs || []).length > 0 &&
+                                (logs || []).map((log, idx) => (
                                   <tr key={idx}>
                                     <td>{idx + 1}</td>
                                     <td>
@@ -581,7 +622,11 @@ const CustomMemoModal = ({
               </div>
               <div className="mt-3">
                 <center>
-                  <button onClick={toggleCollapse} className="btn btn-primary">
+                  <button
+                    type="button"
+                    onClick={toggleCollapse}
+                    className="inline-flex h-9 items-center rounded-md bg-[var(--aa-navy,#0f2744)] px-4 text-sm font-semibold text-white hover:bg-[var(--aa-navy-hover,#243a73)]"
+                  >
                     {isCollapsed ? "View Logs" : "Hide Logs"}
                   </button>
                 </center>
@@ -611,8 +656,8 @@ const CustomMemoModal = ({
                             <td></td>
                           </tr> */}
                           {(mode === "review" || mode === "approve") &&
-                            logs.length > 0 &&
-                            logs.map((log, idx) => (
+                            (logs || []).length > 0 &&
+                            (logs || []).map((log, idx) => (
                               <tr key={idx}>
                                 <td>{idx + 1}</td>
                                 <td>{moment(log.date).format("YYYY-MM-DD")}</td>
@@ -630,11 +675,18 @@ const CustomMemoModal = ({
             </div>
           )}
         </div>
-      </ModalBody>
-      <ModalFooter>
+        </div>
+
+        <div className="shrink-0 border-t border-slate-200 bg-white px-5 py-3">
+          <div className="flex flex-wrap justify-end gap-2">
         {mode === "preview" && (
-          <Button color="danger" className="mr-1" onClick={cancel}>
-            Cancel
+          <Button
+            color="secondary"
+            outline
+            className="mr-1"
+            onClick={cancel}
+          >
+            Close
           </Button>
         )}
         {mode === "review" && (
@@ -652,6 +704,7 @@ const CustomMemoModal = ({
               color="primary"
               onClick={approveMemo}
               disabled={remark === ""}
+              className="!border-[var(--aa-navy,#0f2744)] !bg-[var(--aa-navy,#0f2744)]"
             >
               Submit
             </Button>
@@ -672,6 +725,7 @@ const CustomMemoModal = ({
               color="primary"
               onClick={approveMemo}
               disabled={remark === ""}
+              className="!border-[var(--aa-navy,#0f2744)] !bg-[var(--aa-navy,#0f2744)]"
               // disabled={amount === ""}
             >
               Submit
@@ -679,25 +733,30 @@ const CustomMemoModal = ({
           </>
         )}
         {mode === "review_rejected" && (
-          <center>
-            <Button color="primary" onClick={handleEdit} disabled={loading2}>
-              {loading2 ? "Submitting..." : "Submit"}
-            </Button>
-          </center>
+          <Button
+            color="primary"
+            onClick={handleEdit}
+            disabled={loading2}
+            className="!border-[var(--aa-navy,#0f2744)] !bg-[var(--aa-navy,#0f2744)]"
+          >
+            {loading2 ? "Submitting..." : "Submit"}
+          </Button>
         )}
-      </ModalFooter>
+          </div>
+        </div>
       {isOpen2 && (
         <Lightbox
           open={isOpen2}
           close={() => setIsOpen2(false)}
           index={photoIndex}
-          slides={files.map((file) => ({
+          slides={(files || []).map((file) => ({
             src: file.fromServer ? file.preview : URL.createObjectURL(file),
           }))}
           on={{ view: ({ index }) => setPhotoIndex(index) }}
         />
       )}
-    </Modal>
+      </SheetContent>
+    </Sheet>
   );
 };
 

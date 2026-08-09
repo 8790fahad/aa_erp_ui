@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   CheckCircle2,
-  ExternalLink,
   FileText,
   Package,
   RefreshCw,
@@ -333,9 +332,9 @@ export default function WarehouseRequests() {
                           ) : null}
                         </div>
                         <div className="mt-1 text-xs text-gray-500">
-                          {formatNumber1(Number(row.qty_collected || 0))} /{" "}
-                          {formatNumber1(Number(row.qty_total || 0))} on invoice
-                          collected
+                          {Number(row.qty_collected || 0) > 0
+                            ? `${formatNumber1(Number(row.qty_collected || 0))} / ${formatNumber1(Number(row.qty_total || 0))} collected`
+                            : `${formatNumber1(Number(row.qty_total || 0))} to collect on invoice`}
                         </div>
                       </button>
                     </li>
@@ -389,12 +388,10 @@ export default function WarehouseRequests() {
                   <div className="flex flex-col items-end gap-2">
                     <Link
                       to={branchInvoiceUrl}
-                      target="_blank"
-                      rel="noreferrer"
                       className="inline-flex items-center gap-1.5 text-sm font-medium text-[#4267B2] hover:underline"
                     >
                       Open branch invoice
-                      <ExternalLink className="w-3.5 h-3.5" />
+                      <FileText className="w-3.5 h-3.5" />
                     </Link>
                   </div>
                 </div>
@@ -417,7 +414,7 @@ export default function WarehouseRequests() {
                             Invoice qty
                           </th>
                           <th className="px-3 py-2 text-right font-semibold">
-                            Collected
+                            Collect qty
                           </th>
                           <th className="px-3 py-2 text-right font-semibold">
                             Action
@@ -457,8 +454,14 @@ export default function WarehouseRequests() {
                                     Done
                                   </span>
                                 ) : (
-                                  <span className="tabular-nums text-orange-700">
-                                    {formatNumber1(row.qty_collected)}
+                                  <span className="tabular-nums font-medium text-orange-700">
+                                    {formatNumber1(
+                                      Math.max(
+                                        0,
+                                        Number(row.invoice_qty || 0) -
+                                          Number(row.qty_collected || 0),
+                                      ),
+                                    )}
                                   </span>
                                 )}
                               </td>
@@ -503,13 +506,11 @@ export default function WarehouseRequests() {
                         ? "Updating…"
                         : "Collect all invoice items"}
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => window.open(branchInvoiceUrl, "_blank")}
-                    >
-                      <FileText className="w-4 h-4 mr-1.5" />
-                      View / print invoice
+                    <Button type="button" variant="outline" asChild>
+                      <Link to={branchInvoiceUrl}>
+                        <FileText className="w-4 h-4 mr-1.5" />
+                        View / print invoice
+                      </Link>
                     </Button>
                   </div>
                 ) : (

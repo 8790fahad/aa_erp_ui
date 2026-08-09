@@ -15,7 +15,6 @@ import {
   Info,
   DollarSign,
   Banknote,
-  ChevronLeft,
   Printer,
   Users,
 } from "lucide-react";
@@ -48,6 +47,7 @@ const initialItemForm = {
   total: 0,
   item_type: "",
   taxable: "Not Taxable",
+  line_tax_id: null,
 };
 
 export default function OperatingExpenses() {
@@ -96,7 +96,6 @@ export default function OperatingExpenses() {
   const [taxes, setTaxes] = useState([]);
   const [selectedTaxes, setSelectedTaxes] = useState([]);
   const [loadingTaxes, setLoadingTaxes] = useState(false);
-  const [showTaxSelection, setShowTaxSelection] = useState(true);
   const vatPolicy = activeBusiness?.vat_policy || "vat_exclusive";
 
   // Editing state
@@ -283,6 +282,7 @@ export default function OperatingExpenses() {
       cost: "",
       total: 0,
       taxable: "Not Taxable",
+      line_tax_id: null,
     };
     setItems((prev) => [...prev, newItem]);
   };
@@ -376,138 +376,110 @@ export default function OperatingExpenses() {
     }, 0);
   };
 
-  // Calculate tax amount for an item
-  const calculateTaxAmount = (itemAmount, tax) => {
+  const isTaxInclusive = (tax) => {
+    if (!tax) return false;
+    if (vatPolicy === "all") {
+      return (
+        tax.inclusive_type === "inclusive" ||
+        (tax.inclusive_type === undefined && tax.tax_type === "inclusive")
+      );
+    }
+    return (
+      tax.inclusive_type === "inclusive" ||
+      (tax.inclusive_type === undefined && vatPolicy === "vat_inclusive")
+    );
+  };
+
+  // Filter taxes based on vat_policy (same as New Product Bill)
+  const filteredTaxes = useMemo(() => {
+    if (!taxes || taxes.length === 0) return [];
+
+    if (vatPolicy === "all") {
+      return taxes;
+    } else if (vatPolicy === "vat_inclusive") {
+      return taxes.filter(
+        (tax) =>
+          tax.inclusive_type === "inclusive" ||
+          (tax.inclusive_type === undefined && tax.tax_type === "inclusive"),
+      );
+    }
+    return taxes.filter(
+      (tax) =>
+        tax.inclusive_type === "exclusive" ||
+        (tax.inclusive_type === undefined && tax.tax_type === "exclusive"),
+    );
+  }, [taxes, vatPolicy]);
+
+  const lineTaxOptions = filteredTaxes;
+  const defaultLineTaxId = useMemo(
+    () => lineTaxOptions[0]?.id ?? null,
+    [lineTaxOptions],
+  );
+
+  // Calculate tax amount based on tax's inclusive_type
+  const calculateTaxAmount = (baseAmount, tax) => {
     if (!tax || !tax.rate) return 0;
 
     const rate = parseFloat(tax.rate);
-    // Use tax's inclusive_type if available
-    const isInclusive =
-      tax.inclusive_type === "inclusive" ||
-      (tax.inclusive_type === undefined &&
-        vatPolicy === "vat_inclusive" &&
-        vatPolicy !== "all");
+    const isInclusive = isTaxInclusive(tax);
 
     if (isInclusive) {
-      // For inclusive tax, extract tax from the base amount
       if (tax.rate_type === "percentage") {
         const rateDecimal = rate / 100;
         if (rateDecimal === 0) return 0;
-        return itemAmount - itemAmount / (1 + rateDecimal);
-      } else {
-        return rate; // Fixed amount in inclusive mode
+        return baseAmount - baseAmount / (1 + rateDecimal);
       }
-    } else {
-      // For exclusive tax, add tax on top
-      if (tax.rate_type === "percentage") {
-        return (itemAmount * rate) / 100;
-      } else {
-        return rate; // Fixed amount
-      }
+      return rate;
     }
+    if (tax.rate_type === "percentage") {
+      return (baseAmount * rate) / 100;
+    }
+    return rate;
   };
 
-  // Calculate total tax
+  const getLineTax = (item) => {
+    if (!item?.line_tax_id) return null;
+    return (
+      lineTaxOptions.find((t) => String(t.id) === String(item.line_tax_id)) ||
+      null
+    );
+  };
+
+  const getLineTaxAmount = (item) => {
+    if (item.taxable !== "Taxable") return 0;
+    const tax = getLineTax(item);
+    if (!tax) return 0;
+    const totalParsed = parseNumberFromFormatted(item.total?.toString() || "");
+    const base = totalParsed === "" ? 0 : parseFloat(totalParsed) || 0;
+    return calculateTaxAmount(base, tax);
+  };
+
+  // Keep selectedTaxes in sync with per-line tax picks (New Product Bill pattern)
+  useEffect(() => {
+    const usedIds = new Set(
+      items
+        .filter((i) => i.taxable === "Taxable" && i.line_tax_id)
+        .map((i) => String(i.line_tax_id)),
+    );
+    setSelectedTaxes(lineTaxOptions.filter((t) => usedIds.has(String(t.id))));
+  }, [items, lineTaxOptions]);
+
+  // Per-line tax total
   const calculateTotalTax = () => {
-    if (selectedTaxes.length === 0) return 0;
-
-    const taxableItems = items.filter((item) => item.taxable === "Taxable");
-    if (taxableItems.length === 0) return 0;
-
-    let totalTax = 0;
-
-    // Separate taxes by inclusive_type
-    const exclusiveTaxes = selectedTaxes.filter((tax) => {
-      if (vatPolicy === "all") {
-        return (
-          tax.inclusive_type === "exclusive" ||
-          (tax.inclusive_type === undefined && tax.tax_type === "exclusive")
-        );
-      }
-      return (
-        tax.inclusive_type === "exclusive" ||
-        (tax.inclusive_type === undefined && tax.tax_type === "exclusive") ||
-        (tax.inclusive_type === undefined && vatPolicy === "vat_exclusive")
-      );
-    });
-    const inclusiveTaxes = selectedTaxes.filter((tax) => {
-      if (vatPolicy === "all") {
-        return (
-          tax.inclusive_type === "inclusive" ||
-          (tax.inclusive_type === undefined && tax.tax_type === "inclusive")
-        );
-      }
-      return (
-        tax.inclusive_type === "inclusive" ||
-        (tax.inclusive_type === undefined && tax.tax_type === "inclusive") ||
-        (tax.inclusive_type === undefined && vatPolicy === "vat_inclusive")
-      );
-    });
-
-    // Calculate exclusive taxes: add on top
-    taxableItems.forEach((item) => {
-      const itemTotal =
-        parseFloat(parseNumberFromFormatted(item.total?.toString() || "")) || 0;
-      exclusiveTaxes.forEach((tax) => {
-        totalTax += calculateTaxAmount(itemTotal, tax);
-      });
-    });
-
-    // Calculate inclusive taxes: extract from subtotal
-    if (inclusiveTaxes.length > 0) {
-      const taxableSubtotal = taxableItems.reduce((sum, item) => {
-        const itemTotal =
-          parseFloat(parseNumberFromFormatted(item.total?.toString() || "")) ||
-          0;
-        return sum + itemTotal;
-      }, 0);
-
-      const totalInclusiveRate = inclusiveTaxes.reduce((sum, tax) => {
-        if (tax.rate_type === "percentage") {
-          return sum + parseFloat(tax.rate || 0) / 100;
-        }
-        return sum;
-      }, 0);
-
-      if (totalInclusiveRate > 0) {
-        const netAmount = taxableSubtotal / (1 + totalInclusiveRate);
-        totalTax += taxableSubtotal - netAmount;
-      }
-
-      // Add fixed amount inclusive taxes
-      inclusiveTaxes.forEach((tax) => {
-        if (tax.rate_type === "fixed") {
-          totalTax += parseFloat(tax.rate || 0) * taxableItems.length;
-        }
-      });
-    }
-
-    return totalTax;
+    return items.reduce((sum, item) => sum + getLineTaxAmount(item), 0);
   };
 
-  // Get total with tax
+  // Grand total: subtotal + exclusive line tax only (inclusive already in cost)
   const getTotal = () => {
     const subtotal = calculateTotal();
-    const totalTax = calculateTotalTax();
-
-    // Check if all taxes are inclusive
-    const allTaxesInclusive =
-      selectedTaxes.length > 0 &&
-      selectedTaxes.every((tax) => {
-        if (vatPolicy === "all") {
-          return (
-            tax.inclusive_type === "inclusive" ||
-            (tax.inclusive_type === undefined && tax.tax_type === "inclusive")
-          );
-        }
-        return (
-          tax.inclusive_type === "inclusive" ||
-          (tax.inclusive_type === undefined && vatPolicy === "vat_inclusive")
-        );
-      });
-
-    // If all taxes are inclusive, subtotal already includes tax
-    return allTaxesInclusive ? subtotal : subtotal + totalTax;
+    let exclusiveVAT = 0;
+    items.forEach((item) => {
+      if (item.taxable !== "Taxable") return;
+      const tax = getLineTax(item);
+      if (!tax || isTaxInclusive(tax)) return;
+      exclusiveVAT += getLineTaxAmount(item);
+    });
+    return subtotal + exclusiveVAT;
   };
 
   // Check supplier balance from general ledger
@@ -607,97 +579,38 @@ export default function OperatingExpenses() {
       }
     }
 
-    // Calculate tax amounts
-    const taxableItems = items.filter((item) => item.taxable === "Taxable");
-    const taxableSubtotal = taxableItems.reduce((sum, item) => {
-      const itemTotal =
-        parseFloat(parseNumberFromFormatted(item.total?.toString() || "")) || 0;
-      return sum + itemTotal;
-    }, 0);
-
-    // Calculate tax based on each tax's inclusive_type
-    let taxAmount = 0;
-    const taxesArray = [];
-
-    if (selectedTaxes.length > 0 && taxableSubtotal > 0) {
-      const isTaxInclusive = (tax) => {
-        if (vatPolicy === "vat_inclusive") return true;
-        if (vatPolicy === "vat_exclusive") return false;
-        // vatPolicy === "all": per-tax decision via inclusive_type
-        return (tax.inclusive_type || "").toLowerCase() === "inclusive";
-      };
-
-      const inclusiveTaxes = selectedTaxes.filter(isTaxInclusive);
-      const exclusiveTaxes = selectedTaxes.filter(
-        (tax) => !isTaxInclusive(tax),
+    // Aggregate per-line taxes for API (New Product Bill pattern)
+    const taxAmount = calculateTotalTax();
+    const taxTotals = new Map();
+    items.forEach((item) => {
+      if (item.taxable !== "Taxable" || !item.line_tax_id) return;
+      const tax = getLineTax(item);
+      if (!tax) return;
+      const totalParsed = parseNumberFromFormatted(
+        item.total?.toString() || "",
       );
-
-      // Calculate inclusive taxes: extract VAT from the taxable amount
-      if (inclusiveTaxes.length > 0) {
-        const totalInclusiveRate = inclusiveTaxes.reduce((sum, tax) => {
-          if (tax.rate_type === "percentage") {
-            return sum + parseFloat(tax.rate || 0) / 100;
-          }
-          return sum;
-        }, 0);
-
-        if (totalInclusiveRate > 0) {
-          const netAmount = taxableSubtotal / (1 + totalInclusiveRate);
-          taxAmount += taxableSubtotal - netAmount;
-        }
-
-        // Add fixed amount inclusive taxes
-        inclusiveTaxes.forEach((tax) => {
-          if (tax.rate_type === "fixed") {
-            taxAmount += parseFloat(tax.rate || 0);
-          }
-        });
-      }
-
-      // Calculate exclusive taxes: add VAT to the taxable amount
-      if (exclusiveTaxes.length > 0) {
-        taxAmount += exclusiveTaxes.reduce((sum, tax) => {
-          if (tax.rate_type === "percentage") {
-            return sum + (taxableSubtotal * parseFloat(tax.rate || 0)) / 100;
-          } else {
-            return sum + parseFloat(tax.rate || 0);
-          }
-        }, 0);
-      }
-
-      // Build taxes array for API
-      selectedTaxes.forEach((tax) => {
-        const taxIsInclusive = isTaxInclusive(tax);
-        let taxAmountForTax = 0;
-
-        if (taxIsInclusive) {
-          const totalRate = inclusiveTaxes.reduce((sum, t) => {
-            return sum + parseFloat(t.rate || 0) / 100;
-          }, 0);
-
-          if (totalRate > 0) {
-            const netAmount = taxableSubtotal / (1 + totalRate);
-            const totalVAT = taxableSubtotal - netAmount;
-            const taxRate = parseFloat(tax.rate || 0) / 100;
-            taxAmountForTax = (totalVAT * taxRate) / totalRate;
-          }
-        } else {
-          taxAmountForTax = (taxableSubtotal * parseFloat(tax.rate || 0)) / 100;
-        }
-
-        taxesArray.push({
+      const base = totalParsed === "" ? 0 : parseFloat(totalParsed) || 0;
+      const amount = calculateTaxAmount(base, tax);
+      const key = String(tax.id);
+      if (taxTotals.has(key)) {
+        taxTotals.get(key).amount += amount;
+      } else {
+        taxTotals.set(key, {
           id: tax.id,
           name: tax.description || tax.name,
           description: tax.description,
           rate: parseFloat(tax.rate),
           head: tax.account_sub_head,
-          amount: taxAmountForTax,
-          tax_type: tax.tax_type || "exclusive",
+          amount,
+          tax_type:
+            tax.inclusive_type ||
+            (vatPolicy === "vat_inclusive" ? "inclusive" : "exclusive"),
           rate_type: tax.rate_type || "percentage",
-          inclusive_type: taxIsInclusive ? "inclusive" : "exclusive",
+          inclusive_type: isTaxInclusive(tax) ? "inclusive" : "exclusive",
         });
-      });
-    }
+      }
+    });
+    const taxesArray = Array.from(taxTotals.values());
 
     // Prepare purchase data with items
     const purchaseData = items.map((item) => {
@@ -715,6 +628,7 @@ export default function OperatingExpenses() {
         quantity: qty,
         qty: qty,
         taxable: item.taxable || "Not Taxable",
+        line_tax_id: item.line_tax_id || null,
       };
     });
 
@@ -744,15 +658,19 @@ export default function OperatingExpenses() {
       },
       (res) => {
         if (res.success) {
-          // After a successful save, close any memos that were queued via "Add & Close"
-          if (memosToClose.length > 0) {
-            memosToClose.forEach((memoId) => {
-              const memo = memos.find((m) => m.memo_id === memoId);
-              if (memo) {
-                closeMemoStatus(memo, { addItems: false });
-              }
+          // Close memos treated on this bill (Add to List / remaining unclosed)
+          const idsToClose = [
+            ...new Set([...(selectedMemoIds || []), ...(memosToClose || [])]),
+          ];
+          if (idsToClose.length > 0) {
+            idsToClose.forEach((memoId) => {
+              const memo = memos.find((m) => m.memo_id === memoId) || {
+                memo_id: memoId,
+              };
+              closeMemoStatus(memo, { addItems: false });
             });
             setMemosToClose([]);
+            setSelectedMemoIds([]);
           }
           // Create ledger entries
           toast.success(
@@ -966,13 +884,6 @@ export default function OperatingExpenses() {
     );
   };
 
-  // Show all taxes (both exclusive and inclusive)
-  const filteredTaxes = useMemo(() => {
-    if (!taxes || taxes.length === 0) return [];
-    // Return all taxes regardless of vat_policy
-    return taxes;
-  }, [taxes]);
-
   // Fetch memos for the expenses memo drawer (with items included)
   const fetchMemos = () => {
     if (!activeBusiness?.id) return;
@@ -1008,10 +919,15 @@ export default function OperatingExpenses() {
   // Add memo items to the current items list
   // Items are now already included in the memo object from the API
   const addMemoItems = (memo) => {
+    if (selectedMemoIds.includes(memo.memo_id)) {
+      toast.info(`Memo ${memo.memo_id} is already on this bill`);
+      return false;
+    }
+
     // Check if memo has items
     if (!memo.items || memo.items.length === 0) {
       toast.error("No items found in this memo");
-      return;
+      return false;
     }
 
     // Map the items from the memo to the format expected by the items list
@@ -1028,10 +944,11 @@ export default function OperatingExpenses() {
         parseFloat(item.unit_cost || item.cost || item.amount || 0),
       item_type: item.item_subhead || item.item_type || "",
       taxable: item.taxable || "Not Taxable",
+      line_tax_id: null,
     }));
 
-    // Add to items list
-    setItems([...items, ...memoItems]);
+    // Functional update so multiple memos can be added without losing prior lines
+    setItems((prev) => [...prev, ...memoItems]);
 
     // Populate Select Supplier when memo has supplier details
     if (memo.supplier_number || memo.supplier_name) {
@@ -1045,17 +962,17 @@ export default function OperatingExpenses() {
       }));
     }
 
-    // Add memo ID to selected list to prevent re-adding
-    if (!selectedMemoIds.includes(memo.memo_id)) {
-      setSelectedMemoIds((prev) => [...prev, memo.memo_id]);
-    }
+    setSelectedMemoIds((prev) =>
+      prev.includes(memo.memo_id) ? prev : [...prev, memo.memo_id],
+    );
 
     toast.success(
       `Added ${memoItems.length} item(s) from memo ${memo.memo_id}`,
     );
+    return true;
   };
 
-  // Close memo (update status to "closed")
+  // Close memo (update status to "closed") — removed from this drawer list when successful
   const closeMemoStatus = (memo, { addItems } = { addItems: false }) => {
     if (!activeBusiness?.id && !activeBusiness?._id) {
       toast.error("Active business not found");
@@ -1064,7 +981,10 @@ export default function OperatingExpenses() {
 
     // Optionally add items before closing
     if (addItems) {
-      addMemoItems(memo);
+      const added = addMemoItems(memo);
+      if (!added && !selectedMemoIds.includes(memo.memo_id)) {
+        return;
+      }
     }
 
     setClosingMemoId(memo.memo_id);
@@ -1079,22 +999,13 @@ export default function OperatingExpenses() {
         setClosingMemoId(null);
         if (resp.success) {
           toast.success(resp.message || "Memo closed successfully");
-          // Update memo status locally so it still shows as closed in lists
-          setMemos((prev) =>
-            prev.map((m) =>
-              m.memo_id === memo.memo_id ? { ...m, status: "closed" } : m,
-            ),
-          );
-          // Reload memos from the server so the drawer list stays in sync
-          // (e.g. after using the cancel-close icon)
-          fetchMemos();
-          // Track as processed
+          // Drop from drawer list immediately (treated memos must not reappear)
+          setMemos((prev) => prev.filter((m) => m.memo_id !== memo.memo_id));
+          setMemosToClose((prev) => prev.filter((id) => id !== memo.memo_id));
+          // Already closed — don't queue again on bill save
           setSelectedMemoIds((prev) =>
-            prev.includes(memo.memo_id) ? prev : [...prev, memo.memo_id],
+            prev.filter((id) => id !== memo.memo_id),
           );
-          if (addItems) {
-            setIsMemoDrawerOpen(false);
-          }
         } else {
           toast.error(resp.message || "Failed to close memo");
         }
@@ -1230,7 +1141,7 @@ export default function OperatingExpenses() {
             <button
               type="button"
               onClick={handleOpenMemoDrawer}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--aa-accent)] hover:underline"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--aa-navy,#0f2744)] hover:underline"
             >
               View Expenses Memos
             </button>
@@ -1620,8 +1531,8 @@ export default function OperatingExpenses() {
                   <th className="min-w-[10rem] w-44 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
                     Unit Cost
                   </th>
-                  <th className="w-28 px-2 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide">
-                    Taxable
+                  <th className="w-40 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
+                    Tax
                   </th>
                   <th className="w-32 px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
                     Amount
@@ -1692,8 +1603,37 @@ export default function OperatingExpenses() {
                             positionFixed
                           />
                           {item.head && (
-                            <div className="mt-1.5 text-[11px] text-slate-500">
-                              Code: {item.head}
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <button
+                                type="button"
+                                title="Click to toggle taxable"
+                                onClick={() => {
+                                  if (item.taxable === "Taxable") {
+                                    updateItemField(item._id, {
+                                      taxable: "Not Taxable",
+                                      line_tax_id: null,
+                                    });
+                                  } else {
+                                    updateItemField(item._id, {
+                                      taxable: "Taxable",
+                                      line_tax_id:
+                                        item.line_tax_id || defaultLineTaxId,
+                                    });
+                                  }
+                                }}
+                                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                  item.taxable === "Taxable"
+                                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                }`}
+                              >
+                                {item.taxable === "Taxable"
+                                  ? "Taxable"
+                                  : "Not taxable"}
+                              </button>
+                              <span className="text-[11px] text-slate-500">
+                                Code: {item.head}
+                              </span>
                             </div>
                           )}
                         </td>
@@ -1762,28 +1702,32 @@ export default function OperatingExpenses() {
                             className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-right text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                           />
                         </td>
-                        <td className="px-2 py-3 text-center align-top">
-                          <button
-                            type="button"
-                            title="Click to toggle taxable"
-                            onClick={() =>
+                        <td className="px-2 py-3 align-top">
+                          <select
+                            value={item.line_tax_id ?? ""}
+                            disabled={item.taxable !== "Taxable"}
+                            onChange={(e) => {
+                              const taxId = e.target.value || null;
                               updateItemField(item._id, {
-                                taxable:
-                                  item.taxable === "Taxable"
-                                    ? "Not Taxable"
-                                    : "Taxable",
-                              })
-                            }
-                            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                              item.taxable === "Taxable"
-                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            }`}
+                                line_tax_id: taxId,
+                                taxable: taxId ? "Taxable" : "Not Taxable",
+                              });
+                            }}
+                            className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)] disabled:bg-slate-50"
                           >
-                            {item.taxable === "Taxable"
-                              ? "Taxable"
-                              : "Not taxable"}
-                          </button>
+                            <option value="">Select a Tax</option>
+                            {lineTaxOptions.map((tax) => (
+                              <option key={tax.id} value={tax.id}>
+                                {tax.description} ({tax.rate}%)
+                              </option>
+                            ))}
+                          </select>
+                          {item.taxable === "Taxable" &&
+                            getLineTaxAmount(item) > 0 && (
+                              <div className="mt-1 text-[11px] tabular-nums text-slate-500">
+                                ₦{formatNumber(getLineTaxAmount(item))}
+                              </div>
+                            )}
                         </td>
                         <td className="px-2 py-3 text-right align-top text-sm font-medium tabular-nums text-slate-900">
                           {formatNumber(item.total)}
@@ -1848,7 +1792,7 @@ export default function OperatingExpenses() {
                         <td className="min-w-[10rem] w-44 px-3 py-3 text-right align-top text-sm text-slate-400">
                           0.00
                         </td>
-                        <td className="px-2 py-3 text-center align-top text-sm text-slate-400">
+                        <td className="px-2 py-3 align-top text-sm text-slate-400">
                           —
                         </td>
                         <td className="px-2 py-3 text-right align-top text-sm text-slate-400">
@@ -1909,14 +1853,32 @@ export default function OperatingExpenses() {
                   {formatNumber(calculateTotal())}
                 </span>
               </div>
-              {selectedTaxes.length > 0 && calculateTotalTax() > 0 && (
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-slate-600">Tax</span>
-                  <span className="tabular-nums text-slate-900">
-                    {formatNumber(calculateTotalTax())}
-                  </span>
-                </div>
-              )}
+              {selectedTaxes.length > 0 &&
+                calculateTotalTax() > 0 &&
+                selectedTaxes.map((tax) => {
+                  const taxAmountForDisplay = items.reduce((sum, item) => {
+                    if (
+                      item.taxable !== "Taxable" ||
+                      String(item.line_tax_id) !== String(tax.id)
+                    ) {
+                      return sum;
+                    }
+                    return sum + getLineTaxAmount(item);
+                  }, 0);
+                  return (
+                    <div
+                      key={tax.id}
+                      className="flex items-center justify-between gap-4"
+                    >
+                      <span className="text-slate-600">
+                        {tax.description} ({tax.rate}%)
+                      </span>
+                      <span className="tabular-nums text-slate-900">
+                        {formatNumber(taxAmountForDisplay)}
+                      </span>
+                    </div>
+                  );
+                })}
               <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-3">
                 <span className="text-base font-semibold text-slate-900">
                   Total (NGN)
@@ -1925,71 +1887,6 @@ export default function OperatingExpenses() {
                   {formatNumber(getTotal())}
                 </span>
               </div>
-            </div>
-          </div>
-
-          {/* Tax Selection Section */}
-          <div className="border-t border-slate-200 px-6 py-3">
-            <div className="mb-2">
-              <div className="flex items-center justify-between mb-1">
-                <button
-                  type="button"
-                  onClick={() => setShowTaxSelection(!showTaxSelection)}
-                  className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-[var(--aa-accent)] transition-colors"
-                >
-                  <span>Apply Taxes</span>
-                  {showTaxSelection ? (
-                    <ChevronLeft className="w-4 h-4 rotate-90" />
-                  ) : (
-                    <ChevronLeft className="w-4 h-4 -rotate-90" />
-                  )}
-                </button>
-              </div>
-              {showTaxSelection && (
-                <>
-                  {filteredTaxes.length > 0 && (
-                    <div className="mt-2 flex flex-wrap items-center gap-3">
-                      {filteredTaxes.map((tax) => {
-                        const isSelected = selectedTaxes.some(
-                          (t) => t.id === tax.id,
-                        );
-                        const isInclusive =
-                          tax.inclusive_type === "inclusive" ||
-                          (tax.inclusive_type === undefined &&
-                            tax.tax_type === "inclusive");
-                        return (
-                          <button
-                            key={tax.id}
-                            type="button"
-                            onClick={() => {
-                              if (isSelected) {
-                                setSelectedTaxes((prev) =>
-                                  prev.filter((t) => t.id !== tax.id),
-                                );
-                              } else {
-                                setSelectedTaxes((prev) => [...prev, tax]);
-                              }
-                            }}
-                            className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                              isSelected
-                                ? "border-[var(--aa-accent)] bg-[var(--aa-accent)]/10 text-[var(--aa-accent)]"
-                                : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                            }`}
-                          >
-                            {tax.description} ({tax.rate}%)
-                            {isInclusive ? " · Inc" : " · Exc"}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {filteredTaxes.length === 0 && !loadingTaxes && (
-                    <p className="mt-2 text-xs text-slate-500">
-                      No taxes available for purchase category
-                    </p>
-                  )}
-                </>
-              )}
             </div>
           </div>
 
@@ -2044,41 +1941,44 @@ export default function OperatingExpenses() {
       <Drawer open={isMemoDrawerOpen} onOpenChange={setIsMemoDrawerOpen}>
         <DrawerContent
           side="right"
-          className="bg-white border-gray-200 flex flex-col h-full !w-[600px] max-w-[600px]"
+          className="flex h-full !w-[600px] max-w-[600px] flex-col gap-0 overflow-hidden border-l border-slate-200 bg-white p-0 [&>button]:hidden"
         >
-          <DrawerHeader className="border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <DrawerTitle className="text-gray-900 text-xl">
+          <DrawerHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-navy,#0f2744)] px-5 py-4 pr-12 text-left">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <DrawerTitle className="flex items-center gap-2 text-lg font-semibold text-white">
+                  <FileText className="h-5 w-5 text-white/90" />
                   View Expenses Memos
                 </DrawerTitle>
-                <DrawerDescription className="text-gray-600 mt-1">
-                  Click &quot;Add to List&quot; button to add memo items
+                <DrawerDescription className="mt-0.5 text-xs text-white/70">
+                  Add approved memos to this bill. Closed / treated memos leave this list.
                 </DrawerDescription>
               </div>
               <DrawerClose asChild>
                 <button
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  type="button"
+                  className="rounded-md p-2 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
                   onClick={() => {
                     setSelectedMemoIds([]);
                   }}
+                  aria-label="Close"
                 >
-                  <X className="h-5 w-5 text-gray-500" />
+                  <X className="h-5 w-5" />
                 </button>
               </DrawerClose>
             </div>
           </DrawerHeader>
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="flex-1 overflow-y-auto px-5 py-4">
             {loadingMemos ? (
               <div className="flex items-center justify-center py-12">
-                <Loader className="w-6 h-6 animate-spin text-blue-600" />
-                <span className="ml-2 text-gray-600">Loading memos...</span>
+                <Loader className="h-6 w-6 animate-spin text-[var(--aa-navy,#0f2744)]" />
+                <span className="ml-2 text-slate-600">Loading memos...</span>
               </div>
             ) : memos.filter((m) => m.status !== "closed").length === 0 ? (
-              <div className="text-center py-12">
-                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-600 mb-2">No memos found</p>
-                <p className="text-sm text-gray-500">
+              <div className="py-12 text-center">
+                <FileText className="mx-auto mb-4 h-12 w-12 text-slate-300" />
+                <p className="mb-2 text-slate-600">No memos found</p>
+                <p className="text-sm text-slate-500">
                   There are no available memos to add to the bill
                 </p>
               </div>
@@ -2089,45 +1989,52 @@ export default function OperatingExpenses() {
                   .map((memo) => (
                     <div
                       key={memo.memo_id || memo._id}
-                      className={`bg-white border-2 rounded-lg p-4 hover:border-blue-400 hover:shadow-md transition-all ${
+                      className={`rounded-lg border-2 bg-white p-4 transition-all hover:shadow-md ${
                         selectedMemoIds.includes(memo.memo_id)
-                          ? "opacity-50 cursor-not-allowed border-green-400 bg-green-50"
-                          : "border-gray-200"
+                          ? "cursor-not-allowed border-[var(--aa-navy,#0f2744)]/40 bg-[var(--aa-sidebar-active,#e8f1fc)] opacity-60"
+                          : "border-slate-200 hover:border-[var(--aa-navy,#0f2744)]/50"
                       }`}
                     >
-                      <div className="flex items-start justify-between mb-3">
+                      <div className="mb-3 flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-sm font-bold text-gray-900">
+                          <div className="mb-2 flex items-center gap-2">
+                            <h3 className="text-sm font-bold text-slate-900">
                               {memo.memo_id}
                             </h3>
-                            <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded inline-flex items-center">
+                            <span
+                              className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium capitalize ${
+                                memo.status === "approved"
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : memo.status === "pending"
+                                    ? "bg-[var(--aa-navy,#0f2744)] text-white"
+                                    : "bg-slate-100 text-slate-700"
+                              }`}
+                            >
                               {memo.status}
                             </span>
                           </div>
                           {memo.subject && (
-                            <p className="text-sm text-gray-700 mb-2">
+                            <p className="mb-2 text-sm text-slate-700">
                               {memo.subject}
                             </p>
                           )}
                         </div>
-                        {/* Close (cancel) icon aligned to far right */}
                         <button
                           type="button"
                           onClick={() => {
                             setMemoToClose(memo);
                             setShowCloseMemoModal(true);
                           }}
-                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                          className="rounded-full p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
                           title="Close this memo"
                         >
-                          <X className="w-5 h-5" />
+                          <X className="h-5 w-5" />
                         </button>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 text-xs text-gray-600">
+                      <div className="grid grid-cols-2 gap-3 text-xs text-slate-600">
                         {memo.date && (
                           <div className="flex items-center gap-2">
-                            <Calendar className="w-3 h-3" />
+                            <Calendar className="h-3 w-3 text-[var(--aa-navy,#0f2744)]" />
                             <span>
                               {moment(memo.date).format("MMM DD, YYYY")}
                             </span>
@@ -2135,7 +2042,7 @@ export default function OperatingExpenses() {
                         )}
                         {(memo.supplier_name || memo.supplier_number) && (
                           <div className="flex items-center gap-2">
-                            <Users className="w-3 h-3" />
+                            <Users className="h-3 w-3 text-[var(--aa-navy,#0f2744)]" />
                             <span className="truncate font-medium">
                               {memo.supplier_name || memo.supplier_number}
                             </span>
@@ -2143,34 +2050,33 @@ export default function OperatingExpenses() {
                         )}
                         {memo.from_name && (
                           <div className="flex items-center gap-2">
-                            <FileText className="w-3 h-3" />
+                            <FileText className="h-3 w-3 text-[var(--aa-navy,#0f2744)]" />
                             <span className="truncate">{memo.from_name}</span>
                           </div>
                         )}
                       </div>
-                      {/* Items section - now always visible since items are included in the API response */}
                       {memo.items && memo.items.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
+                        <div className="mt-3 border-t border-slate-200 pt-3">
                           <div className="space-y-2">
                             {memo.items.slice(0, 3).map((item, index) => (
                               <div
                                 key={item.item_list_id || item.id || index}
-                                className="bg-gray-50 border border-gray-200 rounded-lg p-2 pl-3"
+                                className="rounded-lg border border-slate-200 bg-slate-50 p-2 pl-3"
                               >
                                 <div className="flex items-center justify-between">
                                   <div className="flex-1">
-                                    <h4 className="text-sm font-medium text-gray-900">
+                                    <h4 className="text-sm font-medium text-slate-900">
                                       {item.description || item.item_name}
                                     </h4>
-                                    <p className="text-xs text-gray-600">
+                                    <p className="text-xs text-slate-600">
                                       {item.item_code || item.sku}
                                     </p>
                                   </div>
                                   <div className="text-right">
-                                    <div className="text-sm font-medium text-gray-900">
+                                    <div className="text-sm font-medium text-slate-900">
                                       Qty: {item.quantity || 1}
                                     </div>
-                                    <div className="text-xs text-gray-600">
+                                    <div className="text-xs text-slate-600">
                                       ₦
                                       {formatNumber(
                                         item.unit_cost ||
@@ -2183,7 +2089,7 @@ export default function OperatingExpenses() {
                               </div>
                             ))}
                             {memo.items.length > 3 && (
-                              <div className="text-xs text-gray-500 text-center">
+                              <div className="text-center text-xs text-slate-500">
                                 + {memo.items.length - 3} more items
                               </div>
                             )}
@@ -2192,11 +2098,12 @@ export default function OperatingExpenses() {
                       )}
                       <div className="mt-2 space-y-2">
                         <button
+                          type="button"
                           onClick={() => {
+                            // Keep drawer open so additional memos can be added
                             addMemoItems(memo);
-                            setIsMemoDrawerOpen(false);
                           }}
-                          className="w-full px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full rounded-md bg-[var(--aa-navy,#0f2744)] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--aa-navy-hover,#243a73)] disabled:cursor-not-allowed disabled:opacity-50"
                           disabled={selectedMemoIds.includes(memo.memo_id)}
                         >
                           {selectedMemoIds.includes(memo.memo_id)
@@ -2204,20 +2111,23 @@ export default function OperatingExpenses() {
                             : `Add to List (${memo.item_count || 0} items)`}
                         </button>
                         <button
+                          type="button"
                           onClick={() => {
-                            // Add items now and queue this memo to be closed after save
-                            addMemoItems(memo);
-                            setMemosToClose((prev) =>
-                              prev.includes(memo.memo_id)
-                                ? prev
-                                : [...prev, memo.memo_id],
-                            );
-                            setIsMemoDrawerOpen(false);
+                            // Add lines if needed, then close memo so it leaves this list
+                            if (!selectedMemoIds.includes(memo.memo_id)) {
+                              const added = addMemoItems(memo);
+                              if (!added) return;
+                            }
+                            closeMemoStatus(memo, { addItems: false });
                           }}
-                          className="w-full px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium text-sm flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={selectedMemoIds.includes(memo.memo_id)}
+                          className="w-full rounded-md border border-[var(--aa-navy,#0f2744)] bg-white px-3 py-2 text-sm font-semibold text-[var(--aa-navy,#0f2744)] transition-colors hover:bg-[var(--aa-sidebar-active,#e8f1fc)] disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={closingMemoId === memo.memo_id}
                         >
-                          Add &amp; Close
+                          {closingMemoId === memo.memo_id
+                            ? "Closing..."
+                            : selectedMemoIds.includes(memo.memo_id)
+                              ? "Close Memo"
+                              : "Add & Close"}
                         </button>
                       </div>
                     </div>

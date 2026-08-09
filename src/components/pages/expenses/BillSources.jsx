@@ -87,8 +87,14 @@ export default function BillSources() {
     if (!activeBusiness?.id) return;
 
     setLoading(true);
+    // Request a large page so the register is not silently capped at API default (10)
+    const params = new URLSearchParams({
+      facilityId: String(activeBusiness.id),
+      page: "1",
+      limit: "1000",
+    });
     _fetchApi(
-      `/api/supplier/bills?facilityId=${activeBusiness.id}`,
+      `/api/supplier/bills?${params.toString()}`,
       (resp) => {
         if (resp.success) {
           setBills(resp.data || []);
@@ -216,11 +222,19 @@ export default function BillSources() {
       component: (item) => (
         <button
           type="button"
-          onClick={() =>
+          onClick={() => {
+            const ref = String(item.invoice_ref || "");
+            const isOperating =
+              ref.startsWith("EP-") ||
+              ref.startsWith("DE/") ||
+              (item.bill_type || "").toLowerCase().includes("expense") ||
+              (item.description || "").toLowerCase().includes("operating");
             navigate(
-              `/app/expenses/billing/product-supplier-bill-pdf?invoice_ref=${item.invoice_ref}`,
-            )
-          }
+              isOperating
+                ? `/app/expenses/billing/operating-expense-bill-pdf?invoice_ref=${item.invoice_ref}`
+                : `/app/expenses/billing/product-supplier-bill-pdf?invoice_ref=${item.invoice_ref}`,
+            );
+          }}
           className="font-medium text-[#4267B2] hover:underline"
         >
           {item.invoice_ref || "N/A"}

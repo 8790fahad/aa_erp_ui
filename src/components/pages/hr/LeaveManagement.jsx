@@ -310,7 +310,7 @@ const LeaveManagement = () => {
 
       const response = await fetch(url, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: localStorage.getItem("@@__token") || "" },
         body: JSON.stringify(body),
       });
       const data = await response.json();

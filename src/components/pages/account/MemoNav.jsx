@@ -46,7 +46,7 @@ export default function MemoNav() {
             end={tab.id === "create"}
             className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
               active
-                ? "border-[var(--aa-accent)] text-[var(--aa-accent)]"
+                ? "border-[var(--aa-navy,#0f2744)] text-[var(--aa-navy,#0f2744)]"
                 : "border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-800"
             }`}
           >

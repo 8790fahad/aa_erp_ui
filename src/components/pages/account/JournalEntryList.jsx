@@ -1,22 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  BookOpen,
-  Search,
-  Plus,
-  Eye,
-  Edit,
-  Trash2,
-  Download,
-} from "lucide-react";
+import { BookOpen, Search, Plus, Eye, Edit } from "lucide-react";
 import { _postApi } from "@/redux/actions/api";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { toast } from "sonner";
-import CustomButton from "@/common/Custom/CustomButton";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import { formatNumber1 } from "@/components/router/utilities";
 
@@ -38,15 +28,8 @@ const JournalEntryList = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id;
-  // Try multiple sources for user role
   const userRole =
     user?.role || user?.user_role || activeBusiness?.user_role || "admin";
-
-  console.log("Journal Entry List - User info:", {
-    user,
-    facilityId,
-    userRole,
-  });
 
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -54,10 +37,10 @@ const JournalEntryList = () => {
   const defaultDates = getYearToDateDefaults();
   const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "");
   const [startDate, setStartDate] = useState(
-    searchParams.get("startDate") || defaultDates.yearStart
+    searchParams.get("startDate") || defaultDates.yearStart,
   );
   const [endDate, setEndDate] = useState(
-    searchParams.get("endDate") || defaultDates.today
+    searchParams.get("endDate") || defaultDates.today,
   );
 
   useEffect(() => {
@@ -91,18 +74,14 @@ const JournalEntryList = () => {
 
     if (searchTerm) payload.reference = searchTerm;
 
-    console.log("Fetching journal entries with payload:", payload);
-
     _postApi(
       `/api/journals/list`,
       payload,
       (resp) => {
         setLoading(false);
-        console.log("Journal entries response:", resp);
         if (resp.success) {
           const rows = resp.data || [];
           setEntries(rows);
-          // If URL-restored date range is too narrow, auto-broaden once to year start.
           if (
             rows.length === 0 &&
             !searchTerm &&
@@ -116,14 +95,9 @@ const JournalEntryList = () => {
       },
       (err) => {
         setLoading(false);
-        console.error("Error fetching journal entries:", err);
         toast.error(err.message || "Failed to load journal entries");
-      }
+      },
     );
-  };
-
-  const handleSearch = () => {
-    fetchEntries();
   };
 
   const canEdit = userRole === "admin" || userRole === "accountant";
@@ -133,24 +107,38 @@ const JournalEntryList = () => {
     { title: "Description", value: "description" },
     {
       title: "Total Debit",
+      className: "text-right",
       custom: true,
-      component: (item) => <div className="text-end">₦{formatNumber1(item.total_debit || 0)}</div>,
+      component: (item) => (
+        <div className="text-right tabular-nums text-slate-800">
+          ₦{formatNumber1(item.total_debit || 0)}
+        </div>
+      ),
     },
     {
       title: "Total Credit",
+      className: "text-right",
       custom: true,
-      component: (item) => <div className="text-end">₦{formatNumber1(item.total_credit || 0)}</div>,
+      component: (item) => (
+        <div className="text-right tabular-nums text-slate-800">
+          ₦{formatNumber1(item.total_credit || 0)}
+        </div>
+      ),
     },
     { title: "Created By", value: "created_by" },
     {
       title: "Actions",
+      className: "text-right",
       custom: true,
       component: (item) => (
-        <div className="d-flex justify-content-end gap-1">
+        <div className="flex items-center justify-end gap-1">
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => navigate(`/app/account/journal-entries/${item.transaction_ref}`)}
+            className="h-8 w-8 p-0 text-slate-600 hover:bg-[var(--aa-sidebar-active,#eff4fb)] hover:text-[#4267B2]"
+            onClick={() =>
+              navigate(`/app/account/journal-entries/${item.transaction_ref}`)
+            }
           >
             <Eye className="h-4 w-4" />
           </Button>
@@ -158,8 +146,11 @@ const JournalEntryList = () => {
             <Button
               size="sm"
               variant="ghost"
+              className="h-8 w-8 p-0 text-slate-600 hover:bg-[var(--aa-sidebar-active,#eff4fb)] hover:text-[#4267B2]"
               onClick={() =>
-                navigate(`/app/account/journal-entries/${item.transaction_ref}/edit`)
+                navigate(
+                  `/app/account/journal-entries/${item.transaction_ref}/edit`,
+                )
               }
             >
               <Edit className="h-4 w-4" />
@@ -171,83 +162,102 @@ const JournalEntryList = () => {
   ];
 
   return (
-    <div className="container mx-auto  space-y-6">
-      {/* Page Header */}
-      <div className="flex justify-between items-center">
+    <div className="min-h-[70vh] px-3 py-4 sm:px-4 lg:px-6">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <BookOpen className="h-8 w-8" />
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
+            <BookOpen className="h-5 w-5 text-[var(--aa-navy,#0f2744)]" />
             Journal Entries
           </h1>
-          <p className="text-gray-600 mt-2">
+          <p className="mt-0.5 text-xs text-slate-500">
             Create and manage accounting journal entries
           </p>
         </div>
-
-        <CustomButton
+        <Button
+          type="button"
           size="sm"
-          color="primary"
-          className="flex items-center gap-2"
+          className="h-8 gap-2 border-0 bg-[var(--aa-navy,#0f2744)] text-white shadow-none hover:bg-[var(--aa-navy-hover,var(--aa-navy,#0f2744))] hover:opacity-90"
           onClick={() => navigate("/app/account/journal-entries/new")}
         >
-          <Plus className="h-5 w-5" />
+          <Plus className="h-4 w-4" />
           New Journal Entry
-        </CustomButton>
+        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Search & Filter</CardTitle>
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+          <p className="text-sm font-medium text-slate-800">Journal entries</p>
+          <p className="text-xs text-slate-500">
+            {loading
+              ? "Loading…"
+              : `${entries.length} entr${entries.length === 1 ? "y" : "ies"}`}
+          </p>
+        </div>
 
-          {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-            <div>
-              <Label htmlFor="search">Search Reference</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="search"
-                  placeholder="Search by reference..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && handleSearch()}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="startDate">Start Date</Label>
+        <div className="grid grid-cols-1 gap-3 border-b border-slate-100 bg-slate-50/50 p-4 md:grid-cols-3 lg:grid-cols-[1fr_10rem_10rem]">
+          <div className="min-w-0">
+            <Label
+              htmlFor="journal-search"
+              className="mb-1.5 text-xs font-medium text-slate-600"
+            >
+              Search reference
+            </Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
-                id="startDate"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="endDate">End Date</Label>
-              <Input
-                id="endDate"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                id="journal-search"
+                type="search"
+                placeholder="Search by reference…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && fetchEntries()}
+                className="h-9 border-slate-200 bg-white pl-9 text-sm focus-visible:border-[#4267B2] focus-visible:ring-[#4267B2]/20"
               />
             </div>
           </div>
-        </CardHeader>
+          <div>
+            <Label
+              htmlFor="journal-start"
+              className="mb-1.5 text-xs font-medium text-slate-600"
+            >
+              Start date
+            </Label>
+            <Input
+              id="journal-start"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="h-9 border-slate-200 bg-white text-sm focus-visible:border-[#4267B2] focus-visible:ring-[#4267B2]/20"
+            />
+          </div>
+          <div>
+            <Label
+              htmlFor="journal-end"
+              className="mb-1.5 text-xs font-medium text-slate-600"
+            >
+              End date
+            </Label>
+            <Input
+              id="journal-end"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="h-9 border-slate-200 bg-white text-sm focus-visible:border-[#4267B2] focus-visible:ring-[#4267B2]/20"
+            />
+          </div>
+        </div>
 
-        <CardContent>
+        <div className="p-0">
           <CustomTable1
             data={entries}
             fields={fields}
             loading={loading}
             pageSize={20}
             message="No journal entries found matching your criteria."
+            emptyHint="Try a wider date range or clear the search."
           />
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 };

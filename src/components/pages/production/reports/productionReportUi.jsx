@@ -175,7 +175,7 @@ export function ReportSummaryCards({ cards }) {
           key={label}
           className={`rounded border px-4 py-3 ${
             highlight
-              ? "bg-blue-900 text-white border-blue-800"
+              ? "bg-[var(--aa-navy,#0f2744)] text-white border-[var(--aa-navy,#0f2744)]"
               : warn
                 ? "bg-red-50 border-red-200"
                 : "bg-white border-gray-200"
@@ -183,7 +183,7 @@ export function ReportSummaryCards({ cards }) {
         >
           <p
             className={`text-xs font-semibold uppercase tracking-wide ${
-              highlight ? "text-blue-200" : warn ? "text-red-600" : "text-gray-500"
+              highlight ? "text-white/80" : warn ? "text-red-600" : "text-gray-500"
             }`}
           >
             {label}

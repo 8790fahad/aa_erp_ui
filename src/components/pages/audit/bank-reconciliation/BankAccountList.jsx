@@ -269,7 +269,7 @@ const BankAccountsList = ({ onAccountSelect, selectedAccount }) => {
             </p>
           </div>
           <Button
-            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white shadow-sm"
+            className="flex items-center gap-2 border-0 bg-[var(--aa-navy,#0f2744)] text-white shadow-sm hover:bg-[var(--aa-navy,#0f2744)] hover:opacity-90"
             onClick={() => setIsModalOpen(true)}
           >
             <Plus className="h-4 w-4" />
@@ -315,7 +315,7 @@ const BankAccountsList = ({ onAccountSelect, selectedAccount }) => {
               <div
                 key={account.id}
                 className={`group relative bg-white border rounded-xl p-3.5 cursor-pointer transition-all duration-200 hover:shadow-md hover:border-slate-300 ${
-                  selectedAccount === account.id ? "ring-2 ring-blue-500 border-transparent shadow-sm" : "border-slate-200 shadow-sm"
+                  selectedAccount === account.id ? "ring-2 ring-[var(--aa-navy,#0f2744)] border-transparent shadow-sm" : "border-slate-200 shadow-sm"
                 }`}
                 onClick={() => onAccountSelect(account.id,account.account_code)}
               >
@@ -407,7 +407,7 @@ const BankAccountsList = ({ onAccountSelect, selectedAccount }) => {
                       <span className="text-[11px] font-medium text-slate-700">{account.currency || "NGN"}</span>
                     </div>
 
-                    <div className="flex items-center gap-1 text-blue-600 font-medium text-[11px]">
+                    <div className="flex items-center gap-1 text-[11px] font-medium text-[var(--aa-navy,#0f2744)]">
                       Select <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" />
                     </div>
                   </div>
@@ -604,7 +604,7 @@ const BankAccountsList = ({ onAccountSelect, selectedAccount }) => {
               <Button
                 onClick={handleSubmit}
                 disabled={loading2}
-                className="bg-slate-900 hover:bg-slate-800 px-8"
+                className="border-0 bg-[var(--aa-navy,#0f2744)] px-8 text-white hover:bg-[var(--aa-navy,#0f2744)] hover:opacity-90"
               >
                 {loading2 ? (
                   <Loader className="animate-spin w-4 h-4 mr-2" />

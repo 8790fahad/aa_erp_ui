@@ -56,7 +56,7 @@ const PayrollRun = () => {
     try {
       const response = await fetch(`${apiURL}/api/hr/payroll/run`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: localStorage.getItem("@@__token") || "" },
         body: JSON.stringify({
           month: parseInt(selectedMonth),
           year: selectedYear,

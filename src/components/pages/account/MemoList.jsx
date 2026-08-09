@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, Badge, Col, Collapse, Label, Row } from "reactstrap";
+import { Alert, Col, Collapse, Label, Row } from "reactstrap";
 import { useSelector } from "react-redux";
 import { FaEdit, FaEye } from "react-icons/fa";
 import moment from "moment";
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import MemoNav from "./MemoNav";
+import MemoFormModal from "./MemoFormModal";
 import { FileText } from "lucide-react";
 
 function MemoList() {
@@ -44,6 +45,8 @@ function MemoList() {
   const [logs, setLogs] = useState([]);
   const [itemList, setItemList] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all"); // all | pending | reviewed | re_list | approved
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [editMemoId, setEditMemoId] = useState(null);
   const history = useNavigate();
   const location = useLocation();
   const isHistory = new URLSearchParams(location.search).get("tab") === "history";
@@ -193,12 +196,12 @@ function MemoList() {
         memo_id: item.memo_id,
         date: moment().format("YYYY-MM-DD"),
         user_id: user.id,
+        facilityId: activeBusiness.id,
       },
       (res) => {
         if (res.success) {
-          setItemList(res.results);
-          // alert(JSON.stringify(res.attachments))
-          const serverFiles = res.attachments.map((doc) => ({
+          setItemList(res.results || []);
+          const serverFiles = (res.attachments || []).map((doc) => ({
             name: doc.original_name,
             type: doc.mime_type,
             size: doc.file_size,
@@ -206,10 +209,12 @@ function MemoList() {
             fromServer: true,
           }));
           setFiles(serverFiles);
+        } else {
+          toast.error(res.message || "Could not load memo items");
         }
       },
       (err) => {
-        toast.error("Error Occurred");
+        toast.error(err?.message || "Error Occurred");
       }
     );
   };
@@ -267,55 +272,53 @@ function MemoList() {
     {
       title: "Status",
       custom: true,
-      component: (item) => (
-        <div className="text-center">
-          <Badge
-            color={
-              item.status === "pending"
-                ? "primary"
-                : item.status === "returned"
-                ? "danger"
-                : item.status === "approved"
-                ? "success"
+      component: (item) => {
+        const statusClass =
+          item.status === "pending"
+            ? "bg-[var(--aa-navy,#0f2744)] text-white"
+            : item.status === "returned"
+              ? "bg-red-600 text-white"
+              : item.status === "approved"
+                ? "bg-emerald-600 text-white"
                 : item.status === "reviewed"
-                ? "warning"
-                : "secondary"
-            }
-            className="p-2"
-          >
-            {item.status}
-          </Badge>
-        </div>
-      ),
+                  ? "bg-amber-500 text-white"
+                  : "bg-slate-500 text-white";
+        return (
+          <div className="text-center">
+            <span
+              className={`inline-flex rounded-md px-2.5 py-1 text-xs font-medium capitalize ${statusClass}`}
+            >
+              {item.status}
+            </span>
+          </div>
+        );
+      },
     },
     {
       title: "Action",
       custom: true,
       component: (item) => (
         <div className="text-center">
-          <CustomButton
-            color="success"
-            size={"sm"}
-            className="m-1"
-            handleSubmit={() => {
-              viewList(item);
-            }}
+          <button
+            type="button"
+            className="m-1 inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--aa-navy,#0f2744)] text-white hover:bg-[var(--aa-navy-hover,#243a73)]"
+            onClick={() => viewList(item)}
+            aria-label="View memo"
           >
-            <FaEye size="20" />
-          </CustomButton>
+            <FaEye size={16} />
+          </button>
           {item.status === "returned" ? (
-            <CustomButton
-              color="success"
-              size={"sm"}
-              className="m-1 ml-2"
-              // handleSubmit={() => {
+            <button
+              type="button"
+              className="m-1 ml-2 inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--aa-navy,#0f2744)] text-white hover:bg-[var(--aa-navy-hover,#243a73)]"
               onClick={() => {
-                history(`/app/account/memo?id=${item.memo_id}&mode=edit`);
+                setEditMemoId(item.memo_id);
+                setFormModalOpen(true);
               }}
-              // }}
+              aria-label="Edit memo"
             >
-              <FaEdit size="20" />
-            </CustomButton>
+              <FaEdit size={16} />
+            </button>
           ) : null}
         </div>
       ),
@@ -382,10 +385,6 @@ function MemoList() {
 
     return matchesSearch && fromOk && toOk;
   });
-
-  const total = filteredMemos.reduce((sum, memo) => {
-    return sum + (Number(memo.total) || 0);
-  }, 0);
 
   useEffect(() => {
     getLogs();
@@ -473,7 +472,7 @@ function MemoList() {
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
             <div>
               <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-                <FileText className="h-5 w-5 text-[var(--aa-accent)]" />
+                <FileText className="h-5 w-5 text-[var(--aa-navy,#0f2744)]" />
                 Initiate Memo
               </h1>
               <p className="mt-0.5 text-xs text-slate-500">
@@ -484,16 +483,16 @@ function MemoList() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {!isHistory && (
-                <CustomButton
-                  size="sm"
-                  color="primary"
-                  className="mb-0"
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center rounded-md bg-[var(--aa-navy,#0f2744)] px-3 text-sm font-semibold text-white hover:bg-[var(--aa-navy-hover,#243a73)]"
                   onClick={() => {
-                    history("/app/account/memo");
+                    setEditMemoId(null);
+                    setFormModalOpen(true);
                   }}
                 >
                   Add new memo
-                </CustomButton>
+                </button>
               )}
             </div>
           </div>
@@ -590,12 +589,6 @@ function MemoList() {
               {loading && <Loading />}
               {!loading && (
                 <>
-                  <div className="d-flex px-0 align-items-center justify-content-end w-full">
-                    <div className="text-end mb-2 fw-bold">
-                      Total:{" "}
-                      <span>₦{formatNumber1(parseFloat(total).toFixed(2))}</span>
-                    </div>
-                  </div>
                   <CustomTable1
                     data={filteredMemos}
                     fields={fields}
@@ -632,6 +625,18 @@ function MemoList() {
         logs={logs}
         cancel={cancel}
         mode="preview"
+      />
+
+      <MemoFormModal
+        open={formModalOpen}
+        onOpenChange={(next) => {
+          setFormModalOpen(next);
+          if (!next) setEditMemoId(null);
+        }}
+        memoId={editMemoId}
+        onSuccess={() => {
+          getMemos();
+        }}
       />
 
       <CustomModal

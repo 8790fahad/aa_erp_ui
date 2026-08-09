@@ -202,7 +202,10 @@ export default function BulkUploadModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[150]">
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[150]"
+      style={{ ["--app-primary"]: primaryColor }}
+    >
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
 
         {/* Header */}
@@ -217,7 +220,7 @@ export default function BulkUploadModal({
         >
           <div>
             <h3 className="text-lg font-black">{title}</h3>
-            <p className="text-slate-400 text-xs mt-0.5 font-medium">Download the template, fill it in, then upload</p>
+            <p className="text-white/80 text-xs mt-0.5 font-medium">Download the template, fill it in, then upload</p>
           </div>
           <button onClick={handleClose} className="p-1.5 hover:bg-white/10 rounded-full transition-all">
             <X size={18} />
@@ -233,7 +236,14 @@ export default function BulkUploadModal({
                 <p className="text-xs font-black text-slate-700 uppercase tracking-widest">Step 1 — Get Template</p>
                 <p className="text-xs text-slate-500 mt-0.5">Download the Excel template with the required columns</p>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={handleDownloadTemplate} className="gap-2 text-xs font-bold">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadTemplate}
+                className="gap-2 text-xs font-bold"
+                style={{ borderColor: primaryColor, color: primaryColor }}
+              >
                 <Download size={14} />
                 Download Template
               </Button>
@@ -372,7 +382,8 @@ export default function BulkUploadModal({
           )}
           {result && result.failed > 0 && (
             <Button
-              className="flex-1 h-11 rounded-xl bg-slate-900 hover:bg-black text-xs font-black"
+              className="flex-1 h-11 rounded-xl text-xs font-black text-white hover:brightness-95"
+              style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
               onClick={() => { setFile(null); setPreview([]); setResult(null); fileRef.current && (fileRef.current.value = ""); }}
             >
               Try Again

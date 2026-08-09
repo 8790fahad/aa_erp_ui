@@ -343,7 +343,7 @@ const PayrollBatchDetails = ({
   const updateIndividualStatus = async (item, newStatus) => {
     try {
       const res = await window.fetch(`${apiURL}/api/hr/payroll/status/${item.id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
+        method: "PUT", headers: { "Content-Type": "application/json", Authorization: localStorage.getItem("@@__token") || "" },
         body: JSON.stringify({ status: newStatus, facilityId, userId: user?.id }),
       });
       const data = await res.json();
@@ -363,7 +363,7 @@ const PayrollBatchDetails = ({
     setLoading(true);
     try {
       const res = await window.fetch(`${apiURL}/api/hr/payroll/batch-status`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
+        method: "PUT", headers: { "Content-Type": "application/json", Authorization: localStorage.getItem("@@__token") || "" },
         body: JSON.stringify({ ids: draftIds, status: "Processed", facilityId, userId: user?.id }),
       });
       const data = await res.json();
@@ -414,7 +414,7 @@ const PayrollBatchDetails = ({
 
       const res = await window.fetch(`${apiURL}/api/hr/payroll/mark-paid`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: localStorage.getItem("@@__token") || "" },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -1007,10 +1007,10 @@ const PayrollBatchDetails = ({
                     <CheckCircle className="size-4 mr-2" /> Confirm & Process
                   </DropdownMenuItem>
                 )}
-                {item.status !== "Stopped" ? (
+                {item.status !== "Cancelled" && item.status !== "Stopped" ? (
                   <DropdownMenuItem
                     className="text-rose-600 font-bold cursor-pointer"
-                    onClick={() => updateIndividualStatus(item, "Stopped")}
+                    onClick={() => updateIndividualStatus(item, "Cancelled")}
                   >
                     <AlertCircle className="size-4 mr-2" /> Stop Payment
                   </DropdownMenuItem>

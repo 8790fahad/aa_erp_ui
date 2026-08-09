@@ -484,7 +484,7 @@ const BankReconciliationReport = () => {
             <Button
               onClick={handleApplyFilters}
               size="sm"
-              className="h-9 bg-slate-800 hover:bg-slate-900 text-white ml-2"
+              className="ml-2 h-9 border-0 bg-[var(--aa-navy,#0f2744)] text-white hover:bg-[var(--aa-navy,#0f2744)] hover:opacity-90"
             >
               Apply
             </Button>
@@ -527,8 +527,8 @@ const BankReconciliationReport = () => {
       {loading && (
         <div className="space-y-6">
           <div className="border-none shadow-sm overflow-hidden rounded">
-            <div className="bg-blue-900 h-24 p-6">
-              <Skeleton className="h-8 w-64 bg-blue-800" />
+            <div className="bg-[var(--aa-navy,#0f2744)] h-24 p-6">
+              <Skeleton className="h-8 w-64 bg-white/20" />
             </div>
             <div className="p-6 space-y-6">
               <Skeleton className="h-24 w-full" />
@@ -651,16 +651,16 @@ const BankReconciliationReport = () => {
             {/* Reconciliation summary table */}
             {reconciliationSummary && (
               <div className="space-y-2">
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider border-l-4 border-blue-600 pl-3">
+                <h3 className="border-l-4 border-[var(--aa-navy,#0f2744)] pl-3 text-xs font-black uppercase tracking-wider text-slate-800">
                   Reconciliation Summary
                 </h3>
                 <table className="w-full border-collapse border border-slate-300 text-sm">
                   <thead>
-                    <tr className="bg-slate-700 text-white">
-                      <th className="text-left text-xs font-bold uppercase px-4 py-2.5 border border-slate-600 w-[70%]">
+                    <tr className="bg-[var(--aa-navy,#0f2744)] text-white">
+                      <th className="w-[70%] border border-white/10 px-4 py-2.5 text-left text-xs font-bold uppercase">
                         Reconciliation Summary
                       </th>
-                      <th className="text-right text-xs font-bold uppercase px-4 py-2.5 border border-slate-600">
+                      <th className="border border-white/10 px-4 py-2.5 text-right text-xs font-bold uppercase">
                         Amount (₦)
                       </th>
                     </tr>

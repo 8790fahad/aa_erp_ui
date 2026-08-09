@@ -208,7 +208,7 @@ export default function Memo() {
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-4 py-3">
           <h1 className="flex items-center gap-2 text-xl font-semibold text-slate-900">
-            <FileText className="h-5 w-5 text-[var(--aa-accent)]" />
+            <FileText className="h-5 w-5 text-[var(--aa-navy,#0f2744)]" />
             {isEditMode ? "Edit Memo" : "Record Memo"}
           </h1>
           <p className="mt-0.5 text-xs text-slate-500">
@@ -227,7 +227,7 @@ export default function Memo() {
                 name="date"
                 value={form.date}
                 onChange={handleChange}
-                className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-[var(--aa-navy,#0f2744)] focus:ring-1 focus:ring-[var(--aa-navy,#0f2744)]"
               />
             </label>
 
@@ -239,7 +239,7 @@ export default function Memo() {
                 name="from_name"
                 value={form.from_name}
                 onChange={handleChange}
-                className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-[var(--aa-navy,#0f2744)] focus:ring-1 focus:ring-[var(--aa-navy,#0f2744)]"
               >
                 {(branches.length ? branches : ["General"]).map((b) => (
                   <option key={b} value={b}>
@@ -262,7 +262,7 @@ export default function Memo() {
               value={form.subject}
               onChange={handleChange}
               placeholder="e.g. Office supplies"
-              className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+              className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-[var(--aa-navy,#0f2744)] focus:ring-1 focus:ring-[var(--aa-navy,#0f2744)]"
             />
             {errors.subject && (
               <span className="text-xs text-red-500">{errors.subject}</span>
@@ -279,7 +279,7 @@ export default function Memo() {
               onChange={handleChange}
               rows={3}
               placeholder="Brief reason for this memo"
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[var(--aa-navy,#0f2744)] focus:ring-1 focus:ring-[var(--aa-navy,#0f2744)]"
             />
             {errors.purpose && (
               <span className="text-xs text-red-500">{errors.purpose}</span>
@@ -298,13 +298,13 @@ export default function Memo() {
               value={form.amount}
               onChange={handleChange}
               placeholder="0.00"
-              className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+              className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-[var(--aa-navy,#0f2744)] focus:ring-1 focus:ring-[var(--aa-navy,#0f2744)]"
             />
             {errors.amount && (
               <span className="text-xs text-red-500">{errors.amount}</span>
             )}
             {form.amount > 0 && (
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-2 text-sm font-semibold text-[var(--aa-navy,#0f2744)]">
                 Total: ₦{formatNumber1(Number(form.amount))}
               </p>
             )}
@@ -322,7 +322,7 @@ export default function Memo() {
               type="button"
               disabled={loading}
               onClick={handleSubmit}
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--aa-accent)] px-5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+              className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--aa-navy,#0f2744)] px-5 text-sm font-semibold text-white hover:bg-[var(--aa-navy-hover,#243a73)] disabled:opacity-60"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isEditMode ? "Update" : "Submit"}

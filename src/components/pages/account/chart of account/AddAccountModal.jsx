@@ -743,17 +743,23 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                         ...f,
                         category: category?.label || "",
                       };
+                      // Tax-related subcategories suggest balance switch; you can
+                      // still enable/disable it manually for any account below.
                       if (isTaxControl) {
                         next.reportingBehavior = "balance_switch";
-                        next.accountRole = "tax_control";
                         next.alternateNature =
                           (NATURE_TO_ENUM[selectedNature] || "") === "LIABILITY"
                             ? "ASSET"
                             : "LIABILITY";
-                      } else if (f.accountRole === "tax_control") {
-                        next.reportingBehavior = "fixed";
+                        if (f.accountRole === "general") {
+                          next.accountRole = "tax_control";
+                        }
+                      } else if (
+                        f.accountRole === "tax_control" &&
+                        f.reportingBehavior === "balance_switch"
+                      ) {
+                        // Left tax subcategory — keep switch settings; only clear tax role
                         next.accountRole = "general";
-                        next.alternateNature = "";
                       }
                       return next;
                     });
@@ -1034,7 +1040,9 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                     Special reporting
                   </h4>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Dual-nature controls (VAT, WHT clearing) reclassify by closing balance.
+                    Optional dual-nature accounts: reports place them on the
+                    asset or liability side from the closing balance. Use for
+                    VAT, WHT, clearing, suspense, or any similar account.
                   </p>
                 </div>
                 <div>
@@ -1054,34 +1062,35 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                                 ? "ASSET"
                                 : "LIABILITY")
                             : "",
-                        accountRole:
-                          reportingBehavior === "balance_switch" &&
-                          f.accountRole === "general"
-                            ? "tax_control"
-                            : f.accountRole,
                       }));
                     }}
                     className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
                   >
                     <option value="fixed">Fixed (primary nature)</option>
                     <option value="balance_switch">
-                      Balance switch (debit ↔ asset, credit ↔ liability)
+                      Balance switch (debit → asset, credit → liability)
                     </option>
                   </select>
                 </div>
                 {form.reportingBehavior === "balance_switch" && (
                   <div className="rounded-md border border-[#4267B2]/25 bg-[var(--aa-sidebar-active,#eff4fb)] p-3 space-y-3">
                     <p className="text-xs text-slate-600 leading-relaxed">
-                      Used for VAT / clearing: a{" "}
+                      Closing{" "}
                       <span className="font-medium text-slate-800">
                         debit
                       </span>{" "}
-                      closing balance presents as an asset (e.g. VAT recoverable);
-                      a{" "}
+                      balance → Balance Sheet{" "}
+                      <span className="font-medium text-slate-800">Assets</span>
+                      . Closing{" "}
                       <span className="font-medium text-slate-800">
                         credit
                       </span>{" "}
-                      balance presents as a liability (e.g. VAT payable).
+                      balance →{" "}
+                      <span className="font-medium text-slate-800">
+                        Liabilities
+                      </span>
+                      . Primary nature is your default home; alternate nature is
+                      the other side when the balance flips.
                     </p>
                     <div>
                       <Label>Alternate nature (when balance flips)</Label>

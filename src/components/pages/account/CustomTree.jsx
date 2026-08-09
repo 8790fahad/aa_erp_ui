@@ -22,31 +22,57 @@ class CustomTree extends Component {
   };
 
   componentDidMount() {
-    const expandedTreeData = this.expandFirstLevelChildren(this.props.treeData);
-    this.setState({ treeData: expandedTreeData });
+    this.setState({ treeData: this.withChildren(this.props.treeData) });
   }
 
   componentDidUpdate(prevProps) {
     if (prevProps.treeData !== this.props.treeData) {
-      const expandedTreeData = this.expandFirstLevelChildren(
-        this.props.treeData
-      );
-      this.setState({ treeData: expandedTreeData });
+      this.setState({
+        treeData: this.mergeExpandedState(
+          this.props.treeData,
+          this.state.treeData,
+        ),
+      });
     }
   }
 
-  // shouldComponentUpdate(nextProps, nextState) {
-  //   return (
-  //     this.props.treeData !== nextProps.treeData ||
-  //     this.state.treeData !== nextState.treeData
-  //   );
-  // }
-
-  expandFirstLevelChildren(treeData) {
+  withChildren(treeData) {
+    if (!Array.isArray(treeData)) return [];
     return treeData.map((node) => ({
       ...node,
-      expanded: false,
+      expanded: Boolean(node?.expanded),
+      children: this.withChildren(
+        Array.isArray(node?.children) ? node.children : [],
+      ),
     }));
+  }
+
+  mergeExpandedState(nextTree, prevTree) {
+    const prevExpanded = new Map();
+    const collect = (nodes) => {
+      (nodes || []).forEach((n) => {
+        const key = String(n?.head || n?.code || "");
+        if (key) prevExpanded.set(key, Boolean(n.expanded));
+        collect(n.children);
+      });
+    };
+    collect(prevTree);
+
+    const apply = (nodes) =>
+      (nodes || []).map((node) => {
+        const key = String(node?.head || node?.code || "");
+        return {
+          ...node,
+          expanded: prevExpanded.has(key)
+            ? prevExpanded.get(key)
+            : Boolean(node?.expanded),
+          children: apply(
+            Array.isArray(node?.children) ? node.children : [],
+          ),
+        };
+      });
+
+    return apply(nextTree);
   }
 
   render() {
@@ -64,7 +90,9 @@ class CustomTree extends Component {
           }}
           generateNodeProps={this.props.generateNodeProps}
           isVirtualized={false}
-          style={{ fontWeight: "lighter", font: "inherit" }}
+          scaffoldBlockPxWidth={36}
+          rowHeight={52}
+          style={{ fontWeight: "lighter", font: "inherit", width: "100%" }}
         />
       </div>
     );

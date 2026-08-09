@@ -745,6 +745,31 @@ export default function ProductSupplierBill() {
           toast.success(res.message || "Purchase recorded successfully");
           setLoading(false);
           isSavingRef.current = false;
+
+          // Mark requisitions used on this bill as Converted so they cannot be re-billed
+          if (selectedRequisitionIds.length > 0 && activeBusiness?.id) {
+            const invoiceRef =
+              res.data?.reference ||
+              res.data?.invoice_ref ||
+              res.invoice_ref ||
+              res.data?.ref_number ||
+              res.ref_number;
+            selectedRequisitionIds.forEach((pr_no) => {
+              _postApi(
+                "/account/update-pr-status",
+                {
+                  pr_no,
+                  status: "Converted",
+                  facilityId: activeBusiness.id || activeBusiness._id,
+                  invoice_ref: invoiceRef,
+                },
+                () => {},
+                () => {},
+              );
+            });
+            setSelectedRequisitionIds([]);
+          }
+
           // Navigate to print page if shouldPrintAfterSave is true
           if (shouldPrintAfterSave) {
             // The API returns invoice_ref as 'reference' in the data object

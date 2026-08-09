@@ -6,10 +6,15 @@ import ThermalReceipt, { printThermalReceipt } from "./ThermalReceipt";
 import useQuery from "@/hooks/useQuery";
 import { useSelector } from "react-redux";
 import { _fetchApi } from "@/redux/actions/api";
-import { Button, Modal, ModalBody, ModalFooter, ModalHeader } from "reactstrap";
+import { Button } from "reactstrap";
 import { Printer } from "lucide-react";
 
-function buildBranchInvoiceView(invoiceData, branchIdFilter, packCode) {
+function buildBranchInvoiceView(
+  invoiceData,
+  branchIdFilter,
+  packCode,
+  branchName = null,
+) {
   if (!invoiceData) return null;
 
   let items = Array.isArray(invoiceData.items) ? [...invoiceData.items] : [];
@@ -63,6 +68,7 @@ function buildBranchInvoiceView(invoiceData, branchIdFilter, packCode) {
       : Number(invoiceData.discountAmount ?? 0),
     pack_code: packCode || null,
     branch_pack_id: Number.isFinite(filterBid) ? filterBid : null,
+    branch_name: branchName || null,
   };
 }
 
@@ -72,6 +78,7 @@ function InvoicePreview() {
   const saleCode = query.get("sale_code");
   const branchIdFilter = query.get("branch_id");
   const packCode = query.get("pack_code");
+  const branchNameParam = query.get("branch_name");
   const printAll = query.get("print_all") === "1" || query.get("print_all") === "true";
   const autoPrint = query.get("auto_print") === "1" || query.get("auto_print") === "true";
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
@@ -81,7 +88,6 @@ function InvoicePreview() {
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [didAutoPrint, setDidAutoPrint] = useState(false);
-  const [printChoiceOpen, setPrintChoiceOpen] = useState(false);
 
   const fetchInvoice = useCallback(() => {
     if (!saleCode || !facilityId) {
@@ -144,8 +150,14 @@ function InvoicePreview() {
   }, [saleCode, isLoading]);
 
   const resolvedInvoiceData = useMemo(
-    () => buildBranchInvoiceView(invoiceData, branchIdFilter, packCode),
-    [invoiceData, branchIdFilter, packCode],
+    () =>
+      buildBranchInvoiceView(
+        invoiceData,
+        branchIdFilter,
+        packCode,
+        branchNameParam,
+      ),
+    [invoiceData, branchIdFilter, packCode, branchNameParam],
   );
 
   const printAllCopies = useMemo(() => {
@@ -156,9 +168,17 @@ function InvoicePreview() {
         invoiceData,
         pack.branch_id,
         pack.pack_code,
+        pack.branch_name || null,
       ),
     }));
   }, [printAll, invoiceData, packs]);
+
+  // Respect business system setting: PDF/A4 or Terminal/thermal.
+  const receiptType =
+    activeBusiness?.default_receipt_type ||
+    invoiceData?.business?.default_receipt_type ||
+    "pdf";
+  const isTerminalReceipt = receiptType === "terminal";
 
   useEffect(() => {
     if (!autoPrint || didAutoPrint || isLoading) return;
@@ -166,23 +186,24 @@ function InvoicePreview() {
     if (!printAll && !resolvedInvoiceData) return;
     setDidAutoPrint(true);
     const t = setTimeout(() => {
-      window.print();
+      // Single thermal invoice preview uses thermal print helper.
+      // print_all uses the page @media print CSS (window.print).
+      if (isTerminalReceipt && !printAll) {
+        printThermalReceipt("both");
+      } else {
+        window.print();
+      }
     }, 600);
     return () => clearTimeout(t);
   }, [
     autoPrint,
     didAutoPrint,
     isLoading,
+    isTerminalReceipt,
     printAll,
     printAllCopies.length,
     resolvedInvoiceData,
   ]);
-
-  const receiptType =
-    activeBusiness?.default_receipt_type ||
-    resolvedInvoiceData?.business?.default_receipt_type ||
-    "pdf";
-  const isTerminalReceipt = receiptType === "terminal" && !printAll;
 
   const handleCancel = () => {
     if (printAll || packCode || branchIdFilter) {
@@ -194,12 +215,13 @@ function InvoicePreview() {
   };
 
   const handlePrintAll = () => {
+    // print_all page has its own @media print CSS (A4 or thermal).
+    // Do not use printThermalReceipt here — its visibility hack breaks multi-branch layout.
     window.print();
   };
 
-  const handleChoosePrint = (mode) => {
-    setPrintChoiceOpen(false);
-    printThermalReceipt(mode);
+  const handlePrintThermal = () => {
+    printThermalReceipt("both");
   };
 
   if (isLoading) {
@@ -228,10 +250,104 @@ function InvoicePreview() {
   if (printAll) {
     if (!invoiceData) return null;
     return (
-      <div className="min-h-screen bg-gray-50 py-6">
+      <div className="min-h-screen bg-gray-50 py-6 print-all-root">
         <style>{`
           @media print {
             .no-print { display: none !important; }
+            body { background: white !important; margin: 0 !important; }
+            /* Hide app chrome (sidebar / top bar) while printing branch copies */
+            aside, nav, header, [data-sidebar], .app-sidebar, .sidebar {
+              display: none !important;
+            }
+            .print-all-root {
+              background: white !important;
+              min-height: 0 !important;
+              padding: 0 !important;
+            }
+            ${
+              isTerminalReceipt
+                ? `
+            @page { size: portrait; margin: 4mm; }
+            /* Hide everything except the thermal receipts */
+            body * { visibility: hidden !important; }
+            .print-receipt-only,
+            .print-receipt-only * {
+              visibility: visible !important;
+            }
+            .print-all-root,
+            .print-all-thermal-list,
+            .branch-invoice-copy,
+            .print-receipt-frame,
+            .print-receipt-only,
+            .print-receipt-only * {
+              visibility: visible !important;
+            }
+            .no-print,
+            .no-print * {
+              display: none !important;
+              visibility: hidden !important;
+            }
+            aside, nav, header, [data-sidebar], .app-sidebar, .sidebar,
+            aside *, nav *, header * {
+              display: none !important;
+              visibility: hidden !important;
+            }
+            .print-all-thermal-list {
+              display: block !important;
+              max-width: none !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .branch-invoice-copy {
+              display: block !important;
+              break-after: page;
+              page-break-after: always;
+              break-inside: avoid;
+              page-break-inside: avoid;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .branch-invoice-copy:last-child {
+              break-after: auto;
+              page-break-after: auto;
+            }
+            .print-receipt-only {
+              display: block !important;
+              width: 80mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              border: none !important;
+              box-shadow: none !important;
+              background: white !important;
+              overflow: visible !important;
+            }
+            .print-receipt-frame {
+              border: none !important;
+              box-shadow: none !important;
+              background: transparent !important;
+              overflow: visible !important;
+            }
+            .thermal-receipt-set {
+              display: block !important;
+              width: 80mm !important;
+              margin: 0 !important;
+            }
+            .thermal-receipt-root,
+            .thermal-receipt-root.thermal-receipt-preview {
+              display: block !important;
+              visibility: visible !important;
+              width: 80mm !important;
+              max-width: 80mm !important;
+              margin: 0 !important;
+              padding: 2mm 1.5mm !important;
+              box-shadow: none !important;
+              border: none !important;
+              background: white !important;
+              color: #000 !important;
+            }
+            `
+                : `
+            @page { size: A4 portrait; margin: 10mm; }
             .branch-invoice-copy {
               break-after: page;
               page-break-after: always;
@@ -240,16 +356,20 @@ function InvoicePreview() {
               break-after: auto;
               page-break-after: auto;
             }
-            body { background: white !important; }
+            `
+            }
           }
         `}</style>
         <div className="no-print max-w-4xl mx-auto px-4 mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="rounded-md border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900 flex-1">
             <strong>Print all branch copies</strong>
             <span className="block text-xs text-violet-700 mt-0.5">
-              {printAllCopies.length} invoice cop
-              {printAllCopies.length === 1 ? "y" : "ies"} for {saleCode} — each
-              page is one branch.
+              {printAllCopies.length} branch cop
+              {printAllCopies.length === 1 ? "y" : "ies"} for {saleCode} — one
+              per warehouse ·{" "}
+              {isTerminalReceipt
+                ? "Thermal (80mm) from system settings — 1 customer copy each"
+                : "A4 / PDF from system settings"}
             </span>
           </div>
           <div className="flex gap-2">
@@ -267,39 +387,82 @@ function InvoicePreview() {
           <div className="max-w-4xl mx-auto px-4 text-sm text-gray-500">
             No branch copies found for this invoice.
           </div>
+        ) : isTerminalReceipt ? (
+          <div className="print-all-thermal-list max-w-4xl mx-auto px-4 space-y-8">
+            {printAllCopies.map(({ pack, data }, idx) => {
+              const branchLabel =
+                pack.branch_name || `Warehouse ${pack.branch_id}`;
+              return (
+                <div key={pack.id} className="branch-invoice-copy mb-8">
+                  <div className="no-print mb-2 text-center">
+                    <div className="text-sm font-medium text-violet-900">
+                      Copy {idx + 1} of {printAllCopies.length} · {branchLabel}{" "}
+                      · <span className="font-mono">{pack.pack_code}</span>
+                    </div>
+                  </div>
+                  {data ? (
+                    <div className="flex justify-center">
+                      <div className="rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden print-receipt-frame">
+                        <div className="no-print border-b border-gray-100 bg-gray-50 px-3 py-1 text-center">
+                          <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                            80mm · {branchLabel} · Customer copy
+                          </span>
+                        </div>
+                        <div className="print-receipt-only p-1.5 bg-gray-100">
+                          <ThermalReceipt
+                            preview
+                            invoiceData={data}
+                            business={
+                              data.business?.business_name
+                                ? data.business
+                                : activeBusiness
+                            }
+                            customer={data.customer}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         ) : (
-          printAllCopies.map(({ pack, data }, idx) => (
-            <div key={pack.id} className="branch-invoice-copy mb-8">
-              <div className="no-print max-w-4xl mx-auto px-4 mb-2">
-                <div className="text-sm font-medium text-violet-900">
-                  Copy {idx + 1} of {printAllCopies.length} ·{" "}
-                  {pack.branch_name || `Warehouse ${pack.branch_id}`} ·{" "}
-                  <span className="font-mono">{pack.pack_code}</span>
+          printAllCopies.map(({ pack, data }, idx) => {
+            const branchLabel =
+              pack.branch_name || `Warehouse ${pack.branch_id}`;
+            return (
+              <div key={pack.id} className="branch-invoice-copy mb-8">
+                <div className="no-print max-w-4xl mx-auto px-4 mb-2 text-center">
+                  <div className="text-sm font-medium text-violet-900">
+                    Copy {idx + 1} of {printAllCopies.length} · {branchLabel} ·{" "}
+                    <span className="font-mono">{pack.pack_code}</span>
+                  </div>
                 </div>
+                {data ? (
+                  <div className="invoice-print-section">
+                    <CreditSaleInvoiceImproved
+                      invoiceData={data}
+                      business={data.business}
+                      customer={data.customer}
+                      date={data.date}
+                      customPricing={data.customPricing}
+                      customPrices={data.customPrices}
+                      customerCopyEnabled={false}
+                      customerCopyPrices={{}}
+                      setCustomerCopyPrices={() => {}}
+                      taxes={data.taxes}
+                      discount={data.discount}
+                      copyLabel={branchLabel}
+                      showCustomerCopyActions={false}
+                      enableInlineCustomerCopyPreview={false}
+                      onCancel={handleCancel}
+                    />
+                  </div>
+                ) : null}
               </div>
-              {data ? (
-                <div className="invoice-print-section">
-                  <CreditSaleInvoiceImproved
-                    invoiceData={data}
-                    business={data.business}
-                    customer={data.customer}
-                    date={data.date}
-                    customPricing={data.customPricing}
-                    customPrices={data.customPrices}
-                    customerCopyEnabled={false}
-                    customerCopyPrices={{}}
-                    setCustomerCopyPrices={() => {}}
-                    taxes={data.taxes}
-                    discount={data.discount}
-                    copyLabel=""
-                    showCustomerCopyActions={false}
-                    enableInlineCustomerCopyPreview={false}
-                    onCancel={handleCancel}
-                  />
-                </div>
-              ) : null}
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     );
@@ -312,16 +475,17 @@ function InvoicePreview() {
   return (
     <div className="min-h-screen bg-gray-50 py-6">
       {packCode || resolvedInvoiceData.branch_pack_id != null ? (
-        <div className="max-w-4xl mx-auto px-4 mb-4">
+        <div className="max-w-4xl mx-auto px-4 mb-4 no-print">
           <div className="rounded-md border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
             <strong>Warehouse invoice copy</strong>
-            {packCode ? ` · ${packCode}` : ""}
-            {resolvedInvoiceData.branch_pack_id != null
-              ? ` · Branch #${resolvedInvoiceData.branch_pack_id}`
+            {resolvedInvoiceData.branch_name
+              ? ` · ${resolvedInvoiceData.branch_name}`
               : ""}
+            {packCode ? ` · ${packCode}` : ""}
             <span className="block text-xs text-violet-700 mt-0.5">
-              Only items for this warehouse branch (same invoice number, split
-              by branch).
+              {isTerminalReceipt
+                ? "Thermal (80mm) from system settings — one customer copy for this branch."
+                : "A4 / PDF from system settings — full invoice for this warehouse branch."}
             </span>
           </div>
         </div>
@@ -338,7 +502,7 @@ function InvoicePreview() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Button color="primary" onClick={() => setPrintChoiceOpen(true)}>
+              <Button color="primary" onClick={handlePrintThermal}>
                 <Printer className="inline w-4 h-4 mr-2" />
                 Print receipt
               </Button>
@@ -349,66 +513,17 @@ function InvoicePreview() {
           </div>
 
           <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-            <strong>Two receipt layouts</strong>
+            <strong>Customer copy</strong>
             <span className="block text-xs text-emerald-800 mt-0.5">
-              VAT copy shows tax per product + Output VAT. Customer copy folds
-              VAT into each Amt (no VAT column / Output VAT). Choose which to
-              print.
+              One thermal receipt (VAT included in Amt).
             </span>
           </div>
-
-          <Modal
-            isOpen={printChoiceOpen}
-            toggle={() => setPrintChoiceOpen(false)}
-            centered
-          >
-            <ModalHeader toggle={() => setPrintChoiceOpen(false)}>
-              Which receipt are you printing?
-            </ModalHeader>
-            <ModalBody>
-              <p className="text-sm text-muted mb-3">
-                Select the copy to send to the thermal printer.
-              </p>
-              <div className="d-grid gap-2">
-                <Button
-                  color="primary"
-                  onClick={() => handleChoosePrint("vat")}
-                >
-                  VAT copy
-                  <span className="d-block small opacity-75 fw-normal">
-                    Amt + separate VAT column + Output VAT
-                  </span>
-                </Button>
-                <Button
-                  color="success"
-                  onClick={() => handleChoosePrint("customer")}
-                >
-                  Customer copy
-                  <span className="d-block small opacity-75 fw-normal">
-                    Amt includes VAT — no Output VAT line
-                  </span>
-                </Button>
-                <Button
-                  color="secondary"
-                  outline
-                  onClick={() => handleChoosePrint("both")}
-                >
-                  Print both
-                </Button>
-              </div>
-            </ModalBody>
-            <ModalFooter>
-              <Button color="link" onClick={() => setPrintChoiceOpen(false)}>
-                Cancel
-              </Button>
-            </ModalFooter>
-          </Modal>
 
           <div className="flex justify-center pb-8">
             <div className="rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
               <div className="border-b border-gray-100 bg-gray-50 px-3 py-1 text-center">
                 <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                  80mm · VAT copy + Customer copy
+                  80mm · Customer copy
                 </span>
               </div>
               <div className="p-1.5 bg-gray-100">
@@ -444,7 +559,10 @@ function InvoicePreview() {
             setCustomerCopyPrices={() => {}}
             taxes={resolvedInvoiceData.taxes}
             discount={resolvedInvoiceData.discount}
-            copyLabel=""
+            copyLabel={
+              resolvedInvoiceData.branch_name ||
+              (packCode ? `Pack ${packCode}` : "")
+            }
             showCustomerCopyActions={!packCode && !branchIdFilter}
             enableInlineCustomerCopyPreview={false}
             onCancel={handleCancel}

@@ -394,7 +394,7 @@ const BankStatementUpload = ({ onTransactionsUploaded, selectedAccount, onStatem
               <div
                 className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                   isDragging
-                    ? "border-blue-500 bg-blue-50"
+                    ? "border-[var(--aa-navy,#0f2744)] bg-[var(--aa-sidebar-active,#eff4fb)]"
                     : "border-gray-300 hover:border-gray-400"
                 }`}
                 onDragOver={handleDragOver}
@@ -421,7 +421,7 @@ const BankStatementUpload = ({ onTransactionsUploaded, selectedAccount, onStatem
                   <div className="flex justify-center">
                     <label className="cursor-pointer">
                       <Button
-                        className="flex items-center gap-2 bg-[#4267B2] hover:bg-[#365899]"
+                        className="flex items-center gap-2 border-0 bg-[var(--aa-navy,#0f2744)] text-white hover:bg-[var(--aa-navy,#0f2744)] hover:opacity-90"
                         onClick={() => inputRef.current.click()}
                       >
                         <Upload className="h-4 w-4" />
@@ -586,7 +586,7 @@ const BankStatementUpload = ({ onTransactionsUploaded, selectedAccount, onStatem
                 <Card>
                   <CardContent className="pt-4">
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">
+                      <div className="text-2xl font-bold text-[var(--aa-navy,#0f2744)]">
                         {uploadResult.totalTransactions}
                       </div>
                       <div className="text-sm text-gray-600">Total Records</div>

@@ -15,51 +15,52 @@ function StructureTree({ editNode, deleteNode, addChild, treeData }) {
   const [treeHeight, setTreeHeight] = useState("auto");
 
   useEffect(() => {
-    const normalizeNode = (node) => ({
+    const normalizeNode = (node, forceExpand = false) => ({
       ...node,
-      expanded: expanded,
+      expanded: forceExpand ? true : Boolean(node?.expanded),
       children: Array.isArray(node?.children)
-        ? node.children.map(normalizeNode)
+        ? node.children.map((child) => normalizeNode(child, forceExpand))
         : [],
       head: node?.head || node?.code || "",
       description: node?.description || "",
     });
 
-    const expandedTreeData = Array.isArray(treeData)
-      ? treeData.map(normalizeNode)
-      : [];
-    setFilteredTreeData(expandedTreeData);
-  }, [expanded, treeData]);
-
-  useEffect(() => {
-    if (!searchText) {
-      setFilteredTreeData(treeData);
-    } else {
-      const filterTree = (data) =>
-        data
-          .map((node) => {
-            const head = (node?.head || node?.code || "").toLowerCase();
-            const description = (node?.description || "").toLowerCase();
-            const searchLower = searchText.toLowerCase();
-
-            if (
-              head.includes(searchLower) ||
-              description.includes(searchLower)
-            ) {
-              return {
-                ...node,
-                expanded: true,
-                children: Array.isArray(node?.children)
-                  ? filterTree(node.children)
-                  : [],
-              };
-            }
-            return null;
-          })
-          .filter((node) => node !== null);
-      setFilteredTreeData(filterTree(treeData));
+    if (!Array.isArray(treeData)) {
+      setFilteredTreeData([]);
+      return;
     }
-  }, [searchText, treeData]);
+
+    if (!searchText) {
+      setFilteredTreeData(treeData.map((node) => normalizeNode(node, expanded)));
+      return;
+    }
+
+    const searchLower = searchText.toLowerCase();
+    const filterTree = (data) =>
+      data
+        .map((node) => {
+          const head = (node?.head || node?.code || "").toLowerCase();
+          const description = (node?.description || "").toLowerCase();
+          const childMatches = Array.isArray(node?.children)
+            ? filterTree(node.children)
+            : [];
+          const selfMatch =
+            head.includes(searchLower) || description.includes(searchLower);
+
+          if (!selfMatch && childMatches.length === 0) return null;
+
+          return {
+            ...normalizeNode(node, true),
+            expanded: true,
+            children: selfMatch
+              ? (node.children || []).map((child) => normalizeNode(child, true))
+              : childMatches,
+          };
+        })
+        .filter((node) => node !== null);
+
+    setFilteredTreeData(filterTree(treeData));
+  }, [expanded, searchText, treeData]);
 
   useEffect(() => {
     if (treeRef.current) {
@@ -75,6 +76,63 @@ function StructureTree({ editNode, deleteNode, addChild, treeData }) {
         transition: "min-height 0.3s ease-in-out",
       }}
     >
+      <style>{`
+        #print_tree .rst__row {
+          width: 100%;
+        }
+        /* Keep expand/collapse buttons clickable above the row card */
+        #print_tree .rst__expandButton,
+        #print_tree .rst__collapseButton {
+          z-index: 4 !important;
+        }
+        #print_tree .rst__rowContents {
+          flex: 1 1 auto !important;
+          min-width: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+        }
+        #print_tree .rst__rowLabel {
+          flex: 1 1 auto !important;
+          padding-right: 12px !important;
+          overflow: hidden;
+        }
+        #print_tree .rst__rowTitle {
+          width: 100%;
+        }
+        #print_tree .rst__rowToolbar {
+          flex: 0 0 auto !important;
+          margin-left: auto !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 4px;
+        }
+        #print_tree .coa-tree-title {
+          display: grid;
+          grid-template-columns: 5.5rem minmax(0, 1fr);
+          align-items: baseline;
+          column-gap: 12px;
+          min-width: 0;
+          width: 100%;
+        }
+        #print_tree .coa-tree-code {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 0.8125rem;
+          font-weight: 600;
+          color: #475569;
+          letter-spacing: 0.01em;
+        }
+        #print_tree .coa-tree-desc {
+          font-size: 0.875rem;
+          font-weight: 700;
+          color: #0f172a;
+          letter-spacing: 0.02em;
+          text-transform: uppercase;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      `}</style>
       <div className="row">
         <div className="col-md-4 ml-5 mb-1 mt-0 pl-5">
           {/* Search bar can be placed here if needed */}
@@ -82,21 +140,21 @@ function StructureTree({ editNode, deleteNode, addChild, treeData }) {
       </div>
       <div id="print_tree">
         <CustomTree
-          generateNodeProps={({ node }) => {
+          generateNodeProps={({ node, path }) => {
             // Ensure children is always an array
             const children = Array.isArray(node?.children) ? node.children : [];
             const head = node?.head || node?.code || "";
             const description = node?.description || "";
+            const depth = Math.max(0, (Array.isArray(path) ? path.length : 1) - 1);
 
             return {
+              style: {
+                ["--coa-depth"]: depth,
+              },
               title: (
-                <span
-                  style={{
-                    textTransform:
-                      children.length > 0 ? "uppercase" : "capitalize",
-                  }}
-                >
-                  {`${head}-${description}`}
+                <span className="coa-tree-title">
+                  <span className="coa-tree-code">{head}</span>
+                  <span className="coa-tree-desc">{description}</span>
                 </span>
               ),
               buttons: [

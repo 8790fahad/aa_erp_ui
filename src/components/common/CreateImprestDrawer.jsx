@@ -1004,32 +1004,8 @@ export default function CreateImprestDrawer({
                 </Button>
               </div>
 
-              <div className="ml-auto w-full max-w-xs space-y-2 rounded-lg border border-[#4267B2]/25 bg-[var(--aa-sidebar-active)] px-3 py-3 text-sm">
-                <div className="flex items-baseline justify-between gap-4 text-slate-800">
-                  <span>Subtotal (net)</span>
-                  <span className="tabular-nums">
-                    ₦{formatNumber1(subtotalNet)}
-                  </span>
-                </div>
-                {Math.abs(totalVat) > 1e-9 && (
-                  <div className="flex items-baseline justify-between gap-4 text-slate-700">
-                    <span className="min-w-0 break-words leading-snug">
-                      {vatRowLabel}
-                    </span>
-                    <span className="shrink-0 tabular-nums">
-                      ₦{formatNumber1(totalVat)}
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-baseline justify-between gap-4 border-t border-[#4267B2]/25 pt-2 font-semibold text-slate-900">
-                  <span>Grand total</span>
-                  <span className="text-base font-bold tabular-nums text-[#4267B2]">
-                    ₦{formatNumber1(grandTotal)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-[#4267B2]/25 bg-[var(--aa-sidebar-active)] px-3 py-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 flex-1 rounded-lg border border-[#4267B2]/25 bg-[var(--aa-sidebar-active)] px-3 py-3">
                 <div className="mb-2">
                   <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
                     <button
@@ -1142,6 +1118,32 @@ export default function CreateImprestDrawer({
                     </>
                   )}
                 </div>
+              </div>
+
+                <div className="w-full shrink-0 space-y-2 rounded-lg border border-[#4267B2]/25 bg-[var(--aa-sidebar-active)] px-3 py-3 text-sm lg:w-72">
+                <div className="flex items-baseline justify-between gap-4 text-slate-800">
+                  <span>Subtotal (net)</span>
+                  <span className="tabular-nums">
+                    ₦{formatNumber1(subtotalNet)}
+                  </span>
+                </div>
+                {Math.abs(totalVat) > 1e-9 && (
+                  <div className="flex items-baseline justify-between gap-4 text-slate-700">
+                    <span className="min-w-0 break-words leading-snug">
+                      {vatRowLabel}
+                    </span>
+                    <span className="shrink-0 tabular-nums">
+                      ₦{formatNumber1(totalVat)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-baseline justify-between gap-4 border-t border-[#4267B2]/25 pt-2 font-semibold text-slate-900">
+                  <span>Grand total</span>
+                  <span className="text-base font-bold tabular-nums text-[#4267B2]">
+                    ₦{formatNumber1(grandTotal)}
+                  </span>
+                </div>
+              </div>
               </div>
             </div>
           </div>

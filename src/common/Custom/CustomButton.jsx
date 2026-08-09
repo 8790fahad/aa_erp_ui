@@ -7,6 +7,7 @@ import { Button } from "reactstrap";
 
 function CustomButton(props) {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
+  const primary = activeBusiness?.primary_color || "#4267B2";
   const {
     className,
     handleSubmit,
@@ -16,14 +17,17 @@ function CustomButton(props) {
     children,
     color,
     size,
+    style,
     ...rest
   } = props;
   return (
     <Button
       color={color}
       style={{
-        backgroundColor: activeBusiness?.primary_color,
-        borderColor: activeBusiness?.primary_color,
+        backgroundColor: primary,
+        borderColor: primary,
+        color: "#fff",
+        ...style,
       }}
       className={`d-inline-flex align-items-center justify-content-center gap-2 whitespace-nowrap [&_svg]:shrink-0 ${mb ? `mb-${mb}` : "mb-2"} ${className || ""}`}
       onClick={handleSubmit}

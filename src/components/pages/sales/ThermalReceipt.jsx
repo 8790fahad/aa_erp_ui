@@ -74,7 +74,7 @@ function ThermalReceiptCopy({
   invoiceData,
   business = {},
   customer = {},
-  variant = "vat",
+  variant = "customer",
   preview = false,
 }) {
   if (!invoiceData) return null;
@@ -89,8 +89,7 @@ function ThermalReceiptCopy({
     "—";
 
   const isCustomerCopy = variant === "customer";
-  const copyTitle = isCustomerCopy ? "CUSTOMER COPY" : "VAT COPY";
-  // VAT copy: separate VAT column + Output VAT totals.
+  const copyTitle = "CUSTOMER COPY";
   // Customer copy: fold VAT into Amt, no VAT column / Output VAT line.
   const showLineVat = !isCustomerCopy;
   const showTaxSummary = !isCustomerCopy;
@@ -121,6 +120,13 @@ function ThermalReceiptCopy({
 
       <div className="tr-center tr-bold">SALES RECEIPT</div>
       <div className="tr-center tr-muted tr-copy-label">{copyTitle}</div>
+      {(invoiceData.branch_name || invoiceData.pack_code) && (
+        <div className="tr-center tr-muted">
+          {[invoiceData.branch_name, invoiceData.pack_code]
+            .filter(Boolean)
+            .join(" · ")}
+        </div>
+      )}
       <div>Ref: {saleCode}</div>
       <div>
         Date:{" "}
@@ -214,19 +220,22 @@ function ThermalReceiptCopy({
 
 /**
  * 80mm thermal receipt layout.
- * Renders VAT copy + Customer copy for preview; print filters by body class.
+ * Renders one Customer copy (VAT folded into Amt).
  */
 export default function ThermalReceipt({
   invoiceData,
   business = {},
   customer = {},
   preview = false,
+  className = "",
 }) {
   if (!invoiceData) return null;
 
   return (
     <div
-      className={`thermal-receipt-set${preview ? " thermal-receipt-set-preview" : ""}`}
+      className={`thermal-receipt-set${preview ? " thermal-receipt-set-preview" : ""}${
+        className ? ` ${className}` : ""
+      }`}
     >
       <style>{`
         .thermal-receipt-set {
@@ -264,17 +273,24 @@ export default function ThermalReceipt({
           }
           body.thermal-print-active .thermal-receipt-set {
             display: block !important;
-            position: absolute;
+            position: relative;
             left: 0;
             top: 0;
             width: 80mm;
           }
+          body.thermal-print-active .thermal-receipt-set.thermal-branch-pack {
+            page-break-after: always;
+            break-after: page;
+          }
+          body.thermal-print-active .thermal-receipt-set.thermal-branch-pack-last {
+            page-break-after: auto;
+            break-after: auto;
+          }
           body.thermal-print-active .thermal-receipt-root {
             display: none !important;
           }
-          body.thermal-print-active.thermal-print-vat .thermal-receipt-copy--vat,
           body.thermal-print-active.thermal-print-customer .thermal-receipt-copy--customer,
-          body.thermal-print-active.thermal-print-both .thermal-receipt-root {
+          body.thermal-print-active.thermal-print-both .thermal-receipt-copy--customer {
             display: block !important;
             visibility: visible !important;
             position: relative;
@@ -290,17 +306,9 @@ export default function ThermalReceipt({
             background: #fff;
             box-shadow: none;
           }
-          body.thermal-print-active.thermal-print-both .thermal-receipt-root {
-            page-break-after: always;
-            break-after: page;
-          }
-          body.thermal-print-active.thermal-print-both .thermal-receipt-root:last-child {
-            page-break-after: auto;
-            break-after: auto;
-          }
           @page {
-            size: 80mm auto;
-            margin: 1mm;
+            size: portrait;
+            margin: 2mm;
           }
         }
         .thermal-receipt-root .tr-center { text-align: center; }
@@ -344,13 +352,6 @@ export default function ThermalReceipt({
         invoiceData={invoiceData}
         business={business}
         customer={customer}
-        variant="vat"
-      />
-      <ThermalReceiptCopy
-        preview={preview}
-        invoiceData={invoiceData}
-        business={business}
-        customer={customer}
         variant="customer"
       />
     </div>
@@ -364,15 +365,12 @@ const PRINT_MODE_CLASSES = [
 ];
 
 /**
- * @param {"vat"|"customer"|"both"} mode
+ * Prints one Customer copy (VAT included in amounts).
  */
-export function printThermalReceipt(mode = "both") {
-  const normalized =
-    mode === "vat" || mode === "customer" || mode === "both" ? mode : "both";
-
+export function printThermalReceipt(_mode = "both") {
   document.body.classList.add("thermal-print-active");
   PRINT_MODE_CLASSES.forEach((cls) => document.body.classList.remove(cls));
-  document.body.classList.add(`thermal-print-${normalized}`);
+  document.body.classList.add("thermal-print-both");
 
   const cleanup = () => {
     document.body.classList.remove("thermal-print-active");
