@@ -28,6 +28,11 @@ import { toast } from "sonner";
 import { useSelector } from "react-redux";
 import PropTypes from "prop-types";
 import { formatNumber1 } from "@/components/router/utilities";
+import {
+  normalizeNigerianPhone,
+  isValidNigerianPhone,
+  NIGERIAN_PHONE_HINT,
+} from "@/lib/nigerianPhone";
 
 const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
   const { activeBusiness } = useSelector((state) => state.auth);
@@ -532,10 +537,13 @@ const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
       setUploadProgress(20);
       const customers = await parseExcelFile(file);
 
-      // Step 2: Validate data - only fullname is required, address/email/phone can be empty/null
+      // Step 2: Validate data — fullname + valid Nigerian phone required
       setUploadProgress(40);
       const validCustomers = customers.filter(
-        (customer) => customer.fullname && customer.fullname.trim() !== ""
+        (customer) =>
+          customer.fullname &&
+          customer.fullname.trim() !== "" &&
+          isValidNigerianPhone(customer.phone),
       );
 
       const invalidCount = customers.length - validCustomers.length;
@@ -545,7 +553,7 @@ const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
         ...customer,
         address: customer.address || null,
         email: customer.email || null,
-        phone: customer.phone || null,
+        phone: normalizeNigerianPhone(customer.phone),
         branch: customer.branch || null,
         branch_id: resolveBranchId(customer.branch),
         receivable_code:
@@ -564,8 +572,12 @@ const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
         validCustomers: validCustomers.length,
         invalidCustomers: invalidCount,
         invalidRows: customers.filter(
-          (customer) => !customer.fullname || customer.fullname.trim() === ""
+          (customer) =>
+            !customer.fullname ||
+            customer.fullname.trim() === "" ||
+            !isValidNigerianPhone(customer.phone),
         ),
+        phoneHint: NIGERIAN_PHONE_HINT,
       });
       setShowPreview(true);
       setIsProcessing(false);
@@ -628,7 +640,10 @@ const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
           fullname: item.fullname,
           address:
             item.address && item.address.trim() !== "" ? item.address : null,
-          phone: item.phone && item.phone.trim() !== "" ? item.phone : null,
+          phone:
+            item.phone && item.phone.trim() !== ""
+              ? normalizeNigerianPhone(item.phone)
+              : null,
           email: item.email && item.email.trim() !== "" ? item.email : null,
           branch_id: item.branch_id ?? resolveBranchId(item.branch),
           credit_limit: item.credit_limit || 0,

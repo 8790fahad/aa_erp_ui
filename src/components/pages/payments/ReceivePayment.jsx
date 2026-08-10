@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 import {
@@ -8,6 +8,7 @@ import {
   History,
   Loader2,
   RefreshCw,
+  ScanLine,
   Search,
   Split,
   Wallet,
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/sheet";
 import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
 import { WorkflowStatusBadge } from "@/lib/saleWorkflowStatus.js";
+import useScanDetection from "@/hooks/useScanDetection";
 
 function paymentTypeLabel(type) {
   const t = String(type || "").toLowerCase();
@@ -71,6 +73,7 @@ export default function ReceivePayment() {
   });
   const [search, setSearch] = useState("");
   const [modeFilter, setModeFilter] = useState("all");
+  const searchInputRef = useRef(null);
 
   const [collectOpen, setCollectOpen] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -295,6 +298,57 @@ export default function ReceivePayment() {
     }
     setCollectOpen(true);
   };
+
+  const applySearchOrScan = useCallback(
+    (raw, { fromScan = false } = {}) => {
+      const code = String(raw || "").trim();
+      if (!code) return;
+
+      setSearch(code);
+      setActiveTab("pending");
+
+      const needle = code.toLowerCase();
+      const pendingMatch = pending.find(
+        (r) => String(r.sale_code || "").toLowerCase() === needle,
+      );
+      if (pendingMatch) {
+        openCollect(pendingMatch);
+        if (fromScan) toast.success(`Scanned ${pendingMatch.sale_code}`);
+        return;
+      }
+
+      const historyMatch = history.find(
+        (r) => String(r.sale_code || "").toLowerCase() === needle,
+      );
+      if (historyMatch) {
+        setActiveTab("history");
+        if (fromScan) toast.info(`${historyMatch.sale_code} already collected`);
+        return;
+      }
+
+      if (fromScan) {
+        toast.error(`No cashier invoice found for ${code}`);
+      }
+    },
+    // openCollect only uses setters + row data; safe across renders
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [history, pending],
+  );
+
+  const handleBarcodeScan = useCallback(
+    (code) => {
+      if (collectOpen) return;
+      const tag = String(document.activeElement?.tagName || "").toLowerCase();
+      if (tag === "textarea") return;
+      applySearchOrScan(code, { fromScan: true });
+    },
+    [applySearchOrScan, collectOpen],
+  );
+
+  useScanDetection({
+    onComplete: handleBarcodeScan,
+    minLength: 3,
+  });
 
   const closeCollect = () => {
     setCollectOpen(false);
@@ -545,11 +599,33 @@ export default function ReceivePayment() {
             <div className="relative min-w-[12rem] flex-1">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
+                ref={searchInputRef}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search invoice, customer…"
-                className="h-9 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    applySearchOrScan(search);
+                  }
+                }}
+                placeholder="Search or scan invoice, customer…"
+                autoComplete="off"
+                className="h-9 w-full rounded-md border border-slate-200 bg-white pl-8 pr-10 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
               />
+              <button
+                type="button"
+                title="Scan barcode / focus for USB scanner"
+                aria-label="Scan barcode"
+                onClick={() => {
+                  searchInputRef.current?.focus();
+                  toast.message("Ready to scan", {
+                    description: "Scan an invoice barcode with your scanner",
+                  });
+                }}
+                className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[var(--aa-accent)] hover:bg-slate-100"
+              >
+                <ScanLine className="h-4 w-4" />
+              </button>
             </div>
 
             {activeTab === "pending" && !cashierType ? (

@@ -17,6 +17,13 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import {
+  normalizeNigerianPhone,
+  isValidNigerianPhone,
+  toNationalPhoneInput,
+  sanitizePhoneInput,
+  NIGERIAN_PHONE_HINT,
+} from "@/lib/nigerianPhone";
 
 const SALUTATIONS = ["Mr.", "Mrs.", "Ms.", "Dr.", "Miss"];
 const emptyContactPerson = () => ({
@@ -182,8 +189,8 @@ const CustomerRegistartion = ({
         first_name: selectedCustomer.first_name || "",
         last_name: selectedCustomer.last_name || "",
         email: selectedCustomer.email || "",
-        work_phone: selectedCustomer.phone || "",
-        mobile: selectedCustomer.mobile || "",
+        work_phone: toNationalPhoneInput(selectedCustomer.phone || ""),
+        mobile: toNationalPhoneInput(selectedCustomer.mobile || ""),
         language: selectedCustomer.language || "English",
         tin: selectedCustomer.tin || "",
         company_id: selectedCustomer.company_id || "",
@@ -242,6 +249,8 @@ const CustomerRegistartion = ({
         company_name: value,
         name: prev.name?.trim() ? prev.name : value,
       }));
+    } else if (name === "work_phone" || name === "mobile") {
+      setForm((prev) => ({ ...prev, [name]: sanitizePhoneInput(value) }));
     } else {
       setForm((prev) => ({ ...prev, [name]: value }));
     }
@@ -317,8 +326,13 @@ const CustomerRegistartion = ({
       newErrors.email = "Please enter a valid email address";
     }
     const phone = form.work_phone || form.mobile || "";
-    if (phone && phone.replace(/\D/g, "").length < 10) {
-      newErrors.work_phone = "Please enter a valid phone number";
+    if (!String(phone).trim()) {
+      newErrors.work_phone = "Phone number is required";
+    } else if (!isValidNigerianPhone(phone)) {
+      newErrors.work_phone = NIGERIAN_PHONE_HINT;
+    }
+    if (form.mobile && String(form.mobile).trim() && !isValidNigerianPhone(form.mobile)) {
+      newErrors.mobile = NIGERIAN_PHONE_HINT;
     }
     if (!String(form.receivable_code || "").trim()) {
       newErrors.receivable_code = "Accounts receivable is required";
@@ -362,7 +376,10 @@ const CustomerRegistartion = ({
     setLoading(true);
 
     const displayName = (form.name || form.company_name || "").trim();
-    const phone = form.work_phone || form.mobile || "";
+    const phone = normalizeNigerianPhone(form.work_phone || form.mobile || "");
+    const mobile = form.mobile
+      ? normalizeNigerianPhone(form.mobile)
+      : "";
     const address = buildAddressString(form) || form.billing_street1 || "";
 
     try {
@@ -405,7 +422,7 @@ const CustomerRegistartion = ({
         last_name: form.last_name || "",
         email: form.email || "",
         phone: phone || "",
-        mobile: form.mobile || "",
+        mobile: mobile || "",
         address: address || "",
         tin: form.tin || form.company_id || "",
         company_id: form.company_id || form.tin || "",
@@ -667,7 +684,9 @@ const CustomerRegistartion = ({
             </div>
 
             <div>
-              <ShadcnLabel className={labelClass}>Phone</ShadcnLabel>
+              <ShadcnLabel className={labelClass}>
+                Phone <span className="text-red-500">*</span>
+              </ShadcnLabel>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div className="flex gap-1.5">
                   <span className="flex h-9 shrink-0 items-center rounded-md border border-slate-300 bg-slate-50 px-2 text-xs text-slate-600">
@@ -677,7 +696,10 @@ const CustomerRegistartion = ({
                     name="work_phone"
                     value={form.work_phone}
                     onChange={handleChange}
-                    placeholder="Work Phone"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    placeholder="8012345678"
+                    maxLength={11}
                     className={cn(
                       inputClass,
                       errors.work_phone && "border-red-500",
@@ -692,13 +714,22 @@ const CustomerRegistartion = ({
                     name="mobile"
                     value={form.mobile}
                     onChange={handleChange}
+                    inputMode="numeric"
+                    autoComplete="tel-national"
                     placeholder="Mobile"
-                    className={inputClass}
+                    maxLength={11}
+                    className={cn(
+                      inputClass,
+                      errors.mobile && "border-red-500",
+                    )}
                   />
                 </div>
               </div>
               {errors.work_phone && (
                 <p className="mt-1 text-xs text-red-500">{errors.work_phone}</p>
+              )}
+              {errors.mobile && (
+                <p className="mt-1 text-xs text-red-500">{errors.mobile}</p>
               )}
             </div>
 

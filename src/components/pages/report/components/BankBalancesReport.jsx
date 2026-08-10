@@ -102,11 +102,41 @@ export default function BankBalancesReport() {
         sn: index + 1,
         bankId: a.id,
         accountCode: resolveAccountCode(a),
+        ledgerCode: String(
+          a?.head ?? a?.code ?? a?.account_code ?? "",
+        ).trim(),
         accountName: a.account_name || "—",
         currency: a.currency || "NGN",
         balance: toNumber(a.balance),
       })),
     [accounts],
+  );
+
+  const openAccountLedger = useCallback(
+    (row) => {
+      const code =
+        row.ledgerCode && row.ledgerCode !== "—"
+          ? row.ledgerCode
+          : row.accountCode !== "—"
+            ? String(row.accountCode).split("-")[0]
+            : "";
+      if (!code) {
+        toast.error("This bank account is not linked to a GL account");
+        return;
+      }
+      const to = asAtDate || moment().format("YYYY-MM-DD");
+      const from = moment(to).startOf("year").format("YYYY-MM-DD");
+      const params = new URLSearchParams({
+        accounts: code,
+        name: row.accountName || code,
+        from,
+        to,
+      });
+      navigate(
+        `/app/reports/accounting-reports/custom-reports?${params.toString()}`,
+      );
+    },
+    [asAtDate, navigate],
   );
 
   const totalsByCurrency = useMemo(() => {
@@ -245,7 +275,8 @@ export default function BankBalancesReport() {
                 onChange={(e) => setAsAtDate(e.target.value)}
               />
               <p className="text-xs text-gray-500 mt-1">
-                Same live balances as the dashboard bank accounts list.
+                Same live balances as the dashboard bank accounts list. Click an
+                account code to open that account&apos;s ledger.
               </p>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
@@ -349,12 +380,26 @@ export default function BankBalancesReport() {
                 </thead>
                 <tbody>
                   {rows.map((row) => (
-                    <tr key={String(row.bankId)} className="border-b border-gray-200">
-                      <td className="px-3 py-2 text-center text-gray-800 tabular-nums">{row.sn}</td>
-                      <td className="px-3 py-2 font-mono text-gray-900 whitespace-nowrap">
-                        {row.accountCode}
+                    <tr
+                      key={String(row.bankId)}
+                      className="border-b border-gray-200 hover:bg-slate-50"
+                    >
+                      <td className="px-3 py-2 text-center text-gray-800 tabular-nums">
+                        {row.sn}
                       </td>
-                      <td className="px-3 py-2 text-gray-900 font-medium">{row.accountName}</td>
+                      <td className="px-3 py-2 font-mono whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => openAccountLedger(row)}
+                          className="text-blue-600 hover:underline font-medium cursor-pointer bg-transparent border-0 p-0"
+                          title="Open account ledger"
+                        >
+                          {row.accountCode}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 text-gray-900 font-medium">
+                        {row.accountName}
+                      </td>
                       <td className="px-3 py-2 text-right font-semibold text-gray-900 tabular-nums whitespace-nowrap">
                         {formatBalance(row.balance, row.currency)}
                       </td>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, X, Printer, Download } from "lucide-react";
 import { useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { _postApi, _fetchApi } from "@/redux/actions/api";
 import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,6 +21,7 @@ import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 const PayableLedger = () => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const facilityId = activeBusiness?.id;
 
   const [fromDate, setFromDate] = useState("");
@@ -32,17 +33,19 @@ const PayableLedger = () => {
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const printRef = useRef(null);
 
-  // Initialize dates - default to current month-to-date
+  // Initialize dates - default to current month-to-date (or asAt from query)
   useEffect(() => {
     const today = new Date();
     const todayStr = today.toISOString().split("T")[0];
+    const asAt = searchParams.get("asAt") || searchParams.get("toDate");
+    const fromQ = searchParams.get("fromDate");
     const firstDayStr = new Date(today.getFullYear(), today.getMonth(), 1)
       .toISOString()
       .split("T")[0];
 
-    setFromDate(firstDayStr);
-    setToDate(todayStr);
-  }, []);
+    setFromDate(fromQ || firstDayStr);
+    setToDate(asAt || todayStr);
+  }, [searchParams]);
 
   // Load suppliers from suppliersinfo model
   useEffect(() => {
@@ -67,6 +70,31 @@ const PayableLedger = () => {
       },
     );
   }, [facilityId]);
+
+  // Prefill supplier from query string
+  useEffect(() => {
+    const supplierId =
+      searchParams.get("supplierId") || searchParams.get("supplierNo");
+    if (!supplierId) return;
+
+    const match = suppliers.find(
+      (s) =>
+        String(s.id || s.supplier_number).toLowerCase() ===
+        String(supplierId).toLowerCase(),
+    );
+    if (match) {
+      setSelectedSupplier(match);
+      return;
+    }
+    if (!suppliers.length) {
+      const name = searchParams.get("supplierName") || supplierId;
+      setSelectedSupplier({
+        id: supplierId,
+        name,
+        supplier_number: supplierId,
+      });
+    }
+  }, [suppliers, searchParams]);
 
   const fetchPayableLedgerData = useCallback(async () => {
     if (!facilityId || !fromDate || !toDate || !selectedSupplier) {

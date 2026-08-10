@@ -1,4 +1,5 @@
 import moment from "moment";
+import Barcode from "react-barcode";
 import { formatNumber1 } from "@/components/router/utilities";
 
 function isTaxableItem(item) {
@@ -87,12 +88,27 @@ function ThermalReceiptCopy({
     invoiceData.transaction?.id ||
     invoiceData.invoice_ref ||
     "—";
+  const barcodeValue = String(
+    invoiceData.pack_code || saleCode || "",
+  ).trim();
+  const isWarehouseCopy = Boolean(
+    invoiceData.pack_code || invoiceData.branch_name || invoiceData.branch_id,
+  );
+  const isCollectionReceipt = Boolean(invoiceData.collection_receipt);
 
   const isCustomerCopy = variant === "customer";
-  const copyTitle = "CUSTOMER COPY";
+  const copyTitle = isCollectionReceipt
+    ? "COLLECTION RECEIPT"
+    : isWarehouseCopy
+      ? "WAREHOUSE COPY"
+      : "CUSTOMER COPY";
+  const docTitle = isCollectionReceipt
+    ? "GOODS COLLECTION"
+    : "SALES RECEIPT";
   // Customer copy: fold VAT into Amt, no VAT column / Output VAT line.
   const showLineVat = !isCustomerCopy;
   const showTaxSummary = !isCustomerCopy;
+  const showDualSign = isWarehouseCopy || isCollectionReceipt;
 
   const customerSubtotal = items.reduce(
     (sum, item) => sum + item.lineTotal + item.lineVat,
@@ -118,7 +134,7 @@ function ThermalReceiptCopy({
 
       <div className="tr-divider" />
 
-      <div className="tr-center tr-bold">SALES RECEIPT</div>
+      <div className="tr-center tr-bold">{docTitle}</div>
       <div className="tr-center tr-muted tr-copy-label">{copyTitle}</div>
       {(invoiceData.branch_name || invoiceData.pack_code) && (
         <div className="tr-center tr-muted">
@@ -130,10 +146,20 @@ function ThermalReceiptCopy({
       <div>Ref: {saleCode}</div>
       <div>
         Date:{" "}
-        {moment(invoiceData.date || invoiceData.transaction_date).format(
-          "DD/MM/YYYY HH:mm"
-        )}
+        {moment(
+          invoiceData.collected_at ||
+            invoiceData.date ||
+            invoiceData.transaction_date,
+        ).format("DD/MM/YYYY HH:mm")}
       </div>
+      {isCollectionReceipt ? (
+        <div className="tr-muted">
+          Collected:{" "}
+          {invoiceData.collected_at
+            ? moment(invoiceData.collected_at).format("DD/MM/YYYY HH:mm")
+            : moment().format("DD/MM/YYYY HH:mm")}
+        </div>
+      ) : null}
 
       <div className="tr-divider" />
 
@@ -213,7 +239,37 @@ function ThermalReceiptCopy({
       </div>
 
       <div className="tr-divider" />
-      <div className="tr-center tr-footer">Thank you for your business!</div>
+      {showDualSign ? (
+        <div className="tr-dual-sign">
+          <div className="tr-sign-block">
+            <div className="tr-sign-line" />
+            <div className="tr-muted">Released by (Warehouse)</div>
+          </div>
+          <div className="tr-sign-block">
+            <div className="tr-sign-line" />
+            <div className="tr-muted">Received by (Customer)</div>
+          </div>
+        </div>
+      ) : null}
+      <div className="tr-center tr-footer">
+        {isCollectionReceipt
+          ? "Goods collected — thank you!"
+          : "Thank you for your business!"}
+      </div>
+      {barcodeValue && barcodeValue !== "—" ? (
+        <div className="tr-barcode tr-barcode-footer">
+          <Barcode
+            value={barcodeValue}
+            width={1.2}
+            height={36}
+            displayValue
+            fontSize={11}
+            margin={2}
+            background="#ffffff"
+            lineColor="#000000"
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -345,6 +401,33 @@ export default function ThermalReceipt({
         .thermal-receipt-root .tr-sku { font-size: 10px; opacity: 0.85; }
         .thermal-receipt-root .tr-total { margin-top: 2px; font-size: 14px; }
         .thermal-receipt-root .tr-footer { font-size: 12px; }
+        .thermal-receipt-root .tr-barcode {
+          display: flex;
+          justify-content: center;
+          margin: 4px 0 2px;
+          overflow: hidden;
+        }
+        .thermal-receipt-root .tr-barcode-footer {
+          margin: 8px 0 0;
+        }
+        .thermal-receipt-root .tr-barcode svg {
+          max-width: 100%;
+          height: auto;
+        }
+        .thermal-receipt-root .tr-dual-sign {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          margin: 6px 0 4px;
+        }
+        .thermal-receipt-root .tr-sign-block {
+          text-align: center;
+        }
+        .thermal-receipt-root .tr-sign-line {
+          border-bottom: 1px solid #000;
+          height: 18px;
+          margin-bottom: 2px;
+        }
       `}</style>
 
       <ThermalReceiptCopy

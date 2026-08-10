@@ -15,6 +15,9 @@ import {
   formatReportDate,
 } from "./productionReportUi";
 import moment from "moment";
+import SpecialInvoiceTreatment, {
+  InvoiceTreatmentFilter,
+} from "@/components/sales/SpecialInvoiceTreatment";
 
 function sumField(rows, field) {
   return rows.reduce((acc, row) => acc + Number(row[field] || 0), 0);
@@ -111,6 +114,7 @@ export default function SalesPerProductReport() {
   const [byLocation, setByLocation] = useState(false);
   const [locationFilter, setLocationFilter] = useState("");
   const [locationOptions, setLocationOptions] = useState([]);
+  const [paymentType, setPaymentType] = useState("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [reportData, setReportData] = useState(null);
@@ -167,6 +171,7 @@ export default function SalesPerProductReport() {
         byLocation: Boolean(byLocation),
       };
       if (byLocation) body.branchId = Number(locationFilter);
+      if (paymentType && paymentType !== "all") body.paymentType = paymentType;
 
       const response = await fetch(`${apiURL}/api/reports/sales/per-product`, {
         method: "POST",
@@ -190,7 +195,7 @@ export default function SalesPerProductReport() {
     } finally {
       setLoading(false);
     }
-  }, [byLocation, facilityId, fromDate, locationFilter, toDate]);
+  }, [byLocation, facilityId, fromDate, locationFilter, paymentType, toDate]);
 
   if (
     !canViewReportItem("Sale Report per Product") &&
@@ -213,7 +218,7 @@ export default function SalesPerProductReport() {
       <div className="min-h-screen bg-gray-50 p-1 print:bg-white print:p-0">
         <div className="max-w-[95rem] mx-auto">
           <ReportControlsBar
-            onBack={() => navigate("/app/production/production-reports")}
+            onBack={() => navigate(-1)}
             loading={loading}
             onGenerate={loadReport}
             onExportCsv={
@@ -223,6 +228,20 @@ export default function SalesPerProductReport() {
           >
             <DateField label="From" value={fromDate} onChange={setFromDate} />
             <DateField label="To" value={toDate} onChange={setToDate} />
+            <SpecialInvoiceTreatment
+              fromDate={fromDate}
+              toDate={toDate}
+              compact
+              buttonSize="sm"
+              className="h-10"
+            />
+            <InvoiceTreatmentFilter
+              value={paymentType}
+              onChange={(v) => {
+                setPaymentType(v);
+                setReportData(null);
+              }}
+            />
             <label className="flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded border border-gray-300 bg-white px-3 text-sm">
               <input
                 type="checkbox"
@@ -267,7 +286,7 @@ export default function SalesPerProductReport() {
             <div className="print-content">
               <ReportHeaderBand
                 business={activeBusiness}
-                reportTitle="SALE REPORT PER PRODUCT"
+                reportTitle="SALES REPORT BY PRODUCT"
                 periodLabel={periodLabel}
               />
               {(() => {

@@ -2512,12 +2512,28 @@ export default function CustomDashboard() {
     !loadingBankAccounts ? (
       <BankAccountsCardSkeletonNew />
     ) : (
-      <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-        <div className="flex justify-between items-center mb-1">
-          <h3 className="text-sm font-semibold text-gray-800">
+      <div
+        className="relative overflow-hidden rounded-xl border bg-white p-4 sm:p-5"
+        style={{
+          background: "linear-gradient(135deg, #1a2d5e14 0%, #ffffff 55%)",
+          borderColor: "#1a2d5e40",
+        }}
+      >
+        <span className="absolute bottom-0 left-0 top-0 w-1 rounded-l-xl bg-[#1a2d5e]" />
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-[#1a2d5e]">
             {labels.dashboardBankAccounts}
           </h3>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                navigate("/app/reports/accounting-reports/bank-balances")
+              }
+              className="text-xs font-medium text-[#1a2d5e] hover:underline"
+            >
+              View
+            </button>
             {bankAccountsList.length > 3 && (
               <div className="flex items-center gap-1">
                 <button
@@ -2525,11 +2541,11 @@ export default function CustomDashboard() {
                     setBankAccountsPage(Math.max(0, bankAccountsPage - 1))
                   }
                   disabled={bankAccountsPage === 0}
-                  className="p-1 border border-gray-200 rounded text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+                  className="rounded border border-[#1a2d5e]/30 p-1 text-[#1a2d5e] hover:bg-white disabled:opacity-40"
                 >
-                  <ChevronLeft className="w-3 h-3" />
+                  <ChevronLeft className="h-3 w-3" />
                 </button>
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-gray-500">
                   {bankAccountsPage * 3 + 1}-
                   {Math.min(
                     (bankAccountsPage + 1) * 3,
@@ -2550,26 +2566,36 @@ export default function CustomDashboard() {
                     bankAccountsPage >=
                     Math.ceil(bankAccountsList.length / 3) - 1
                   }
-                  className="p-1 border border-gray-200 rounded text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+                  className="rounded border border-[#1a2d5e]/30 p-1 text-[#1a2d5e] hover:bg-white disabled:opacity-40"
                 >
-                  <ChevronRight className="w-3 h-3" />
+                  <ChevronRight className="h-3 w-3" />
                 </button>
               </div>
             )}
             <button
               onClick={() => setIsBankModalOpen(true)}
-              className="flex items-center gap-1 text-xs text-gray-600 border border-gray-200 rounded px-2 py-1 hover:bg-gray-50"
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-white"
+              style={{ backgroundColor: "#1a2d5e" }}
             >
-              <Plus className="w-3 h-3" /> Add bank
+              <Plus className="h-3 w-3" /> Add bank
             </button>
           </div>
         </div>
-        <p className="text-xs text-gray-500 mb-3">
-          Link your banks to see balances
+        <p className="mb-3 text-xs text-gray-600">
+          Total balance:{" "}
+          <span className="text-base font-semibold tabular-nums text-[#1a2d5e]">
+            ₦
+            {formatNumber1(
+              bankAccountsList.reduce(
+                (sum, a) => sum + parseFloat(a.balance || 0),
+                0,
+              ),
+            )}
+          </span>
         </p>
         <div className="space-y-2">
           {bankAccountsList.length === 0 ? (
-            <div className="text-center py-3 text-gray-500 text-sm">
+            <div className="py-3 text-center text-sm text-gray-500">
               No bank accounts linked
             </div>
           ) : (
@@ -2584,34 +2610,41 @@ export default function CustomDashboard() {
 
               return (
                 <>
-                  {paginatedAccounts.map((account) => (
-                    <div
-                      key={account.id}
-                      className="flex items-center justify-between py-1 hover:bg-gray-50 rounded px-1 -mx-1 cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div className="w-7 h-7 bg-blue-900 rounded-full flex items-center justify-center flex-shrink-0">
-                          <span className="text-white text-xs font-bold">
-                            {getBankInitials(account.bank_name)}
+                  {paginatedAccounts.map((account) => {
+                    const bal = parseFloat(account.balance || 0);
+                    return (
+                      <div
+                        key={account.id}
+                        className="flex cursor-pointer items-center justify-between rounded-lg border border-gray-100 bg-white/80 px-2 py-2 hover:bg-white"
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[#1a2d5e]">
+                            <span className="text-xs font-bold text-white">
+                              {getBankInitials(account.bank_name)}
+                            </span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium text-gray-900">
+                              {account.account_name || "Bank Account"}
+                            </div>
+                            <div className="truncate text-xs text-gray-500">
+                              {account.bank_name}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-1">
+                          <span
+                            className={`text-sm font-semibold tabular-nums ${
+                              bal < 0 ? "text-red-500" : "text-[#1a2d5e]"
+                            }`}
+                          >
+                            ₦{formatNumber1(bal)}
                           </span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-gray-900 truncate">
-                            {account.account_name || "Bank Account"}
-                          </div>
-                          <div className="text-xs text-gray-500 truncate">
-                            {account.bank_name}
-                          </div>
+                          <ChevronRight className="h-4 w-4 text-[#1a2d5e]" />
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <span className="text-sm font-medium text-gray-900">
-                          ₦{formatNumber1(account.balance || 0)}
-                        </span>
-                        <ChevronRight className="w-4 h-4 text-blue-600" />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </>
               );
             })()

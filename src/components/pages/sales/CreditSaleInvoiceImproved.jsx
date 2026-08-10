@@ -8,6 +8,7 @@ import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { useSelector } from "react-redux";
 import PropTypes from "prop-types";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
+import Barcode from "react-barcode";
 
 export default function CreditSaleInvoice({
   invoiceData: propInvoiceData,
@@ -27,6 +28,7 @@ export default function CreditSaleInvoice({
   showCustomerCopyActions = true,
   enableInlineCustomerCopyPreview = true,
   showPrintButton = true,
+  warehouseDualSignature = false,
   onConfirm,
   onCancel,
   onApplyCustomerCopy,
@@ -1234,6 +1236,19 @@ export default function CreditSaleInvoice({
                 <span className="font-semibold">Receipt No:</span>{" "}
                 <span className="text-gray-900">{invoiceReference}</span>
               </p>
+              {invoiceReference ? (
+                <div className="mb-2 flex justify-center overflow-hidden">
+                  <Barcode
+                    value={String(invoiceReference)}
+                    width={1.1}
+                    height={32}
+                    displayValue={false}
+                    margin={0}
+                    background="#f9fafb"
+                    lineColor="#000000"
+                  />
+                </div>
+              ) : null}
               <p className="text-xs mb-1 text-gray-700">
                 <span className="font-semibold">Delivery Order No:</span>{" "}
                 <span className="text-gray-900">
@@ -1245,21 +1260,55 @@ export default function CreditSaleInvoice({
                 <span className="text-gray-900">{customer.customer_name}</span>
               </p>
               <div className="border-t-2 border-gray-300 mt-2 pt-1.5">
-                <p className="text-xs font-semibold text-gray-600">
-                  Customer Signature
-                </p>
+                {warehouseDualSignature ? (
+                  <div className="space-y-3">
+                    <div>
+                      <div className="h-8 border-b border-gray-400" />
+                      <p className="text-xs font-semibold text-gray-600 mt-1">
+                        Released by (Warehouse)
+                      </p>
+                    </div>
+                    <div>
+                      <div className="h-8 border-b border-gray-400" />
+                      <p className="text-xs font-semibold text-gray-600 mt-1">
+                        Received by (Customer)
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs font-semibold text-gray-600">
+                    Customer Signature
+                  </p>
+                )}
                 {/* <div className="h-8"></div> */}
               </div>
             </div>
             <div className="bg-blue-50 border border-blue-200 p-1.5">
               <h6 className="text-xs font-bold text-gray-800 mb-2 border-b border-blue-300 pb-1">
-                Prepared Details
+                {warehouseDualSignature ? "Warehouse Details" : "Prepared Details"}
               </h6>
               <p className="text-xs mb-1.5 text-gray-700">
-                <span className="font-semibold">Prepared By:</span> {user?.name}{" "}
-                ({user?.id})
+                <span className="font-semibold">
+                  {warehouseDualSignature ? "Printed By:" : "Prepared By:"}
+                </span>{" "}
+                {user?.name} ({user?.id})
               </p>
-              {authorizationUser.signature ? (
+              {warehouseDualSignature ? (
+                <div className="space-y-3 mt-2">
+                  <div>
+                    <div className="h-8 border-b border-blue-300" />
+                    <p className="text-[0.65rem] text-gray-500 uppercase tracking-wide mt-1">
+                      Warehouse signature
+                    </p>
+                  </div>
+                  <div>
+                    <div className="h-8 border-b border-blue-300" />
+                    <p className="text-[0.65rem] text-gray-500 uppercase tracking-wide mt-1">
+                      Checker / dual signature
+                    </p>
+                  </div>
+                </div>
+              ) : authorizationUser.signature ? (
                 <div className="flex flex-col items-center gap-1">
                   <img
                     src={authorizationUser.signature}
@@ -1806,6 +1855,7 @@ CreditSaleInvoice.propTypes = {
   showCustomerCopyActions: PropTypes.bool,
   enableInlineCustomerCopyPreview: PropTypes.bool,
   showPrintButton: PropTypes.bool,
+  warehouseDualSignature: PropTypes.bool,
   onConfirm: PropTypes.func,
   onCancel: PropTypes.func,
   onApplyCustomerCopy: PropTypes.func,

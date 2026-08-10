@@ -25,18 +25,6 @@ export const ACCOUNTING_REPORT_SECTIONS = [
         dateMode: "asOf",
       },
       {
-        title: "Cash Flow Statement",
-        description: "Operating, investing, and financing cash flows",
-        path: `${BASE}/inventria-cash-flow`,
-        dateMode: "range",
-      },
-      {
-        title: "Statement of Changes in Equity",
-        description: "Opening balances, movements, and closing equity",
-        path: `${BASE}/inventria-statement-of-changes-in-equity`,
-        dateMode: "range",
-      },
-      {
         title: "Trial Balance",
         description: "All accounts with debit and credit balances",
         path: `${BASE}/inventria-trial-balance`,
@@ -58,7 +46,8 @@ export const ACCOUNTING_REPORT_SECTIONS = [
     items: [
       {
         title: "Debtors report (Accounts Receivable)",
-        description: "Unpaid customer invoices with balances",
+        description:
+          "Customers and suppliers with debit (DR) balances",
         path: `${BASE}/receivable-ledger`,
         dateMode: "range",
       },
@@ -81,6 +70,20 @@ export const ACCOUNTING_REPORT_SECTIONS = [
         path: `${BASE}/sales-invoices-report`,
         dateMode: "range",
       },
+      {
+        title: "Sales report by product",
+        description:
+          "Sales quantity, revenue, COGS and margin by product (Cash / Transfer / Warehouse)",
+        path: `${BASE}/sales-by-product`,
+        dateMode: "range",
+      },
+      {
+        title: "Sales report by supplier",
+        description:
+          "Sales aggregated by product supplier source (Cash / Transfer / Warehouse)",
+        path: `${BASE}/sales-by-supplier`,
+        dateMode: "range",
+      },
     ],
   },
   {
@@ -91,7 +94,8 @@ export const ACCOUNTING_REPORT_SECTIONS = [
     items: [
       {
         title: "Creditors report (Accounts Payable)",
-        description: "Unpaid supplier bills with balances",
+        description:
+          "Customers and suppliers with credit (CR) balances",
         path: `${BASE}/creditors-report`,
         dateMode: "range",
       },

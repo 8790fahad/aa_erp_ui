@@ -263,6 +263,12 @@ export const modules = [
         ],
       },
       {
+        title: "CRM",
+        url: "/app/crm",
+        functionality: ["CRM", "CRM Dashboard", "Customers", "Make sales"],
+        access: ["retailers"],
+      },
+      {
         title: "Invoices",
         url: "/app/sales/invoices",
         functionality: ["Make sales", "Invoices"],

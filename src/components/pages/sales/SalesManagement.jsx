@@ -14,15 +14,17 @@ import {
   ShoppingCart,
 } from "lucide-react";
 import moment from "moment";
-import { _fetchApi, _postApi } from "@/redux/actions/api";
+import { _fetchApi } from "@/redux/actions/api";
 import { Button } from "@/components/ui/button";
 import { formatNumber1 } from "@/components/router/utilities";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   getFulfillmentStatusMeta,
   getWorkflowStatusMeta,
+  normalizeWorkflowHistory,
   WorkflowStatusBadge,
 } from "@/lib/saleWorkflowStatus.js";
+import SaleWorkflowSearchBar from "./SaleWorkflowSearchBar";
 
 const FILTERS = [
   { id: "active", label: "In progress" },
@@ -45,27 +47,16 @@ const FILTERS = [
   {
     id: "warehouse",
     label: "Warehouse",
-    statuses: ["warehouse_picking", "dual_signature", "goods_released"],
+    statuses: ["warehouse_picking"],
   },
   { id: "credit", label: "Credit", statuses: ["awaiting_credit_approval"] },
-  { id: "done", label: "Done", statuses: ["completed"] },
+  {
+    id: "done",
+    label: "Done",
+    statuses: ["dual_signature", "goods_released", "completed"],
+  },
   { id: "all", label: "All" },
 ];
-
-function advanceActionLabel(nextStatus) {
-  const map = {
-    payment_confirmed: "Confirm Payment",
-    credit_approved: "Approve Credit",
-    invoice_separation: "Mark Separated → Warehouse",
-    final_invoice: "Send to Warehouse",
-    warehouse_picking: "Send to Warehouse",
-    dual_signature: "Confirm Dual Signature",
-    goods_released: "Release Goods",
-    completed: "Mark Completed",
-    awaiting_cashier_confirm: "Receive Payment → Cashier",
-  };
-  return map[nextStatus] || "Advance to next stage";
-}
 
 function paymentTypeLabel(type) {
   if (type === "credit") return "Credit";
@@ -81,15 +72,12 @@ export default function SalesManagement() {
   const saleFromUrl = searchParams.get("sale_code") || "";
 
   const [loading, setLoading] = useState(false);
-  const [advancing, setAdvancing] = useState(false);
   const [rows, setRows] = useState([]);
   const [filter, setFilter] = useState("active");
   const [selectedCode, setSelectedCode] = useState(saleFromUrl);
   const [packs, setPacks] = useState([]);
   const [packsLoading, setPacksLoading] = useState(false);
-  const [printingId, setPrintingId] = useState(null);
-  const [printingAll, setPrintingAll] = useState(false);
-  const [separating, setSeparating] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchList = useCallback(() => {
     if (!activeBusiness?.id) return;
@@ -108,9 +96,22 @@ export default function SalesManagement() {
         if (res.success) {
           let list = res.results || [];
           if (filter === "active") {
-            list = list.filter((r) => r.status !== "completed");
+            list = list.filter(
+              (r) =>
+                ![
+                  "completed",
+                  "dual_signature",
+                  "goods_released",
+                  "cancelled",
+                  "reversed",
+                ].includes(r.status),
+            );
           } else if (filter === "done") {
-            list = list.filter((r) => r.status === "completed");
+            list = list.filter((r) =>
+              ["completed", "dual_signature", "goods_released"].includes(
+                r.status,
+              ),
+            );
           }
 
           const roleLower = String(user?.role || "").toLowerCase();
@@ -163,6 +164,45 @@ export default function SalesManagement() {
     [rows, selectedCode],
   );
 
+  const selectedHistory = useMemo(
+    () => normalizeWorkflowHistory(selected?.history),
+    [selected?.history],
+  );
+
+  const visibleRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        String(r.sale_code || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.customer_name || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.pack_code || "")
+          .toLowerCase()
+          .includes(q),
+    );
+  }, [rows, searchQuery]);
+
+  const handleSearchSelect = useCallback(
+    (row, code) => {
+      const saleCode = row?.sale_code || code;
+      if (!saleCode) return;
+      setRows((prev) => {
+        if (prev.some((r) => r.sale_code === saleCode)) return prev;
+        return [{ ...row, sale_code: saleCode }, ...prev];
+      });
+      setFilter("all");
+      setSelectedCode(saleCode);
+      const next = new URLSearchParams(searchParams);
+      next.set("sale_code", saleCode);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
   const showSeparation =
     selected &&
     [
@@ -205,158 +245,12 @@ export default function SalesManagement() {
     fetchPacks();
   }, [fetchPacks]);
 
-  const cashierCanConfirmSelected = useMemo(() => {
-    if (!selected) return true;
-    const roleLower = String(user?.role || "").toLowerCase();
-    const isCashier =
-      roleLower.includes("cashier") || roleLower.includes("casheir");
-    if (!isCashier) return true;
-    const cashierType = String(user?.cashier_type || "").toLowerCase();
-    if (cashierType !== "cash" && cashierType !== "transfer") return true;
-    if (selected.next_status !== "payment_confirmed") return true;
-    const pt = String(selected.payment_type || "").toLowerCase();
-    if (pt === "split") return true;
-    if (cashierType === "cash") return pt === "cash";
-    return pt === "transfer" || pt === "bank";
-  }, [selected, user?.role, user?.cashier_type]);
-
   const selectRow = (code) => {
     setSelectedCode(code);
     const next = new URLSearchParams(searchParams);
     if (code) next.set("sale_code", code);
     else next.delete("sale_code");
     setSearchParams(next, { replace: true });
-  };
-
-  const advance = (action = "advance", note) => {
-    if (!selected || !activeBusiness?.id) return;
-    setAdvancing(true);
-    _postApi(
-      "/api/v1/sale-workflows/advance",
-      {
-        facilityId: activeBusiness.id,
-        saleCode: selected.sale_code,
-        action,
-        note,
-        updated_by: user?.id,
-      },
-      (res) => {
-        setAdvancing(false);
-        if (res.success) {
-          toast.success(res.message || "Updated");
-          fetchList();
-          fetchPacks();
-        } else {
-          toast.error(res.message || "Could not update stage");
-        }
-      },
-      () => {
-        setAdvancing(false);
-        toast.error("Could not update stage");
-      },
-    );
-  };
-
-  const markPrinted = (pack) => {
-    if (!activeBusiness?.id || !pack) return;
-    setPrintingId(pack.id);
-    _postApi(
-      "/api/v1/sale-workflows/fulfillment/print",
-      {
-        facilityId: activeBusiness.id,
-        id: pack.id,
-        packCode: pack.pack_code,
-        updated_by: user?.id,
-      },
-      (res) => {
-        setPrintingId(null);
-        if (res.success) {
-          toast.success("Warehouse invoice opened");
-          fetchPacks();
-          window.open(
-            `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-              pack.sale_code,
-            )}&branch_id=${pack.branch_id}&pack_code=${encodeURIComponent(
-              pack.pack_code,
-            )}`,
-            "_blank",
-          );
-        } else {
-          toast.error(res.message || "Could not open branch invoice");
-        }
-      },
-      () => {
-        setPrintingId(null);
-        toast.error("Could not open branch invoice");
-      },
-    );
-  };
-
-  const markSeparated = () => {
-    if (!activeBusiness?.id || !selected) return;
-    setSeparating(true);
-    _postApi(
-      "/api/v1/sale-workflows/complete-separation",
-      {
-        facilityId: activeBusiness.id,
-        saleCode: selected.sale_code,
-        updated_by: user?.id,
-        note: `Separated into ${packs.length} branch invoice copies`,
-      },
-      (res) => {
-        setSeparating(false);
-        if (res.success) {
-          toast.success(res.message || "Marked separated");
-          fetchList();
-          fetchPacks();
-        } else {
-          toast.error(res.message || "Could not mark separated");
-        }
-      },
-      () => {
-        setSeparating(false);
-        toast.error("Could not mark separated");
-      },
-    );
-  };
-
-  const printAllInvoices = () => {
-    if (!activeBusiness?.id || !selected || packs.length === 0) return;
-    setPrintingAll(true);
-    let remaining = packs.length;
-    let failed = false;
-    const finish = () => {
-      remaining -= 1;
-      if (remaining > 0) return;
-      setPrintingAll(false);
-      fetchPacks();
-      if (failed) toast.error("Some copies could not be marked printed");
-      window.open(
-        `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-          selected.sale_code,
-        )}&print_all=1&auto_print=1`,
-        "_blank",
-      );
-    };
-    packs.forEach((pack) => {
-      _postApi(
-        "/api/v1/sale-workflows/fulfillment/print",
-        {
-          facilityId: activeBusiness.id,
-          id: pack.id,
-          packCode: pack.pack_code,
-          updated_by: user?.id,
-        },
-        (res) => {
-          if (!res.success) failed = true;
-          finish();
-        },
-        () => {
-          failed = true;
-          finish();
-        },
-      );
-    });
   };
 
   const stagePath = selected?.stage_path || [];
@@ -382,15 +276,63 @@ export default function SalesManagement() {
     ) {
       return "invoice_separation";
     }
-    if (
-      ["warehouse_picking", "dual_signature", "goods_released"].includes(s)
-    ) {
+    if (["warehouse_picking"].includes(s)) {
       return "warehouse_picking";
     }
-    if (s === "completed") return "completed";
+    if (["dual_signature", "goods_released", "completed"].includes(s)) {
+      return "completed";
+    }
     return s;
   })();
   const currentIdx = stagePath.findIndex((s) => s.id === timelineStatusId);
+
+  const nextActionHub = (() => {
+    if (!selected || selected.status === "completed") return null;
+    const s = selected.status;
+    if (
+      ["awaiting_payment", "awaiting_cashier_confirm", "submitted"].includes(s)
+    ) {
+      return {
+        title: "Next: Cashier Point",
+        description: "Collect payment for this invoice at Cashier Point.",
+        to: "/app/payments/cashier-point",
+        label: "Open Cashier Point",
+      };
+    }
+    if (s === "awaiting_credit_approval") {
+      return {
+        title: "Next: Credit approval",
+        description: "Approve this credit sale on the Separation page.",
+        to: `/app/sales/separation?sale_code=${encodeURIComponent(selected.sale_code)}`,
+        label: "Open Separation",
+      };
+    }
+    if (
+      [
+        "payment_confirmed",
+        "invoice_separation",
+        "credit_approved",
+        "final_invoice",
+      ].includes(s)
+    ) {
+      return {
+        title: "Next: Separation",
+        description:
+          "Split the invoice into warehouse copies on the Separation page.",
+        to: `/app/sales/separation?sale_code=${encodeURIComponent(selected.sale_code)}`,
+        label: "Open Separation",
+      };
+    }
+    if (s === "warehouse_picking") {
+      return {
+        title: "Next: Warehouse collection",
+        description: "Collect goods and print the collection receipt.",
+        to: "/app/sales/warehouse-requests",
+        label: "Open Warehouse Requests",
+      };
+    }
+    return null;
+  })();
 
   return (
     <div className="min-h-screen">
@@ -400,10 +342,11 @@ export default function SalesManagement() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
                 <ShoppingCart className="w-8 h-8 text-blue-600" />
-                Sales Management
+                Sales Process
               </h1>
               <p className="text-gray-600 mt-1">
-                One invoice → pay → separation → warehouse collect
+                Track invoices through pay → separation → warehouse. Actions are
+                done on Cashier, Separation, and Warehouse pages.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -467,8 +410,17 @@ export default function SalesManagement() {
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <div className="lg:col-span-2 bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 font-semibold text-gray-800">
-              Sales queue ({rows.length})
+            <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+              <div className="font-semibold text-gray-800">
+                Sales queue ({visibleRows.length})
+              </div>
+              <SaleWorkflowSearchBar
+                facilityId={activeBusiness?.id}
+                rows={rows}
+                onSelect={handleSearchSelect}
+                onQueryChange={setSearchQuery}
+                placeholder="Search or scan invoice, customer…"
+              />
             </div>
             {loading ? (
               <div className="p-4 space-y-3">
@@ -476,14 +428,14 @@ export default function SalesManagement() {
                   <Skeleton key={i} className="h-16 w-full" />
                 ))}
               </div>
-            ) : rows.length === 0 ? (
+            ) : visibleRows.length === 0 ? (
               <div className="p-8 text-center text-gray-500 text-sm">
                 No sales in this queue yet. Create an invoice to start the
                 process.
               </div>
             ) : (
               <ul className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
-                {rows.map((row) => {
+                {visibleRows.map((row) => {
                   const active = row.sale_code === selectedCode;
                   return (
                     <li key={`${row.facility_id}-${row.sale_code}`}>
@@ -540,7 +492,7 @@ export default function SalesManagement() {
             {!selected ? (
               <div className="h-64 flex flex-col items-center justify-center text-gray-500 gap-2">
                 <HandHelping className="w-10 h-10 text-gray-300" />
-                Select a sale to view and advance the process
+                Select a sale to track its progress
               </div>
             ) : (
               <>
@@ -640,61 +592,26 @@ export default function SalesManagement() {
                       <h3 className="text-sm font-semibold text-violet-900 uppercase tracking-wide">
                         Warehouse invoice copies
                       </h3>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={fetchPacks}
-                          className="h-8"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5 mr-1" />
-                          Refresh
-                        </Button>
-                        {selected.status === "invoice_separation" ||
-                        selected.status === "payment_confirmed" ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={separating || packs.length === 0}
-                            onClick={markSeparated}
-                            className="h-8"
-                            style={{ backgroundColor: "#4267B2" }}
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                            {separating ? "Separating…" : "Mark Separated"}
-                          </Button>
-                        ) : null}
-                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={fetchPacks}
+                        className="h-8"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                        Refresh
+                      </Button>
                     </div>
                     <p className="text-xs text-violet-800 mb-3">
-                      Each branch gets its own invoice copy with only that
-                      branch&apos;s items (e.g. fish → Branch A, eggs → Branch
-                      B).
+                      Read-only here. Print and collect from Separation /
+                      Warehouse Requests.
                     </p>
-                    {packs.length > 1 ? (
-                      <div className="mb-3">
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={printingAll}
-                          onClick={printAllInvoices}
-                          className="h-8"
-                          style={{ backgroundColor: "#4267B2" }}
-                        >
-                          <Printer className="w-3.5 h-3.5 mr-1" />
-                          {printingAll
-                            ? "Opening…"
-                            : `Print all ${packs.length} invoices`}
-                        </Button>
-                      </div>
-                    ) : null}
                     {packsLoading ? (
                       <Skeleton className="h-20 w-full" />
                     ) : packs.length === 0 ? (
                       <p className="text-sm text-violet-800">
-                        No branch copies yet. Stock lines on this invoice will
-                        split by branch here.
+                        No warehouse copies yet.
                       </p>
                     ) : (
                       <ul className="space-y-3">
@@ -736,123 +653,80 @@ export default function SalesManagement() {
                                   ))}
                                 </ul>
                               ) : null}
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={printingId === pack.id}
-                                  onClick={() => markPrinted(pack)}
-                                  className="h-8"
-                                >
-                                  <Printer className="w-3.5 h-3.5 mr-1" />
-                                  {printingId === pack.id
-                                    ? "Opening…"
-                                    : "Print branch invoice"}
-                                </Button>
-                              </div>
                             </li>
                           );
                         })}
                       </ul>
                     )}
-                    {selected.status === "invoice_separation" &&
-                    packs.length > 0 ? (
-                      <p className="mt-3 text-xs text-violet-700">
-                        Print each branch copy, then Mark Separated to send to
-                        warehouse.
-                      </p>
-                    ) : null}
                   </div>
                 ) : null}
 
-                {selected.status !== "completed" ? (
-                  <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
-                    <Button
-                      disabled={
-                        advancing ||
-                        !selected.next_status ||
-                        !cashierCanConfirmSelected
-                      }
-                      onClick={() => advance("advance")}
-                      style={{ backgroundColor: "#4267B2" }}
-                    >
-                      {advancing
-                        ? "Updating…"
-                        : advanceActionLabel(selected.next_status)}
-                    </Button>
-                    {!cashierCanConfirmSelected ? (
-                      <p className="w-full text-xs text-amber-700">
-                        This invoice payment type does not match your cashier
-                        type (
-                        {user?.cashier_type === "transfer"
-                          ? "Bank Transfer"
-                          : "Cash"}
-                        ).
-                      </p>
-                    ) : null}
-                    {selected.payment_type !== "credit" &&
-                    [
-                      "awaiting_payment",
-                      "awaiting_cashier_confirm",
-                      "submitted",
-                    ].includes(selected.status) ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={advancing || selected.hold_overnight}
-                        onClick={() =>
-                          advance(
-                            "hold_overnight",
-                            "If not paid before closing hours",
-                          )
-                        }
-                        className="text-red-700 border-red-200 hover:bg-red-50"
-                      >
-                        <Clock className="w-4 h-4 mr-1" />
-                        {selected.hold_overnight
-                          ? "Already held overnight"
-                          : "Not paid before closing"}
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : (
+                {selected.status === "completed" ||
+                ["dual_signature", "goods_released"].includes(
+                  selected.status,
+                ) ? (
                   <div className="rounded-md bg-emerald-50 text-emerald-800 text-sm px-4 py-3">
-                    Goods released — process completed.
+                    Process completed — goods collected.
                   </div>
-                )}
+                ) : nextActionHub ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-sm font-semibold text-slate-900">
+                      {nextActionHub.title}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-600">
+                      {nextActionHub.description}
+                    </p>
+                    <Button
+                      type="button"
+                      className="mt-3"
+                      style={{ backgroundColor: "#4267B2" }}
+                      onClick={() => navigate(nextActionHub.to)}
+                    >
+                      {nextActionHub.label}
+                    </Button>
+                  </div>
+                ) : null}
 
-                {Array.isArray(selected.history) && selected.history.length ? (
-                  <div className="mt-8">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-                      History
-                    </h3>
-                    <ul className="text-xs text-gray-600 space-y-1 max-h-40 overflow-y-auto">
-                      {[...selected.history].reverse().map((h, i) => {
+                <div className="mt-8">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                    Process history
+                  </h3>
+                  {selectedHistory.length ? (
+                    <ul className="text-xs text-gray-600 space-y-2 max-h-56 overflow-y-auto rounded-md border border-gray-100 bg-gray-50 p-3">
+                      {[...selectedHistory].reverse().map((h, i) => {
                         const hMeta = getWorkflowStatusMeta(h.status);
                         return (
                           <li
                             key={`${h.at}-${i}`}
-                            className="flex flex-wrap items-center gap-2"
+                            className="flex flex-wrap items-start gap-x-2 gap-y-1 border-b border-gray-100 pb-2 last:border-0 last:pb-0"
                           >
-                            <span className="font-mono text-gray-400">
+                            <span className="font-mono text-gray-400 shrink-0">
                               {h.at
-                                ? moment(h.at).format("MMM DD HH:mm")
+                                ? moment(h.at).format("DD MMM YYYY HH:mm")
                                 : "—"}
                             </span>
                             <WorkflowStatusBadge
                               status={h.status}
                               label={hMeta.label}
                             />
+                            {h.by ? (
+                              <span className="text-gray-500">by {h.by}</span>
+                            ) : null}
                             {h.note ? (
-                              <span className="text-gray-500">— {h.note}</span>
+                              <span className="w-full text-gray-500 pl-0 sm:pl-0">
+                                {h.note}
+                              </span>
                             ) : null}
                           </li>
                         );
                       })}
                     </ul>
-                  </div>
-                ) : null}
+                  ) : (
+                    <p className="text-xs text-gray-500 rounded-md border border-dashed border-gray-200 px-3 py-4">
+                      No history recorded for this sale yet.
+                    </p>
+                  )}
+                </div>
               </>
             )}
           </div>

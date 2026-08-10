@@ -16,8 +16,11 @@ import { formatNumber1 } from "@/components/router/utilities";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   getFulfillmentStatusMeta,
+  getWorkflowStatusMeta,
+  normalizeWorkflowHistory,
   WorkflowStatusBadge,
 } from "@/lib/saleWorkflowStatus.js";
+import SaleWorkflowSearchBar from "./SaleWorkflowSearchBar";
 
 export default function InvoiceSeparation() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
@@ -28,18 +31,21 @@ export default function InvoiceSeparation() {
   const [loading, setLoading] = useState(false);
   const [packsLoading, setPacksLoading] = useState(false);
   const [separating, setSeparating] = useState(false);
+  const [approvingCredit, setApprovingCredit] = useState(false);
   const [printingId, setPrintingId] = useState(null);
   const [printingAll, setPrintingAll] = useState(false);
   const [rows, setRows] = useState([]);
   const [selectedCode, setSelectedCode] = useState(saleFromUrl);
   const [packs, setPacks] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchList = useCallback(() => {
     if (!activeBusiness?.id) return;
     setLoading(true);
     const params = new URLSearchParams({
       facilityId: activeBusiness.id,
-      status: "payment_confirmed,invoice_separation",
+      status:
+        "payment_confirmed,invoice_separation,awaiting_credit_approval,credit_approved,final_invoice",
     });
     _fetchApi(
       `/api/v1/sale-workflows?${params.toString()}`,
@@ -75,6 +81,44 @@ export default function InvoiceSeparation() {
   const selected = useMemo(
     () => rows.find((r) => r.sale_code === selectedCode) || null,
     [rows, selectedCode],
+  );
+
+  const selectedHistory = useMemo(
+    () => normalizeWorkflowHistory(selected?.history),
+    [selected?.history],
+  );
+
+  const visibleRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        String(r.sale_code || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.customer_name || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.customer_no || "")
+          .toLowerCase()
+          .includes(q),
+    );
+  }, [rows, searchQuery]);
+
+  const handleSearchSelect = useCallback(
+    (row, code) => {
+      const saleCode = row?.sale_code || code;
+      if (!saleCode) return;
+      setRows((prev) => {
+        if (prev.some((r) => r.sale_code === saleCode)) return prev;
+        return [{ ...row, sale_code: saleCode }, ...prev];
+      });
+      setSelectedCode(saleCode);
+      const next = new URLSearchParams(searchParams);
+      next.set("sale_code", saleCode);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
   );
 
   const fetchPacks = useCallback(() => {
@@ -227,6 +271,47 @@ export default function InvoiceSeparation() {
     );
   };
 
+  const approveCredit = () => {
+    if (!activeBusiness?.id || !selected) return;
+    setApprovingCredit(true);
+    _postApi(
+      "/api/v1/sale-workflows/advance",
+      {
+        facilityId: activeBusiness.id,
+        saleCode: selected.sale_code,
+        action: "advance",
+        note: "Credit approved",
+        updated_by: user?.id,
+      },
+      (res) => {
+        setApprovingCredit(false);
+        if (res.success) {
+          toast.success(res.message || "Credit approved");
+          fetchList();
+          fetchPacks();
+        } else {
+          toast.error(res.message || "Could not approve credit");
+        }
+      },
+      () => {
+        setApprovingCredit(false);
+        toast.error("Could not approve credit");
+      },
+    );
+  };
+
+  const needsCreditApproval =
+    selected?.status === "awaiting_credit_approval";
+  const canSeparate =
+    selected &&
+    !needsCreditApproval &&
+    [
+      "payment_confirmed",
+      "invoice_separation",
+      "credit_approved",
+      "final_invoice",
+    ].includes(selected.status);
+
   return (
     <div className="min-h-screen">
       <div className="max-w-7xl mx-auto">
@@ -238,8 +323,8 @@ export default function InvoiceSeparation() {
                 Invoice Separation
               </h1>
               <p className="text-gray-600 mt-1">
-                Split one paid invoice into a copy per branch — each copy only
-                has that branch&apos;s items
+                Approve credit sales, then split invoices into warehouse copies
+                and send to collection
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -273,8 +358,17 @@ export default function InvoiceSeparation() {
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <div className="lg:col-span-2 bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 font-semibold text-gray-800">
-              Awaiting separation ({rows.length})
+            <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+              <div className="font-semibold text-gray-800">
+                Awaiting separation ({visibleRows.length})
+              </div>
+              <SaleWorkflowSearchBar
+                facilityId={activeBusiness?.id}
+                rows={rows}
+                onSelect={handleSearchSelect}
+                onQueryChange={setSearchQuery}
+                placeholder="Search or scan invoice, customer…"
+              />
             </div>
             {loading ? (
               <div className="p-4 space-y-3">
@@ -282,14 +376,14 @@ export default function InvoiceSeparation() {
                   <Skeleton key={i} className="h-16 w-full" />
                 ))}
               </div>
-            ) : rows.length === 0 ? (
+            ) : visibleRows.length === 0 ? (
               <div className="p-8 text-center text-gray-500 text-sm">
                 No paid invoices waiting. After cashier confirms payment, sales
                 appear here to split by branch.
               </div>
             ) : (
               <ul className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
-                {rows.map((row) => {
+                {visibleRows.map((row) => {
                   const active = row.sale_code === selectedCode;
                   return (
                     <li key={row.sale_code}>
@@ -369,7 +463,19 @@ export default function InvoiceSeparation() {
                     >
                       Full invoice
                     </Link>
-                    {packs.length > 1 ? (
+                    {needsCreditApproval ? (
+                      <Button
+                        type="button"
+                        disabled={approvingCredit}
+                        onClick={approveCredit}
+                        style={{ backgroundColor: "#4267B2" }}
+                        className="flex items-center gap-2"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        {approvingCredit ? "Approving…" : "Approve Credit"}
+                      </Button>
+                    ) : null}
+                    {canSeparate && packs.length > 1 ? (
                       <Button
                         type="button"
                         variant="outline"
@@ -383,31 +489,39 @@ export default function InvoiceSeparation() {
                           : `Print all (${packs.length})`}
                       </Button>
                     ) : null}
-                    <Button
-                      type="button"
-                      disabled={separating || packs.length === 0}
-                      onClick={markSeparated}
-                      style={{ backgroundColor: "#4267B2" }}
-                      className="flex items-center gap-2"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      {separating ? "Separating…" : "Mark Separated"}
-                    </Button>
+                    {canSeparate ? (
+                      <Button
+                        type="button"
+                        disabled={separating || packs.length === 0}
+                        onClick={markSeparated}
+                        style={{ backgroundColor: "#4267B2" }}
+                        className="flex items-center gap-2"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        {separating ? "Separating…" : "Mark Separated"}
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
+
+                {needsCreditApproval ? (
+                  <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+                    This credit sale needs approval before warehouse copies are
+                    created. Click <strong>Approve Credit</strong> to continue.
+                  </div>
+                ) : null}
 
                 <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-4 mb-4">
                   <h3 className="text-sm font-semibold text-violet-900 uppercase tracking-wide mb-1">
                     Warehouse invoice copies
                   </h3>
                   <p className="text-xs text-violet-800 mb-3">
-                    One copy per warehouse branch. Use{" "}
-                    <strong>Print all</strong> to print every branch (A4 or
-                    thermal from system settings). Then mark separated to send
-                    packs to warehouse.
+                    {needsCreditApproval
+                      ? "Branch copies appear after credit is approved."
+                      : "One copy per warehouse branch. Use Print all to print every branch (A4 or thermal from system settings). Then mark separated to send packs to warehouse."}
                   </p>
 
-                  {packs.length > 1 ? (
+                  {!needsCreditApproval && packs.length > 1 ? (
                     <div className="mb-3">
                       <Button
                         type="button"
@@ -429,7 +543,9 @@ export default function InvoiceSeparation() {
                     <Skeleton className="h-24 w-full" />
                   ) : packs.length === 0 ? (
                     <p className="text-sm text-violet-800">
-                      No branch lines found on this invoice yet.
+                      {needsCreditApproval
+                        ? "No branch copies yet — approve credit first."
+                        : "No branch lines found on this invoice yet."}
                     </p>
                   ) : (
                     <ul className="space-y-4">
@@ -508,13 +624,52 @@ export default function InvoiceSeparation() {
                   )}
                 </div>
 
-                {packs.length > 0 ? (
+                {canSeparate && packs.length > 0 ? (
                   <p className="text-xs text-gray-500">
                     After you print the copies, click{" "}
                     <strong>Mark Separated</strong> to move this sale to
                     Warehouse Requests.
                   </p>
                 ) : null}
+
+                <div className="mt-8">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                    Process history
+                  </h3>
+                  {selectedHistory.length ? (
+                    <ul className="text-xs text-gray-600 space-y-2 max-h-48 overflow-y-auto rounded-md border border-gray-100 bg-gray-50 p-3">
+                      {[...selectedHistory].reverse().map((h, i) => {
+                        const hMeta = getWorkflowStatusMeta(h.status);
+                        return (
+                          <li
+                            key={`${h.at}-${i}`}
+                            className="flex flex-wrap items-start gap-x-2 gap-y-1 border-b border-gray-100 pb-2 last:border-0 last:pb-0"
+                          >
+                            <span className="font-mono text-gray-400 shrink-0">
+                              {h.at
+                                ? moment(h.at).format("DD MMM YYYY HH:mm")
+                                : "—"}
+                            </span>
+                            <WorkflowStatusBadge
+                              status={h.status}
+                              label={hMeta.label}
+                            />
+                            {h.by ? (
+                              <span className="text-gray-500">by {h.by}</span>
+                            ) : null}
+                            {h.note ? (
+                              <span className="w-full text-gray-500">{h.note}</span>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-gray-500 rounded-md border border-dashed border-gray-200 px-3 py-4">
+                      No history recorded for this sale yet.
+                    </p>
+                  )}
+                </div>
               </>
             )}
           </div>

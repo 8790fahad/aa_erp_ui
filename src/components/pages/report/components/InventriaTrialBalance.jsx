@@ -213,6 +213,33 @@ const InventriaTrialBalance = () => {
 
   const flatRows = flattenTree(tree);
 
+  const openAccountLedger = useCallback(
+    (account) => {
+      const code = String(account?._code || account?.account_code || "").trim();
+      if (!code || code === "-") {
+        toast.error("No account code for this row");
+        return;
+      }
+      const to = asOfDate || new Date().toISOString().split("T")[0];
+      const fromDate = new Date(to);
+      fromDate.setMonth(0, 1);
+      const from = fromDate.toISOString().split("T")[0];
+      const params = new URLSearchParams({
+        accounts: code,
+        name: account.account_name || code,
+        from,
+        to,
+      });
+      if (account._hasChildren || account.is_header) {
+        params.set("onlyChildren", "1");
+      }
+      navigate(
+        `/app/reports/accounting-reports/custom-reports?${params.toString()}`,
+      );
+    },
+    [asOfDate, navigate],
+  );
+
   const rawDifference = parseFloat(totals?.difference || 0);
   const effectiveDifference =
     Math.abs(rawDifference) <= BALANCE_TOLERANCE_NAIRA ? 0 : rawDifference;
@@ -622,12 +649,15 @@ const InventriaTrialBalance = () => {
                     {flatRows.map((account, idx) => {
                       const isHeader = Boolean(account.is_header);
                       const depth = Number(account._depth || 0);
+                      const canOpen = Boolean(
+                        String(account._code || account.account_code || "").trim(),
+                      );
                       return (
                         <tr
                           key={`row-${account._code || idx}`}
                           className={`border-b border-gray-200 ${
                             isHeader ? "bg-[#f3f4f6]" : "bg-white"
-                          }`}
+                          } hover:bg-slate-50`}
                         >
                           <td
                             className={`text-sm text-gray-900 ${
@@ -638,7 +668,18 @@ const InventriaTrialBalance = () => {
                             {account.account_name || "-"}
                           </td>
                           <td className="px-1.5 py-1.5 text-xs text-gray-500">
-                            {account.account_code || "-"}
+                            {canOpen ? (
+                              <button
+                                type="button"
+                                onClick={() => openAccountLedger(account)}
+                                className="text-blue-600 hover:underline font-medium cursor-pointer bg-transparent border-0 p-0"
+                                title="Open account ledger"
+                              >
+                                {account.account_code || "-"}
+                              </button>
+                            ) : (
+                              account.account_code || "-"
+                            )}
                           </td>
                           <td className="px-3 py-1.5 text-right text-sm tabular-nums text-gray-900 whitespace-nowrap">
                             {isHeader

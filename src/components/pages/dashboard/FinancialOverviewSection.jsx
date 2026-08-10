@@ -9,6 +9,19 @@ import {
 } from "lucide-react";
 import moment from "moment";
 import { format } from "date-fns";
+import {
+  Area,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { _fetchApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import {
@@ -17,6 +30,92 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import SpecialInvoiceTreatment from "@/components/sales/SpecialInvoiceTreatment";
+
+/** Distinct series colors (Trend-style soft palette, one hue each) */
+const CHART_GRID = "#f1f5f4";
+const PL_COLORS = {
+  revenue: "#10b981", // emerald green
+  cogs: "#F2A93B", // gold
+  grossProfit: "#2563eb", // royal blue
+  operatingExpenses: "#CC4D3D", // terracotta red
+  netProfit: "#7c3aed", // violet (clearly different from blue)
+};
+
+const PL_SERIES_ORDER = [
+  "revenue",
+  "cogs",
+  "grossProfit",
+  "operatingExpenses",
+  "netProfit",
+];
+
+function plItemSorter(item) {
+  const key = item?.dataKey || item?.value;
+  const idx = PL_SERIES_ORDER.indexOf(key);
+  return idx === -1 ? 99 : idx;
+}
+
+function PlChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  const point = payload[0]?.payload || {};
+  const colorByKey = Object.fromEntries(
+    payload.map((e) => [e.dataKey, e.color]),
+  );
+  const rows = [
+    {
+      key: "revenue",
+      name: "Revenue",
+      value: point.revenue,
+      color: colorByKey.revenue || PL_COLORS.revenue,
+    },
+    {
+      key: "cogs",
+      name: "COGS",
+      value: point.cogs,
+      color: colorByKey.cogs || PL_COLORS.cogs,
+    },
+    {
+      key: "grossProfit",
+      name: "Gross Profit",
+      value: point.grossProfit,
+      color: colorByKey.grossProfit || PL_COLORS.grossProfit,
+    },
+    {
+      key: "operatingExpenses",
+      name: "Operating Expenses",
+      value: point.operatingExpenses,
+      color: colorByKey.operatingExpenses || PL_COLORS.operatingExpenses,
+    },
+    {
+      key: "netProfit",
+      name: "Net Profit",
+      value: point.netProfit,
+      color: colorByKey.netProfit || PL_COLORS.netProfit,
+    },
+  ];
+
+  return (
+    <div className="bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 min-w-[140px] whitespace-nowrap">
+      <p className="font-semibold mb-1.5 text-white">{label}</p>
+      {rows.map((row) => (
+        <p
+          key={row.key}
+          className="flex items-center gap-1.5 text-gray-200 mb-0.5 last:mb-0"
+        >
+          <span
+            className="w-1.5 h-1.5 rounded-full inline-block flex-shrink-0"
+            style={{ backgroundColor: row.color }}
+          />
+          <span className="text-gray-300">{row.name}:</span>
+          <span className="font-medium text-white">
+            ₦{formatCompact(row.value)}
+          </span>
+        </p>
+      ))}
+    </div>
+  );
+}
 
 function formatCompact(amount) {
   const value = parseFloat(amount || 0);
@@ -68,12 +167,31 @@ function ChangeBadge({ value, label, invert = false }) {
 const CARD_CLASS =
   "bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200";
 
-function KpiCard({ title, value, change, changeLabel, invertChange = false }) {
+function KpiCard({
+  title,
+  value,
+  change,
+  changeLabel,
+  invertChange = false,
+  color = "#1a2d5e",
+}) {
   return (
-    <div className={`${CARD_CLASS} p-4 sm:p-5`}>
-      <p className="mb-2 text-xs font-medium text-gray-500">{title}</p>
+    <div
+      className={`${CARD_CLASS} relative overflow-hidden p-4 sm:p-5`}
+      style={{
+        background: `linear-gradient(135deg, ${color}12 0%, #ffffff 55%)`,
+        borderColor: `${color}33`,
+      }}
+    >
+      <span
+        className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+        style={{ backgroundColor: color }}
+      />
+      <p className="mb-2 text-xs font-semibold tracking-wide" style={{ color }}>
+        {title}
+      </p>
       <div className="flex items-end justify-between gap-2 flex-wrap">
-        <p className="text-2xl font-bold text-gray-900 tracking-tight">
+        <p className="text-2xl font-bold tracking-tight" style={{ color }}>
           ₦{formatCompact(value)}
         </p>
         <ChangeBadge value={change} label={changeLabel} invert={invertChange} />
@@ -82,17 +200,89 @@ function KpiCard({ title, value, change, changeLabel, invertChange = false }) {
   );
 }
 
-function StatusBar({ segments }) {
-  const total = segments.reduce((sum, s) => sum + s.value, 0) || 1;
+const RECV_AGING_COLORS = {
+  current: "#9FE1CB",
+  "1_30": "#5DCAA5",
+  "31_60": "#1D9E75",
+  "61_90": "#0F6E56",
+  "90_plus": "#085041",
+};
+
+const PAY_AGING_COLORS = {
+  current: "#F0997B",
+  "1_30": "#E37F53",
+  "31_60": "#D85A30",
+  "61_90": "#993C1D",
+  "90_plus": "#712B13",
+};
+
+const AGING_BUCKETS = [
+  { key: "current", label: "Current" },
+  { key: "1_30", label: "1–30" },
+  { key: "31_60", label: "31–60" },
+  { key: "61_90", label: "61–90" },
+  { key: "90_plus", label: "90+" },
+];
+
+function AgingBarRows({ aging, colors }) {
+  const amounts = AGING_BUCKETS.map((b) =>
+    parseFloat(aging?.[b.key] || 0),
+  );
+  const max = Math.max(...amounts, 1);
   return (
-    <div className="h-2.5 rounded-full overflow-hidden flex bg-gray-100 gap-[1px]">
-      {segments.map((segment, index) => (
-        <div
-          key={index}
-          className={`${segment.color} first:rounded-l-full last:rounded-r-full`}
-          style={{ width: `${(segment.value / total) * 100}%` }}
-        />
-      ))}
+    <div className="space-y-2">
+      {AGING_BUCKETS.map((bucket, i) => {
+        const amt = amounts[i];
+        const width = Math.round((amt / max) * 100);
+        return (
+          <div key={bucket.key} className="flex items-center gap-2.5">
+            <span className="w-11 flex-shrink-0 text-xs text-gray-500">
+              {bucket.label}
+            </span>
+            <div className="h-2 flex-1 overflow-hidden rounded bg-gray-100">
+              <div
+                className="h-full rounded"
+                style={{
+                  width: `${width}%`,
+                  backgroundColor: colors[bucket.key],
+                }}
+              />
+            </div>
+            <span className="w-16 flex-shrink-0 text-right text-xs tabular-nums text-gray-800">
+              ₦{formatCompact(amt)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ArApToggle({ value, onChange }) {
+  return (
+    <div className="inline-flex overflow-hidden rounded-md border border-gray-300 text-xs">
+      <button
+        type="button"
+        onClick={() => onChange("total")}
+        className={`px-3 py-1 transition-colors ${
+          value === "total"
+            ? "bg-white font-medium text-gray-900 shadow-sm"
+            : "bg-transparent text-gray-500"
+        }`}
+      >
+        Total
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("aging")}
+        className={`border-l border-gray-300 px-3 py-1 transition-colors ${
+          value === "aging"
+            ? "bg-white font-medium text-gray-900 shadow-sm"
+            : "bg-transparent text-gray-500"
+        }`}
+      >
+        Aging
+      </button>
     </div>
   );
 }
@@ -150,276 +340,13 @@ function DonutChart({ items, total }) {
   );
 }
 
-// Catmull-Rom -> Cubic Bezier smoothing for a soft, natural-looking curve
-function smoothLinePath(points) {
-  if (points.length < 2) return "";
-  if (points.length === 2) {
-    return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`;
-  }
-  let d = `M ${points[0].x},${points[0].y}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[i === 0 ? i : i - 1];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[i + 2 < points.length ? i + 2 : i + 1];
-    const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = p1.y + (p2.y - p0.y) / 6;
-    const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
-  }
-  return d;
-}
-
-function ProfitLossChart({ data }) {
-  const [hoverIndex, setHoverIndex] = useState(null);
-
-  const hasActivity = data?.some(
-    (d) => (d.revenue ?? d.income ?? 0) > 0.001 || (d.expenses ?? 0) > 0.001,
-  );
-
-  if (!data?.length || !hasActivity) {
-    return (
-      <div className="h-56 flex items-center justify-center text-sm text-gray-400">
-        No revenue or expense activity for this period
-      </div>
-    );
-  }
-
-  const maxValue = Math.max(
-    ...data.flatMap((d) => [d.revenue ?? d.income ?? 0, d.expenses ?? 0]),
-    1,
-  );
-  const width = Math.max(480, data.length * 72);
-  const height = 224; // matches Tailwind h-56 (14rem) so % based overlays align pixel-perfect
-  const padding = { top: 24, right: 20, bottom: 32, left: 56 };
-  const chartW = width - padding.left - padding.right;
-  const chartH = height - padding.top - padding.bottom;
-
-  // Keep single-month series visible (centered) instead of collapsing to x=0
-  const xStep = data.length > 1 ? chartW / (data.length - 1) : 0;
-  const xAt = (i) =>
-    data.length > 1 ? padding.left + i * xStep : padding.left + chartW / 2;
-  const yScale = (v) => padding.top + chartH - (v / maxValue) * chartH;
-
-  const revenueCoords = data.map((d, i) => ({
-    x: xAt(i),
-    y: yScale(d.revenue ?? d.income ?? 0),
-  }));
-  const expenseCoords = data.map((d, i) => ({
-    x: xAt(i),
-    y: yScale(d.expenses ?? 0),
-  }));
-
-  const revenuePath = smoothLinePath(revenueCoords);
-  const expensePath = smoothLinePath(expenseCoords);
-  const firstX = xAt(0);
-  const lastX = xAt(data.length - 1);
-  const baseline = padding.top + chartH;
-  const revenueAreaPath = `${revenuePath} L ${lastX},${baseline} L ${firstX},${baseline} Z`;
-
-  // One invisible hover band per data point, split at midpoints between neighbors
-  const bandWidths = data.map((_, i) => {
-    if (data.length === 1) return 100;
-    const x = xAt(i);
-    const start = i === 0 ? padding.left : (xAt(i - 1) + x) / 2;
-    const end =
-      i === data.length - 1 ? width - padding.right : (x + xAt(i + 1)) / 2;
-    return ((end - start) / width) * 100;
-  });
-
-  const activeIndex =
-    hoverIndex !== null && hoverIndex < data.length ? hoverIndex : null;
-  const active = activeIndex !== null ? data[activeIndex] : null;
-  const activeXPercent =
-    activeIndex !== null ? (xAt(activeIndex) / width) * 100 : 0;
-  const activeRevYPercent =
-    activeIndex !== null ? (revenueCoords[activeIndex].y / height) * 100 : 0;
-  const activeExpYPercent =
-    activeIndex !== null ? (expenseCoords[activeIndex].y / height) * 100 : 0;
-  const tooltipAlign =
-    activeXPercent < 18 ? "left" : activeXPercent > 82 ? "right" : "center";
-  // Keep the tooltip inside the chart's own box (not translated above it) — the
-  // horizontal scroll wrapper implicitly clips vertical overflow too, which was
-  // cutting the tooltip off and leaving only its background sliver visible.
-  const tooltipTransform =
-    tooltipAlign === "left"
-      ? "translateX(0)"
-      : tooltipAlign === "right"
-        ? "translateX(-100%)"
-        : "translateX(-50%)";
-
-  return (
-    <div className="overflow-x-auto">
-      <div className="relative min-w-[480px]">
-        <svg
-          viewBox={`0 0 ${width} ${height}`}
-          preserveAspectRatio="none"
-          className="w-full h-56 block"
-        >
-          <defs>
-            <linearGradient id="plRevenueFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.28" />
-              <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
-            const y = padding.top + chartH * (1 - tick);
-            const label = `₦${formatCompact(maxValue * tick)}`;
-            return (
-              <g key={tick}>
-                <line
-                  x1={padding.left}
-                  y1={y}
-                  x2={width - padding.right}
-                  y2={y}
-                  stroke="#f1f5f4"
-                  vectorEffect="non-scaling-stroke"
-                />
-                <text x={8} y={y + 4} className="fill-gray-400 text-[10px]">
-                  {label}
-                </text>
-              </g>
-            );
-          })}
-          {activeIndex !== null && (
-            <line
-              x1={xAt(activeIndex)}
-              y1={padding.top}
-              x2={xAt(activeIndex)}
-              y2={baseline}
-              stroke="#d1d5db"
-              strokeWidth="1.5"
-              strokeDasharray="4 4"
-              vectorEffect="non-scaling-stroke"
-            />
-          )}
-          <path d={revenueAreaPath} fill="url(#plRevenueFill)" stroke="none" />
-          <path
-            d={expensePath}
-            fill="none"
-            stroke="#cbd5e1"
-            strokeWidth="2"
-            strokeDasharray="5 5"
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-          />
-          <path
-            d={revenuePath}
-            fill="none"
-            stroke="#10b981"
-            strokeWidth="2.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-          {data.length === 1 && (
-            <>
-              <circle
-                cx={revenueCoords[0].x}
-                cy={revenueCoords[0].y}
-                r="4"
-                fill="#10b981"
-              />
-              <circle
-                cx={expenseCoords[0].x}
-                cy={expenseCoords[0].y}
-                r="4"
-                fill="#cbd5e1"
-              />
-            </>
-          )}
-          {data.map((d, i) => (
-            <text
-              key={d.monthKey || i}
-              x={xAt(i)}
-              y={height - 8}
-              textAnchor="middle"
-              className={`text-[11px] transition-colors ${
-                i === activeIndex
-                  ? "fill-gray-900 font-medium"
-                  : "fill-gray-500"
-              }`}
-            >
-              {d.month}
-            </text>
-          ))}
-        </svg>
-
-        {/* Hover bands: HTML overlay so pointer detection works regardless of SVG scaling */}
-        <div
-          className="absolute inset-0 flex"
-          onMouseLeave={() => setHoverIndex(null)}
-        >
-          {bandWidths.map((w, i) => (
-            <div
-              key={data[i].monthKey || i}
-              className="h-full cursor-pointer"
-              style={{ width: `${w}%` }}
-              onMouseEnter={() => setHoverIndex(i)}
-            />
-          ))}
-        </div>
-
-        {active !== null && (
-          <>
-            <div
-              className="absolute w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white shadow-sm pointer-events-none"
-              style={{
-                left: `${activeXPercent}%`,
-                top: `${activeRevYPercent}%`,
-                transform: "translate(-50%, -50%)",
-              }}
-            />
-            <div
-              className="absolute w-2.5 h-2.5 rounded-full bg-gray-400 border-2 border-white shadow-sm pointer-events-none"
-              style={{
-                left: `${activeXPercent}%`,
-                top: `${activeExpYPercent}%`,
-                transform: "translate(-50%, -50%)",
-              }}
-            />
-            <div
-              className="absolute z-10 pointer-events-none bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 min-w-[130px] whitespace-nowrap"
-              style={{
-                left: `${activeXPercent}%`,
-                top: "8px",
-                transform: tooltipTransform,
-              }}
-            >
-              <p className="font-semibold mb-1">{active.month}</p>
-              <p className="flex items-center gap-1.5 text-emerald-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block flex-shrink-0" />
-                Revenue: ₦{formatCompact(active.revenue ?? active.income)}
-              </p>
-              <p className="flex items-center gap-1.5 text-gray-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 inline-block flex-shrink-0" />
-                Expenses: ₦{formatCompact(active.expenses)}
-              </p>
-            </div>
-          </>
-        )}
-      </div>
-      <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="w-3 h-0.5 rounded-full bg-emerald-500 inline-block" />
-          Revenue
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="w-3 h-0.5 rounded-full bg-gray-300 inline-block" />
-          Expenses
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function TopRankingCard({
   title,
   data,
   unitField,
   unitSuffix,
   showCustomerId,
+  accentColor = "#10b981",
 }) {
   const [mode, setMode] = useState("unit");
   const list = (mode === "price" ? data?.byPrice : data?.byUnit) || [];
@@ -431,29 +358,43 @@ function TopRankingCard({
   );
 
   return (
-    <div className={`${CARD_CLASS} p-4 sm:p-5`}>
-      <div className="flex items-center justify-between mb-2 gap-3">
-        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-        <div className="inline-flex items-center bg-gray-100 rounded-lg p-0.5 text-xs font-medium flex-shrink-0">
+    <div
+      className={`${CARD_CLASS} relative overflow-hidden p-4 sm:p-5`}
+      style={{
+        background: `linear-gradient(135deg, ${accentColor}12 0%, #ffffff 55%)`,
+        borderColor: `${accentColor}33`,
+      }}
+    >
+      <span
+        className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+        style={{ backgroundColor: accentColor }}
+      />
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold" style={{ color: accentColor }}>
+          {title}
+        </h3>
+        <div className="inline-flex flex-shrink-0 items-center rounded-lg border border-gray-200 bg-white/80 p-0.5 text-xs font-medium">
           <button
             type="button"
             onClick={() => setMode("price")}
-            className={`px-2.5 py-1 rounded-md transition-colors ${
-              mode === "price"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
+            className={`rounded-md px-2.5 py-1 transition-colors ${
+              mode === "price" ? "text-white shadow-sm" : "text-gray-500"
             }`}
+            style={
+              mode === "price" ? { backgroundColor: accentColor } : undefined
+            }
           >
             By Price
           </button>
           <button
             type="button"
             onClick={() => setMode("unit")}
-            className={`px-2.5 py-1 rounded-md transition-colors ${
-              mode === "unit"
-                ? "bg-white text-emerald-600 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
+            className={`rounded-md px-2.5 py-1 transition-colors ${
+              mode === "unit" ? "text-white shadow-sm" : "text-gray-500"
             }`}
+            style={
+              mode === "unit" ? { backgroundColor: accentColor } : undefined
+            }
           >
             By Unit
           </button>
@@ -461,7 +402,7 @@ function TopRankingCard({
       </div>
 
       {list.length === 0 ? (
-        <p className="text-xs text-gray-400 py-8 text-center">
+        <p className="py-8 text-center text-xs text-gray-400">
           No sales activity in this period
         </p>
       ) : (
@@ -472,17 +413,20 @@ function TopRankingCard({
             const widthPct = Math.max((value / maxValue) * 100, 4);
             return (
               <div key={item.id ?? index}>
-                <div className="flex items-center justify-between gap-3 mb-1">
-                  <span className="inline-flex items-start gap-2.5 min-w-0">
-                    <span className="text-xs font-semibold text-gray-400 w-4 flex-shrink-0 mt-0.5">
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <span className="inline-flex min-w-0 items-start gap-2.5">
+                    <span
+                      className="mt-0.5 w-4 flex-shrink-0 text-xs font-semibold"
+                      style={{ color: accentColor }}
+                    >
                       {index + 1}
                     </span>
                     <span className="min-w-0">
-                      <span className="text-sm font-medium text-gray-900 truncate block">
+                      <span className="block truncate text-sm font-medium text-gray-900">
                         {item.name}
                       </span>
                       {item.sku && (
-                        <span className="text-xs text-gray-400 truncate block">
+                        <span className="block truncate text-xs text-gray-400">
                           SKU: {item.sku}
                         </span>
                       )}
@@ -490,22 +434,28 @@ function TopRankingCard({
                         showCustomerId &&
                         item.id &&
                         item.id !== item.name && (
-                          <span className="text-xs text-gray-400 truncate block">
+                          <span className="block truncate text-xs text-gray-400">
                             ID: {item.id}
                           </span>
                         )}
                     </span>
                   </span>
-                  <span className="text-sm font-semibold text-gray-900 flex-shrink-0">
+                  <span
+                    className="flex-shrink-0 text-sm font-semibold tabular-nums"
+                    style={{ color: accentColor }}
+                  >
                     {mode === "price"
                       ? `₦${formatCompact(item.revenue)}`
                       : `${value} ${unitSuffix}`}
                   </span>
                 </div>
-                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden ml-[26px]">
+                <div className="ml-[26px] h-1.5 overflow-hidden rounded-full bg-gray-100">
                   <div
-                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-                    style={{ width: `${widthPct}%` }}
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${widthPct}%`,
+                      backgroundColor: accentColor,
+                    }}
                   />
                 </div>
               </div>
@@ -606,28 +556,42 @@ function RecentProductionCard({ data, navigate }) {
 }
 
 function RecentActivityCard({ data, navigate }) {
+  const accent = "#10b981";
   return (
-    <div className={`${CARD_CLASS} p-4 sm:p-5`}>
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-gray-900">Recent Activity</h3>
+    <div
+      className={`${CARD_CLASS} relative overflow-hidden p-4 sm:p-5`}
+      style={{
+        background: `linear-gradient(135deg, ${accent}12 0%, #ffffff 55%)`,
+        borderColor: `${accent}33`,
+      }}
+    >
+      <span
+        className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+        style={{ backgroundColor: accent }}
+      />
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-semibold" style={{ color: accent }}>
+          Recent Activity
+        </h3>
         <button
           type="button"
           onClick={() => navigate("/app/sales/invoices")}
-          className="text-xs text-emerald-600 hover:text-emerald-700"
+          className="text-xs font-medium hover:underline"
+          style={{ color: accent }}
         >
           View all
         </button>
       </div>
       {data.length === 0 ? (
-        <p className="text-sm text-gray-400 py-2">No recent invoices</p>
+        <p className="py-2 text-sm text-gray-400">No recent invoices</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs min-w-[380px]">
+          <table className="w-full min-w-[380px] text-xs">
             <thead>
-              <tr className="text-gray-400 uppercase text-[10px] tracking-wide border-b border-gray-100">
-                <th className="text-left font-medium py-1.5 pr-2">Activity</th>
-                <th className="text-left font-medium py-1.5 pr-2">Date</th>
-                <th className="text-right font-medium py-1.5">Amount</th>
+              <tr className="border-b border-gray-100 text-[10px] uppercase tracking-wide text-gray-400">
+                <th className="py-1.5 pr-2 text-left font-medium">Activity</th>
+                <th className="py-1.5 pr-2 text-left font-medium">Date</th>
+                <th className="py-1.5 text-right font-medium">Amount</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -656,22 +620,22 @@ function RecentActivityCard({ data, navigate }) {
                 return (
                   <tr key={item.id}>
                     <td className="py-1.5 pr-2 align-top">
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex min-w-0 items-center gap-2">
                         <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${iconWrapClass}`}
+                          className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full ${iconWrapClass}`}
                         >
-                          <Icon className="w-3 h-3" />
+                          <Icon className="h-3 w-3" />
                         </div>
-                        <span className="font-medium text-gray-900 truncate block">
+                        <span className="block truncate font-medium text-gray-900">
                           {item.description}
                         </span>
                       </div>
                     </td>
-                    <td className="py-1.5 pr-2 align-top text-gray-400 whitespace-nowrap">
+                    <td className="whitespace-nowrap py-1.5 pr-2 align-top text-gray-400">
                       {timeAgo(item.date)}
                     </td>
                     <td
-                      className={`py-1.5 align-top text-right font-semibold whitespace-nowrap ${amountClass}`}
+                      className={`whitespace-nowrap py-1.5 text-right align-top font-semibold ${amountClass}`}
                     >
                       {isPositive ? "+" : "-"}
                       {formatCurrency(item.amount)}
@@ -876,6 +840,10 @@ export default function FinancialOverviewSection({
     from.setDate(1);
     return { from, to };
   });
+  const [recvView, setRecvView] = useState("total"); // total | aging
+  const [payView, setPayView] = useState("total"); // total | aging
+  const [billsMode, setBillsMode] = useState("purchases"); // purchases | expenses
+  const [plChartMode, setPlChartMode] = useState("bar"); // bar | line
 
   const formatDateForAPI = (date) => moment(date).format("DD-MM-YYYY");
 
@@ -910,19 +878,22 @@ export default function FinancialOverviewSection({
   const trend = overview?.profitLossTrend || [];
   const operating = overview?.operatingExpenseBreakdown || [];
   const operatingTotal = overview?.operatingExpensesTotal || 0;
-  const invoices = overview?.invoicesSummary || {};
-  const bills = overview?.billsToPay || {};
   const accounts = overview?.bankAccounts || [];
   const activity = overview?.recentActivity || [];
   const production = overview?.recentProduction || [];
   const topProducts = overview?.topProducts || {};
   const topCustomers = overview?.topCustomers || {};
+  const arAp = overview?.receivablesPayables || {};
+  const outstanding = overview?.outstandingBills || {};
+  const bankBalance =
+    kpis.cashInBank ??
+    accounts.reduce((sum, a) => sum + parseFloat(a.balance || 0), 0);
 
   if (loading && !overview) {
     return (
       <div className="mb-8 space-y-5 animate-pulse">
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-5">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5 lg:gap-5">
+          {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="h-24 rounded-xl bg-gray-100" />
           ))}
         </div>
@@ -931,177 +902,640 @@ export default function FinancialOverviewSection({
     );
   }
 
+  const outstandingList =
+    billsMode === "purchases"
+      ? outstanding.purchases || []
+      : outstanding.expenses || [];
+  const outstandingTotal =
+    billsMode === "purchases"
+      ? outstanding.purchasesTotal || 0
+      : outstanding.expensesTotal || 0;
+
   return (
     <div className="mb-8 space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">
-            Financial Overview
-          </h2>
+          <h2 className="text-lg font-semibold text-gray-900">Dashboard</h2>
           <p className="mt-0.5 text-xs text-gray-500">
-            From chart of accounts &amp; general ledger
+            Revenue − COGS = Gross Profit · Gross Profit − Operating Expenses =
+            Net Profit
           </p>
         </div>
-        <DateRangePicker period={period} onChange={setPeriod} />
+        <div className="flex flex-wrap items-center gap-2">
+          <SpecialInvoiceTreatment
+            fromDate={moment(period.from).format("YYYY-MM-DD")}
+            toDate={moment(period.to).format("YYYY-MM-DD")}
+            buttonSize="sm"
+            className="h-9 text-sm border-gray-200"
+          />
+          <DateRangePicker period={period} onChange={setPeriod} />
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         <KpiCard
-          title="Total Revenue"
+          title="Revenue"
           value={kpis.totalRevenue ?? kpis.totalIncome}
           change={kpis.revenueChange ?? kpis.incomeChange}
           changeLabel={kpis.revenueChangeLabel ?? kpis.incomeChangeLabel}
+          color={PL_COLORS.revenue}
         />
         <KpiCard
-          title="Total Expenses"
-          value={kpis.totalExpenses}
-          change={kpis.expenseChange}
-          changeLabel={kpis.expenseChangeLabel}
+          title="COGS"
+          value={kpis.cogs}
+          change={kpis.cogsChange}
+          changeLabel={kpis.cogsChangeLabel}
           invertChange
+          color={PL_COLORS.cogs}
+        />
+        <KpiCard
+          title="Gross Profit"
+          value={kpis.grossProfit}
+          change={kpis.grossProfitChange}
+          changeLabel={kpis.grossProfitChangeLabel}
+          color={PL_COLORS.grossProfit}
+        />
+        <KpiCard
+          title="Operating Expenses"
+          value={kpis.operatingExpenses ?? kpis.totalExpenses}
+          change={kpis.operatingExpensesChange ?? kpis.expenseChange}
+          changeLabel={
+            kpis.operatingExpensesChangeLabel ?? kpis.expenseChangeLabel
+          }
+          invertChange
+          color={PL_COLORS.operatingExpenses}
         />
         <KpiCard
           title="Net Profit"
           value={kpis.netProfit}
           change={kpis.netProfitChange}
           changeLabel={kpis.netProfitChangeLabel}
-        />
-        <KpiCard
-          title="Cash in Bank"
-          value={kpis.cashInBank}
-          change={kpis.cashChange}
-          changeLabel={kpis.cashChangeLabel}
+          color={PL_COLORS.netProfit}
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3 xl:gap-5">
-        <div className={`xl:col-span-2 ${CARD_CLASS} p-4 sm:p-5`}>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-900">
-              Profit &amp; Loss
-            </h3>
+      <div className={`${CARD_CLASS} p-4 sm:p-5`}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-gray-900">
+            Profit &amp; Loss
+          </h3>
+          <div className="flex items-center gap-3">
+            <div className="inline-flex items-center bg-gray-100 rounded-lg p-0.5 text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => setPlChartMode("bar")}
+                className={`px-2.5 py-1 rounded-md transition-colors ${
+                  plChartMode === "bar"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500"
+                }`}
+              >
+                Bar
+              </button>
+              <button
+                type="button"
+                onClick={() => setPlChartMode("line")}
+                className={`px-2.5 py-1 rounded-md transition-colors ${
+                  plChartMode === "line"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500"
+                }`}
+              >
+                Line
+              </button>
+            </div>
             <button
               type="button"
-              onClick={() => navigate("/app/reports/accounting-reports")}
-              className="text-xs text-emerald-600 hover:text-emerald-700"
+              onClick={() =>
+                navigate(
+                  "/app/reports/accounting-reports/inventria-income-statement",
+                )
+              }
+              className="text-xs text-[var(--aa-navy,#1a2d5e)] hover:underline"
             >
-              View report
+              View P&amp;L
             </button>
           </div>
-          <ProfitLossChart data={trend} />
         </div>
-
-        <div className="flex flex-col gap-4">
-          <div className={`${CARD_CLASS} p-4 sm:p-5`}>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-900">
-                {labels?.dashboardInvoices || "Invoices"}
-              </h3>
-              <button
-                type="button"
-                onClick={() => navigate("/app/sales/invoices")}
-                className="text-xs text-emerald-600 hover:text-emerald-700"
+        <div className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            {plChartMode === "bar" ? (
+              <BarChart
+                data={trend}
+                margin={{ top: 12, right: 12, left: 0, bottom: 4 }}
+                barCategoryGap="18%"
+                barGap={2}
               >
-                View all
-              </button>
-            </div>
-            <StatusBar
-              segments={[
-                {
-                  value: invoices.notDueYet || 0,
-                  color: "bg-emerald-500",
-                },
-                {
-                  value: invoices.overdue || 0,
-                  color: "bg-red-500",
-                },
-              ]}
-            />
-            <div className="space-y-1 mt-2 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-2 text-gray-600">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />
-                  Not yet due
-                </span>
-                <span className="font-medium">
-                  {formatCurrency(invoices.notDueYet)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-2 text-gray-600">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-red-500" />
-                  Overdue
-                </span>
-                <span className="font-medium">
-                  {formatCurrency(invoices.overdue)}
-                </span>
-              </div>
-            </div>
-            <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-sm">
-              <span className="text-gray-500">Paid last 30 days</span>
-              <span className="font-semibold text-gray-900">
-                {formatCurrency(invoices.paidLast30Days)}
+                <CartesianGrid
+                  strokeDasharray="0"
+                  stroke={CHART_GRID}
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 11, fill: "#6b7280" }}
+                  axisLine={{ stroke: "#111827", strokeWidth: 1 }}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "#9ca3af" }}
+                  tickFormatter={(v) => formatCompact(v)}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  content={<PlChartTooltip />}
+                  cursor={{ fill: "rgba(15, 23, 42, 0.04)" }}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar
+                  dataKey="revenue"
+                  name="Revenue"
+                  fill={PL_COLORS.revenue}
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={22}
+                />
+                <Bar
+                  dataKey="cogs"
+                  name="COGS"
+                  fill={PL_COLORS.cogs}
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={22}
+                />
+                <Bar
+                  dataKey="grossProfit"
+                  name="Gross Profit"
+                  fill={PL_COLORS.grossProfit}
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={22}
+                />
+                <Bar
+                  dataKey="operatingExpenses"
+                  name="Operating Expenses"
+                  fill={PL_COLORS.operatingExpenses}
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={22}
+                />
+                <Bar
+                  dataKey="netProfit"
+                  name="Net Profit"
+                  fill={PL_COLORS.netProfit}
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={22}
+                />
+              </BarChart>
+            ) : (
+              <ComposedChart
+                data={trend}
+                margin={{ top: 12, right: 12, left: 0, bottom: 4 }}
+              >
+                <defs>
+                  <linearGradient
+                    id="plLineRevenueFill"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.28} />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  strokeDasharray="0"
+                  stroke={CHART_GRID}
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 11, fill: "#6b7280" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "#9ca3af" }}
+                  tickFormatter={(v) => formatCompact(v)}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  content={<PlChartTooltip />}
+                  cursor={{
+                    stroke: "#d1d5db",
+                    strokeWidth: 1.5,
+                    strokeDasharray: "4 4",
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  name="Revenue"
+                  stroke={PL_COLORS.revenue}
+                  strokeWidth={2.75}
+                  fill="url(#plLineRevenueFill)"
+                  activeDot={{
+                    r: 5,
+                    fill: PL_COLORS.revenue,
+                    stroke: "#fff",
+                    strokeWidth: 2,
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="cogs"
+                  name="COGS"
+                  stroke={PL_COLORS.cogs}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{
+                    r: 5,
+                    fill: PL_COLORS.cogs,
+                    stroke: "#fff",
+                    strokeWidth: 2,
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="grossProfit"
+                  name="Gross Profit"
+                  stroke={PL_COLORS.grossProfit}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{
+                    r: 5,
+                    fill: PL_COLORS.grossProfit,
+                    stroke: "#fff",
+                    strokeWidth: 2,
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="operatingExpenses"
+                  name="Operating Expenses"
+                  stroke={PL_COLORS.operatingExpenses}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{
+                    r: 5,
+                    fill: PL_COLORS.operatingExpenses,
+                    stroke: "#fff",
+                    strokeWidth: 2,
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="netProfit"
+                  name="Net Profit"
+                  stroke={PL_COLORS.netProfit}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{
+                    r: 5,
+                    fill: PL_COLORS.netProfit,
+                    stroke: "#fff",
+                    strokeWidth: 2,
+                  }}
+                />
+              </ComposedChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:gap-5">
+        {/* Total Receivable */}
+        <div
+          className={`${CARD_CLASS} relative overflow-hidden p-5`}
+          style={{
+            background: `linear-gradient(135deg, ${PL_COLORS.revenue}14 0%, #ffffff 55%)`,
+            borderColor: `${PL_COLORS.revenue}40`,
+          }}
+        >
+          <span
+            className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+            style={{ backgroundColor: PL_COLORS.revenue }}
+          />
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <ArrowDownLeft
+                className="h-[18px] w-[18px]"
+                style={{ color: PL_COLORS.revenue }}
+              />
+              <span
+                className="text-[13px] font-semibold"
+                style={{ color: PL_COLORS.revenue }}
+              >
+                Total receivable
               </span>
             </div>
-          </div>
-
-          <div className={`${CARD_CLASS} p-4 sm:p-5`}>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-900">
-                Bills to Pay
-              </h3>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => navigate("/app/purchase/bills")}
-                className="text-xs text-emerald-600 hover:text-emerald-700"
+                onClick={() =>
+                  navigate("/app/reports/accounting-reports/receivable-aging")
+                }
+                className="text-xs font-medium hover:underline"
+                style={{ color: PL_COLORS.revenue }}
               >
-                View all
+                View report
               </button>
-            </div>
-            <StatusBar
-              segments={[
-                { value: bills.notDueYet || 0, color: "bg-emerald-500" },
-                { value: bills.overdue || 0, color: "bg-red-500" },
-              ]}
-            />
-            <div className="space-y-1 mt-2 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-2 text-gray-600">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />
-                  Unpaid
-                </span>
-                <span className="font-medium">
-                  {formatCurrency(bills.unpaid)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-2 text-gray-600">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-red-500" />
-                  Overdue
-                </span>
-                <span className="font-medium">
-                  {formatCurrency(bills.overdue)}
-                </span>
-              </div>
-            </div>
-            <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-sm">
-              <span className="text-gray-500">Paid last 30 days</span>
-              <span className="font-semibold text-gray-900">
-                {formatCurrency(bills.paidLast30Days)}
-              </span>
+              <ArApToggle value={recvView} onChange={setRecvView} />
             </div>
           </div>
+          {recvView === "total" ? (
+            <button
+              type="button"
+              onClick={() =>
+                navigate("/app/reports/accounting-reports/receivable-aging")
+              }
+              className="w-full text-left"
+            >
+              <div
+                className="text-[30px] font-semibold tabular-nums tracking-tight"
+                style={{ color: PL_COLORS.revenue }}
+              >
+                ₦{formatCompact(arAp.totalReceivable)}
+              </div>
+              <p className="mt-1 text-[13px] text-gray-600">
+                {arAp.receivableOpenCount || 0} open invoices
+                {arAp.totalReceivable > 0
+                  ? ` · `
+                  : ""}
+                {arAp.totalReceivable > 0 && (
+                  <span className="font-medium text-amber-700">
+                    ₦{formatCompact(arAp.receivableOverdue)} overdue (
+                    {Math.round(
+                      ((arAp.receivableOverdue || 0) /
+                        (arAp.totalReceivable || 1)) *
+                        100,
+                    )}
+                    %)
+                  </span>
+                )}
+              </p>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() =>
+                navigate("/app/reports/accounting-reports/receivable-aging")
+              }
+              className="w-full text-left"
+            >
+              <AgingBarRows
+                aging={arAp.receivableAging}
+                colors={RECV_AGING_COLORS}
+              />
+            </button>
+          )}
         </div>
+
+        {/* Total Payable */}
+        <div
+          className={`${CARD_CLASS} relative overflow-hidden p-5`}
+          style={{
+            background: `linear-gradient(135deg, ${PL_COLORS.operatingExpenses}14 0%, #ffffff 55%)`,
+            borderColor: `${PL_COLORS.operatingExpenses}40`,
+          }}
+        >
+          <span
+            className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+            style={{ backgroundColor: PL_COLORS.operatingExpenses }}
+          />
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <ArrowUpRight
+                className="h-[18px] w-[18px]"
+                style={{ color: PL_COLORS.operatingExpenses }}
+              />
+              <span
+                className="text-[13px] font-semibold"
+                style={{ color: PL_COLORS.operatingExpenses }}
+              >
+                Total payable
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  navigate("/app/reports/accounting-reports/payable-aging")
+                }
+                className="text-xs font-medium hover:underline"
+                style={{ color: PL_COLORS.operatingExpenses }}
+              >
+                View report
+              </button>
+              <ArApToggle value={payView} onChange={setPayView} />
+            </div>
+          </div>
+          {payView === "total" ? (
+            <button
+              type="button"
+              onClick={() =>
+                navigate("/app/reports/accounting-reports/payable-aging")
+              }
+              className="w-full text-left"
+            >
+              <div
+                className="text-[30px] font-semibold tabular-nums tracking-tight"
+                style={{ color: PL_COLORS.operatingExpenses }}
+              >
+                ₦{formatCompact(arAp.totalPayable)}
+              </div>
+              <p className="mt-1 text-[13px] text-gray-600">
+                {arAp.payableOpenCount || 0} open bills
+                {arAp.totalPayable > 0 ? ` · ` : ""}
+                {arAp.totalPayable > 0 && (
+                  <span className="font-medium text-amber-700">
+                    ₦{formatCompact(arAp.payableOverdue)} overdue (
+                    {Math.round(
+                      ((arAp.payableOverdue || 0) / (arAp.totalPayable || 1)) *
+                        100,
+                    )}
+                    %)
+                  </span>
+                )}
+              </p>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() =>
+                navigate("/app/reports/accounting-reports/payable-aging")
+              }
+              className="w-full text-left"
+            >
+              <AgingBarRows
+                aging={arAp.payableAging}
+                colors={PAY_AGING_COLORS}
+              />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div
+        className={`${CARD_CLASS} relative overflow-hidden p-4 sm:p-5`}
+        style={{
+          background: `linear-gradient(135deg, ${
+            billsMode === "purchases"
+              ? PL_COLORS.cogs
+              : PL_COLORS.operatingExpenses
+          }12 0%, #ffffff 50%)`,
+          borderColor: `${
+            billsMode === "purchases"
+              ? PL_COLORS.cogs
+              : PL_COLORS.operatingExpenses
+          }33`,
+        }}
+      >
+        <span
+          className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+          style={{
+            backgroundColor:
+              billsMode === "purchases"
+                ? PL_COLORS.cogs
+                : PL_COLORS.operatingExpenses,
+          }}
+        />
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h3
+            className="text-sm font-semibold"
+            style={{
+              color:
+                billsMode === "purchases"
+                  ? PL_COLORS.cogs
+                  : PL_COLORS.operatingExpenses,
+            }}
+          >
+            Outstanding Bills
+          </h3>
+          <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white/80 p-0.5 text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => setBillsMode("purchases")}
+              className={`rounded-md px-2.5 py-1 transition-colors ${
+                billsMode === "purchases"
+                  ? "text-white shadow-sm"
+                  : "text-gray-500"
+              }`}
+              style={
+                billsMode === "purchases"
+                  ? { backgroundColor: PL_COLORS.cogs }
+                  : undefined
+              }
+            >
+              Purchases
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillsMode("expenses")}
+              className={`rounded-md px-2.5 py-1 transition-colors ${
+                billsMode === "expenses"
+                  ? "text-white shadow-sm"
+                  : "text-gray-500"
+              }`}
+              style={
+                billsMode === "expenses"
+                  ? { backgroundColor: PL_COLORS.operatingExpenses }
+                  : undefined
+              }
+            >
+              Expenses
+            </button>
+          </div>
+        </div>
+        <p className="mb-3 text-xs text-gray-600">
+          Outstanding:{" "}
+          <span
+            className="text-base font-semibold tabular-nums"
+            style={{
+              color:
+                billsMode === "purchases"
+                  ? PL_COLORS.cogs
+                  : PL_COLORS.operatingExpenses,
+            }}
+          >
+            ₦{formatCompact(outstandingTotal)}
+          </span>
+        </p>
+        {outstandingList.length === 0 ? (
+          <p className="py-6 text-center text-xs text-gray-400">
+            No outstanding {billsMode}
+          </p>
+        ) : (
+          <div className="max-h-56 space-y-2 overflow-y-auto">
+            {outstandingList.slice(0, 8).map((item, idx) => {
+              const accent =
+                billsMode === "purchases"
+                  ? PL_COLORS.cogs
+                  : PL_COLORS.operatingExpenses;
+              const isOverdue =
+                item.dueDate && moment(item.dueDate).isBefore(moment(), "day");
+              return (
+                <div
+                  key={`${item.ref}-${idx}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-white/70 px-3 py-2 text-sm"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span
+                      className="h-2 w-2 flex-shrink-0 rounded-full"
+                      style={{ backgroundColor: accent }}
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-gray-900">
+                        {item.party}
+                      </p>
+                      <p className="truncate text-xs text-gray-400">
+                        {item.invoiceNo || item.ref}
+                        {item.dueDate
+                          ? ` · due ${moment(item.dueDate).format("DD/MM/YYYY")}`
+                          : ""}
+                        {isOverdue ? (
+                          <span className="ml-1 font-medium text-red-600">
+                            · overdue
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className="flex-shrink-0 font-semibold tabular-nums"
+                    style={{ color: accent }}
+                  >
+                    {formatCurrency(item.amountDue)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
-        <div className={`${CARD_CLASS} p-4 sm:p-5`}>
-          <h3 className="text-sm font-semibold text-gray-900 mb-1">
+        <div
+          className={`${CARD_CLASS} relative overflow-hidden p-4 sm:p-5`}
+          style={{
+            background: `linear-gradient(135deg, ${PL_COLORS.operatingExpenses}12 0%, #ffffff 55%)`,
+            borderColor: `${PL_COLORS.operatingExpenses}33`,
+          }}
+        >
+          <span
+            className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+            style={{ backgroundColor: PL_COLORS.operatingExpenses }}
+          />
+          <h3
+            className="mb-1 text-sm font-semibold"
+            style={{ color: PL_COLORS.operatingExpenses }}
+          >
             Expense Breakdown
           </h3>
-          <p className="text-xs text-gray-500 mb-4">Operating expenses</p>
+          <p className="mb-4 text-xs text-gray-500">Operating expenses</p>
           <div className="flex items-center gap-4">
             <DonutChart items={operating} total={operatingTotal} />
-            <div className="space-y-2 flex-1 min-w-0">
+            <div className="min-w-0 flex-1 space-y-2">
               {operating.length === 0 ? (
                 <p className="text-xs text-gray-400">
                   No operating expense activity in this period
@@ -1112,16 +1546,17 @@ export default function FinancialOverviewSection({
                     key={item.name}
                     className="flex items-center justify-between gap-2 text-xs"
                   >
-                    <span className="inline-flex items-center gap-1.5 min-w-0">
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
                       <span
-                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        className="h-2 w-2 flex-shrink-0 rounded-full"
                         style={{ backgroundColor: item.color }}
                       />
-                      <span className="truncate text-gray-700">
-                        {item.name}
-                      </span>
+                      <span className="truncate text-gray-700">{item.name}</span>
                     </span>
-                    <span className="font-medium text-gray-900 flex-shrink-0">
+                    <span
+                      className="flex-shrink-0 font-semibold tabular-nums"
+                      style={{ color: item.color || PL_COLORS.operatingExpenses }}
+                    >
                       ₦{formatCompact(item.amount)}
                     </span>
                   </div>
@@ -1134,31 +1569,46 @@ export default function FinancialOverviewSection({
         {bankAccountsSlot ? (
           bankAccountsSlot
         ) : (
-          <div className={`${CARD_CLASS} p-4 sm:p-5`}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-gray-900">Accounts</h3>
+          <div
+            className={`${CARD_CLASS} relative overflow-hidden p-4 sm:p-5`}
+            style={{
+              background: "linear-gradient(135deg, #1a2d5e14 0%, #ffffff 55%)",
+              borderColor: "#1a2d5e40",
+            }}
+          >
+            <span className="absolute bottom-0 left-0 top-0 w-1 rounded-l-2xl bg-[var(--aa-navy,#1a2d5e)]" />
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-[var(--aa-navy,#1a2d5e)]">
+                Accounts
+              </h3>
               <button
                 type="button"
                 onClick={() => navigate("/app/account/bank-accounts")}
-                className="text-xs text-emerald-600 hover:text-emerald-700"
+                className="text-xs font-medium text-[var(--aa-navy,#1a2d5e)] hover:underline"
               >
                 Manage
               </button>
             </div>
-            <div className="space-y-3">
+            <p className="mb-3 text-xs text-gray-600">
+              Total:{" "}
+              <span className="text-base font-semibold tabular-nums text-[var(--aa-navy,#1a2d5e)]">
+                ₦{formatCompact(bankBalance)}
+              </span>
+            </p>
+            <div className="space-y-2">
               {accounts.length === 0 ? (
                 <p className="text-xs text-gray-400">No bank accounts found</p>
               ) : (
                 accounts.map((account) => (
                   <div
                     key={account.id}
-                    className="flex items-start justify-between gap-3"
+                    className="flex items-start justify-between gap-3 rounded-lg border border-gray-100 bg-white/70 px-3 py-2"
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
+                      <p className="truncate text-sm font-medium text-gray-900">
                         {account.name}
                       </p>
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="truncate text-xs text-gray-500">
                         {account.bankName || "Bank"}
                         {account.accountNumber
                           ? ` ···${String(account.accountNumber).slice(-4)}`
@@ -1166,8 +1616,10 @@ export default function FinancialOverviewSection({
                       </p>
                     </div>
                     <p
-                      className={`text-sm font-semibold flex-shrink-0 ${
-                        account.balance < 0 ? "text-red-500" : "text-gray-900"
+                      className={`flex-shrink-0 text-sm font-semibold tabular-nums ${
+                        account.balance < 0
+                          ? "text-red-500"
+                          : "text-[var(--aa-navy,#1a2d5e)]"
                       }`}
                     >
                       {account.balance < 0 ? "-" : ""}
@@ -1181,12 +1633,13 @@ export default function FinancialOverviewSection({
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <TopRankingCard
           title="Top 5 Selling Products & Services"
           data={topProducts}
           unitField="units"
           unitSuffix="units"
+          accentColor={PL_COLORS.revenue}
         />
         <TopRankingCard
           title="Top 5 Customers"
@@ -1194,6 +1647,7 @@ export default function FinancialOverviewSection({
           unitField="orderCount"
           unitSuffix="invoices"
           showCustomerId
+          accentColor={PL_COLORS.grossProfit}
         />
       </div>
 

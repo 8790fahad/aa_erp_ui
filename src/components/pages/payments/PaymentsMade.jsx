@@ -22,12 +22,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import ApplySupplierDeposit from "@/components/pages/payments/ApplySupplierDeposit";
 
 /**
@@ -360,14 +360,17 @@ export default function PaymentsMade() {
         )}
       </div>
 
-      <Dialog open={applyDepositOpen} onOpenChange={setApplyDepositOpen}>
-        <DialogContent className="max-h-[92vh] w-[95vw] max-w-5xl overflow-y-auto border-0 bg-transparent p-0 shadow-none [&>button]:right-8 [&>button]:top-6 [&>button]:z-10">
-          <DialogHeader className="sr-only">
-            <DialogTitle>Apply Deposit</DialogTitle>
-            <DialogDescription>
-              Apply a vendor deposit to unpaid bills
-            </DialogDescription>
-          </DialogHeader>
+      <Sheet open={applyDepositOpen} onOpenChange={setApplyDepositOpen}>
+        <SheetContent
+          side="right"
+          className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-xl md:!max-w-2xl lg:!max-w-3xl [&>button]:hidden"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Apply Deposit</SheetTitle>
+            <SheetDescription>
+              Move deposit to goods in transit and apply to unpaid bills
+            </SheetDescription>
+          </SheetHeader>
           {applyDepositOpen ? (
             <ApplySupplierDeposit
               asModal
@@ -378,8 +381,8 @@ export default function PaymentsMade() {
               }}
             />
           ) : null}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

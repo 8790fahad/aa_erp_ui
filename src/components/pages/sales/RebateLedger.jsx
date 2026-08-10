@@ -17,6 +17,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import SearchSupplierInput from "@/components/pages/purchase/SearchSuppliers";
+import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
 
 const PAGE_SIZE = 200;
 const TABS = [
@@ -25,7 +27,28 @@ const TABS = [
   { key: "rebates", label: "Rebates" },
 ];
 
+function emptyRuleForm() {
+  return {
+    name: "",
+    basis: "sales",
+    targetType: "product", // product | supplier | customer
+    product: "All products",
+    productSku: "",
+    supplierNo: "",
+    supplierName: "",
+    customerNo: "",
+    customerName: "",
+    period: "",
+    fromDate: "",
+    toDate: "",
+    minQty: "",
+    rebatePercent: "",
+  };
+}
+
 function productMatchesRule(line, rule) {
+  const targetType = String(rule.targetType || "product").toLowerCase();
+  if (targetType !== "product") return true;
   const isAll =
     !rule.productSku &&
     (!rule.product || rule.product === "All products");
@@ -34,6 +57,47 @@ function productMatchesRule(line, rule) {
   const lineName = String(line.product_name || "").trim();
   if (rule.productSku && lineSku && rule.productSku === lineSku) return true;
   return lineName === String(rule.product || "").trim();
+}
+
+function partyMatchesRule(line, rule) {
+  const targetType = String(rule.targetType || "product").toLowerCase();
+  if (targetType === "supplier") {
+    const no = String(rule.supplierNo || "").trim();
+    const name = String(rule.supplierName || "").trim();
+    const lineNo = String(line.supplier_no || "").trim();
+    const lineName = String(line.supplier_name || "").trim();
+    if (no && lineNo) return no === lineNo;
+    if (name && lineName) return name === lineName;
+    return false;
+  }
+  if (targetType === "customer") {
+    const no = String(rule.customerNo || "").trim();
+    const name = String(rule.customerName || "").trim();
+    const lineNo = String(line.customer_no || "").trim();
+    const lineName = String(line.customer_name || "").trim();
+    if (no && lineNo) return no === lineNo;
+    if (name && lineName) return name === lineName;
+    return false;
+  }
+  return true;
+}
+
+function ruleAppliesToLabel(rule) {
+  const targetType = String(rule.targetType || "product").toLowerCase();
+  if (targetType === "supplier") {
+    return rule.supplierName || rule.supplierNo || "Supplier";
+  }
+  if (targetType === "customer") {
+    return rule.customerName || rule.customerNo || "Customer";
+  }
+  return rule.product || "All products";
+}
+
+function ruleAppliesToSub(rule) {
+  const targetType = String(rule.targetType || "product").toLowerCase();
+  if (targetType === "supplier") return rule.supplierNo || "";
+  if (targetType === "customer") return rule.customerNo || "";
+  return rule.productSku || "";
 }
 
 const STATUS_META = {
@@ -107,17 +171,9 @@ export default function RebateLedger() {
   );
   const [search, setSearch] = useState("");
 
-  const [ruleForm, setRuleForm] = useState({
-    name: "",
-    basis: "sales",
-    product: "All products",
-    productSku: "",
-    period: "",
-    fromDate: "",
-    toDate: "",
-    minQty: "",
-    rebatePercent: "",
-  });
+  const [ruleForm, setRuleForm] = useState(emptyRuleForm);
+  const [selectedSupplier, setSelectedSupplier] = useState(null);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [issuingCnKey, setIssuingCnKey] = useState(null);
   const [payingKey, setPayingKey] = useState(null);
   const [addRuleOpen, setAddRuleOpen] = useState(false);
@@ -309,6 +365,22 @@ export default function RebateLedger() {
       toast.error("No active business selected");
       return;
     }
+    const basis = ruleForm.basis === "purchase" ? "purchase" : "sales";
+    let targetType = ruleForm.targetType || "product";
+    if (basis === "purchase" && !["product", "supplier"].includes(targetType)) {
+      targetType = "product";
+    }
+    if (basis === "sales" && !["product", "customer"].includes(targetType)) {
+      targetType = "product";
+    }
+    if (targetType === "supplier" && !ruleForm.supplierNo && !ruleForm.supplierName) {
+      toast.error("Select a supplier");
+      return;
+    }
+    if (targetType === "customer" && !ruleForm.customerNo && !ruleForm.customerName) {
+      toast.error("Select a customer");
+      return;
+    }
     const dates =
       ruleForm.fromDate && ruleForm.toDate
         ? { fromDate: ruleForm.fromDate, toDate: ruleForm.toDate }
@@ -323,9 +395,17 @@ export default function RebateLedger() {
         facilityId,
         userId,
         name: ruleForm.name.trim(),
-        basis: ruleForm.basis === "purchase" ? "purchase" : "sales",
-        product: ruleForm.product.trim() || "All products",
-        productSku: ruleForm.productSku || "",
+        basis,
+        targetType,
+        product:
+          targetType === "product"
+            ? ruleForm.product.trim() || "All products"
+            : "All products",
+        productSku: targetType === "product" ? ruleForm.productSku || "" : "",
+        supplierNo: targetType === "supplier" ? ruleForm.supplierNo : "",
+        supplierName: targetType === "supplier" ? ruleForm.supplierName : "",
+        customerNo: targetType === "customer" ? ruleForm.customerNo : "",
+        customerName: targetType === "customer" ? ruleForm.customerName : "",
         period: ruleForm.period.trim(),
         fromDate: dates.fromDate,
         toDate: dates.toDate,
@@ -336,17 +416,9 @@ export default function RebateLedger() {
         setSavingRule(false);
         if (resp?.success && resp.result) {
           setRules((r) => [resp.result, ...r]);
-          setRuleForm({
-            name: "",
-            basis: "sales",
-            product: "All products",
-            productSku: "",
-            period: "",
-            fromDate: "",
-            toDate: "",
-            minQty: "",
-            rebatePercent: "",
-          });
+          setRuleForm(emptyRuleForm());
+          setSelectedSupplier(null);
+          setSelectedCustomer(null);
           productTypeaheadRef.current?.clear?.();
           setAddRuleOpen(false);
           toast.success("Rule saved");
@@ -389,10 +461,14 @@ export default function RebateLedger() {
     const rows = [];
     for (const rule of rules) {
       const ruleBasis = rule.basis === "purchase" ? "purchase" : "sales";
+      const targetType = String(rule.targetType || "product").toLowerCase();
       const parties = [
         ...new Set(
           billing
-            .filter((p) => (p.basis || "sales") === ruleBasis)
+            .filter((p) => {
+              if ((p.basis || "sales") !== ruleBasis) return false;
+              return partyMatchesRule(p, rule);
+            })
             .map((p) => (p.customer_name || p.supplier_name || "").trim())
             .filter((c) => c && c !== "—"),
         ),
@@ -404,6 +480,7 @@ export default function RebateLedger() {
           if (name !== party) return false;
           const d = lineDate(p);
           if (!inRange(d, rule.fromDate, rule.toDate)) return false;
+          if (!partyMatchesRule(p, rule)) return false;
           return productMatchesRule(p, rule);
         });
         if (matches.length === 0) continue;
@@ -429,7 +506,8 @@ export default function RebateLedger() {
           customer: party,
           customerNo,
           basis: ruleBasis,
-          rule: { ...rule, basis: ruleBasis },
+          targetType,
+          rule: { ...rule, basis: ruleBasis, targetType },
           totalQty,
           totalValue,
           qualifies,
@@ -741,7 +819,7 @@ export default function RebateLedger() {
                       Add rebate rule
                     </SheetTitle>
                     <SheetDescription className="mt-0.5 text-xs text-white/70">
-                      Sales or Purchase basis, product, period, and rebate %
+                      Purchase: supplier or product · Sales: product or customer
                     </SheetDescription>
                   </div>
                 </div>
@@ -774,14 +852,98 @@ export default function RebateLedger() {
                       <select
                         className={`${inputClass} w-full`}
                         value={ruleForm.basis || "sales"}
-                        onChange={(e) =>
-                          setRuleForm({ ...ruleForm, basis: e.target.value })
-                        }
+                        onChange={(e) => {
+                          const basis = e.target.value;
+                          const nextTarget =
+                            basis === "purchase"
+                              ? ruleForm.targetType === "customer"
+                                ? "product"
+                                : ruleForm.targetType === "supplier"
+                                  ? "supplier"
+                                  : "product"
+                              : ruleForm.targetType === "supplier"
+                                ? "product"
+                                : ruleForm.targetType === "customer"
+                                  ? "customer"
+                                  : "product";
+                          setRuleForm({
+                            ...ruleForm,
+                            basis,
+                            targetType: nextTarget,
+                            ...(nextTarget !== "supplier"
+                              ? { supplierNo: "", supplierName: "" }
+                              : {}),
+                            ...(nextTarget !== "customer"
+                              ? { customerNo: "", customerName: "" }
+                              : {}),
+                            ...(nextTarget !== "product"
+                              ? { product: "All products", productSku: "" }
+                              : {}),
+                          });
+                          if (nextTarget !== "supplier") setSelectedSupplier(null);
+                          if (nextTarget !== "customer") setSelectedCustomer(null);
+                        }}
                       >
                         <option value="sales">Sales</option>
                         <option value="purchase">Purchase</option>
                       </select>
                     </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600">
+                        Based on
+                      </label>
+                      <select
+                        className={`${inputClass} w-full`}
+                        value={
+                          ruleForm.basis === "purchase"
+                            ? ruleForm.targetType === "supplier"
+                              ? "supplier"
+                              : "product"
+                            : ruleForm.targetType === "customer"
+                              ? "customer"
+                              : "product"
+                        }
+                        onChange={(e) => {
+                          const targetType = e.target.value;
+                          setRuleForm({
+                            ...ruleForm,
+                            targetType,
+                            ...(targetType !== "supplier"
+                              ? { supplierNo: "", supplierName: "" }
+                              : {}),
+                            ...(targetType !== "customer"
+                              ? { customerNo: "", customerName: "" }
+                              : {}),
+                            ...(targetType !== "product"
+                              ? { product: "All products", productSku: "" }
+                              : {}),
+                          });
+                          if (targetType !== "supplier") setSelectedSupplier(null);
+                          if (targetType !== "customer") setSelectedCustomer(null);
+                          if (targetType !== "product") {
+                            productTypeaheadRef.current?.clear?.();
+                          }
+                        }}
+                      >
+                        {(ruleForm.basis === "purchase"
+                          ? [
+                              { value: "product", label: "Product" },
+                              { value: "supplier", label: "Supplier" },
+                            ]
+                          : [
+                              { value: "product", label: "Product" },
+                              { value: "customer", label: "Customer" },
+                            ]
+                        ).map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {(ruleForm.targetType || "product") === "product" ? (
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-slate-600">
                         Product
@@ -835,7 +997,55 @@ export default function RebateLedger() {
                         }}
                       />
                     </div>
-                  </div>
+                  ) : null}
+
+                  {ruleForm.basis === "purchase" &&
+                  ruleForm.targetType === "supplier" ? (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600">
+                        Supplier
+                      </label>
+                      <SearchSupplierInput
+                        selected={selectedSupplier ? [selectedSupplier] : []}
+                        onChange={(sup) => {
+                          setSelectedSupplier(sup);
+                          setRuleForm((f) => ({
+                            ...f,
+                            supplierNo:
+                              sup?.supplier_number ||
+                              sup?.supplierNo ||
+                              "",
+                            supplierName: sup?.supplier_name || "",
+                          }));
+                        }}
+                      />
+                    </div>
+                  ) : null}
+
+                  {ruleForm.basis === "sales" &&
+                  ruleForm.targetType === "customer" ? (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600">
+                        Customer
+                      </label>
+                      <SearchCustomerInput
+                        selected={selectedCustomer ? [selectedCustomer] : []}
+                        onChange={(cus) => {
+                          setSelectedCustomer(cus);
+                          setRuleForm((f) => ({
+                            ...f,
+                            customerNo: cus?.customerNo || "",
+                            customerName:
+                              cus?.fullname ||
+                              cus?.name ||
+                              cus?.customerName ||
+                              cus?.company_name ||
+                              "",
+                          }));
+                        }}
+                      />
+                    </div>
+                  ) : null}
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-slate-600">
                       Period label
@@ -941,7 +1151,8 @@ export default function RebateLedger() {
                 <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
                   <th className="px-3 py-2.5">Rule</th>
                   <th className="px-3 py-2.5">Basis</th>
-                  <th className="px-3 py-2.5">Product</th>
+                  <th className="px-3 py-2.5">Based on</th>
+                  <th className="px-3 py-2.5">Applies to</th>
                   <th className="px-3 py-2.5">Period</th>
                   <th className="px-3 py-2.5 text-right">Min Qty</th>
                   <th className="px-3 py-2.5 text-right">Rebate</th>
@@ -952,7 +1163,7 @@ export default function RebateLedger() {
                 {loadingRules &&
                   Array.from({ length: 3 }).map((_, i) => (
                     <tr key={`sk-${i}`}>
-                      <td colSpan={7} className="px-3 py-2">
+                      <td colSpan={8} className="px-3 py-2">
                         <Skeleton className="h-6 w-full" />
                       </td>
                     </tr>
@@ -974,11 +1185,20 @@ export default function RebateLedger() {
                         {r.basis === "purchase" ? "Purchase" : "Sales"}
                       </span>
                     </td>
+                    <td className="px-3 py-2.5">
+                      <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+                        {r.targetType === "supplier"
+                          ? "Supplier"
+                          : r.targetType === "customer"
+                            ? "Customer"
+                            : "Product"}
+                      </span>
+                    </td>
                     <td className="bg-white px-3 py-2.5 text-slate-600">
-                      {r.product}
-                      {r.productSku ? (
+                      {ruleAppliesToLabel(r)}
+                      {ruleAppliesToSub(r) ? (
                         <span className="mt-0.5 block font-mono text-[11px] text-slate-400">
-                          {r.productSku}
+                          {ruleAppliesToSub(r)}
                         </span>
                       ) : null}
                     </td>
@@ -1010,7 +1230,7 @@ export default function RebateLedger() {
                 {!loadingRules && rules.length === 0 && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-3 py-8 text-center text-slate-500"
                     >
                       No rules yet. Click Add rule to create one.

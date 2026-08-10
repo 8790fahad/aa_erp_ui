@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   CheckCircle2,
   FileText,
   Package,
+  Printer,
   RefreshCw,
   Warehouse,
 } from "lucide-react";
@@ -18,9 +19,11 @@ import {
   getFulfillmentStatusMeta,
   WorkflowStatusBadge,
 } from "@/lib/saleWorkflowStatus.js";
+import SaleWorkflowSearchBar from "./SaleWorkflowSearchBar";
 
 export default function WarehouseRequests() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [collecting, setCollecting] = useState(null);
@@ -28,6 +31,7 @@ export default function WarehouseRequests() {
   const [selectedId, setSelectedId] = useState(null);
   const [branchFilter, setBranchFilter] = useState("all");
   const [invoiceItems, setInvoiceItems] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const userBranchId = useMemo(() => {
     const bid = parseInt(user?.branchId ?? user?.branch_id, 10);
@@ -85,14 +89,67 @@ export default function WarehouseRequests() {
     [rows, selectedId],
   );
 
+  const visibleRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        String(r.sale_code || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.pack_code || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.customer_name || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.branch_name || "")
+          .toLowerCase()
+          .includes(q),
+    );
+  }, [rows, searchQuery]);
+
+  const handleSearchSelect = useCallback((row) => {
+    if (row?.id != null) {
+      setSelectedId(row.id);
+      return;
+    }
+    if (row?.sale_code) {
+      setRows((prev) => {
+        const match = prev.find((r) => r.sale_code === row.sale_code);
+        if (match) {
+          setSelectedId(match.id);
+          return prev;
+        }
+        return prev;
+      });
+    }
+  }, []);
+
   const branchInvoiceUrl = useMemo(() => {
     if (!selected) return "";
     return `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
       selected.sale_code,
     )}&branch_id=${selected.branch_id}&pack_code=${encodeURIComponent(
-      selected.pack_code,
-    )}&collect=1`;
+      selected.pack_code || "",
+    )}&branch_name=${encodeURIComponent(selected.branch_name || "")}`;
   }, [selected]);
+
+  const openCollectionReceipt = useCallback(
+    (pack, { autoPrint = false } = {}) => {
+      if (!pack?.sale_code) return;
+      const params = new URLSearchParams({
+        sale_code: pack.sale_code,
+        branch_id: String(pack.branch_id || ""),
+        pack_code: pack.pack_code || "",
+        branch_name: pack.branch_name || "",
+        collect: "1",
+      });
+      if (autoPrint) params.set("auto_print", "1");
+      navigate(`/app/sales/invoice-preview?${params.toString()}`);
+    },
+    [navigate],
+  );
 
   /** Load this branch's invoice lines — collect qty comes from the invoice. */
   useEffect(() => {
@@ -218,6 +275,16 @@ export default function WarehouseRequests() {
             toast.success("All branch invoices collected — dual signature");
           }
           fetchList();
+          // After full collect, open warehouse collection receipt for printing.
+          if (collectAll || res.results?.status === "collected") {
+            openCollectionReceipt(
+              {
+                ...pack,
+                ...(res.results || {}),
+              },
+              { autoPrint: false },
+            );
+          }
         } else {
           toast.error(res.message || "Could not mark collected");
         }
@@ -279,8 +346,18 @@ export default function WarehouseRequests() {
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <div className="lg:col-span-2 bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 font-semibold text-gray-800">
-              Warehouse invoices to collect ({rows.length})
+            <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+              <div className="font-semibold text-gray-800">
+                Warehouse invoices to collect ({visibleRows.length})
+              </div>
+              <SaleWorkflowSearchBar
+                facilityId={activeBusiness?.id}
+                rows={rows}
+                getRowCode={(r) => r.pack_code || r.sale_code}
+                onSelect={handleSearchSelect}
+                onQueryChange={setSearchQuery}
+                placeholder="Search or scan invoice, pack, customer…"
+              />
             </div>
             {loading ? (
               <div className="p-4 space-y-3">
@@ -288,14 +365,14 @@ export default function WarehouseRequests() {
                   <Skeleton key={i} className="h-16 w-full" />
                 ))}
               </div>
-            ) : rows.length === 0 ? (
+            ) : visibleRows.length === 0 ? (
               <div className="p-8 text-center text-gray-500 text-sm">
                 No branch invoices waiting. After separation, each branch copy
                 appears here for collection.
               </div>
             ) : (
               <ul className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
-                {rows.map((row) => {
+                {visibleRows.map((row) => {
                   const active = row.id === selectedId;
                   const fMeta = getFulfillmentStatusMeta(row.status);
                   return (
@@ -386,6 +463,16 @@ export default function WarehouseRequests() {
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openCollectionReceipt(selected)}
+                      className="inline-flex items-center gap-1.5"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      Collection receipt
+                    </Button>
                     <Link
                       to={branchInvoiceUrl}
                       className="inline-flex items-center gap-1.5 text-sm font-medium text-[#4267B2] hover:underline"
@@ -506,16 +593,34 @@ export default function WarehouseRequests() {
                         ? "Updating…"
                         : "Collect all invoice items"}
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => openCollectionReceipt(selected)}
+                    >
+                      <Printer className="w-4 h-4 mr-1.5" />
+                      Print collection receipt
+                    </Button>
                     <Button type="button" variant="outline" asChild>
                       <Link to={branchInvoiceUrl}>
                         <FileText className="w-4 h-4 mr-1.5" />
-                        View / print invoice
+                        View invoice
                       </Link>
                     </Button>
                   </div>
                 ) : (
-                  <div className="mt-4 rounded-md bg-green-50 text-green-800 text-sm px-4 py-3">
-                    All items on this branch invoice are collected.
+                  <div className="mt-4 space-y-3">
+                    <div className="rounded-md bg-green-50 text-green-800 text-sm px-4 py-3">
+                      All items on this branch invoice are collected.
+                    </div>
+                    <Button
+                      type="button"
+                      className="bg-orange-600 hover:bg-orange-700"
+                      onClick={() => openCollectionReceipt(selected)}
+                    >
+                      <Printer className="w-4 h-4 mr-1.5" />
+                      Print collection receipt
+                    </Button>
                   </div>
                 )}
               </>

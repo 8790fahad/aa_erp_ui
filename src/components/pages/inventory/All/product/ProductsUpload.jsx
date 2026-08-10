@@ -20,6 +20,13 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import * as XLSX from "xlsx";
 import {
   Table,
@@ -58,7 +65,8 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
   const [itemsPerPage] = useState(10);
   const [branches, setBranches] = useState([]);
   const inputRef = React.createRef();
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor =
+    activeBusiness?.primary_color || "var(--aa-navy, #1a2d5e)";
 
   const getBranches = useCallback(() => {
     if (!activeBusiness?.id) return;
@@ -1508,39 +1516,39 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
   };
 
   return (
-    <>
-      {open && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <Upload className="h-5 w-5" />
-                    Upload Products
-                  </h3>
-                  <p className="text-blue-100 text-sm mt-1">
-                    {showPreview
-                      ? "Review product data before uploading"
-                      : selectedProductType
-                      ? `Upload ${selectedProductType} products`
-                      : "Select product type to upload"}
-                  </p>
-                </div>
-                <button
-                  onClick={clearResults}
-                  className="p-1.5 hover:bg-white/20 rounded transition-all"
-                >
-                  <X size={20} />
-                </button>
-              </div>
+    <Sheet
+      open={!!open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) clearResults();
+      }}
+    >
+      <SheetContent
+        side="right"
+        className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-xl md:!max-w-2xl lg:!max-w-3xl [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100"
+      >
+        <SheetHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] px-5 py-4 pr-12 text-left">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-md bg-white/10 p-2">
+              <Upload className="h-4 w-4 text-white/90" />
             </div>
+            <div className="min-w-0">
+              <SheetTitle className="text-lg font-semibold leading-tight text-white">
+                Upload Products
+              </SheetTitle>
+              <SheetDescription className="mt-0.5 text-xs text-white/70">
+                {showPreview
+                  ? "Review product data before uploading"
+                  : selectedProductType
+                    ? `Upload ${selectedProductType} products`
+                    : "Select product type to upload"}
+              </SheetDescription>
+            </div>
+          </div>
+        </SheetHeader>
 
-            {/* Modal Content */}
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              <div className="p-6 flex-1 overflow-y-auto">
-                {showPreview && previewData ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            {showPreview && previewData ? (
                   // Preview Section
                   <div className="space-y-4">
                     <Alert>
@@ -2165,7 +2173,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
                           </Button>
                           <Button
                             onClick={clearResults}
-                            className="bg-[#4267B2] hover:bg-[#36549B]"
+                            className="bg-[var(--aa-navy,#1a2d5e)] hover:bg-[var(--aa-navy-hover,#243a73)]"
                           >
                             Done
                           </Button>
@@ -2177,7 +2185,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
               </div>
 
               {/* Footer Actions */}
-              <div className="border-t bg-gray-50 p-4 flex justify-end gap-3">
+              <div className="shrink-0 border-t bg-gray-50 p-4 flex justify-end gap-3">
                 {showPreview && previewData ? (
                   <>
                     <Button
@@ -2220,11 +2228,9 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
                   </button>
                 )}
               </div>
-            </div>
-          </div>
         </div>
-      )}
-    </>
+      </SheetContent>
+    </Sheet>
   );
 };
 

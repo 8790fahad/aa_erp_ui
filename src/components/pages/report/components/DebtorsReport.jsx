@@ -115,14 +115,26 @@ const DebtorsReport = () => {
   const rows = useMemo(() => {
     const rawRows = reportData?.rows || [];
     return rawRows
-      .map((item) => ({
-        id: item.customerNo || "-",
-        customerId: item.customerNo || "-",
-        customerName: item.fullname || "Unknown Customer",
-        balance: toNumber(item.balance),
-      }))
+      .map((item) => {
+        const partyId = item.party_id || item.customerNo || "-";
+        const partyName =
+          item.party_name ||
+          item.Name ||
+          item.fullname ||
+          item.supplier_name ||
+          "Unknown";
+        return {
+          id: partyId,
+          partyType: item.party_type || "customer",
+          partyId,
+          partyName,
+          customerId: partyId,
+          customerName: partyName,
+          balance: toNumber(item.balance),
+        };
+      })
       .sort((a, b) =>
-        String(a.customerName).localeCompare(String(b.customerName))
+        String(a.partyName).localeCompare(String(b.partyName)),
       );
   }, [reportData]);
   const totalBalance = useMemo(
@@ -156,7 +168,7 @@ const DebtorsReport = () => {
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r += 2;
 
-      const headers = ["ID", "Customer ID", "CUSTOMER NAME", "Balance"];
+      const headers = ["ID", "PARTY ID", "PARTY NAME", "TYPE", "Balance"];
       headers.forEach((h, i) => {
         const c = ws.getCell(r, i + 1);
         c.value = h;
@@ -167,15 +179,17 @@ const DebtorsReport = () => {
 
       rows.forEach((row, idx) => {
         ws.getCell(r, 1).value = idx + 1;
-        ws.getCell(r, 2).value = row.customerId;
-        ws.getCell(r, 3).value = row.customerName;
-        ws.getCell(r, 4).value = formatNairaDrCr(row.balance);
+        ws.getCell(r, 2).value = row.partyId;
+        ws.getCell(r, 3).value = row.partyName;
+        ws.getCell(r, 4).value =
+          row.partyType === "supplier" ? "Supplier" : "Customer";
+        ws.getCell(r, 5).value = formatNairaDrCr(row.balance);
         r++;
       });
       ws.getCell(r, 1).value = "Total";
       ws.getCell(r, 1).font = { bold: true };
-      ws.getCell(r, 4).value = formatNairaDrCr(totalBalance);
-      ws.getCell(r, 4).font = { bold: true };
+      ws.getCell(r, 5).value = formatNairaDrCr(totalBalance);
+      ws.getCell(r, 5).font = { bold: true };
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
@@ -242,7 +256,8 @@ const DebtorsReport = () => {
               onChange={(e) => setAsAtDate(e.target.value)}
             />
             <p className="text-[11px] text-gray-600 mt-1.5 leading-snug">
-              Customers with net receivable (they owe you). Credit balances / overpayments are not listed here.
+              Customers and suppliers with a net debit (DR) ledger balance.
+              Credit balances appear on the Payables report.
             </p>
           </div>
           <div className="md:col-span-1 flex flex-wrap justify-end gap-2">
@@ -309,10 +324,13 @@ const DebtorsReport = () => {
                   id
                 </th>
                 <th className="text-left text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
-                  customer id
+                  party id
                 </th>
                 <th className="text-left text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
-                  customer name
+                  party name
+                </th>
+                <th className="text-left text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
+                  type
                 </th>
                 <th className="text-right text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
                   Balance (₦)
@@ -322,31 +340,45 @@ const DebtorsReport = () => {
             <tbody>
               {rows.map((row, idx) => (
                 <tr
-                  key={row.id}
+                  key={`${row.partyType}-${row.partyId}`}
                   className="border-b hover:bg-slate-50 cursor-pointer"
                   onClick={() => {
-                    if (!row.customerId || row.customerId === "-") return;
+                    if (!row.partyId || row.partyId === "-") return;
+                    if (row.partyType === "supplier") {
+                      const params = new URLSearchParams({
+                        supplierId: String(row.partyId),
+                        supplierName: String(row.partyName || ""),
+                      });
+                      if (asAtDate) params.set("asAt", asAtDate);
+                      navigate(
+                        `/app/reports/accounting-reports/payable-ledger-individual?${params.toString()}`,
+                      );
+                      return;
+                    }
                     const params = new URLSearchParams({
-                      customerNo: String(row.customerId),
-                      customerName: String(row.customerName || ""),
+                      customerNo: String(row.partyId),
+                      customerName: String(row.partyName || ""),
                     });
                     if (asAtDate) params.set("asAt", asAtDate);
                     navigate(
                       `/app/reports/accounting-reports/receivable-ledger-aging?${params.toString()}`,
                     );
                   }}
-                  title="Open individual receivable ledger"
+                  title="Open individual ledger"
                 >
                   <td className="px-3 py-2 text-sm">{idx + 1}</td>
                   <td className="px-3 py-2 text-sm">
                     <span className="text-blue-600 hover:text-blue-800 hover:underline">
-                      {row.customerId}
+                      {row.partyId}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-sm">
                     <span className="text-blue-600 hover:text-blue-800 hover:underline">
-                      {row.customerName}
+                      {row.partyName}
                     </span>
+                  </td>
+                  <td className="px-3 py-2 text-sm capitalize text-gray-600">
+                    {row.partyType}
                   </td>
                   <td className="px-3 py-2 text-sm text-right font-semibold">
                     {renderNairaDrCr(row.balance)}
@@ -355,7 +387,7 @@ const DebtorsReport = () => {
               ))}
               {!!rows.length && (
                 <tr className="bg-gray-100 font-semibold border-t border-b border-gray-400">
-                  <td className="px-3 py-2 text-sm" colSpan={3}>
+                  <td className="px-3 py-2 text-sm" colSpan={4}>
                     Total
                   </td>
                   <td className="px-3 py-2 text-sm text-right">
@@ -365,7 +397,7 @@ const DebtorsReport = () => {
               )}
               {!rows.length && (
                 <tr>
-                  <td colSpan={4} className="px-3 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={5} className="px-3 py-8 text-center text-sm text-gray-500">
                     No debtor rows found for the selected filters.
                   </td>
                 </tr>

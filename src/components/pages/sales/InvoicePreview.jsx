@@ -81,6 +81,10 @@ function InvoicePreview() {
   const branchNameParam = query.get("branch_name");
   const printAll = query.get("print_all") === "1" || query.get("print_all") === "true";
   const autoPrint = query.get("auto_print") === "1" || query.get("auto_print") === "true";
+  const isCollectionReceipt =
+    query.get("collect") === "1" ||
+    query.get("collect") === "true" ||
+    query.get("collection") === "1";
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const facilityId = activeBusiness?.id;
   const [invoiceData, setInvoiceData] = useState(null);
@@ -149,16 +153,27 @@ function InvoicePreview() {
     }
   }, [saleCode, isLoading]);
 
-  const resolvedInvoiceData = useMemo(
-    () =>
-      buildBranchInvoiceView(
-        invoiceData,
-        branchIdFilter,
-        packCode,
-        branchNameParam,
-      ),
-    [invoiceData, branchIdFilter, packCode, branchNameParam],
-  );
+  const resolvedInvoiceData = useMemo(() => {
+    const base = buildBranchInvoiceView(
+      invoiceData,
+      branchIdFilter,
+      packCode,
+      branchNameParam,
+    );
+    if (!base) return null;
+    if (!isCollectionReceipt) return base;
+    return {
+      ...base,
+      collection_receipt: true,
+      collected_at: base.collected_at || new Date().toISOString(),
+    };
+  }, [
+    invoiceData,
+    branchIdFilter,
+    packCode,
+    branchNameParam,
+    isCollectionReceipt,
+  ]);
 
   const printAllCopies = useMemo(() => {
     if (!printAll || !invoiceData || !packs.length) return [];
@@ -174,11 +189,13 @@ function InvoicePreview() {
   }, [printAll, invoiceData, packs]);
 
   // Respect business system setting: PDF/A4 or Terminal/thermal.
+  // Collection receipts always use thermal layout (dual signatures + barcode).
   const receiptType =
     activeBusiness?.default_receipt_type ||
     invoiceData?.business?.default_receipt_type ||
     "pdf";
-  const isTerminalReceipt = receiptType === "terminal";
+  const isTerminalReceipt =
+    receiptType === "terminal" || isCollectionReceipt;
 
   useEffect(() => {
     if (!autoPrint || didAutoPrint || isLoading) return;
@@ -456,6 +473,7 @@ function InvoicePreview() {
                       copyLabel={branchLabel}
                       showCustomerCopyActions={false}
                       enableInlineCustomerCopyPreview={false}
+                      warehouseDualSignature
                       onCancel={handleCancel}
                     />
                   </div>
@@ -476,16 +494,34 @@ function InvoicePreview() {
     <div className="min-h-screen bg-gray-50 py-6">
       {packCode || resolvedInvoiceData.branch_pack_id != null ? (
         <div className="max-w-4xl mx-auto px-4 mb-4 no-print">
-          <div className="rounded-md border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
-            <strong>Warehouse invoice copy</strong>
+          <div
+            className={`rounded-md border px-4 py-3 text-sm ${
+              isCollectionReceipt
+                ? "border-orange-200 bg-orange-50 text-orange-900"
+                : "border-violet-200 bg-violet-50 text-violet-900"
+            }`}
+          >
+            <strong>
+              {isCollectionReceipt
+                ? "Warehouse collection receipt"
+                : "Warehouse invoice copy"}
+            </strong>
             {resolvedInvoiceData.branch_name
               ? ` · ${resolvedInvoiceData.branch_name}`
               : ""}
             {packCode ? ` · ${packCode}` : ""}
-            <span className="block text-xs text-violet-700 mt-0.5">
-              {isTerminalReceipt
-                ? "Thermal (80mm) from system settings — one customer copy for this branch."
-                : "A4 / PDF from system settings — full invoice for this warehouse branch."}
+            <span
+              className={`block text-xs mt-0.5 ${
+                isCollectionReceipt ? "text-orange-700" : "text-violet-700"
+              }`}
+            >
+              {isCollectionReceipt
+                ? isTerminalReceipt
+                  ? "Thermal (80mm) collection slip — warehouse release + customer receive signatures."
+                  : "A4 collection slip — warehouse release + customer receive signatures."
+                : isTerminalReceipt
+                  ? "Thermal (80mm) from system settings — one customer copy for this branch."
+                  : "A4 / PDF from system settings — full invoice for this warehouse branch."}
             </span>
           </div>
         </div>
@@ -495,16 +531,22 @@ function InvoicePreview() {
           <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">
-                Thermal receipt preview
+                {isCollectionReceipt
+                  ? "Collection receipt preview"
+                  : "Thermal receipt preview"}
               </h2>
               <p className="text-sm text-gray-500">
-                Terminal / thermal (80mm) — review before printing
+                {isCollectionReceipt
+                  ? "Terminal / thermal (80mm) — warehouse collection copy"
+                  : "Terminal / thermal (80mm) — review before printing"}
               </p>
             </div>
             <div className="flex items-center gap-2">
               <Button color="primary" onClick={handlePrintThermal}>
                 <Printer className="inline w-4 h-4 mr-2" />
-                Print receipt
+                {isCollectionReceipt
+                  ? "Print collection receipt"
+                  : "Print receipt"}
               </Button>
               <Button color="secondary" outline onClick={handleCancel}>
                 Close
@@ -512,10 +554,24 @@ function InvoicePreview() {
             </div>
           </div>
 
-          <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-            <strong>Customer copy</strong>
-            <span className="block text-xs text-emerald-800 mt-0.5">
-              One thermal receipt (VAT included in Amt).
+          <div
+            className={`mb-3 rounded-md border px-4 py-3 text-sm ${
+              isCollectionReceipt
+                ? "border-orange-200 bg-orange-50 text-orange-900"
+                : "border-emerald-200 bg-emerald-50 text-emerald-900"
+            }`}
+          >
+            <strong>
+              {isCollectionReceipt ? "Collection copy" : "Customer copy"}
+            </strong>
+            <span
+              className={`block text-xs mt-0.5 ${
+                isCollectionReceipt ? "text-orange-800" : "text-emerald-800"
+              }`}
+            >
+              {isCollectionReceipt
+                ? "Goods collection receipt with dual signatures and pack barcode."
+                : "One thermal receipt (VAT included in Amt)."}
             </span>
           </div>
 
@@ -523,7 +579,9 @@ function InvoicePreview() {
             <div className="rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
               <div className="border-b border-gray-100 bg-gray-50 px-3 py-1 text-center">
                 <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                  80mm · Customer copy
+                  {isCollectionReceipt
+                    ? "80mm · Collection receipt"
+                    : "80mm · Customer copy"}
                 </span>
               </div>
               <div className="p-1.5 bg-gray-100">
@@ -565,6 +623,7 @@ function InvoicePreview() {
             }
             showCustomerCopyActions={!packCode && !branchIdFilter}
             enableInlineCustomerCopyPreview={false}
+            warehouseDualSignature={Boolean(packCode || branchIdFilter)}
             onCancel={handleCancel}
             onCustomerCopySaved={fetchInvoice}
           />

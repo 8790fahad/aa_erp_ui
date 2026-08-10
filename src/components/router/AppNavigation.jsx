@@ -100,6 +100,16 @@ import CustomerReport from "../pages/customer/CustomerReport";
 import InvoiceList from "../pages/invoice/InvoiceList";
 import SalesLineReport from "../pages/invoice/SalesLineReport";
 import RebateLedger from "../pages/sales/RebateLedger";
+import CrmLayout from "../pages/crm/CrmLayout";
+import CrmDashboard from "../pages/crm/CrmDashboard";
+import CrmCustomers from "../pages/crm/CrmCustomers";
+import CrmCustomer360 from "../pages/crm/CrmCustomer360";
+import CrmActivities from "../pages/crm/CrmActivities";
+import CrmFollowups from "../pages/crm/CrmFollowups";
+import CrmSegments from "../pages/crm/CrmSegments";
+import CrmBulkSms from "../pages/crm/CrmBulkSms";
+import CrmTemplates from "../pages/crm/CrmTemplates";
+import CrmSettings from "../pages/crm/CrmSettings";
 import CreateInvoice from "../pages/invoice/CreateInvoice";
 import StatementOfFinancial from "../pages/report/StatementOfFinancial";
 import UnitOfMeasurement from "../pages/inventory/UnitOfMeasurement";
@@ -169,8 +179,6 @@ import StatementOfFinancialPositionReport from "../pages/report/components/State
 import InventoryValuationReport from "../pages/report/components/InventoryValuationReport";
 import InventriaIncomeStatement from "../pages/report/components/InventriaIncomeStatement";
 import InventriaIncomeStatementNotes from "../pages/report/components/InventriaIncomeStatementNotes";
-import InventriaCashFlow from "../pages/report/components/InventriaCashFlow";
-import InventriaEquityChanges from "../pages/report/components/InventriaEquityChanges";
 import PayableLedger from "../pages/report/components/PayableLedger";
 import CreditorsReport from "../pages/report/components/CreditorsReport";
 import PayableLedgerIndividualReport from "../pages/report/components/PayableLedgerIndividualReport";
@@ -195,6 +203,7 @@ import ProductionReport from "../pages/production/reports/ProductionReport";
 import FGInventoryReport from "../pages/production/reports/FGInventoryReport";
 import RMInventoryReport from "../pages/production/reports/RMInventoryReport";
 import SalesPerProductReport from "../pages/production/reports/SalesPerProductReport";
+import SalesBySupplierReport from "../pages/production/reports/SalesBySupplierReport";
 
 // Asset Register Components
 import AssetRegister from "../pages/assets/AssetRegister";
@@ -230,6 +239,22 @@ const routeModules = {
   Dashboard: {
     path: "",
     element: <CustomDashboard />,
+  },
+
+  CRM: {
+    path: "crm",
+    element: <CrmLayout />,
+    children: [
+      { path: "", element: <CrmDashboard /> },
+      { path: "customers", element: <CrmCustomers /> },
+      { path: "customers/:customerNo", element: <CrmCustomer360 /> },
+      { path: "activities", element: <CrmActivities /> },
+      { path: "followups", element: <CrmFollowups /> },
+      { path: "segments", element: <CrmSegments /> },
+      { path: "sms", element: <CrmBulkSms /> },
+      { path: "templates", element: <CrmTemplates /> },
+      { path: "settings", element: <CrmSettings /> },
+    ],
   },
 
   Inventory: {
@@ -1051,14 +1076,6 @@ const routeModules = {
             element: <InventriaIncomeStatementNotes />,
           },
           {
-            path: "inventria-cash-flow",
-            element: <InventriaCashFlow />,
-          },
-          {
-            path: "inventria-statement-of-changes-in-equity",
-            element: <InventriaEquityChanges />,
-          },
-          {
             path: "payable-ledger",
             element: <PayableLedger />,
           },
@@ -1093,6 +1110,14 @@ const routeModules = {
           {
             path: "sales-invoices-report",
             element: <SalesInvoicesReport />,
+          },
+          {
+            path: "sales-by-product",
+            element: <SalesPerProductReport />,
+          },
+          {
+            path: "sales-by-supplier",
+            element: <SalesBySupplierReport />,
           },
           {
             path: "bank-balances",
@@ -1431,6 +1456,8 @@ export default function AppNavigation() {
     "Customers",
     "Suppliers",
     "Expenses",
+    // CRM lives under Sales in the sidebar but keeps its own /app/crm routes
+    "CRM",
   ]);
 
   // Map route keys to actual route modules, avoiding duplicates

@@ -11,6 +11,7 @@ import {
   GitBranch,
   ChevronLeft,
   ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatNumber1 } from "@/components/router/utilities";
@@ -27,6 +28,8 @@ import {
 
 const STAGE_LEGEND = [...PROCESS_STAGES, CREDIT_PROCESS_STAGE];
 
+const todayDate = () => moment().format("YYYY-MM-DD");
+
 export default function InvoiceList() {
   const { activeBusiness } = useSelector((state) => state.auth);
   const navigate = useNavigate();
@@ -37,6 +40,9 @@ export default function InvoiceList() {
   const searchFromUrl = searchParams.get("search") || "";
   const branchFromUrl = searchParams.get("branchId") || "";
   const statusFromUrl = searchParams.get("status") || "";
+  // Default to today's date when URL has no date params.
+  const fromDateFromUrl = searchParams.get("fromDate") || todayDate();
+  const toDateFromUrl = searchParams.get("toDate") || todayDate();
   const pageFromUrl = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const pageSizeFromUrl = Math.max(
     1,
@@ -44,6 +50,30 @@ export default function InvoiceList() {
   );
   const [searchInput, setSearchInput] = useState(searchFromUrl);
   const searchDebounceRef = useRef(null);
+  const didInitDatesRef = useRef(false);
+
+  // Seed URL with today's date once so filters and fetch stay in sync.
+  useEffect(() => {
+    if (didInitDatesRef.current) return;
+    didInitDatesRef.current = true;
+    const today = todayDate();
+    const next = new URLSearchParams(searchParams);
+    let changed = false;
+    // Drop legacy "all dates" mode — always use a date range.
+    if (next.get("allDates")) {
+      next.delete("allDates");
+      changed = true;
+    }
+    if (!next.get("fromDate")) {
+      next.set("fromDate", today);
+      changed = true;
+    }
+    if (!next.get("toDate")) {
+      next.set("toDate", today);
+      changed = true;
+    }
+    if (changed) setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     setSearchInput(searchFromUrl);
@@ -52,15 +82,21 @@ export default function InvoiceList() {
   const fetchInvoices = useCallback(() => {
     if (!activeBusiness?.id) return;
 
+    const fromDate = fromDateFromUrl || todayDate();
+    const toDate = toDateFromUrl || todayDate();
+
     setLoading(true);
     const params = new URLSearchParams({
       facilityId: activeBusiness.id,
       type: "sales",
       page: String(pageFromUrl),
       pageSize: String(pageSizeFromUrl),
+      fromDate,
+      toDate,
     });
     if (searchFromUrl.trim()) params.set("search", searchFromUrl.trim());
     if (branchFromUrl) params.set("branchId", branchFromUrl);
+
     _fetchApi(
       `/api/v1/transactions/get-all-transactions-data?${params.toString()}`,
       (response) => {
@@ -83,6 +119,8 @@ export default function InvoiceList() {
     activeBusiness?.id,
     searchFromUrl,
     branchFromUrl,
+    fromDateFromUrl,
+    toDateFromUrl,
     pageFromUrl,
     pageSizeFromUrl,
   ]);
@@ -181,6 +219,30 @@ export default function InvoiceList() {
     setSearchParams(next, { replace: true });
   };
 
+  const handleDateFilterChange = (key, value) => {
+    const next = new URLSearchParams(searchParams);
+    const today = todayDate();
+    const nextFrom =
+      key === "fromDate" ? value || today : searchParams.get("fromDate") || today;
+    const nextTo =
+      key === "toDate" ? value || today : searchParams.get("toDate") || today;
+    next.set("fromDate", nextFrom);
+    next.set("toDate", nextTo);
+    next.delete("allDates");
+    next.set("page", "1");
+    setSearchParams(next, { replace: true });
+  };
+
+  const resetToToday = () => {
+    const next = new URLSearchParams(searchParams);
+    const today = todayDate();
+    next.set("fromDate", today);
+    next.set("toDate", today);
+    next.delete("allDates");
+    next.set("page", "1");
+    setSearchParams(next, { replace: true });
+  };
+
   const handleStatusFilter = (statusId) => {
     const next = new URLSearchParams(searchParams);
     if (statusId && statusId === statusFromUrl) {
@@ -257,8 +319,8 @@ export default function InvoiceList() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-2 sm:flex-row">
-            <div className="relative flex-1">
+          <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="relative min-w-[12rem] flex-1">
               <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -268,6 +330,55 @@ export default function InvoiceList() {
                 className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20"
                 disabled={loading}
               />
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <input
+                type="date"
+                value={fromDateFromUrl}
+                onChange={(e) =>
+                  handleDateFilterChange("fromDate", e.target.value)
+                }
+                title="From date"
+                aria-label="From date"
+                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20"
+                disabled={loading}
+              />
+              <span className="text-xs text-slate-400">to</span>
+              <input
+                type="date"
+                value={toDateFromUrl}
+                min={fromDateFromUrl || undefined}
+                onChange={(e) =>
+                  handleDateFilterChange("toDate", e.target.value)
+                }
+                title="To date"
+                aria-label="To date"
+                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20"
+                disabled={loading}
+              />
+              {(fromDateFromUrl !== todayDate() ||
+                toDateFromUrl !== todayDate()) && (
+                <button
+                  type="button"
+                  onClick={resetToToday}
+                  className="text-[11px] text-[#4267B2] hover:underline"
+                >
+                  Today
+                </button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-2"
+                onClick={fetchInvoices}
+                disabled={loading}
+                title="Refresh invoices"
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+                />
+              </Button>
             </div>
             {branches.length > 0 && (
               <div className="sm:w-56">
@@ -306,11 +417,11 @@ export default function InvoiceList() {
                 No invoices found
               </h3>
               <p className="mb-3 text-sm text-slate-500">
-                {searchFromUrl || statusFromUrl
-                  ? "Try adjusting your search or status filter"
+                {searchFromUrl || statusFromUrl || fromDateFromUrl || toDateFromUrl
+                  ? "Try adjusting your search, dates, or status filter"
                   : "Create your first invoice to get started"}
               </p>
-              {!searchFromUrl && !statusFromUrl && (
+              {!searchFromUrl && !statusFromUrl && !fromDateFromUrl && !toDateFromUrl && (
                 <Button
                   onClick={() => navigate("/app/sales/sale?view=lines")}
                   className="mx-auto flex items-center gap-2 border-0 bg-[var(--aa-accent)] text-white hover:bg-[var(--aa-accent)]/90"
@@ -400,6 +511,31 @@ export default function InvoiceList() {
                                   paymentType={item.workflow_payment_type}
                                   compact
                                 />
+                                {statusMatchesProcessStage(
+                                  item.workflow_status,
+                                  "warehouse",
+                                  item.workflow_payment_type,
+                                ) &&
+                                (item.warehouse_name ||
+                                  item.warehouse_names?.length ||
+                                  item.branch_name) ? (
+                                  <span
+                                    className="max-w-[10rem] truncate text-[10px] font-medium text-orange-800"
+                                    title={
+                                      item.warehouse_name ||
+                                      (Array.isArray(item.warehouse_names)
+                                        ? item.warehouse_names.join(", ")
+                                        : "") ||
+                                      item.branch_name
+                                    }
+                                  >
+                                    {item.warehouse_name ||
+                                      (Array.isArray(item.warehouse_names)
+                                        ? item.warehouse_names.join(", ")
+                                        : "") ||
+                                      item.branch_name}
+                                  </span>
+                                ) : null}
                                 {item.hold_overnight ? (
                                   <span className="text-[10px] font-medium text-red-600">
                                     Held

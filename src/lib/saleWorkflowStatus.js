@@ -51,7 +51,7 @@ export const PROCESS_STAGES = [
     badge: "bg-orange-100 text-orange-800 border-orange-200",
     dot: "bg-orange-500",
     row: "bg-orange-50",
-    statuses: ["warehouse_picking", "dual_signature", "goods_released"],
+    statuses: ["warehouse_picking"],
   },
   {
     id: "done",
@@ -61,7 +61,8 @@ export const PROCESS_STAGES = [
     badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
     dot: "bg-emerald-500",
     row: "bg-emerald-50",
-    statuses: ["completed"],
+    // dual_signature / goods_released complete warehouse collection
+    statuses: ["dual_signature", "goods_released", "completed"],
   },
   {
     id: "cancelled",
@@ -186,20 +187,20 @@ export const SALE_WORKFLOW_STATUS_META = {
     row: "bg-orange-50",
   },
   dual_signature: {
-    label: "Warehouse — dual signature",
-    short: "Warehouse",
-    color: "orange",
-    badge: "bg-orange-100 text-orange-800 border-orange-200",
-    dot: "bg-orange-500",
-    row: "bg-orange-50",
+    label: "Done",
+    short: "Done",
+    color: "emerald",
+    badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    dot: "bg-emerald-500",
+    row: "bg-emerald-50",
   },
   goods_released: {
-    label: "Warehouse — goods released",
-    short: "Warehouse",
-    color: "orange",
-    badge: "bg-orange-100 text-orange-800 border-orange-200",
-    dot: "bg-orange-500",
-    row: "bg-orange-50",
+    label: "Done",
+    short: "Done",
+    color: "emerald",
+    badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    dot: "bg-emerald-500",
+    row: "bg-emerald-50",
   },
   completed: {
     label: "Done",
@@ -326,6 +327,20 @@ export function getWorkflowStatusMeta(status, paymentType) {
 
 export function getFulfillmentStatusMeta(status) {
   return FULFILLMENT_STATUS_META[status] || FULFILLMENT_STATUS_META.pending;
+}
+
+/** Parse sale workflow history whether API returns an array or JSON string. */
+export function normalizeWorkflowHistory(history) {
+  if (Array.isArray(history)) return history;
+  if (typeof history === "string" && history.trim()) {
+    try {
+      const parsed = JSON.parse(history);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }
 
 export function statusMatchesProcessStage(

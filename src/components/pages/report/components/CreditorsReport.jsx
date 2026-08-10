@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { _postApi } from "@/redux/actions/api";
@@ -12,7 +18,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, FileDown, FileSpreadsheet, Loader2, X } from "lucide-react";
+import {
+  ChevronDown,
+  FileDown,
+  FileSpreadsheet,
+  Loader2,
+  X,
+} from "lucide-react";
 import ExcelJS from "exceljs";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
@@ -87,14 +99,32 @@ export default function CreditorsReport() {
   const rows = useMemo(
     () =>
       (reportData || [])
-        .map((item, index) => ({
-          id: index + 1,
-          supplierId: item.supplier_id || item.supplier_number || "-",
-          supplierName: item.supplier || item.supplier_name || "Unknown Supplier",
-          balance: toNumber(item.balance ?? item.amount),
-        }))
+        .map((item, index) => {
+          const partyId =
+            item.party_id ||
+            item.supplier_number ||
+            item.supplier_id ||
+            item.customerNo ||
+            "-";
+          const partyName =
+            item.party_name ||
+            item.supplier_name ||
+            item.supplier ||
+            item.Name ||
+            item.fullname ||
+            "Unknown";
+          return {
+            id: index + 1,
+            partyType: item.party_type || "supplier",
+            partyId,
+            partyName,
+            supplierId: partyId,
+            supplierName: partyName,
+            balance: toNumber(item.balance ?? item.amount),
+          };
+        })
         .sort((a, b) =>
-          String(a.supplierName).localeCompare(String(b.supplierName)),
+          String(a.partyName).localeCompare(String(b.partyName)),
         ),
     [reportData],
   );
@@ -112,45 +142,60 @@ export default function CreditorsReport() {
     try {
       const workbook = new ExcelJS.Workbook();
       const ws = workbook.addWorksheet("Creditors Report");
-      ws.columns = [{ width: 10 }, { width: 20 }, { width: 36 }, { width: 20 }];
+      ws.columns = [
+        { width: 10 },
+        { width: 20 },
+        { width: 36 },
+        { width: 14 },
+        { width: 20 },
+      ];
       let r = 1;
-      ws.mergeCells(r, 1, r, 4);
+      ws.mergeCells(r, 1, r, 5);
       ws.getCell(r, 1).value =
-        activeBusiness?.business_name || activeBusiness?.name || "Business Name";
+        activeBusiness?.business_name ||
+        activeBusiness?.name ||
+        "Business Name";
       ws.getCell(r, 1).font = { bold: true, size: 14 };
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
-      ws.mergeCells(r, 1, r, 4);
+      ws.mergeCells(r, 1, r, 5);
       ws.getCell(r, 1).value = "CREDITORS REPORT";
       ws.getCell(r, 1).font = { bold: true, size: 12 };
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
-      ws.mergeCells(r, 1, r, 4);
-      ws.getCell(r, 1).value = `As at: ${moment(asAtDate).format("DD/MM/YYYY")}`;
+      ws.mergeCells(r, 1, r, 5);
+      ws.getCell(r, 1).value =
+        `As at: ${moment(asAtDate).format("DD/MM/YYYY")}`;
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r += 2;
 
-      const headers = ["ID", "SUPPLIER ID", "SUPPLIER NAME", "Balance"];
+      const headers = ["ID", "PARTY ID", "PARTY NAME", "TYPE", "Balance"];
       headers.forEach((h, i) => {
         const c = ws.getCell(r, i + 1);
         c.value = h;
         c.font = { bold: true, color: { argb: "FFFFFFFF" } };
-        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4B5563" } };
+        c.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF4B5563" },
+        };
       });
       r++;
 
       rows.forEach((row) => {
         ws.getCell(r, 1).value = row.id;
-        ws.getCell(r, 2).value = row.supplierId;
-        ws.getCell(r, 3).value = row.supplierName;
-        ws.getCell(r, 4).value = formatNaira(row.balance);
+        ws.getCell(r, 2).value = row.partyId;
+        ws.getCell(r, 3).value = row.partyName;
+        ws.getCell(r, 4).value =
+          row.partyType === "customer" ? "Customer" : "Supplier";
+        ws.getCell(r, 5).value = formatNaira(row.balance);
         r++;
       });
 
       ws.getCell(r, 1).value = "Total";
       ws.getCell(r, 1).font = { bold: true };
-      ws.getCell(r, 4).value = formatNaira(totalBalance);
-      ws.getCell(r, 4).font = { bold: true };
+      ws.getCell(r, 5).value = formatNaira(totalBalance);
+      ws.getCell(r, 5).font = { bold: true };
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
@@ -209,19 +254,21 @@ export default function CreditorsReport() {
       <div className="bg-gray-100 rounded-lg px-2 py-2">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
           <div className="md:col-span-1">
-            <label className="text-xs text-gray-600 block mb-1">Date As At</label>
+            <label className="text-xs text-gray-600 block mb-1">
+              Date As At
+            </label>
             <input
               type="date"
               className="w-full border rounded px-2 py-2 text-sm"
               value={asAtDate}
               onChange={(e) => setAsAtDate(e.target.value)}
             />
-                <p className="text-[11px] text-gray-600 mt-1.5 leading-snug">
-                  Lists suppliers you still owe (net credit in the ledger). Prepayments
-                  or debit balances with a supplier are not included here.
-                </p>
-              </div>
-              <div className="md:col-span-1 flex flex-wrap justify-end gap-2">
+            <p className="text-[11px] text-gray-600 mt-1.5 leading-snug">
+              Customers and suppliers with a net credit (CR) ledger balance.
+              Debit balances appear on the Receivable report.
+            </p>
+          </div>
+          <div className="md:col-span-1 flex flex-wrap justify-end gap-2">
             <Button
               type="button"
               variant="destructive"
@@ -271,7 +318,10 @@ export default function CreditorsReport() {
         </div>
       </div>
 
-      <div className="bg-white border rounded-md overflow-hidden" ref={reportExportRef}>
+      <div
+        className="bg-white border rounded-md overflow-hidden"
+        ref={reportExportRef}
+      >
         <BusinessDocumentHeader
           business={activeBusiness}
           title="PAYABLES REPORT"
@@ -289,10 +339,13 @@ export default function CreditorsReport() {
                   ID
                 </th>
                 <th className="text-left text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
-                  Supplier ID
+                  Party ID
                 </th>
                 <th className="text-left text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
-                  Supplier Name
+                  Party Name
+                </th>
+                <th className="text-left text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
+                  Type
                 </th>
                 <th className="text-right text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
                   Balance
@@ -301,10 +354,43 @@ export default function CreditorsReport() {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={`${row.id}-${row.supplierName}`} className="border-b">
+                <tr
+                  key={`${row.partyType}-${row.partyId}-${row.id}`}
+                  className="border-b hover:bg-slate-50 cursor-pointer"
+                  onClick={() => {
+                    if (!row.partyId || row.partyId === "-") return;
+                    if (row.partyType === "customer") {
+                      const params = new URLSearchParams({
+                        customerNo: String(row.partyId),
+                        customerName: String(row.partyName || ""),
+                      });
+                      if (asAtDate) params.set("asAt", asAtDate);
+                      navigate(
+                        `/app/reports/accounting-reports/receivable-ledger-aging?${params.toString()}`,
+                      );
+                      return;
+                    }
+                    const params = new URLSearchParams({
+                      supplierId: String(row.partyId),
+                      supplierName: String(row.partyName || ""),
+                    });
+                    if (asAtDate) params.set("asAt", asAtDate);
+                    navigate(
+                      `/app/reports/accounting-reports/payable-ledger-individual?${params.toString()}`,
+                    );
+                  }}
+                  title="Open ledger"
+                >
                   <td className="px-3 py-2 text-sm">{row.id}</td>
-                  <td className="px-3 py-2 text-sm">{row.supplierId}</td>
-                  <td className="px-3 py-2 text-sm">{row.supplierName}</td>
+                  <td className="px-3 py-2 text-sm text-blue-600 hover:underline">
+                    {row.partyId}
+                  </td>
+                  <td className="px-3 py-2 text-sm text-blue-600 hover:underline">
+                    {row.partyName}
+                  </td>
+                  <td className="px-3 py-2 text-sm capitalize text-gray-600">
+                    {row.partyType}
+                  </td>
                   <td
                     className={`px-3 py-2 text-sm text-right font-semibold ${getBalanceColorClass(row.balance)}`}
                   >
@@ -317,7 +403,7 @@ export default function CreditorsReport() {
               ))}
               {!!rows.length && (
                 <tr className="bg-gray-100 font-semibold border-t border-b border-gray-400">
-                  <td className="px-3 py-2 text-sm" colSpan={3}>
+                  <td className="px-3 py-2 text-sm" colSpan={4}>
                     Total
                   </td>
                   <td
@@ -332,7 +418,10 @@ export default function CreditorsReport() {
               )}
               {!rows.length && (
                 <tr>
-                  <td colSpan={4} className="px-3 py-8 text-center text-sm text-gray-500">
+                  <td
+                    colSpan={5}
+                    className="px-3 py-8 text-center text-sm text-gray-500"
+                  >
                     No creditor rows found for the selected filters.
                   </td>
                 </tr>
@@ -344,4 +433,3 @@ export default function CreditorsReport() {
     </div>
   );
 }
-
