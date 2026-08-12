@@ -97,12 +97,13 @@ export default function RecordSupplierPaymentForm() {
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentDate, setPaymentDate] = useState(moment().format("YYYY-MM-DD"));
   const [paymentNumber, setPaymentNumber] = useState("");
-  const [reference, setReference] = useState("");
   const [modeOfPayment, setModeOfPayment] = useState("cash");
   const [chequeNumber, setChequeNumber] = useState("");
   const [selectedBranch, setSelectedBranch] = useState("");
   const [branches, setBranches] = useState([]);
   const [notes, setNotes] = useState("");
+  const [attachments, setAttachments] = useState([]);
+  const fileInputRef = useRef(null);
   const [outstandingInvoices, setOutstandingInvoices] = useState([]);
   const [invoicePayments, setInvoicePayments] = useState({});
   const [loadingInvoices, setLoadingInvoices] = useState(false);
@@ -414,9 +415,14 @@ export default function RecordSupplierPaymentForm() {
       })
       .filter(Boolean);
 
-    const notesParts = [String(reference || "").trim()];
+    const notesParts = [];
     if (paymentNumber) notesParts.push(`Payment #: ${paymentNumber}`);
     if (String(notes || "").trim()) notesParts.push(String(notes).trim());
+    if (attachments.length) {
+      notesParts.push(
+        `Attachments: ${attachments.map((f) => f.name).join(", ")}`,
+      );
+    }
     const baseDesc =
       notesParts.filter(Boolean).join(" · ") ||
       `Vendor payment${paymentNumber ? ` ${paymentNumber}` : ""}`;
@@ -741,16 +747,6 @@ export default function RecordSupplierPaymentForm() {
           </Row>
         )}
 
-        <Row label="Reference#">
-          <input
-            type="text"
-            value={reference}
-            onChange={(e) => setReference(e.target.value)}
-            disabled={saving}
-            className={inputClass}
-          />
-        </Row>
-
         <div className="my-4 border-t border-gray-200" />
 
         <div className="mb-2 flex items-center justify-between">
@@ -962,19 +958,80 @@ export default function RecordSupplierPaymentForm() {
             <label className="mb-1 block text-[13px] text-gray-700">
               Attachments
             </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.png,.jpg,.jpeg,.docx,application/pdf,image/png,image/jpeg,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              className="hidden"
+              onChange={(e) => {
+                const picked = Array.from(e.target.files || []);
+                e.target.value = "";
+                if (!picked.length) return;
+                const maxBytes = 25 * 1024 * 1024;
+                const allowed = new Set([
+                  "application/pdf",
+                  "image/png",
+                  "image/jpeg",
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ]);
+                const next = [...attachments];
+                for (const file of picked) {
+                  if (next.length >= 5) {
+                    toast.error("You can upload a maximum of 5 files");
+                    break;
+                  }
+                  if (!allowed.has(file.type)) {
+                    toast.error(`${file.name}: only PDF, PNG, JPG, or DOCX`);
+                    continue;
+                  }
+                  if (file.size > maxBytes) {
+                    toast.error(`${file.name}: exceeds 25MB limit`);
+                    continue;
+                  }
+                  next.push(file);
+                }
+                setAttachments(next);
+              }}
+            />
             <button
               type="button"
-              disabled
-              title="Coming soon"
-              className="inline-flex items-center gap-2 rounded border border-gray-300 bg-white px-3.5 py-1.5 text-sm text-gray-400"
+              disabled={saving || attachments.length >= 5}
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-2 rounded border border-gray-300 bg-white px-3.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               <Upload className="h-4 w-4" />
               Upload File
-              <ChevronDown className="h-3.5 w-3.5" />
             </button>
             <p className="mt-1 text-xs text-gray-500">
-              You can upload a maximum of 5 files, 5MB each
+              Maximum 5 files, 25MB each (PDF, PNG, JPG, DOCX)
             </p>
+            {attachments.length > 0 ? (
+              <ul className="mt-2 space-y-1">
+                {attachments.map((file, idx) => (
+                  <li
+                    key={`${file.name}-${idx}`}
+                    className="flex items-center justify-between gap-2 rounded border border-gray-100 bg-gray-50 px-2 py-1 text-xs text-gray-700"
+                  >
+                    <span className="truncate">
+                      {file.name} ({(file.size / (1024 * 1024)).toFixed(1)} MB)
+                    </span>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() =>
+                        setAttachments((prev) =>
+                          prev.filter((_, i) => i !== idx),
+                        )
+                      }
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </div>
 

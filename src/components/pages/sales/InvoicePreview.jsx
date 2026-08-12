@@ -14,21 +14,68 @@ function buildBranchInvoiceView(
   branchIdFilter,
   packCode,
   branchName = null,
+  packLines = null,
 ) {
   if (!invoiceData) return null;
 
   let items = Array.isArray(invoiceData.items) ? [...invoiceData.items] : [];
   const filterBid = parseInt(branchIdFilter, 10);
-  const hasBranchMeta = items.some(
-    (it) => it.branch_id != null || it.branchId != null,
-  );
-  const isBranchPack = Number.isFinite(filterBid) && hasBranchMeta;
+  const lines = Array.isArray(packLines) ? packLines : null;
+  const hasPackLines = Boolean(lines?.length);
 
-  if (Number.isFinite(filterBid) && isBranchPack) {
-    items = items.filter((it) => {
-      const bid = parseInt(it.branch_id ?? it.branchId, 10);
-      return Number.isFinite(bid) && bid === filterBid;
+  if (hasPackLines) {
+    const remaining = [...items];
+    items = lines.map((line) => {
+      const pid = String(line.product_id || "").trim();
+      const name = String(line.item_name || "").trim().toLowerCase();
+      const qty = Number(line.qty || 0);
+      const idx = remaining.findIndex((it) => {
+        const sku = String(it.link_id || it.sku || it.item_code || "").trim();
+        if (pid && sku && sku === pid) return true;
+        const desc = String(it.description || it.item_name || "")
+          .trim()
+          .toLowerCase();
+        return Boolean(name && desc && desc === name);
+      });
+      if (idx >= 0) {
+        const [match] = remaining.splice(idx, 1);
+        const baseQty = Number(match.quantity ?? match.qty ?? 1) || 1;
+        const unitAmount =
+          match.amount != null
+            ? Number(match.amount) / baseQty
+            : Number(match.price || match.unit_price || 0);
+        return {
+          ...match,
+          quantity: qty,
+          qty,
+          amount: unitAmount * qty,
+          branch_id: Number.isFinite(filterBid) ? filterBid : match.branch_id,
+          branchId: Number.isFinite(filterBid) ? filterBid : match.branchId,
+        };
+      }
+      return {
+        description: line.item_name || line.product_id || "Item",
+        link_id: line.product_id,
+        quantity: qty,
+        qty,
+        amount: 0,
+        price: 0,
+        branch_id: Number.isFinite(filterBid) ? filterBid : 0,
+        branchId: Number.isFinite(filterBid) ? filterBid : 0,
+      };
     });
+  } else {
+    const hasBranchMeta = items.some(
+      (it) => it.branch_id != null || it.branchId != null,
+    );
+    const isBranchPack = Number.isFinite(filterBid) && hasBranchMeta;
+
+    if (Number.isFinite(filterBid) && isBranchPack) {
+      items = items.filter((it) => {
+        const bid = parseInt(it.branch_id ?? it.branchId, 10);
+        return Number.isFinite(bid) && bid === filterBid;
+      });
+    }
   }
 
   const taxes = Array.isArray(invoiceData.taxes) ? invoiceData.taxes : [];
@@ -40,7 +87,9 @@ function buildBranchInvoiceView(
     0,
   );
   const usePackTotals =
-    Number.isFinite(filterBid) && isBranchPack && items.length > 0;
+    (hasPackLines || (Number.isFinite(filterBid) && items.length > 0)) &&
+    (hasPackLines ||
+      items.some((it) => it.branch_id != null || it.branchId != null));
 
   return {
     ...invoiceData,
@@ -89,6 +138,7 @@ function InvoicePreview() {
   const facilityId = activeBusiness?.id;
   const [invoiceData, setInvoiceData] = useState(null);
   const [packs, setPacks] = useState([]);
+  const [activePack, setActivePack] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [didAutoPrint, setDidAutoPrint] = useState(false);
@@ -100,12 +150,14 @@ function InvoicePreview() {
 
     setIsLoading(true);
     setHasError(false);
+    setActivePack(null);
     _fetchApi(
       `/api/v1/transactions/get-sale?sale_code=${saleCode}&facility_id=${facilityId}`,
       (response) => {
         if (response.success) {
           setInvoiceData(response.data);
-          if (printAll) {
+          const loadPacks = printAll || Boolean(packCode);
+          if (loadPacks) {
             const params = new URLSearchParams({
               facilityId,
               saleCode,
@@ -115,7 +167,18 @@ function InvoicePreview() {
               (packRes) => {
                 setIsLoading(false);
                 if (packRes.success) {
-                  setPacks(packRes.results || []);
+                  const list = packRes.results || [];
+                  setPacks(list);
+                  if (packCode) {
+                    const match =
+                      list.find((p) => p.pack_code === packCode) ||
+                      list.find(
+                        (p) =>
+                          String(p.branch_id) === String(branchIdFilter),
+                      ) ||
+                      null;
+                    setActivePack(match);
+                  }
                 } else {
                   setPacks([]);
                 }
@@ -141,7 +204,7 @@ function InvoicePreview() {
         toast.error("Failed to fetch invoice data");
       },
     );
-  }, [saleCode, facilityId, printAll]);
+  }, [saleCode, facilityId, printAll, packCode, branchIdFilter]);
 
   useEffect(() => {
     fetchInvoice();
@@ -158,7 +221,8 @@ function InvoicePreview() {
       invoiceData,
       branchIdFilter,
       packCode,
-      branchNameParam,
+      branchNameParam || activePack?.branch_name,
+      activePack?.lines || null,
     );
     if (!base) return null;
     if (!isCollectionReceipt) return base;
@@ -172,6 +236,7 @@ function InvoicePreview() {
     branchIdFilter,
     packCode,
     branchNameParam,
+    activePack,
     isCollectionReceipt,
   ]);
 
@@ -184,6 +249,7 @@ function InvoicePreview() {
         pack.branch_id,
         pack.pack_code,
         pack.branch_name || null,
+        pack.lines || null,
       ),
     }));
   }, [printAll, invoiceData, packs]);

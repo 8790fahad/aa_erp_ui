@@ -2,8 +2,18 @@ import { useState, useEffect } from "react";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { toast } from "sonner";
 
+/** Cash payment mode may only use the Cash on/in Hand ledger head. */
+export function isCashInHandHead(head) {
+  if (!head) return false;
+  const code = String(head.head || head.code || "").trim();
+  const desc = String(head.description || "").toLowerCase();
+  if (code === "112199") return true;
+  return /cash\s*(on|in)\s*hand/.test(desc);
+}
+
 /**
  * Loads cash account heads or bank accounts when mode of payment changes.
+ * When mode is cash, only "Cash on Hand" / "Cash in Hand" is offered for Pay Through / Deposit To.
  */
 export function useAdvancePaymentAccounts(open, facilityId, modeOfPayment) {
   const [accountHead, setAccountHead] = useState({});
@@ -25,7 +35,7 @@ export function useAdvancePaymentAccounts(open, facilityId, modeOfPayment) {
         { facilityId },
         (resp) => {
           if (resp.success) {
-            setHeadList(resp?.results || []);
+            setHeadList((resp?.results || []).filter(isCashInHandHead));
           } else {
             toast.error("Failed to load cash accounts.");
           }
