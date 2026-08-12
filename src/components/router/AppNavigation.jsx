@@ -135,7 +135,6 @@ import DiscountApproval from "../pages/production/recycling/DiscountApproval";
 import CollectionApproval from "../pages/production/recycling/CollectionApproval";
 import CollectionInvoice from "../pages/production/recycling/CollectionInvoice";
 import CollectionForm from "../pages/production/recycling/collectionForm";
-import CustomerReceipt from "../pages/customer/CustomerReceipt";
 import CustomerDepositReceiptPdf from "../pages/customer/CustomerDepositReceiptPdf";
 import CustomerEdit from "../pages/customer/CustomerEdit";
 
@@ -900,10 +899,6 @@ const routeModules = {
         path: "view-receipt",
         element: <Outlet />,
         children: [
-          {
-            path: "",
-            element: <CustomerReceipt />,
-          },
           {
             path: "print",
             element: <CustomerDepositReceiptPdf />,

@@ -341,18 +341,6 @@ export const modules = [
         ],
       },
       {
-        title: "Sales Receipts",
-        url: "/app/customers/view-receipt",
-        functionality: ["Customers", "Make sales", "Invoices"],
-        access: [
-          "services",
-          "retailers",
-          "recycling",
-          "manufacturing",
-          "contractors",
-        ],
-      },
-      {
         title: "Cashier Point",
         url: "/app/payments/cashier-point",
         functionality: ["Receive Payment", "Payments", "Cashier"],

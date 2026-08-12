@@ -45,6 +45,77 @@ export default function InvoiceSeparation() {
 
   const rows = activeTab === "history" ? historyRows : pendingRows;
 
+  const applyDashboardLists = useCallback(
+    (pending, history) => {
+      setPendingRows(pending);
+      setHistoryRows(history);
+      setSelectedCode((prev) => {
+        if (saleFromUrl) {
+          if (pending.some((r) => r.sale_code === saleFromUrl)) {
+            setActiveTab("pending");
+            return saleFromUrl;
+          }
+          if (history.some((r) => r.sale_code === saleFromUrl)) {
+            setActiveTab("history");
+            return saleFromUrl;
+          }
+        }
+        if (prev) {
+          if (pending.some((r) => r.sale_code === prev)) return prev;
+          if (history.some((r) => r.sale_code === prev)) return prev;
+        }
+        return pending[0]?.sale_code || history[0]?.sale_code || "";
+      });
+    },
+    [saleFromUrl],
+  );
+
+  const fetchListFallback = useCallback(() => {
+    if (!activeBusiness?.id) return;
+    const facilityId = activeBusiness.id;
+    const pendingStatus =
+      "payment_confirmed,invoice_separation,awaiting_credit_approval,credit_approved,final_invoice";
+    const historyStatus =
+      "warehouse_picking,dual_signature,goods_released,completed";
+
+    let pendingDone = false;
+    let historyDone = false;
+    let pending = [];
+    let history = [];
+
+    const finish = () => {
+      if (!pendingDone || !historyDone) return;
+      setLoading(false);
+      applyDashboardLists(pending, history);
+    };
+
+    _fetchApi(
+      `/api/v1/sale-workflows?facilityId=${facilityId}&status=${pendingStatus}`,
+      (res) => {
+        pendingDone = true;
+        if (res.success) pending = res.results || [];
+        finish();
+      },
+      () => {
+        pendingDone = true;
+        finish();
+      },
+    );
+
+    _fetchApi(
+      `/api/v1/sale-workflows?facilityId=${facilityId}&status=${historyStatus}`,
+      (res) => {
+        historyDone = true;
+        if (res.success) history = res.results || [];
+        finish();
+      },
+      () => {
+        historyDone = true;
+        finish();
+      },
+    );
+  }, [activeBusiness?.id, applyDashboardLists]);
+
   const fetchList = useCallback(() => {
     if (!activeBusiness?.id) return;
     setLoading(true);
@@ -54,43 +125,22 @@ export default function InvoiceSeparation() {
     _fetchApi(
       `/api/v1/sale-workflows/separation-dashboard?${params.toString()}`,
       (res) => {
-        setLoading(false);
         if (res.success) {
-          const pending = res.results?.pending || [];
-          const history = res.results?.history || [];
-          setPendingRows(pending);
-          setHistoryRows(history);
-          setSelectedCode((prev) => {
-            if (saleFromUrl) {
-              if (pending.some((r) => r.sale_code === saleFromUrl)) {
-                setActiveTab("pending");
-                return saleFromUrl;
-              }
-              if (history.some((r) => r.sale_code === saleFromUrl)) {
-                setActiveTab("history");
-                return saleFromUrl;
-              }
-            }
-            if (prev) {
-              if (pending.some((r) => r.sale_code === prev)) return prev;
-              if (history.some((r) => r.sale_code === prev)) return prev;
-            }
-            return pending[0]?.sale_code || history[0]?.sale_code || "";
-          });
-        } else {
-          toast.error(res.message || "Failed to load separation queue");
-          setPendingRows([]);
-          setHistoryRows([]);
+          setLoading(false);
+          applyDashboardLists(
+            res.results?.pending || [],
+            res.results?.history || [],
+          );
+          return;
         }
+        // Older API builds don't have separation-dashboard yet — fall back.
+        fetchListFallback();
       },
       () => {
-        setLoading(false);
-        toast.error("Failed to load separation queue");
-        setPendingRows([]);
-        setHistoryRows([]);
+        fetchListFallback();
       },
     );
-  }, [activeBusiness?.id, saleFromUrl]);
+  }, [activeBusiness?.id, applyDashboardLists, fetchListFallback]);
 
   useEffect(() => {
     fetchList();
