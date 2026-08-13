@@ -18,7 +18,9 @@ import CustomMemoModal from "@/common/Custom/CustomMemoModal";
 import CustomRequisitionModal from "@/common/Custom/CustomRequisitionModal";
 import { toaster } from "evergreen-ui";
 import { useNavigate } from "react-router-dom";
-import PurchaseOrderNav from "./PurchaseOrderNav";
+import PurchaseOrderNav, {
+  usePurchaseOrderPermissions,
+} from "./PurchaseOrderNav";
 function RequisitionApproval() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const [loading, setLoading] = useState(true);
@@ -32,6 +34,13 @@ function RequisitionApproval() {
   const [items2, setItems2] = useState({});
   const [isOpen2, setIsOpen2] = useState(false);
   const navigate = useNavigate();
+  const { canApprove, visibleTabs } = usePurchaseOrderPermissions();
+
+  useEffect(() => {
+    if (canApprove) return;
+    const fallback = visibleTabs[0];
+    if (fallback) navigate(fallback.to, { replace: true });
+  }, [canApprove, visibleTabs, navigate]);
 
   const _form = {
     date: moment().format("YYYY-MM-DD"),

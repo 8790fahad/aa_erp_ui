@@ -67,8 +67,8 @@ const QUICK_CREATE = [
   },
   { label: "Bill", href: "/app/expenses/billing", icon: Wallet },
   {
-    label: "Cashier Point",
-    href: "/app/payments/cashier-point",
+    label: "Collection Points",
+    href: "/app/payments/collection-points",
     icon: Wallet,
   },
 ];

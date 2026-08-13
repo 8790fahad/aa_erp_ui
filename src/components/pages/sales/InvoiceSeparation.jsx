@@ -34,7 +34,6 @@ export default function InvoiceSeparation() {
   const [loading, setLoading] = useState(false);
   const [packsLoading, setPacksLoading] = useState(false);
   const [separating, setSeparating] = useState(false);
-  const [approvingCredit, setApprovingCredit] = useState(false);
   const [printingId, setPrintingId] = useState(null);
   const [printingAll, setPrintingAll] = useState(false);
   const [pendingRows, setPendingRows] = useState([]);
@@ -74,7 +73,7 @@ export default function InvoiceSeparation() {
     if (!activeBusiness?.id) return;
     const facilityId = activeBusiness.id;
     const pendingStatus =
-      "payment_confirmed,invoice_separation,awaiting_credit_approval,credit_approved,final_invoice";
+      "payment_confirmed,invoice_separation,credit_approved,final_invoice";
     const historyStatus =
       "warehouse_picking,dual_signature,goods_released,completed";
 
@@ -382,35 +381,6 @@ export default function InvoiceSeparation() {
     );
   };
 
-  const approveCredit = () => {
-    if (!activeBusiness?.id || !selected) return;
-    setApprovingCredit(true);
-    _postApi(
-      "/api/v1/sale-workflows/advance",
-      {
-        facilityId: activeBusiness.id,
-        saleCode: selected.sale_code,
-        action: "advance",
-        note: "Credit approved",
-        updated_by: user?.id,
-      },
-      (res) => {
-        setApprovingCredit(false);
-        if (res.success) {
-          toast.success(res.message || "Credit approved");
-          fetchList();
-          fetchPacks();
-        } else {
-          toast.error(res.message || "Could not approve credit");
-        }
-      },
-      () => {
-        setApprovingCredit(false);
-        toast.error("Could not approve credit");
-      },
-    );
-  };
-
   const needsCreditApproval =
     selected?.status === "awaiting_credit_approval";
   const canSeparate =
@@ -440,8 +410,9 @@ export default function InvoiceSeparation() {
                 Invoice Separation
               </h1>
               <p className="text-gray-600 mt-1">
-                Approve credit sales, print one copy per store involved, then
-                send to collection
+                Print one copy per store involved, then send to collection.
+                Credit invoices appear here only after approval at Collection
+                Points.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -519,7 +490,7 @@ export default function InvoiceSeparation() {
               <div className="p-8 text-center text-gray-500 text-sm">
                 {activeTab === "history"
                   ? "No separated invoices yet. Mark Separated moves sales here."
-                  : "No paid invoices waiting. After cashier confirms payment, sales appear here to split by store."}
+                  : "No invoices waiting. After Collection Points confirms payment (or approves credit), sales appear here to split by store."}
               </div>
             ) : (
               <ul className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
@@ -618,16 +589,12 @@ export default function InvoiceSeparation() {
                       Full invoice
                     </Link>
                     {needsCreditApproval && !isHistoryRecord ? (
-                      <Button
-                        type="button"
-                        disabled={approvingCredit}
-                        onClick={approveCredit}
-                        style={{ backgroundColor: "#4267B2" }}
-                        className="flex items-center gap-2"
+                      <Link
+                        to={`/app/payments/collection-points`}
+                        className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-800 hover:bg-rose-100"
                       >
-                        <CheckCircle2 className="w-4 h-4" />
-                        {approvingCredit ? "Approving…" : "Approve Credit"}
-                      </Button>
+                        Approve at Collection Points
+                      </Link>
                     ) : null}
                     {canSeparate && packs.length > 1 ? (
                       <Button
@@ -672,8 +639,9 @@ export default function InvoiceSeparation() {
 
                 {needsCreditApproval && !isHistoryRecord ? (
                   <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
-                    This credit sale needs approval before store copies are
-                    created. Click <strong>Approve Credit</strong> to continue.
+                    This credit sale is waiting for approval at{" "}
+                    <strong>Collection Points → Credit</strong>. It cannot move
+                    to Invoice Separation until credit is approved.
                   </div>
                 ) : null}
 
@@ -683,7 +651,7 @@ export default function InvoiceSeparation() {
                   </h3>
                   <p className="text-xs text-violet-800 mb-3">
                     {needsCreditApproval && !isHistoryRecord
-                      ? "Store copies appear after credit is approved — one evidence copy per store on the invoice."
+                      ? "Store copies appear only after credit is approved at Collection Points."
                       : packs.length
                         ? `One evidence copy per store involved (${packs.length}). Print each store invoice, then mark separated to send packs to warehouse.`
                         : "One evidence copy is created for each store involved in this invoice."}
@@ -712,7 +680,7 @@ export default function InvoiceSeparation() {
                   ) : packs.length === 0 ? (
                     <p className="text-sm text-violet-800">
                       {needsCreditApproval && !isHistoryRecord
-                        ? "No store copies yet — approve credit first."
+                        ? "No store copies yet — approve credit at Collection Points first."
                         : "No store lines found on this invoice yet."}
                     </p>
                   ) : (

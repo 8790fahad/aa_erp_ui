@@ -136,12 +136,23 @@ export const modules = [
       {
         title: "Purchase Order",
         url: "/app/purchase/purchase-requisition",
+        functionality: [
+          "Purchase Order",
+          "Create Purchase Order",
+          "Approve Purchase Order",
+          "Purchase Order History",
+        ],
         access: [
           "services",
           "retailers",
           "recycling",
           "manufacturing",
           "contractors",
+        ],
+        subFunctionalities: [
+          { title: "Create Purchase Order" },
+          { title: "Approve Purchase Order" },
+          { title: "Purchase Order History" },
         ],
       },
       // {
@@ -341,8 +352,8 @@ export const modules = [
         ],
       },
       {
-        title: "Cashier Point",
-        url: "/app/payments/cashier-point",
+        title: "Collection Points",
+        url: "/app/payments/collection-points",
         functionality: ["Receive Payment", "Payments", "Cashier"],
         access: [
           "services",

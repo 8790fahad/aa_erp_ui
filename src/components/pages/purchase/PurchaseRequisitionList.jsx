@@ -26,7 +26,9 @@ import SearchSupplierInput from "./SearchSuppliers";
 import PurchaseRequisitionAPI from "./purchaseRequisitionApi";
 import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
 import { Skeleton } from "@/components/ui/skeleton";
-import PurchaseOrderNav from "./PurchaseOrderNav";
+import PurchaseOrderNav, {
+  usePurchaseOrderPermissions,
+} from "./PurchaseOrderNav";
 import {
   Sheet,
   SheetContent,
@@ -75,6 +77,7 @@ export default function PurchaseRequisitionList() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const [searchParams] = useSearchParams();
   const isHistory = searchParams.get("tab") === "history";
+  const { canCreate } = usePurchaseOrderPermissions();
   const [searchTerm, setSearchTerm] = useState("");
   const [itemList, setItemList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -445,7 +448,7 @@ export default function PurchaseRequisitionList() {
                     className="h-9 w-56 rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                   />
                 </div>
-                {!isHistory && (
+                {!isHistory && canCreate && (
                   <Button
                     onClick={openFormModal}
                     className="h-9 gap-1.5 bg-[var(--aa-accent)] text-white hover:opacity-90"

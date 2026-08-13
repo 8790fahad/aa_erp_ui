@@ -260,11 +260,11 @@ function ThermalReceiptCopy({
         <div className="tr-barcode tr-barcode-footer">
           <Barcode
             value={barcodeValue}
-            width={1.2}
-            height={36}
+            width={1.3}
+            height={40}
             displayValue
-            fontSize={11}
-            margin={2}
+            fontSize={13}
+            margin={1}
             background="#ffffff"
             lineColor="#000000"
           />
@@ -301,7 +301,7 @@ export default function ThermalReceipt({
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 16px;
+          gap: 12px;
         }
         .thermal-receipt-root {
           display: none;
@@ -311,10 +311,10 @@ export default function ThermalReceipt({
           width: 80mm;
           max-width: 80mm;
           margin: 0 auto;
-          padding: 2mm 1.5mm;
+          padding: 1mm 0.8mm;
           font-family: "Courier New", Courier, monospace;
-          font-size: 13px;
-          line-height: 1.25;
+          font-size: 15px;
+          line-height: 1.3;
           color: #000;
           background: #fff;
           box-sizing: border-box;
@@ -354,24 +354,24 @@ export default function ThermalReceipt({
             top: 0;
             width: 80mm;
             max-width: 80mm;
-            padding: 2mm 1.5mm;
+            padding: 1mm 0.8mm;
             font-family: "Courier New", Courier, monospace;
-            font-size: 13px;
-            line-height: 1.25;
+            font-size: 15px;
+            line-height: 1.3;
             color: #000;
             background: #fff;
             box-shadow: none;
           }
           @page {
             size: portrait;
-            margin: 2mm;
+            margin: 1mm;
           }
         }
         .thermal-receipt-root .tr-center { text-align: center; }
         .thermal-receipt-root .tr-bold { font-weight: 700; }
         .thermal-receipt-root .tr-divider {
           border-top: 1px dashed #000;
-          margin: 3px 0;
+          margin: 2px 0;
         }
         .thermal-receipt-root .tr-row {
           display: flex;
@@ -380,8 +380,8 @@ export default function ThermalReceipt({
         }
         .thermal-receipt-root .tr-items th,
         .thermal-receipt-root .tr-items td {
-          font-size: 11px;
-          padding: 1px 0;
+          font-size: 13px;
+          padding: 0;
           vertical-align: top;
         }
         .thermal-receipt-root .tr-items {
@@ -391,24 +391,24 @@ export default function ThermalReceipt({
         .thermal-receipt-root .tr-items .tr-qty { width: 12%; text-align: right; }
         .thermal-receipt-root .tr-items .tr-amt { width: 28%; text-align: right; }
         .thermal-receipt-root .tr-items .tr-vat { width: 22%; text-align: right; }
-        .thermal-receipt-root .tr-business-name { font-size: 15px; }
-        .thermal-receipt-root .tr-muted { font-size: 12px; }
+        .thermal-receipt-root .tr-business-name { font-size: 17px; }
+        .thermal-receipt-root .tr-muted { font-size: 13px; }
         .thermal-receipt-root .tr-copy-label {
-          font-size: 11px;
+          font-size: 12px;
           letter-spacing: 0.04em;
-          margin-bottom: 2px;
+          margin-bottom: 1px;
         }
-        .thermal-receipt-root .tr-sku { font-size: 10px; opacity: 0.85; }
-        .thermal-receipt-root .tr-total { margin-top: 2px; font-size: 14px; }
-        .thermal-receipt-root .tr-footer { font-size: 12px; }
+        .thermal-receipt-root .tr-sku { font-size: 11px; opacity: 0.85; }
+        .thermal-receipt-root .tr-total { margin-top: 1px; font-size: 16px; }
+        .thermal-receipt-root .tr-footer { font-size: 13px; }
         .thermal-receipt-root .tr-barcode {
           display: flex;
           justify-content: center;
-          margin: 4px 0 2px;
+          margin: 2px 0 1px;
           overflow: hidden;
         }
         .thermal-receipt-root .tr-barcode-footer {
-          margin: 8px 0 0;
+          margin: 4px 0 0;
         }
         .thermal-receipt-root .tr-barcode svg {
           max-width: 100%;
@@ -417,16 +417,16 @@ export default function ThermalReceipt({
         .thermal-receipt-root .tr-dual-sign {
           display: flex;
           flex-direction: column;
-          gap: 10px;
-          margin: 6px 0 4px;
+          gap: 6px;
+          margin: 4px 0 2px;
         }
         .thermal-receipt-root .tr-sign-block {
           text-align: center;
         }
         .thermal-receipt-root .tr-sign-line {
           border-bottom: 1px solid #000;
-          height: 18px;
-          margin-bottom: 2px;
+          height: 14px;
+          margin-bottom: 1px;
         }
       `}</style>
 

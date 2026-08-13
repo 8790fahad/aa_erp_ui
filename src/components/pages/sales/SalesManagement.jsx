@@ -31,7 +31,7 @@ const FILTERS = [
   { id: "invoice", label: "Invoice", statuses: ["sales_order", "invoice_generated", "submitted"] },
   {
     id: "cashier",
-    label: "Cashier",
+    label: "Collection Points",
     statuses: ["awaiting_payment", "awaiting_cashier_confirm"],
   },
   {
@@ -293,18 +293,18 @@ export default function SalesManagement() {
       ["awaiting_payment", "awaiting_cashier_confirm", "submitted"].includes(s)
     ) {
       return {
-        title: "Next: Cashier Point",
-        description: "Collect payment for this invoice at Cashier Point.",
-        to: "/app/payments/cashier-point",
-        label: "Open Cashier Point",
+        title: "Next: Collection Points",
+        description: "Collect payment for this invoice at Collection Points.",
+        to: "/app/payments/collection-points",
+        label: "Open Collection Points",
       };
     }
     if (s === "awaiting_credit_approval") {
       return {
         title: "Next: Credit approval",
-        description: "Approve this credit sale on the Separation page.",
-        to: `/app/sales/separation?sale_code=${encodeURIComponent(selected.sale_code)}`,
-        label: "Open Separation",
+        description: "Approve this credit sale at Collection Points.",
+        to: "/app/payments/collection-points",
+        label: "Open Collection Points",
       };
     }
     if (
@@ -346,7 +346,7 @@ export default function SalesManagement() {
               </h1>
               <p className="text-gray-600 mt-1">
                 Track invoices through pay → separation → warehouse. Actions are
-                done on Cashier, Separation, and Warehouse pages.
+                done on Collection Points, Separation, and Warehouse pages.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

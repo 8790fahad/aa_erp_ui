@@ -350,7 +350,7 @@ function InvoicePreview() {
             ${
               isTerminalReceipt
                 ? `
-            @page { size: portrait; margin: 4mm; }
+            @page { size: portrait; margin: 1mm; }
             /* Hide everything except the thermal receipts */
             body * { visibility: hidden !important; }
             .print-receipt-only,
@@ -422,7 +422,7 @@ function InvoicePreview() {
               width: 80mm !important;
               max-width: 80mm !important;
               margin: 0 !important;
-              padding: 2mm 1.5mm !important;
+              padding: 1mm 0.8mm !important;
               box-shadow: none !important;
               border: none !important;
               background: white !important;
@@ -491,7 +491,7 @@ function InvoicePreview() {
                             80mm · {branchLabel} · Customer copy
                           </span>
                         </div>
-                        <div className="print-receipt-only p-1.5 bg-gray-100">
+                        <div className="print-receipt-only p-0.5 bg-gray-100">
                           <ThermalReceipt
                             preview
                             invoiceData={data}
@@ -650,7 +650,7 @@ function InvoicePreview() {
                     : "80mm · Customer copy"}
                 </span>
               </div>
-              <div className="p-1.5 bg-gray-100">
+              <div className="p-0.5 bg-gray-100">
                 <ThermalReceipt
                   preview
                   invoiceData={resolvedInvoiceData}

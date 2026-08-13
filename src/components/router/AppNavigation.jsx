@@ -545,6 +545,10 @@ const routeModules = {
     element: <Outlet />,
     children: [
       {
+        path: "collection-points",
+        element: <ReceivePayment />,
+      },
+      {
         path: "cashier-point",
         element: <ReceivePayment />,
       },
