@@ -97,6 +97,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
   const goodsTemplateColumns = [
     "sku",
     "Product Name",
+    "Category",
     "Sales Description",
     "Selling Price",
     "Revenue Account",
@@ -116,7 +117,6 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
     "Taxable",
     "Status",
     "Supplier ID",
-    "Tags",
     "Notes",
   ];
 
@@ -760,11 +760,16 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
         mapped.expiry_date = item["Expiry Date"] || "";
         mapped.inventory_account = item["Inventory Account"] || "";
         mapped.unit_of_measure = item["Unit of Measurement"] || "";
-        mapped.category = item["UOM Category"] || "";
+        mapped.category =
+          item["Category"] ||
+          item["category"] ||
+          item["Tags"] ||
+          item["UOM Category"] ||
+          "";
         mapped.taxable = item["Taxable"] || "";
         mapped.status = item["Status"] || "Active";
         mapped.supplier_id = item["Supplier ID"] || "";
-        mapped.tags = item["Tags"] || "";
+        mapped.tags = "";
         mapped.notes = item["Notes"] || "";
         mapped.daily_sales_limit = salesLimits.daily_sales_limit;
         mapped.weekly_sales_limit = salesLimits.weekly_sales_limit;
