@@ -90,7 +90,8 @@ export default function ReceivedFunds() {
     });
   }, [rows, search]);
 
-  const goNew = () => navigate("/app/payments/receive-payment/new");
+  const goNew = () =>
+    navigate("/app/payments/collection-points?action=deposit");
 
   const fields = useMemo(
     () => [
@@ -229,9 +230,14 @@ export default function ReceivedFunds() {
             <Banknote className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Received Funds</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Deposit History
+            </h1>
             <p className="text-sm text-muted-foreground">
-              Record and track customer payments
+              History of customer deposits and received funds. Create new
+              deposits and collect invoice payments at{" "}
+              <span className="font-medium text-gray-800">Collection Points</span>
+              .
               {totalCount > 0 && (
                 <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
                   {totalCount} total
@@ -242,7 +248,7 @@ export default function ReceivedFunds() {
         </div>
         <CustomButton className="!mb-0" onClick={goNew}>
           <FaPlus className="h-4 w-4" aria-hidden />
-          New Payment
+          Make Deposit
         </CustomButton>
       </div>
 
@@ -314,17 +320,17 @@ export default function ReceivedFunds() {
               <Banknote className="h-6 w-6 text-slate-400" />
             </div>
             <h3 className="text-sm font-semibold text-slate-900">
-              {search ? "No matching payments" : "No payments received yet"}
+              {search ? "No matching deposits" : "No deposits recorded yet"}
             </h3>
             <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500">
               {search
                 ? "Try a different search term."
-                : "Record a customer payment and apply it to unpaid invoices."}
+                : "Make a customer deposit at Collection Points, or collect invoice payments there."}
             </p>
             {!search && (
               <CustomButton className="!mb-0 mt-4" onClick={goNew}>
                 <FaPlus className="h-4 w-4" aria-hidden />
-                New Payment
+                Make Deposit
               </CustomButton>
             )}
           </div>

@@ -16,7 +16,6 @@ import {
   FileText,
   LogOut,
   Plus,
-  Search,
   Settings,
   UserRound,
   Users,
@@ -37,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import logo from "@/assets/aa_erp_icon.png";
+import GlobalSearchBar from "@/components/GlobalSearchBar";
 
 function parseAccess(accessStr) {
   if (!accessStr || typeof accessStr !== "string") return [];
@@ -55,7 +55,7 @@ function hasDashboardAccess(team) {
 
 const QUICK_CREATE = [
   {
-    label: "New invoice / sale",
+    label: "Create Invoice",
     href: "/app/sales/sale?view=lines",
     icon: FileText,
   },
@@ -80,7 +80,6 @@ export function AppTopBar() {
   const { user, activeBusiness, businessesList = [], businessCount = 0 } =
     useSelector((state) => state.auth);
   const [isSwitching, setIsSwitching] = useState(false);
-  const [search, setSearch] = useState("");
 
   const sortedBusinesses = useMemo(() => {
     if (!businessesList?.length) return [];
@@ -163,16 +162,7 @@ export function AppTopBar() {
       </div>
 
       <div className="mx-auto flex w-full max-w-xl flex-1 items-center px-2">
-        <label className="relative flex w-full items-center">
-          <Search className="pointer-events-none absolute left-3 h-4 w-4 text-white/55" />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search…"
-            className="h-9 w-full rounded-full border-0 bg-[#13244d] pl-9 pr-3 text-sm text-white placeholder:text-white/50 outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-[var(--aa-accent)]"
-          />
-        </label>
+        <GlobalSearchBar />
       </div>
 
       <div className="ml-auto flex items-center gap-1.5 shrink-0">

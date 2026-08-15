@@ -471,7 +471,7 @@ export default function CustomerAdvancePaymentModal({
           resp.results?.reference_number ||
           "";
         toast.success(
-          ref ? `Payment recorded (${ref})` : "Advance payment recorded",
+          ref ? `Deposit recorded (${ref})` : "Deposit recorded",
         );
         setLastReceipt({
           ref,
@@ -526,7 +526,7 @@ export default function CustomerAdvancePaymentModal({
           <div className="flex items-start justify-between gap-3 pb-4">
             <div className="min-w-0 text-left">
               <DrawerTitle className="text-gray-900 text-xl">
-                Customer deposit payment
+                Make Deposit
               </DrawerTitle>
               <DrawerDescription className="text-gray-600 mt-1">
                 Record a customer deposit or prepayment
@@ -547,7 +547,7 @@ export default function CustomerAdvancePaymentModal({
           {/* Tabs */}
           <div className="flex border-b border-gray-200 -mx-4 px-4 gap-1">
             {[
-              { id: "payment", label: "New Payment", icon: <Plus size={14} /> },
+              { id: "payment", label: "Make Deposit", icon: <Plus size={14} /> },
               { id: "history", label: "History",     icon: <History size={14} /> },
               { id: "receipt", label: "Receipt",     icon: <Receipt size={14} /> },
             ].map((tab) => (
@@ -1196,13 +1196,13 @@ export default function CustomerAdvancePaymentModal({
                   </p>
                 ) : null}
                 <Button type="submit" disabled={submitting || allocationBlocksSubmit} className="w-full bg-[#2C5CC5] hover:bg-[#1e4ba8] text-white h-11 disabled:opacity-60">
-                  {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : "Save payment"}
+                  {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : "Make Deposit"}
                 </Button>
               </>
             )}
             {activeTab === "history" && (
               <Button type="button" variant="outline" className="w-full h-11" onClick={() => setActiveTab("payment")}>
-                <Plus size={15} className="mr-2" /> New Payment
+                <Plus size={15} className="mr-2" /> Make Deposit
               </Button>
             )}
             {activeTab === "receipt" && (
@@ -1218,7 +1218,7 @@ export default function CustomerAdvancePaymentModal({
                   </>
                 ) : (
                   <Button type="button" className="w-full h-11 bg-[#2C5CC5] hover:bg-[#1e4ba8] text-white gap-1.5" onClick={() => setActiveTab("payment")}>
-                    <Plus size={15} /> New Payment
+                    <Plus size={15} /> Make Deposit
                   </Button>
                 )}
               </div>

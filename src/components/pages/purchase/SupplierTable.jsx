@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Check,
   Search,
+  Wallet,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import SuppliersUpload from "../suppliers/SuppliersUpload";
@@ -53,6 +54,23 @@ export default function SupplierTable() {
 
   // Mode states
   const [uploadOpen, setUploadOpen] = useState(false);
+
+  const goMakeDeposit = useCallback(
+    (supplier = null) => {
+      const params = new URLSearchParams({ action: "deposit" });
+      const no =
+        supplier?.supplier_number ||
+        supplier?.supplierNo ||
+        supplier?.id ||
+        "";
+      const name =
+        supplier?.supplier_name || supplier?.name || supplier?.supplierName || "";
+      if (no) params.set("supplierNo", String(no));
+      if (name) params.set("supplierName", String(name));
+      navigate(`/app/payments/pay-bills?${params.toString()}`);
+    },
+    [navigate],
+  );
 
   const userBranchIds = useMemo(() => {
     if (Array.isArray(user?.branchIds) && user.branchIds.length > 0) {
@@ -302,6 +320,9 @@ export default function SupplierTable() {
               >
                 Edit Payee
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => goMakeDeposit(item)}>
+                Make Deposit
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => handleManageAccounts(item)}>
                 Manage Accounts
@@ -445,15 +466,26 @@ export default function SupplierTable() {
             </div>
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => setUploadOpen(true)}
-          >
-            <Upload className="h-4 w-4" />
-            Upload Payees
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => goMakeDeposit()}
+            >
+              <Wallet className="h-4 w-4" />
+              Make Deposit
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setUploadOpen(true)}
+            >
+              <Upload className="h-4 w-4" />
+              Upload Payees
+            </Button>
+          </div>
         </div>
 
         <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 text-xs text-gray-500">

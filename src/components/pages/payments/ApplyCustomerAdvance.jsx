@@ -264,11 +264,11 @@ export default function ApplyCustomerAdvance() {
           <div>
             <h1 className="flex items-center gap-2 text-xl font-semibold text-gray-900">
               <Wallet className="h-5 w-5 text-[var(--aa-accent)]" />
-              Apply Advance
+              Apply Deposit
             </h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              Apply a customer&apos;s existing advance / deposit to unpaid
-              invoices — like Credit Notes → Apply to Invoices.
+              Apply an existing customer deposit to unpaid invoices. To record a
+              new deposit, use Collection Points → Make Deposit.
             </p>
           </div>
           {selectedCustomer && (
@@ -411,7 +411,7 @@ export default function ApplyCustomerAdvance() {
                   <th className="px-3 py-2">Date</th>
                   <th className="px-3 py-2">Invoice</th>
                   <th className="px-3 py-2 text-right">Amount Due</th>
-                  <th className="px-3 py-2 text-right">Apply Advance</th>
+                  <th className="px-3 py-2 text-right">Apply Deposit</th>
                   <th className="px-3 py-2" />
                 </tr>
               </thead>
@@ -486,7 +486,7 @@ export default function ApplyCustomerAdvance() {
               availableDeposit <= 0
             }
           >
-            Apply Advance to Invoices
+            Apply Deposit to Invoices
           </CustomButton>
         </div>
       </div>

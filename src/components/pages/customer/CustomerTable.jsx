@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FaPlus } from "react-icons/fa";
 import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import CustomButton from "@/common/Custom/CustomButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import CustomTable1 from "@/common/Custom/CustomTable1";
@@ -24,11 +25,11 @@ import {
 } from "lucide-react";
 import CustomersUpload from "./components/CustomersUpload";
 import CustomerRegistartion from "./CustomerRegistration";
-import CustomerAdvancePaymentModal from "@/components/common/CustomerAdvancePaymentModal";
 import { _fetchApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 
 export default function CustomerTable() {
+  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const [filterText, setFilterText] = useState("");
@@ -71,8 +72,23 @@ export default function CustomerTable() {
   const [customerList, setCustomerList] = useState([]);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [advanceOpen, setAdvanceOpen] = useState(false);
-  const [advanceCustomer, setAdvanceCustomer] = useState(null);
+
+  const goMakeDeposit = useCallback(
+    (customer = null) => {
+      const params = new URLSearchParams({ action: "deposit" });
+      if (customer?.customerNo) {
+        params.set("customerNo", customer.customerNo);
+        const name =
+          customer.fullname ||
+          customer.name ||
+          customer.customerName ||
+          "";
+        if (name) params.set("customerName", name);
+      }
+      navigate(`/app/payments/collection-points?${params.toString()}`);
+    },
+    [navigate],
+  );
 
   const getList = useCallback(() => {
     if (!activeBusiness?.id) return;
@@ -326,13 +342,8 @@ export default function CustomerTable() {
               <DropdownMenuItem onClick={() => openCustomer(item)}>
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setAdvanceCustomer(item);
-                  setAdvanceOpen(true);
-                }}
-              >
-                Deposit payment
+              <DropdownMenuItem onClick={() => goMakeDeposit(item)}>
+                Make Deposit
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -386,17 +397,6 @@ export default function CustomerTable() {
         showModal={showModal}
         getList={getList}
         selectedCustomer={selectedCustomer}
-      />
-
-      <CustomerAdvancePaymentModal
-        open={advanceOpen}
-        onClose={() => {
-          setAdvanceOpen(false);
-          setAdvanceCustomer(null);
-        }}
-        onSuccess={getList}
-        party={advanceCustomer}
-        customersList={customerList}
       />
 
       {/* Toolbar */}
@@ -495,10 +495,10 @@ export default function CustomerTable() {
               variant="outline"
               size="sm"
               className="gap-2"
-              onClick={() => setAdvanceOpen(true)}
+              onClick={() => goMakeDeposit()}
             >
               <Wallet className="h-4 w-4" />
-              Deposit payment
+              Make Deposit
             </Button>
             <Button
               variant="outline"

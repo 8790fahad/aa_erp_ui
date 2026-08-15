@@ -11,6 +11,10 @@ import { useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import { _postApi } from "@/redux/actions/api";
 import { formatNumber1, formatNaira } from "@/components/router/utilities";
+import {
+  resolveAccountNature,
+  isCreditNormalNature,
+} from "@/components/pages/report/utils/accountBalance";
 import moment from "moment";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -71,12 +75,24 @@ const InventriaGeneralLedger = () => {
     setLoading(true);
     setError("");
 
+    const from = moment(fromDate, ["YYYY-MM-DD", "YYYY/MM/DD", "DD/MM/YYYY"]).format(
+      "YYYY-MM-DD",
+    );
+    const to = moment(toDate, ["YYYY-MM-DD", "YYYY/MM/DD", "DD/MM/YYYY"]).format(
+      "YYYY-MM-DD",
+    );
+    if (!moment(from).isValid() || !moment(to).isValid()) {
+      setLoading(false);
+      setError("Invalid date range");
+      return;
+    }
+
     _postApi(
       `/account/hierarchical-general-ledger`,
       {
         facilityId,
-        fromDate,
-        toDate,
+        fromDate: from,
+        toDate: to,
       },
       (response) => {
         setLoading(false);
@@ -89,8 +105,12 @@ const InventriaGeneralLedger = () => {
       (err) => {
         setLoading(false);
         console.error("General Ledger Error:", err);
-        setError("An error occurred while fetching general ledger data");
-      }
+        setError(
+          err?.message ||
+            err?.error ||
+            "An error occurred while fetching general ledger data",
+        );
+      },
     );
   }, [facilityId, fromDate, toDate]);
 
@@ -116,6 +136,20 @@ const InventriaGeneralLedger = () => {
   };
 
   const formatCurrency = formatNaira;
+
+  /** Nature-signed balance label: Assets/Expenses → Dr; Liabilities/Equity/Revenue → Cr when positive. */
+  const formatSignedBalance = (amount, nature, accountCode) => {
+    const n = resolveAccountNature(nature, accountCode);
+    const val = parseFloat(amount) || 0;
+    if (Math.abs(val) < 0.005) return formatCurrency(0);
+    const creditNormal = isCreditNormalNature(n);
+    const side =
+      val >= 0 ? (creditNormal ? "cr" : "dr") : creditNormal ? "dr" : "cr";
+    return `${formatCurrency(Math.abs(val))}${side}`;
+  };
+
+  const balanceColorClass = (amount) =>
+    (parseFloat(amount) || 0) >= 0 ? "text-green-600" : "text-red-600";
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
@@ -1090,14 +1124,14 @@ const InventriaGeneralLedger = () => {
                                           {/* Blank */}
                                         </td>
                                         <td
-                                          className={`px-2 py-1 text-sm text-right font-medium bg-gray-50 ${
-                                            (accountTotals.beginningBalance || 0) >= 0
-                                              ? "text-green-600"
-                                              : "text-red-600"
-                                          }`}
+                                          className={`px-2 py-1 text-sm text-right font-medium bg-gray-50 ${balanceColorClass(
+                                            accountTotals.beginningBalance || 0,
+                                          )}`}
                                         >
-                                          {formatCurrency(
-                                            accountTotals.beginningBalance || 0
+                                          {formatSignedBalance(
+                                            accountTotals.beginningBalance || 0,
+                                            account.account_nature,
+                                            account.code,
                                           )}
                                         </td>
                                       </tr>
@@ -1135,13 +1169,15 @@ const InventriaGeneralLedger = () => {
                                                 : ""}
                                             </td>
                                             <td
-                                              className={`px-2 py-1 text-sm text-right font-medium bg-gray-50 ${
-                                                balance >= 0
-                                                  ? "text-green-600"
-                                                  : "text-red-600"
-                                              }`}
+                                              className={`px-2 py-1 text-sm text-right font-medium bg-gray-50 ${balanceColorClass(
+                                                balance,
+                                              )}`}
                                             >
-                                              {formatCurrency(balance)}
+                                              {formatSignedBalance(
+                                                balance,
+                                                account.account_nature,
+                                                account.code,
+                                              )}
                                             </td>
                                           </tr>
                                         );
@@ -1175,14 +1211,14 @@ const InventriaGeneralLedger = () => {
                                               : ""}
                                           </td>
                                           <td
-                                            className={`px-2 py-1 text-sm text-right font-semibold bg-gray-200 ${
-                                              accountTotals.balance >= 0
-                                                ? "text-green-600"
-                                                : "text-red-600"
-                                            }`}
+                                            className={`px-2 py-1 text-sm text-right font-semibold bg-gray-200 ${balanceColorClass(
+                                              accountTotals.balance,
+                                            )}`}
                                           >
-                                            {formatCurrency(
-                                              accountTotals.balance
+                                            {formatSignedBalance(
+                                              accountTotals.balance,
+                                              account.account_nature,
+                                              account.code,
                                             )}
                                           </td>
                                         </tr>
@@ -1444,14 +1480,14 @@ const InventriaGeneralLedger = () => {
                                                   {/* Blank */}
                                                 </td>
                                                 <td
-                                                  className={`px-4 py-2 text-sm text-right font-medium ${
-                                                    (accountTotals.beginningBalance || 0) >= 0
-                                                      ? "text-green-600"
-                                                      : "text-red-600"
-                                                  }`}
+                                                  className={`px-4 py-2 text-sm text-right font-medium ${balanceColorClass(
+                                                    accountTotals.beginningBalance || 0,
+                                                  )}`}
                                                 >
-                                                  {formatCurrency(
-                                                    accountTotals.beginningBalance || 0
+                                                  {formatSignedBalance(
+                                                    accountTotals.beginningBalance || 0,
+                                                    account.account_nature,
+                                                    account.code,
                                                   )}
                                                 </td>
                                               </tr>
@@ -1489,14 +1525,14 @@ const InventriaGeneralLedger = () => {
                                                         : ""}
                                                     </td>
                                                     <td
-                                                      className={`px-4 py-2 text-sm text-right font-medium ${
-                                                        transaction.balance >= 0
-                                                          ? "text-green-600"
-                                                          : "text-red-600"
-                                                      }`}
+                                                      className={`px-4 py-2 text-sm text-right font-medium ${balanceColorClass(
+                                                        transaction.balance,
+                                                      )}`}
                                                     >
-                                                      {formatCurrency(
-                                                        transaction.balance
+                                                      {formatSignedBalance(
+                                                        transaction.balance,
+                                                        account.account_nature,
+                                                        account.code,
                                                       )}
                                                     </td>
                                                   </tr>
@@ -1521,14 +1557,14 @@ const InventriaGeneralLedger = () => {
                                                   )}
                                                 </td>
                                                 <td
-                                                  className={`px-4 py-2 text-sm text-right ${
-                                                    accountTotals.balance >= 0
-                                                      ? "text-green-600"
-                                                      : "text-red-600"
-                                                  }`}
+                                                  className={`px-4 py-2 text-sm text-right ${balanceColorClass(
+                                                    accountTotals.balance,
+                                                  )}`}
                                                 >
-                                                  {formatCurrency(
-                                                    accountTotals.balance
+                                                  {formatSignedBalance(
+                                                    accountTotals.balance,
+                                                    account.account_nature,
+                                                    account.code,
                                                   )}
                                                 </td>
                                               </tr>

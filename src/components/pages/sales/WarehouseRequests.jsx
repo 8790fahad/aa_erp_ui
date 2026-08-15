@@ -304,10 +304,11 @@ export default function WarehouseRequests() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
                 <Warehouse className="w-8 h-8 text-orange-600" />
-                Warehouse Requests
+                Warehouse Collection
               </h1>
               <p className="text-gray-600 mt-1">
-                Collect items as shown on each branch invoice copy
+                Print warehouse invoice copies and collect goods after Invoice
+                Separation. Collect items as shown on each branch invoice copy.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">

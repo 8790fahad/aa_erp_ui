@@ -496,7 +496,7 @@ export default function SupplierAdvancePaymentModal({
           resp.results?.reference_number ||
           "";
         toast.success(
-          ref ? `Payment recorded (${ref})` : "Advance payment recorded",
+          ref ? `Deposit recorded (${ref})` : "Deposit recorded",
         );
         // Build receipt data so user can view/print it
         setLastReceipt({
@@ -550,10 +550,10 @@ export default function SupplierAdvancePaymentModal({
           <div className="flex items-start justify-between gap-3 pb-4">
             <div className="min-w-0 text-left">
               <DrawerTitle className="text-gray-900 text-xl">
-                Supplier advance payment
+                Make Deposit
               </DrawerTitle>
               <DrawerDescription className="text-gray-600 mt-1">
-                Record a prepayment or allocate to purchase bills
+                Record a supplier deposit or prepayment against purchase bills
               </DrawerDescription>
             </div>
             <DrawerClose asChild>
@@ -572,7 +572,7 @@ export default function SupplierAdvancePaymentModal({
           {/* Tabs */}
           <div className="flex border-b border-gray-200 -mx-4 px-4 gap-1">
             {[
-              { id: "payment", label: "New Payment", icon: <Plus size={14} /> },
+              { id: "payment", label: "Make Deposit", icon: <Plus size={14} /> },
               { id: "history", label: "History",     icon: <History size={14} /> },
               { id: "receipt", label: "Receipt",     icon: <Receipt size={14} /> },
             ].map((tab) => (
@@ -1302,7 +1302,7 @@ export default function SupplierAdvancePaymentModal({
                       Saving…
                     </>
                   ) : (
-                    "Save payment"
+                    "Make Deposit"
                   )}
                 </Button>
               </>
@@ -1314,7 +1314,7 @@ export default function SupplierAdvancePaymentModal({
                 className="w-full h-11"
                 onClick={() => setActiveTab("payment")}
               >
-                <Plus size={15} className="mr-2" /> New Payment
+                <Plus size={15} className="mr-2" /> Make Deposit
               </Button>
             )}
             {activeTab === "receipt" && (
@@ -1330,7 +1330,7 @@ export default function SupplierAdvancePaymentModal({
                   </>
                 ) : (
                   <Button type="button" className="w-full h-11 bg-[#2C5CC5] hover:bg-[#1e4ba8] text-white gap-1.5" onClick={() => setActiveTab("payment")}>
-                    <Plus size={15} /> New Payment
+                    <Plus size={15} /> Make Deposit
                   </Button>
                 )}
               </div>

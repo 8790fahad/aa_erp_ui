@@ -27,7 +27,6 @@ import ApprovalByMD from "../pages/account/ApprovalByMD";
 import CustomerTable from "../pages/customer/CustomerTable";
 import TransactionReport from "../pages/report/ReportInvoice";
 import Expenses from "../pages/report/Expenses";
-import CustomerRegistartion from "../pages/customer/CustomerRegistration";
 // import CustomerDeposit from "../pages/customer/CustomerDeposit";
 import PendingSales from "../pages/sales/pendingSales";
 import ReciveForm from "../pages/sales/ReciveForm";
@@ -207,8 +206,6 @@ import SalesBySupplierReport from "../pages/production/reports/SalesBySupplierRe
 // Asset Register Components
 import AssetRegister from "../pages/assets/AssetRegister";
 import WipInventory from "../pages/production/WipInventory";
-import SupplierDepositForm from "../pages/report/transaction/SupplierDepositForm";
-import CustomerDepositForm from "../pages/report/transaction/CustomerDepositForm";
 import CustomerSecurityDepositForm from "../pages/customer/CustomerSecurityDepositForm";
 import SupplierPaymentReceipt from "../pages/purchase/SupplierPaymentReceipt";
 import ProductionReports from "../pages/report/components/ProductionReports";
@@ -221,6 +218,7 @@ import ProductCashExpense from "../pages/expenses/ProductCashExpense";
 import ReceivePayment from "../pages/payments/ReceivePayment";
 import ReceivedFunds from "../pages/payments/ReceivedFunds";
 import RecordPaymentForm from "../pages/payments/RecordPaymentForm";
+import RedirectToPayBills from "../pages/payments/RedirectToPayBills";
 import PaymentsMade from "../pages/payments/PaymentsMade";
 import RecordSupplierPaymentForm from "../pages/payments/RecordSupplierPaymentForm";
 import PayBills from "../pages/payments/PayBills";
@@ -566,7 +564,7 @@ const routeModules = {
           },
           {
             path: "pay",
-            element: <CustomerDepositForm />,
+            element: <RecordPaymentForm />,
           },
         ],
       },
@@ -885,7 +883,7 @@ const routeModules = {
       },
       {
         path: "registration",
-        element: <CustomerRegistartion />,
+        element: <Navigate to="/app/customers" replace />,
       },
       {
         path: "edit",
@@ -911,8 +909,7 @@ const routeModules = {
       },
       {
         path: "customer-deposit",
-        element: <CustomerDepositForm />,
-        // element: <PaymentPosting />,
+        element: <RecordPaymentForm />,
       },
       {
         path: "customer-security-deposit",
@@ -939,7 +936,7 @@ const routeModules = {
       },
       {
         path: "payment",
-        element: <SupplierPaymentForm />,
+        element: <RedirectToPayBills action="" />,
       },
       {
         path: "new",
@@ -947,8 +944,7 @@ const routeModules = {
       },
       {
         path: "supplier-deposit",
-        element: <SupplierDepositForm />,
-        // element: <PaymentPosting />,
+        element: <RedirectToPayBills action="deposit" />,
       },
       {
         path: "print",

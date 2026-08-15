@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Banknote,
   Building2,
@@ -8,6 +8,7 @@ import {
   CreditCard,
   History,
   Loader2,
+  Plus,
   RefreshCw,
   ScanLine,
   Search,
@@ -16,6 +17,8 @@ import {
 } from "lucide-react";
 import moment from "moment";
 import { toast } from "sonner";
+import { Typeahead } from "react-bootstrap-typeahead";
+import "react-bootstrap-typeahead/css/Typeahead.css";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import {
@@ -28,25 +31,83 @@ import {
 import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
 import { WorkflowStatusBadge } from "@/lib/saleWorkflowStatus.js";
 import useScanDetection from "@/hooks/useScanDetection";
+import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
+
+const cashPayThroughLabel = (option) =>
+  `${option?.description || option?.head || ""} (${option?.head || ""})`.trim();
+
+const bankPayThroughLabel = (option) => {
+  const name = option?.account_name || option?.bank_name || option?.head || "";
+  const num = option?.account_number || option?.head || "";
+  return num ? `${name} (${num})` : String(name);
+};
+
+const payThroughTypeaheadClass =
+  "w-full [&_.rbt-input-main]:h-10 [&_.rbt-input-main]:rounded-md [&_.rbt-input-main]:border [&_.rbt-input-main]:border-slate-300 [&_.rbt-input-main]:bg-white [&_.rbt-input-main]:px-3 [&_.rbt-input-main]:text-sm [&_.rbt-input-main]:shadow-none outline-none focus-within:[&_.rbt-input-main]:border-[var(--aa-accent)]";
 
 const METHOD_TABS = [
-  { id: "cash", label: "Cash", icon: Banknote },
-  { id: "transfer", label: "Transfer", icon: Building2 },
-  { id: "credit", label: "Credit", icon: CreditCard },
+  { id: "cash", label: "Cash", icon: Banknote, privilege: "Cash Collection" },
+  {
+    id: "transfer",
+    label: "Transfer",
+    icon: Building2,
+    privilege: "Transfer Collection",
+  },
+  {
+    id: "credit",
+    label: "Credit",
+    icon: CreditCard,
+    privilege: "Credit Collection",
+  },
 ];
+
+const COLLECTION_TAB_PRIVILEGES = METHOD_TABS.map((t) => t.privilege);
+
+const LEGACY_COLLECTION_PRIVILEGES = [
+  "Collection Points",
+  "Receive Payment",
+  "Payments",
+  "Cashier",
+];
+
+function parseFunctionalities(raw) {
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  if (typeof raw === "string" && raw.trim()) {
+    return raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function isSplitPaymentType(type) {
+  const t = String(type || "")
+    .toLowerCase()
+    .trim();
+  return (
+    t === "split" ||
+    t === "both" ||
+    t === "cash+transfer" ||
+    t === "cash_transfer" ||
+    t === "cash + transfer"
+  );
+}
 
 function paymentTypeLabel(type) {
   const t = String(type || "").toLowerCase();
-  if (t === "split") return "Cash + Transfer";
+  if (isSplitPaymentType(t)) return "Cash + Transfer";
   if (t === "transfer" || t === "bank") return "Transfer";
   if (t === "cash") return "Cash";
   if (t === "credit") return "Credit";
+  if (t === "customer_advance") return "Deposit";
   return type || "—";
 }
 
 function paymentTypeBadgeClass(type) {
   const t = String(type || "").toLowerCase();
-  if (t === "split") return "bg-violet-50 text-violet-700 ring-violet-200";
+  if (isSplitPaymentType(t))
+    return "bg-violet-50 text-violet-700 ring-violet-200";
   if (t === "transfer" || t === "bank")
     return "bg-sky-50 text-sky-700 ring-sky-200";
   if (t === "credit") return "bg-amber-50 text-amber-700 ring-amber-200";
@@ -56,26 +117,37 @@ function paymentTypeBadgeClass(type) {
 /** Cash + Transfer invoices appear on both Cash and Transfer tabs. */
 function matchesMethod(paymentType, method) {
   const pt = String(paymentType || "").toLowerCase();
-  if (method === "cash") return pt === "cash" || pt === "split";
+  if (method === "cash") return pt === "cash" || isSplitPaymentType(pt);
   if (method === "transfer")
-    return pt === "transfer" || pt === "bank" || pt === "split";
+    return pt === "transfer" || pt === "bank" || isSplitPaymentType(pt);
   if (method === "credit") return pt === "credit";
   return true;
 }
 
-/** Hide split rows once this collection side is already done. */
+/** Cash + Transfer: show on a tab while any balance remains to collect. */
 function needsCollectionSide(row, method) {
-  const pt = String(row?.payment_type || "").toLowerCase();
-  if (pt !== "split") return true;
-  const prog = row?.split_progress;
-  if (method === "cash") return !prog?.cash_done;
-  if (method === "transfer") return !prog?.transfer_done;
-  return true;
+  if (!isSplitPaymentType(row?.payment_type)) return true;
+  const due = Number(row?.amount) || 0;
+  const collected = Number(row?.split_progress?.collected_total) || 0;
+  const remaining = Number((due - collected).toFixed(2));
+  if (remaining <= 0.05) return false;
+  // Both Cash and Transfer tabs show until the invoice is fully collected
+  return method === "cash" || method === "transfer";
 }
 
 export default function ReceivePayment() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
+
+  const functionalities = useMemo(() => {
+    return [
+      ...new Set([
+        ...parseFunctionalities(activeBusiness?.functionalities),
+        ...parseFunctionalities(user?.functionalities),
+      ]),
+    ];
+  }, [activeBusiness?.functionalities, user?.functionalities]);
 
   const cashierType = useMemo(() => {
     const role = String(user?.role || "").toLowerCase();
@@ -86,15 +158,36 @@ export default function ReceivePayment() {
     return "";
   }, [user?.role, user?.cashier_type]);
 
-  const visibleMethodTabs = useMemo(() => {
-    if (cashierType === "cash") {
-      return METHOD_TABS.filter((t) => t.id === "cash");
-    }
-    if (cashierType === "transfer") {
-      return METHOD_TABS.filter((t) => t.id === "transfer");
-    }
-    return METHOD_TABS;
-  }, [cashierType]);
+  const canViewCollectionTab = useCallback(
+    (privilege) => {
+      // Role-based cashier lock still wins
+      if (cashierType === "cash") return privilege === "Cash Collection";
+      if (cashierType === "transfer")
+        return privilege === "Transfer Collection";
+
+      // No privilege list configured → full access (admin / legacy)
+      if (!functionalities.length) return true;
+
+      if (functionalities.includes(privilege)) return true;
+
+      const hasAnyTabPriv = COLLECTION_TAB_PRIVILEGES.some((p) =>
+        functionalities.includes(p),
+      );
+      // Parent / legacy keys only (no Cash/Transfer/Credit yet) → all tabs
+      if (!hasAnyTabPriv) {
+        return LEGACY_COLLECTION_PRIVILEGES.some((p) =>
+          functionalities.includes(p),
+        );
+      }
+      return false;
+    },
+    [cashierType, functionalities],
+  );
+
+  const visibleMethodTabs = useMemo(
+    () => METHOD_TABS.filter((t) => canViewCollectionTab(t.privilege)),
+    [canViewCollectionTab],
+  );
 
   const [methodTab, setMethodTab] = useState("cash");
   const [activeTab, setActiveTab] = useState("pending");
@@ -122,9 +215,18 @@ export default function ReceivePayment() {
   const [cashAmount, setCashAmount] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
 
+  const [advanceOpen, setAdvanceOpen] = useState(false);
+  const [advanceCustomer, setAdvanceCustomer] = useState(null);
+  const [advanceMode, setAdvanceMode] = useState("cash"); // cash | transfer | split
+  const [advanceAmount, setAdvanceAmount] = useState("");
+  const [advanceCashAmount, setAdvanceCashAmount] = useState("");
+  const [advanceTransferAmount, setAdvanceTransferAmount] = useState("");
+  const [advanceNarration, setAdvanceNarration] = useState("");
+  const [advanceSubmitting, setAdvanceSubmitting] = useState(false);
+
   const amountDue = Number(selected?.amount) || 0;
   const paymentType = String(selected?.payment_type || "").toLowerCase();
-  const isSplit = paymentType === "split";
+  const isSplit = isSplitPaymentType(paymentType);
   // Split invoices: show only the active tab’s side (cash person vs transfer person)
   const collectionSide = isSplit
     ? methodTab === "transfer"
@@ -157,12 +259,15 @@ export default function ReceivePayment() {
     : amountDue;
 
   const cashAccounts = useAdvancePaymentAccounts(
-    collectOpen && showCashFields,
+    (collectOpen && showCashFields) ||
+      (advanceOpen && (advanceMode === "cash" || advanceMode === "split")),
     activeBusiness?.id,
     "cash",
   );
   const bankAccounts = useAdvancePaymentAccounts(
-    collectOpen && showTransferFields,
+    (collectOpen && showTransferFields) ||
+      (advanceOpen &&
+        (advanceMode === "transfer" || advanceMode === "split")),
     activeBusiness?.id,
     "bank",
   );
@@ -217,10 +322,20 @@ export default function ReceivePayment() {
     fetchDashboard();
   }, [fetchDashboard]);
 
+  // Cash + Transfer: always start amounts at empty when opening collect
   useEffect(() => {
-    if (!collectOpen) return;
+    if (!collectOpen || !selected) return;
+    if (!isSplitPaymentType(selected.payment_type)) return;
+    setCashAmount("");
+    setTransferAmount("");
+  }, [collectOpen, selected?.sale_code, selected?.payment_type]);
+
+  useEffect(() => {
+    if (!collectOpen && !advanceOpen) return;
     if (
-      showCashFields &&
+      (showCashFields ||
+        (advanceOpen &&
+          (advanceMode === "cash" || advanceMode === "split"))) &&
       !cashAccounts.accountHead?.head &&
       cashAccounts.headList?.length
     ) {
@@ -228,6 +343,8 @@ export default function ReceivePayment() {
     }
   }, [
     collectOpen,
+    advanceOpen,
+    advanceMode,
     showCashFields,
     cashAccounts.accountHead?.head,
     cashAccounts.headList,
@@ -235,9 +352,11 @@ export default function ReceivePayment() {
   ]);
 
   useEffect(() => {
-    if (!collectOpen) return;
+    if (!collectOpen && !advanceOpen) return;
     if (
-      showTransferFields &&
+      (showTransferFields ||
+        (advanceOpen &&
+          (advanceMode === "transfer" || advanceMode === "split"))) &&
       !bankAccounts.bankAccount?.id &&
       bankAccounts.accountList?.length
     ) {
@@ -245,6 +364,8 @@ export default function ReceivePayment() {
     }
   }, [
     collectOpen,
+    advanceOpen,
+    advanceMode,
     showTransferFields,
     bankAccounts.bankAccount?.id,
     bankAccounts.accountList,
@@ -360,15 +481,218 @@ export default function ReceivePayment() {
   }, [pending, creditPending, methodTab, search]);
 
   const filteredHistory = useMemo(() => {
-    let list = history.filter((r) => matchesMethod(r.payment_type, methodTab));
+    let list = history.filter((r) => {
+      if (methodTab === "credit") {
+        return String(r.payment_type || "").toLowerCase() === "credit";
+      }
+      return matchesMethod(r.payment_type, methodTab);
+    });
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((r) =>
-      [r.sale_code, r.customer_no, r.customer_name, r.status]
+      [
+        r.sale_code,
+        r.customer_no,
+        r.customer_name,
+        r.status,
+        r.status_label,
+        r.description,
+        r.kind,
+      ]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q)),
     );
   }, [history, methodTab, search]);
+
+  const openAdvanceSheet = useCallback((prefillCustomer = null) => {
+    const defaultMode =
+      methodTab === "transfer"
+        ? "transfer"
+        : methodTab === "cash"
+          ? "cash"
+          : "cash";
+    setAdvanceMode(defaultMode);
+    setAdvanceCustomer(prefillCustomer || null);
+    setAdvanceAmount("");
+    setAdvanceCashAmount("");
+    setAdvanceTransferAmount("");
+    setAdvanceNarration("Collection Points customer deposit");
+    setAdvanceOpen(true);
+  }, [methodTab]);
+
+  // Deep-link: /collection-points?action=deposit&customerNo=CUS-…
+  useEffect(() => {
+    const action = String(searchParams.get("action") || "").toLowerCase();
+    if (action !== "deposit" && action !== "make-deposit") return;
+    if (methodTab === "credit") setMethodTab("cash");
+    const customerNo = searchParams.get("customerNo") || "";
+    const customerName = searchParams.get("customerName") || "";
+    const prefill =
+      customerNo
+        ? {
+            customerNo,
+            fullname: customerName || customerNo,
+            name: customerName || customerNo,
+          }
+        : null;
+    openAdvanceSheet(prefill);
+    // Clear query so refresh doesn't reopen
+    const next = new URLSearchParams(searchParams);
+    next.delete("action");
+    next.delete("customerNo");
+    next.delete("customerName");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, openAdvanceSheet, methodTab]);
+
+  const closeAdvanceSheet = () => {
+    setAdvanceOpen(false);
+    setAdvanceCustomer(null);
+    setAdvanceAmount("");
+    setAdvanceCashAmount("");
+    setAdvanceTransferAmount("");
+    setAdvanceNarration("");
+  };
+
+  const submitCustomerAdvance = () => {
+    if (!activeBusiness?.id || !user?.id) {
+      toast.error("Session required");
+      return;
+    }
+    if (!advanceCustomer?.customerNo) {
+      toast.error("Select a customer");
+      return;
+    }
+
+    const cashAmt =
+      parseFloat(String(advanceCashAmount || advanceAmount).replace(/,/g, "")) ||
+      0;
+    const transferAmt =
+      parseFloat(String(advanceTransferAmount).replace(/,/g, "")) || 0;
+    const singleAmt =
+      parseFloat(String(advanceAmount).replace(/,/g, "")) || 0;
+
+    if (advanceMode === "split") {
+      if (cashAmt <= 0 || transferAmt <= 0) {
+        toast.error("Enter both cash and transfer amounts");
+        return;
+      }
+      if (!cashAccounts.accountHead?.head) {
+        toast.error("Select cash Pay Through");
+        return;
+      }
+      if (!bankAccounts.bankAccount?.id) {
+        toast.error("Select transfer Pay Through");
+        return;
+      }
+    } else if (advanceMode === "cash") {
+      if (singleAmt <= 0) {
+        toast.error("Enter advance amount");
+        return;
+      }
+      if (!cashAccounts.accountHead?.head) {
+        toast.error("Select cash Pay Through");
+        return;
+      }
+    } else {
+      if (singleAmt <= 0) {
+        toast.error("Enter advance amount");
+        return;
+      }
+      if (!bankAccounts.bankAccount?.id) {
+        toast.error("Select transfer Pay Through");
+        return;
+      }
+    }
+
+    const base = {
+      transaction_date: moment().format("YYYY-MM-DD"),
+      customer_no: advanceCustomer.customerNo,
+      facilityId: activeBusiness.id,
+      userId: user.id,
+      narration:
+        advanceNarration.trim() ||
+        "Collection Points customer deposit",
+      receivable_deposit_code: activeBusiness.receivable_accural_code,
+      receivable_code: activeBusiness.receivable_code,
+      pure_advance: true,
+      source: "collection_points",
+      invoices: [],
+    };
+
+    let payload;
+    if (advanceMode === "split") {
+      payload = {
+        ...base,
+        amount_paid: cashAmt + transferAmt,
+        mode_of_payment: "cash+transfer",
+        payment_splits: [
+          {
+            mode: "cash",
+            amount: cashAmt,
+            accountHead: {
+              head: cashAccounts.accountHead.head,
+              description: cashAccounts.accountHead.description,
+            },
+          },
+          {
+            mode: "bank",
+            amount: transferAmt,
+            bankAccount: { id: bankAccounts.bankAccount.id },
+          },
+        ],
+      };
+    } else if (advanceMode === "cash") {
+      payload = {
+        ...base,
+        amount_paid: singleAmt,
+        mode_of_payment: "cash",
+        accountHead: {
+          head: cashAccounts.accountHead.head,
+          description: cashAccounts.accountHead.description,
+        },
+      };
+    } else {
+      payload = {
+        ...base,
+        amount_paid: singleAmt,
+        mode_of_payment: "bank transfer",
+        bankAccount: { id: bankAccounts.bankAccount.id },
+      };
+    }
+
+    setAdvanceSubmitting(true);
+    _postApi(
+      "/api/v1/customer-advance-payment",
+      payload,
+      (resp) => {
+        setAdvanceSubmitting(false);
+        if (resp?.error) {
+          toast.error(String(resp.error));
+          return;
+        }
+        if (resp?.success) {
+          const ref =
+            resp.data?.reference_number ||
+            resp.data?.transaction_ref ||
+            "";
+          toast.success(
+            ref
+              ? `Customer deposit recorded (${ref})`
+              : "Customer deposit recorded",
+          );
+          closeAdvanceSheet();
+          fetchDashboard();
+          setActiveTab("history");
+        } else {
+          toast.error(resp?.message || "Could not record advance");
+        }
+      },
+      (err) => {
+        setAdvanceSubmitting(false);
+        toast.error(err?.message || "Could not record advance");
+      },
+    );
+  };
 
   const openCollect = (row) => {
     const pt = String(row?.payment_type || "").toLowerCase();
@@ -386,33 +710,8 @@ export default function ReceivePayment() {
     } else if (pt === "transfer" || pt === "bank") {
       setCashAmount("");
       setTransferAmount(String(due));
-    } else if (pt === "split") {
-      // Prefill a portion (not full) so cash/transfer each enter their side
-      const prog = row?.split_progress;
-      const otherDone =
-        methodTab === "transfer" ? !!prog?.cash_done : !!prog?.transfer_done;
-      if (otherDone) {
-        const rem = Number(
-          (due - (Number(prog?.collected_total) || 0)).toFixed(2),
-        );
-        if (methodTab === "transfer") {
-          setCashAmount("");
-          setTransferAmount(String(rem > 0 ? rem : ""));
-        } else {
-          setCashAmount(String(rem > 0 ? rem : ""));
-          setTransferAmount("");
-        }
-      } else {
-        const half = Number((due / 2).toFixed(2));
-        if (methodTab === "transfer") {
-          setCashAmount("");
-          setTransferAmount(String(half));
-        } else {
-          setCashAmount(String(half));
-          setTransferAmount("");
-        }
-      }
     } else {
+      // Cash + Transfer (and unknown): leave amounts empty for the cashier to enter
       setCashAmount("");
       setTransferAmount("");
     }
@@ -443,7 +742,7 @@ export default function ReceivePayment() {
           if (cashierType !== "cash") setMethodTab("transfer");
         } else if (pt === "cash") {
           if (cashierType !== "transfer") setMethodTab("cash");
-        } else if (pt === "split") {
+        } else if (isSplitPaymentType(pt)) {
           // Prefer the side this cashier can collect; else keep current cash/transfer tab
           if (cashierType === "transfer") setMethodTab("transfer");
           else if (cashierType === "cash") setMethodTab("cash");
@@ -575,25 +874,13 @@ export default function ReceivePayment() {
         toast.error("Enter your portion amount");
         return;
       }
-      const otherDone =
-        collectionSide === "cash"
-          ? !!splitProgress?.transfer_done
-          : !!splitProgress?.cash_done;
-      if (!otherDone && total >= amountDue - 0.05) {
-        toast.error(
-          "Enter only your portion — leave the rest for the other collection point",
-        );
+      if (remainingDue <= 0.05) {
+        toast.error("This invoice is already fully collected");
         return;
       }
       if (total - remainingDue > 0.05) {
         toast.error(
           `Amount cannot exceed remaining ₦${formatNumber1(remainingDue)}`,
-        );
-        return;
-      }
-      if (otherDone && Math.abs(total - remainingDue) > 0.05) {
-        toast.error(
-          `Amount must equal remaining ₦${formatNumber1(remainingDue)}`,
         );
         return;
       }
@@ -611,8 +898,20 @@ export default function ReceivePayment() {
         facilityId: activeBusiness.id,
         saleCode: selected.sale_code,
         updated_by: user?.id,
+        collector_name:
+          [user?.firstname, user?.lastname].filter(Boolean).join(" ").trim() ||
+          user?.name ||
+          user?.username ||
+          undefined,
         cashier_type: cashierType || undefined,
-        collection_side: isSplit ? collectionSide : undefined,
+        collection_side:
+          methodTab === "transfer"
+            ? "transfer"
+            : methodTab === "cash"
+              ? "cash"
+              : isSplit
+                ? collectionSide
+                : undefined,
         payment_splits: splits,
         note: isSplit
           ? `${collectionSide === "transfer" ? "Transfer" : "Cash"} portion at Collection Points`
@@ -644,6 +943,25 @@ export default function ReceivePayment() {
       ? "xl:grid-cols-1 sm:grid-cols-1"
       : "xl:grid-cols-2";
 
+  if (!visibleMethodTabs.length) {
+    return (
+      <div className="min-h-full bg-[#f5f7fb] px-4 py-5 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Collection Points
+          </h1>
+          <div className="mt-6 rounded-xl border border-slate-200 bg-white p-8 text-center">
+            <p className="text-sm font-medium text-slate-600">
+              You do not have permission to collect payments. Ask an admin to
+              grant Cash Collection, Transfer Collection, or Credit Collection
+              under Sales → Collection Points.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-full bg-[#f5f7fb] px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-5">
@@ -653,8 +971,9 @@ export default function ReceivePayment() {
               Collection Points
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Cash + Transfer invoices appear on both Cash and Transfer tabs —
-              each side collects only their amount.
+              Customer collection hub: Collect Payment on pending invoices, Make
+              Deposit for prepaid funds, and Apply Deposit to open invoices.
+              Supplier payments are handled under Purchase → Pay Bills.
               {cashierType ? (
                 <span className="ml-1 font-medium text-[var(--aa-navy)]">
                   You are a {cashierType === "transfer" ? "Transfer" : "Cash"}{" "}
@@ -663,14 +982,32 @@ export default function ReceivePayment() {
               ) : null}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={fetchDashboard}
-            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {methodTab !== "credit" ? (
+              <button
+                type="button"
+                onClick={() => openAdvanceSheet()}
+                className="inline-flex items-center gap-2 rounded-md border border-[var(--aa-navy)] bg-white px-3 py-2 text-sm font-medium text-[var(--aa-navy)] shadow-sm hover:bg-slate-50"
+              >
+                <Plus className="h-4 w-4" />
+                Make Deposit
+              </button>
+            ) : null}
+            <Link
+              to="/app/payments/apply-advance"
+              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              Apply Deposit
+            </Link>
+            <button
+              type="button"
+              onClick={fetchDashboard}
+              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* Method sub-tabs */}
@@ -907,8 +1244,7 @@ export default function ReceivePayment() {
                               row.payment_type || (methodTab === "credit" ? "credit" : ""),
                             )}`}
                           >
-                            {String(row.payment_type || "").toLowerCase() ===
-                            "split" ? (
+                            {isSplitPaymentType(row.payment_type) ? (
                               <Split className="h-3 w-3" />
                             ) : methodTab === "credit" ||
                               String(row.payment_type || "").toLowerCase() ===
@@ -920,15 +1256,19 @@ export default function ReceivePayment() {
                                 (methodTab === "credit" ? "credit" : ""),
                             )}
                           </span>
-                          {String(row.payment_type || "").toLowerCase() ===
-                          "split" ? (
+                          {isSplitPaymentType(row.payment_type) ? (
                             <div className="mt-1.5 space-y-0.5 text-[11px] text-slate-500">
                               <div>
                                 Cash:{" "}
-                                {row.split_progress?.cash_done ? (
+                                {Number(row.split_progress?.cash) > 0 ? (
                                   <span className="font-medium text-emerald-600">
-                                    Collected ₦
-                                    {formatNumber1(row.split_progress.cash)}
+                                    ₦{formatNumber1(row.split_progress.cash)}
+                                    {row.split_progress?.cash_by_name ? (
+                                      <span className="ml-1 font-normal text-slate-500">
+                                        · signed by{" "}
+                                        {row.split_progress.cash_by_name}
+                                      </span>
+                                    ) : null}
                                   </span>
                                 ) : (
                                   <span className="font-medium text-amber-600">
@@ -938,16 +1278,41 @@ export default function ReceivePayment() {
                               </div>
                               <div>
                                 Transfer:{" "}
-                                {row.split_progress?.transfer_done ? (
+                                {Number(row.split_progress?.transfer) > 0 ? (
                                   <span className="font-medium text-emerald-600">
-                                    Collected ₦
+                                    ₦
                                     {formatNumber1(row.split_progress.transfer)}
+                                    {row.split_progress?.transfer_by_name ? (
+                                      <span className="ml-1 font-normal text-slate-500">
+                                        · signed by{" "}
+                                        {row.split_progress.transfer_by_name}
+                                      </span>
+                                    ) : null}
                                   </span>
                                 ) : (
                                   <span className="font-medium text-amber-600">
                                     Pending
                                   </span>
                                 )}
+                              </div>
+                              <div>
+                                Remaining:{" "}
+                                <span className="font-medium text-slate-700">
+                                  ₦
+                                  {formatNumber1(
+                                    Math.max(
+                                      0,
+                                      Number(
+                                        (
+                                          (Number(row.amount) || 0) -
+                                          (Number(
+                                            row.split_progress?.collected_total,
+                                          ) || 0)
+                                        ).toFixed(2),
+                                      ),
+                                    ),
+                                  )}
+                                </span>
                               </div>
                             </div>
                           ) : null}
@@ -1004,18 +1369,26 @@ export default function ReceivePayment() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredHistory.map((row) => (
+                  {filteredHistory.map((row) => {
+                    const isAdvance = row.kind === "customer_advance";
+                    const updated =
+                      row.updatedAt || row.updated_at || row.createdAt;
+                    return (
                     <tr key={row.id || row.sale_code} className="hover:bg-slate-50/80">
                       <td className="px-4 py-3 font-mono text-xs font-medium">
-                        <Link
-                          to={`/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-                            row.sale_code,
-                          )}`}
-                          className="text-[var(--aa-accent)] hover:underline"
-                          title="Open invoice PDF"
-                        >
-                          {row.sale_code}
-                        </Link>
+                        {isAdvance ? (
+                          <span className="text-slate-800">{row.sale_code}</span>
+                        ) : (
+                          <Link
+                            to={`/app/sales/invoice-preview?sale_code=${encodeURIComponent(
+                              row.sale_code,
+                            )}`}
+                            className="text-[var(--aa-accent)] hover:underline"
+                            title="Open invoice PDF"
+                          >
+                            {row.sale_code}
+                          </Link>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="font-medium text-slate-900">
@@ -1031,7 +1404,9 @@ export default function ReceivePayment() {
                             row.payment_type,
                           )}`}
                         >
-                          {paymentTypeLabel(row.payment_type)}
+                          {isAdvance
+                            ? `Deposit · ${paymentTypeLabel(row.payment_type)}`
+                            : paymentTypeLabel(row.payment_type)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">
@@ -1044,12 +1419,13 @@ export default function ReceivePayment() {
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-500">
-                        {row.updatedAt
-                          ? moment(row.updatedAt).format("DD MMM, HH:mm")
+                        {updated
+                          ? moment(updated).format("DD MMM, HH:mm")
                           : "—"}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1101,12 +1477,21 @@ export default function ReceivePayment() {
                     <span className="font-semibold text-slate-800">
                       {collectionSide === "transfer" ? "Transfer" : "Cash"}
                     </span>{" "}
-                    portion only.
+                    part payment — both points can collect until the invoice is
+                    fully paid.
                   </p>
                   <p>
-                    Already collected: cash ₦
-                    {formatNumber1(splitProgress?.cash || 0)} · transfer ₦
+                    Cash collected: ₦{formatNumber1(splitProgress?.cash || 0)}
+                    {splitProgress?.cash_by_name
+                      ? ` · signed by ${splitProgress.cash_by_name}`
+                      : ""}
+                  </p>
+                  <p>
+                    Transfer collected: ₦
                     {formatNumber1(splitProgress?.transfer || 0)}
+                    {splitProgress?.transfer_by_name
+                      ? ` · signed by ${splitProgress.transfer_by_name}`
+                      : ""}
                   </p>
                   <p>
                     Remaining:{" "}
@@ -1114,6 +1499,19 @@ export default function ReceivePayment() {
                       ₦{formatNumber1(remainingDue)}
                     </span>
                   </p>
+                  {(user?.firstname || user?.name || user?.username) && (
+                    <p className="text-slate-500">
+                      This collection will be signed by{" "}
+                      <span className="font-medium text-slate-700">
+                        {[user?.firstname, user?.lastname]
+                          .filter(Boolean)
+                          .join(" ")
+                          .trim() ||
+                          user?.name ||
+                          user?.username}
+                      </span>
+                    </p>
+                  )}
                 </div>
               ) : null}
             </div>
@@ -1140,23 +1538,28 @@ export default function ReceivePayment() {
                 <label className="text-sm font-medium text-slate-700">
                   {isCashOnly || isSplit ? "Pay Through" : "Cash account"}
                 </label>
-                <select
-                  value={cashAccounts.accountHead?.head || ""}
-                  onChange={(e) => {
-                    const head = cashAccounts.headList.find(
-                      (h) => String(h.head) === e.target.value,
-                    );
-                    cashAccounts.setAccountHead(head || {});
+                <Typeahead
+                  id="collection-pay-through-cash"
+                  labelKey={cashPayThroughLabel}
+                  options={cashAccounts.headList || []}
+                  placeholder="Search cash account…"
+                  clearButton
+                  positionFixed
+                  flip
+                  className={payThroughTypeaheadClass}
+                  selected={
+                    cashAccounts.accountHead?.head
+                      ? (cashAccounts.headList || []).filter(
+                          (h) =>
+                            String(h.head) ===
+                            String(cashAccounts.accountHead.head),
+                        )
+                      : []
+                  }
+                  onChange={(items) => {
+                    cashAccounts.setAccountHead(items?.[0] || {});
                   }}
-                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)]"
-                >
-                  <option value="">Select cash account</option>
-                  {(cashAccounts.headList || []).map((h) => (
-                    <option key={h.head} value={h.head}>
-                      {h.description || h.head} ({h.head})
-                    </option>
-                  ))}
-                </select>
+                />
                 {paymentType === "cash" ? (
                   <p className="text-xs text-slate-500">
                     Cash collections use Cash on Hand only.
@@ -1187,31 +1590,45 @@ export default function ReceivePayment() {
                 <label className="text-sm font-medium text-slate-700">
                   {isTransferOnly || isSplit ? "Pay Through" : "Bank account"}
                 </label>
-                <select
-                  value={bankAccounts.bankAccount?.id || ""}
-                  onChange={(e) => {
-                    const bank = bankAccounts.accountList.find(
-                      (b) => String(b.id) === e.target.value,
-                    );
-                    bankAccounts.setBankAccount(bank || null);
+                <Typeahead
+                  id="collection-pay-through-bank"
+                  labelKey={bankPayThroughLabel}
+                  options={bankAccounts.accountList || []}
+                  placeholder="Search bank account…"
+                  clearButton
+                  positionFixed
+                  flip
+                  className={payThroughTypeaheadClass}
+                  selected={
+                    bankAccounts.bankAccount?.id
+                      ? (bankAccounts.accountList || []).filter(
+                          (b) =>
+                            String(b.id) ===
+                            String(bankAccounts.bankAccount.id),
+                        )
+                      : []
+                  }
+                  onChange={(items) => {
+                    bankAccounts.setBankAccount(items?.[0] || null);
                   }}
-                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)]"
-                >
-                  <option value="">Select bank account</option>
-                  {(bankAccounts.accountList || []).map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.account_name || b.bank_name || b.head} (
-                      {b.account_number || b.head})
-                    </option>
-                  ))}
-                </select>
+                  filterBy={(option, props) => {
+                    const q = String(props.text || "")
+                      .toLowerCase()
+                      .trim();
+                    if (!q) return true;
+                    const hay = bankPayThroughLabel(option).toLowerCase();
+                    return hay.includes(q);
+                  }}
+                />
               </div>
             ) : null}
 
             {isSplit ? (
               <p className="text-xs text-slate-500">
-                Entered: ₦{formatNumber1(splitHintTotal)} · Remaining due ₦
-                {formatNumber1(remainingDue)}
+                Entered: ₦{formatNumber1(splitHintTotal)} · Remaining after this: ₦
+                {formatNumber1(
+                  Math.max(0, Number((remainingDue - splitHintTotal).toFixed(2))),
+                )}
               </p>
             ) : null}
           </div>
@@ -1239,6 +1656,281 @@ export default function ReceivePayment() {
               {isSplit
                 ? `Confirm ${collectionSide === "transfer" ? "Transfer" : "Cash"}`
                 : "Confirm Payment"}
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet
+        open={advanceOpen}
+        onOpenChange={(open) => {
+          if (!open) closeAdvanceSheet();
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 sm:!max-w-md [&>button]:text-white [&>button]:opacity-90 [&>button]:hover:bg-white/15"
+        >
+          <SheetHeader className="shrink-0 space-y-1 border-b border-white/10 bg-[var(--aa-navy)] px-5 py-4 text-left">
+            <SheetTitle className="pr-8 text-lg font-semibold text-white">
+              Make Deposit
+            </SheetTitle>
+            <SheetDescription className="text-sm text-white/70">
+              Record a prepaid customer deposit (Cash, Transfer, or Cash +
+              Transfer). Use Collect Payment for invoices awaiting collection.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">
+                Customer
+              </label>
+              <SearchCustomerInput
+                selected={advanceCustomer ? [advanceCustomer] : []}
+                onChange={(cus) => setAdvanceCustomer(cus)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">
+                Payment method
+              </label>
+              <select
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                value={advanceMode}
+                onChange={(e) => {
+                  setAdvanceMode(e.target.value);
+                  setAdvanceAmount("");
+                  setAdvanceCashAmount("");
+                  setAdvanceTransferAmount("");
+                }}
+              >
+                <option value="cash">Cash</option>
+                <option value="transfer">Transfer</option>
+                <option value="split">Cash + Transfer</option>
+              </select>
+            </div>
+
+            {advanceMode === "split" ? (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">
+                    Cash amount
+                  </label>
+                  <input
+                    inputMode="decimal"
+                    value={advanceCashAmount}
+                    onChange={(e) =>
+                      setAdvanceCashAmount(
+                        e.target.value.replace(/[^\d.]/g, ""),
+                      )
+                    }
+                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                    placeholder="0.00"
+                  />
+                  <label className="text-sm font-medium text-slate-700">
+                    Pay Through (Cash)
+                  </label>
+                  <Typeahead
+                    id="advance-pay-through-cash"
+                    labelKey={cashPayThroughLabel}
+                    options={cashAccounts.headList || []}
+                    placeholder="Search cash account…"
+                    clearButton
+                    positionFixed
+                    flip
+                    className={payThroughTypeaheadClass}
+                    selected={
+                      cashAccounts.accountHead?.head
+                        ? (cashAccounts.headList || []).filter(
+                            (h) =>
+                              String(h.head) ===
+                              String(cashAccounts.accountHead.head),
+                          )
+                        : []
+                    }
+                    onChange={(items) => {
+                      const cash = items?.[0];
+                      cashAccounts.setAccountHead(
+                        cash
+                          ? {
+                              head: cash.head || "",
+                              description: cash.description || "",
+                            }
+                          : {},
+                      );
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">
+                    Transfer amount
+                  </label>
+                  <input
+                    inputMode="decimal"
+                    value={advanceTransferAmount}
+                    onChange={(e) =>
+                      setAdvanceTransferAmount(
+                        e.target.value.replace(/[^\d.]/g, ""),
+                      )
+                    }
+                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                    placeholder="0.00"
+                  />
+                  <label className="text-sm font-medium text-slate-700">
+                    Pay Through (Transfer)
+                  </label>
+                  <Typeahead
+                    id="advance-pay-through-bank"
+                    labelKey={bankPayThroughLabel}
+                    options={bankAccounts.accountList || []}
+                    placeholder="Search bank account…"
+                    clearButton
+                    positionFixed
+                    flip
+                    className={payThroughTypeaheadClass}
+                    selected={
+                      bankAccounts.bankAccount?.id
+                        ? (bankAccounts.accountList || []).filter(
+                            (b) =>
+                              String(b.id) ===
+                              String(bankAccounts.bankAccount.id),
+                          )
+                        : []
+                    }
+                    onChange={(items) => {
+                      bankAccounts.setBankAccount(items?.[0] || null);
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-slate-500">
+                  Total advance: ₦
+                  {formatNumber1(
+                    (parseFloat(advanceCashAmount) || 0) +
+                      (parseFloat(advanceTransferAmount) || 0),
+                  )}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">
+                    Advance amount
+                  </label>
+                  <input
+                    inputMode="decimal"
+                    value={advanceAmount}
+                    onChange={(e) =>
+                      setAdvanceAmount(e.target.value.replace(/[^\d.]/g, ""))
+                    }
+                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                    placeholder="0.00"
+                  />
+                </div>
+                {advanceMode === "cash" ? (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">
+                      Pay Through
+                    </label>
+                    <Typeahead
+                      id="advance-pay-through-cash-only"
+                      labelKey={cashPayThroughLabel}
+                      options={cashAccounts.headList || []}
+                      placeholder="Search cash account…"
+                      clearButton
+                      positionFixed
+                      flip
+                      className={payThroughTypeaheadClass}
+                      selected={
+                        cashAccounts.accountHead?.head
+                          ? (cashAccounts.headList || []).filter(
+                              (h) =>
+                                String(h.head) ===
+                                String(cashAccounts.accountHead.head),
+                            )
+                          : []
+                      }
+                      onChange={(items) => {
+                        const cash = items?.[0];
+                        cashAccounts.setAccountHead(
+                          cash
+                            ? {
+                                head: cash.head || "",
+                                description: cash.description || "",
+                              }
+                            : {},
+                        );
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">
+                      Pay Through
+                    </label>
+                    <Typeahead
+                      id="advance-pay-through-bank-only"
+                      labelKey={bankPayThroughLabel}
+                      options={bankAccounts.accountList || []}
+                      placeholder="Search bank account…"
+                      clearButton
+                      positionFixed
+                      flip
+                      className={payThroughTypeaheadClass}
+                      selected={
+                        bankAccounts.bankAccount?.id
+                          ? (bankAccounts.accountList || []).filter(
+                              (b) =>
+                                String(b.id) ===
+                                String(bankAccounts.bankAccount.id),
+                            )
+                          : []
+                      }
+                      onChange={(items) => {
+                        bankAccounts.setBankAccount(items?.[0] || null);
+                      }}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">
+                Narration
+              </label>
+              <textarea
+                value={advanceNarration}
+                onChange={(e) => setAdvanceNarration(e.target.value)}
+                rows={2}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                placeholder="Collection Points customer deposit"
+              />
+            </div>
+          </div>
+
+          <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+            <button
+              type="button"
+              onClick={closeAdvanceSheet}
+              disabled={advanceSubmitting}
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={submitCustomerAdvance}
+              disabled={advanceSubmitting}
+              className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:opacity-50"
+            >
+              {advanceSubmitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" />
+              )}
+              Make Deposit
             </button>
           </div>
         </SheetContent>

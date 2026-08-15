@@ -36,7 +36,7 @@ const FILTERS = [
   },
   {
     id: "paid",
-    label: "Separation",
+    label: "Invoice Separation",
     statuses: [
       "payment_confirmed",
       "invoice_separation",
@@ -46,7 +46,7 @@ const FILTERS = [
   },
   {
     id: "warehouse",
-    label: "Warehouse",
+    label: "Warehouse Collection",
     statuses: ["warehouse_picking"],
   },
   { id: "credit", label: "Credit", statuses: ["awaiting_credit_approval"] },
@@ -316,19 +316,19 @@ export default function SalesManagement() {
       ].includes(s)
     ) {
       return {
-        title: "Next: Separation",
+        title: "Next: Invoice Separation",
         description:
-          "Split the invoice into warehouse copies on the Separation page.",
+          "Split the invoice into warehouse copies on Invoice Separation.",
         to: `/app/sales/separation?sale_code=${encodeURIComponent(selected.sale_code)}`,
-        label: "Open Separation",
+        label: "Open Invoice Separation",
       };
     }
     if (s === "warehouse_picking") {
       return {
-        title: "Next: Warehouse collection",
+        title: "Next: Warehouse Collection",
         description: "Collect goods and print the collection receipt.",
         to: "/app/sales/warehouse-requests",
-        label: "Open Warehouse Requests",
+        label: "Open Warehouse Collection",
       };
     }
     return null;
@@ -345,8 +345,8 @@ export default function SalesManagement() {
                 Sales Process
               </h1>
               <p className="text-gray-600 mt-1">
-                Track invoices through pay → separation → warehouse. Actions are
-                done on Collection Points, Separation, and Warehouse pages.
+                Customer → Create Invoice → Collection Points → Invoice
+                Separation → Warehouse Collection.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -369,7 +369,7 @@ export default function SalesManagement() {
                 className="flex items-center gap-2"
               >
                 <Printer className="w-4 h-4" />
-                Separation
+                Invoice Separation
               </Button>
               <Button
                 type="button"
@@ -378,14 +378,14 @@ export default function SalesManagement() {
                 className="flex items-center gap-2"
               >
                 <Package className="w-4 h-4" />
-                Warehouse
+                Warehouse Collection
               </Button>
               <Button
                 onClick={() => navigate("/app/sales/sale?view=lines")}
                 className="flex items-center gap-2"
                 style={{ backgroundColor: "#4267B2" }}
               >
-                New Invoice
+                Create Invoice
               </Button>
             </div>
           </div>
@@ -604,8 +604,8 @@ export default function SalesManagement() {
                       </Button>
                     </div>
                     <p className="text-xs text-violet-800 mb-3">
-                      Read-only here. Print and collect from Separation /
-                      Warehouse Requests.
+                      Read-only here. Print and collect from Invoice Separation /
+                      Warehouse Collection.
                     </p>
                     {packsLoading ? (
                       <Skeleton className="h-20 w-full" />

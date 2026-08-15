@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import moment from "moment";
 import { toast } from "sonner";
@@ -29,12 +29,19 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import ApplySupplierDeposit from "@/components/pages/payments/ApplySupplierDeposit";
+import SupplierAdvancePaymentModal from "@/components/common/SupplierAdvancePaymentModal";
 
 /**
  * Pay Bills — payment history list, matching Bill / app list layout.
+ *
+ * Actions (all supplier payment flows live here):
+ * - New Payment → pay unpaid vendor bills
+ * - Make Deposit → record a supplier prepaid deposit
+ * - Apply Deposit → apply existing supplier deposit to bills
  */
 export default function PaymentsMade() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id;
 
@@ -44,6 +51,8 @@ export default function PaymentsMade() {
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
   const [applyDepositOpen, setApplyDepositOpen] = useState(false);
+  const [makeDepositOpen, setMakeDepositOpen] = useState(false);
+  const [depositSupplier, setDepositSupplier] = useState(null);
   const pageSize = 20;
 
   const fetchList = useCallback(() => {
@@ -76,6 +85,37 @@ export default function PaymentsMade() {
   useEffect(() => {
     fetchList();
   }, [fetchList]);
+
+  // Deep-link: /pay-bills?action=deposit&supplierNo=…
+  useEffect(() => {
+    const action = String(searchParams.get("action") || "").toLowerCase();
+    if (action === "deposit" || action === "make-deposit") {
+      const supplierNo = searchParams.get("supplierNo") || "";
+      const supplierName = searchParams.get("supplierName") || "";
+      setDepositSupplier(
+        supplierNo
+          ? {
+              supplier_number: supplierNo,
+              supplierNo,
+              supplier_name: supplierName || supplierNo,
+            }
+          : null,
+      );
+      setMakeDepositOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("action");
+      next.delete("supplierNo");
+      next.delete("supplierName");
+      setSearchParams(next, { replace: true });
+      return;
+    }
+    if (action === "apply-deposit" || action === "apply") {
+      setApplyDepositOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("action");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const handleSearchChange = (e) => {
     setSearchInput(e.target.value);
@@ -209,7 +249,9 @@ export default function PaymentsMade() {
         <div>
           <h1 className="text-3xl font-bold">Pay Bills</h1>
           <p className="text-muted-foreground">
-            Record and track vendor bill payments
+            Supplier payment hub: New Payment for unpaid bills, Make Deposit for
+            prepaid vendor funds, Apply Deposit to bills. Customer collections
+            are under Sales → Collection Points.
           </p>
         </div>
       </div>
@@ -235,6 +277,17 @@ export default function PaymentsMade() {
               <option value="bank">Bank</option>
               <option value="cheque">Cheque</option>
             </select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={() => {
+                setDepositSupplier(null);
+                setMakeDepositOpen(true);
+              }}
+            >
+              Make Deposit
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -383,6 +436,20 @@ export default function PaymentsMade() {
           ) : null}
         </SheetContent>
       </Sheet>
+
+      <SupplierAdvancePaymentModal
+        open={makeDepositOpen}
+        onClose={() => {
+          setMakeDepositOpen(false);
+          setDepositSupplier(null);
+        }}
+        onSuccess={() => {
+          setMakeDepositOpen(false);
+          setDepositSupplier(null);
+          fetchList();
+        }}
+        party={depositSupplier}
+      />
     </div>
   );
 }

@@ -350,7 +350,7 @@ function InvoicePreview() {
             ${
               isTerminalReceipt
                 ? `
-            @page { size: portrait; margin: 1mm; }
+            @page { size: 80mm auto; margin: 0; }
             /* Hide everything except the thermal receipts */
             body * { visibility: hidden !important; }
             .print-receipt-only,
@@ -422,7 +422,7 @@ function InvoicePreview() {
               width: 80mm !important;
               max-width: 80mm !important;
               margin: 0 !important;
-              padding: 1mm 0.8mm !important;
+              padding: 0.5mm !important;
               box-shadow: none !important;
               border: none !important;
               background: white !important;

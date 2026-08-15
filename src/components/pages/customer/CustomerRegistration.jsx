@@ -1295,16 +1295,18 @@ const CustomerRegistartion = ({
 };
 
 CustomerRegistartion.propTypes = {
-  closeModal: PropTypes.func.isRequired,
+  closeModal: PropTypes.func,
   empty: PropTypes.func,
-  showModal: PropTypes.bool.isRequired,
+  showModal: PropTypes.bool,
   getList: PropTypes.func,
   onSuccess: PropTypes.func,
   selectedCustomer: PropTypes.object,
 };
 
 CustomerRegistartion.defaultProps = {
+  closeModal: () => {},
   empty: () => {},
+  showModal: false,
   getList: () => {},
   onSuccess: null,
   selectedCustomer: null,

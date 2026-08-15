@@ -243,11 +243,25 @@ function ThermalReceiptCopy({
         <div className="tr-dual-sign">
           <div className="tr-sign-block">
             <div className="tr-sign-line" />
-            <div className="tr-muted">Released by (Warehouse)</div>
+            <div className="tr-muted">
+              Released by (
+              {invoiceData.branch_name ||
+                invoiceData.warehouse_name ||
+                invoiceData.store_name ||
+                "Warehouse"}
+              )
+            </div>
           </div>
           <div className="tr-sign-block">
             <div className="tr-sign-line" />
-            <div className="tr-muted">Received by (Customer)</div>
+            <div className="tr-muted">
+              Received by (
+              {customer.customer_name ||
+                customer.fullname ||
+                invoiceData.customer_name ||
+                "Customer"}
+              )
+            </div>
           </div>
         </div>
       ) : null}
@@ -311,10 +325,10 @@ export default function ThermalReceipt({
           width: 80mm;
           max-width: 80mm;
           margin: 0 auto;
-          padding: 1mm 0.8mm;
+          padding: 0.5mm 0.5mm;
           font-family: "Courier New", Courier, monospace;
           font-size: 15px;
-          line-height: 1.3;
+          line-height: 1.22;
           color: #000;
           background: #fff;
           box-sizing: border-box;
@@ -329,10 +343,12 @@ export default function ThermalReceipt({
           }
           body.thermal-print-active .thermal-receipt-set {
             display: block !important;
-            position: relative;
+            position: absolute;
             left: 0;
             top: 0;
             width: 80mm;
+            margin: 0 !important;
+            padding: 0 !important;
           }
           body.thermal-print-active .thermal-receipt-set.thermal-branch-pack {
             page-break-after: always;
@@ -354,24 +370,26 @@ export default function ThermalReceipt({
             top: 0;
             width: 80mm;
             max-width: 80mm;
-            padding: 1mm 0.8mm;
+            margin: 0 !important;
+            padding: 0.5mm !important;
             font-family: "Courier New", Courier, monospace;
             font-size: 15px;
-            line-height: 1.3;
+            line-height: 1.22;
             color: #000;
             background: #fff;
             box-shadow: none;
           }
+          /* Force thermal roll width so OS/Zebra does not center on A4 */
           @page {
-            size: portrait;
-            margin: 1mm;
+            size: 80mm auto;
+            margin: 0;
           }
         }
         .thermal-receipt-root .tr-center { text-align: center; }
         .thermal-receipt-root .tr-bold { font-weight: 700; }
         .thermal-receipt-root .tr-divider {
           border-top: 1px dashed #000;
-          margin: 2px 0;
+          margin: 1px 0;
         }
         .thermal-receipt-root .tr-row {
           display: flex;
@@ -396,7 +414,7 @@ export default function ThermalReceipt({
         .thermal-receipt-root .tr-copy-label {
           font-size: 12px;
           letter-spacing: 0.04em;
-          margin-bottom: 1px;
+          margin-bottom: 0;
         }
         .thermal-receipt-root .tr-sku { font-size: 11px; opacity: 0.85; }
         .thermal-receipt-root .tr-total { margin-top: 1px; font-size: 16px; }
@@ -404,11 +422,11 @@ export default function ThermalReceipt({
         .thermal-receipt-root .tr-barcode {
           display: flex;
           justify-content: center;
-          margin: 2px 0 1px;
+          margin: 2px 0 0;
           overflow: hidden;
         }
         .thermal-receipt-root .tr-barcode-footer {
-          margin: 4px 0 0;
+          margin: 2px 0 0;
         }
         .thermal-receipt-root .tr-barcode svg {
           max-width: 100%;
@@ -417,16 +435,16 @@ export default function ThermalReceipt({
         .thermal-receipt-root .tr-dual-sign {
           display: flex;
           flex-direction: column;
-          gap: 6px;
-          margin: 4px 0 2px;
+          gap: 4px;
+          margin: 2px 0 1px;
         }
         .thermal-receipt-root .tr-sign-block {
           text-align: center;
         }
         .thermal-receipt-root .tr-sign-line {
           border-bottom: 1px solid #000;
-          height: 14px;
-          margin-bottom: 1px;
+          height: 12px;
+          margin-bottom: 0;
         }
       `}</style>
 

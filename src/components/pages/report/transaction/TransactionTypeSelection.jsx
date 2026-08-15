@@ -40,14 +40,13 @@ const TransactionTypeSelection = () => {
       line_of_business: lineOfBusiness,
     };
 
-    // Handle special routing for supplier and customer deposits
+    // Customer deposits → Collection Points; supplier deposits → Pay Bills
     if (transactionType.id === "supplier_deposit") {
-      navigate("/app/suppliers/supplier-deposit", {
+      navigate("/app/payments/pay-bills?action=deposit", {
         state: { transactionType: serializableTransactionType },
       });
     } else if (transactionType.id === "customer_deposit") {
-      console.log(serializableTransactionType);
-      navigate("/app/customers/customer-deposit", {
+      navigate("/app/payments/collection-points?action=deposit", {
         state: { transactionType: serializableTransactionType },
       });
     } else if (transactionType.id === "customer_security_deposit") {

@@ -41,6 +41,11 @@ import { toast } from "sonner";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 import { _fetchApi, _postApi, _deleteApi } from "@/redux/actions/api";
 import { formatNumber1, formatNaira } from "@/components/router/utilities";
+import {
+  signedBalance,
+  resolveAccountNature,
+  isCreditNormalNature,
+} from "@/components/pages/report/utils/accountBalance";
 import ExcelJS from "exceljs";
 import { useReactToPrint } from "react-to-print";
 import moment from "moment";
@@ -563,21 +568,45 @@ export default function AccountLedgerReportView({
 
   const formatCurrency = formatNaira;
 
-  const netDrCr = (debit, credit) => {
-    const dr = parseFloat(debit || 0);
-    const cr = parseFloat(credit || 0);
-    const net = dr - cr;
-    if (net >= 0) return { amount: net, side: "DR" };
-    return { amount: Math.abs(net), side: "CR" };
+  /** Nature-signed balance label (Assets/Expenses → dr; L/E/R → cr when positive). */
+  const formatSignedBalance = (amount, nature, accountCode) => {
+    const n = resolveAccountNature(nature, accountCode);
+    const val = parseFloat(amount) || 0;
+    if (Math.abs(val) < 0.005) return formatCurrency(0);
+    const creditNormal = isCreditNormalNature(n);
+    const side =
+      val >= 0 ? (creditNormal ? "cr" : "dr") : creditNormal ? "dr" : "cr";
+    return `${formatCurrency(Math.abs(val))}${side}`;
   };
 
-  const formatDrCrAmount = (debit, credit) => {
-    const { amount, side } = netDrCr(debit, credit);
+  const balanceColorClass = (amount) =>
+    (parseFloat(amount) || 0) >= 0 ? "text-green-600" : "text-red-600";
+
+  const netDrCr = (debit, credit, nature = null, accountCode = null) => {
+    const resolved = resolveAccountNature(nature, accountCode);
+    const signed = signedBalance(resolved, debit, credit);
+    // Period movement display: show absolute on the nature's normal side when signed ≥ 0,
+    // otherwise on the opposite side (contra / overdrawn).
+    if (Math.abs(signed) < 0.005) {
+      return { amount: 0, side: "DR" };
+    }
+    const creditNormal = ["LIABILITY", "EQUITY", "REVENUE"].includes(resolved);
+    if (signed >= 0) {
+      return { amount: signed, side: creditNormal ? "CR" : "DR" };
+    }
+    return {
+      amount: Math.abs(signed),
+      side: creditNormal ? "DR" : "CR",
+    };
+  };
+
+  const formatDrCrAmount = (debit, credit, nature = null, accountCode = null) => {
+    const { amount, side } = netDrCr(debit, credit, nature, accountCode);
     return `${formatCurrency(amount)}${side.toLowerCase()}`;
   };
 
-  const renderDrCrAmount = (debit, credit) => {
-    const { amount, side } = netDrCr(debit, credit);
+  const renderDrCrAmount = (debit, credit, nature = null, accountCode = null) => {
+    const { amount, side } = netDrCr(debit, credit, nature, accountCode);
     return (
       <>
         {formatCurrency(amount)}
@@ -874,6 +903,8 @@ export default function AccountLedgerReportView({
         const { amount, side } = netDrCr(
           account.total_debit,
           account.total_credit,
+          account.account_nature,
+          account.account_code,
         );
         const dataRow = worksheet.getRow(row);
         dataRow.getCell(1).value = idx + 1;
@@ -974,10 +1005,13 @@ export default function AccountLedgerReportView({
       begRow.getCell(5).style = { border };
       begRow.getCell(6).value = "";
       begRow.getCell(6).style = { border };
-      begRow.getCell(7).value = account.opening_balance || 0;
+      begRow.getCell(7).value = formatSignedBalance(
+        account.opening_balance || 0,
+        account.account_nature,
+        account.account_code,
+      );
       begRow.getCell(7).style = {
         font: { bold: true },
-        numFmt: "#,##0.00",
         alignment: { horizontal: "right" },
         border,
       };
@@ -1024,9 +1058,12 @@ export default function AccountLedgerReportView({
           alignment: { horizontal: "right" },
           border,
         };
-        dr.getCell(7).value = txn.running_balance;
+        dr.getCell(7).value = formatSignedBalance(
+          txn.running_balance,
+          account.account_nature,
+          account.account_code,
+        );
         dr.getCell(7).style = {
-          numFmt: "#,##0.00",
           alignment: { horizontal: "right" },
           font: { bold: true },
           border,
@@ -1484,6 +1521,8 @@ export default function AccountLedgerReportView({
                             const { side } = netDrCr(
                               account.total_debit,
                               account.total_credit,
+                              account.account_nature,
+                              account.account_code,
                             );
                             return (
                               <tr
@@ -1509,6 +1548,8 @@ export default function AccountLedgerReportView({
                                   {renderDrCrAmount(
                                     account.total_debit,
                                     account.total_credit,
+                                    account.account_nature,
+                                    account.account_code,
                                   )}
                                 </td>
                               </tr>
@@ -1594,14 +1635,14 @@ export default function AccountLedgerReportView({
                                   <td className="px-2 py-1 text-sm text-right text-gray-600 border-r border-gray-200" />
                                   <td className="px-2 py-1 text-sm text-right text-gray-600 border-r border-gray-200" />
                                   <td
-                                    className={`px-2 py-1 text-sm text-right font-medium bg-gray-50 ${
-                                      (account.opening_balance || 0) >= 0
-                                        ? "text-green-600"
-                                        : "text-red-600"
-                                    }`}
-                                  >
-                                    {formatCurrency(
+                                    className={`px-2 py-1 text-sm text-right font-medium bg-gray-50 ${balanceColorClass(
                                       account.opening_balance || 0,
+                                    )}`}
+                                  >
+                                    {formatSignedBalance(
+                                      account.opening_balance || 0,
+                                      account.account_nature,
+                                      account.account_code,
                                     )}
                                   </td>
                                 </tr>
@@ -1661,13 +1702,15 @@ export default function AccountLedgerReportView({
                                             : ""}
                                         </td>
                                         <td
-                                          className={`px-2 py-1 text-sm text-right font-medium bg-gray-50 ${
-                                            balance >= 0
-                                              ? "text-green-600"
-                                              : "text-red-600"
-                                          }`}
+                                          className={`px-2 py-1 text-sm text-right font-medium bg-gray-50 ${balanceColorClass(
+                                            balance,
+                                          )}`}
                                         >
-                                          {formatCurrency(balance)}
+                                          {formatSignedBalance(
+                                            balance,
+                                            account.account_nature,
+                                            account.account_code,
+                                          )}
                                         </td>
                                       </tr>
                                     );
