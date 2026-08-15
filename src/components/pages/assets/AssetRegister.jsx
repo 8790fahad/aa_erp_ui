@@ -66,9 +66,6 @@ const STATUS_STYLE = {
 const naira = (n) =>
   "₦" + Number(n || 0).toLocaleString("en-NG", { maximumFractionDigits: 0 });
 
-const yearsBetween = (from, to) =>
-  Math.max(0, (to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
-
 // ---------- Brand color helpers ----------
 function hexToRgb(hex) {
   if (!hex || typeof hex !== "string") return { r: 30, g: 86, b: 160 };
@@ -133,9 +130,6 @@ function mapApiAsset(a, existingMaintenance = []) {
     vendor: a.supplier_name || a.supplierName || "",
     supplierNumber: a.supplier_number || a.supplierNumber || "",
     invoiceRef: a.invoice_ref || a.invoiceRef || "",
-    recordedInPurchase: Boolean(
-      a.recorded_in_purchase ?? a.recordedInPurchase,
-    ),
     location: a.location || "",
     department: a.department_id || a.departmentId || "",
     custodian: a.custodian || "",
@@ -159,38 +153,23 @@ function mapApiAsset(a, existingMaintenance = []) {
           : undefined,
     gainLoss: a.gainLoss != null ? Number(a.gainLoss) : undefined,
     apiNbv: apiNbv != null ? Number(apiNbv) : undefined,
-    apiAccDep: apiAccDep != null ? Number(apiAccDep) : undefined,
+    apiAccDep: apiAccDep != null ? Number(apiAccDep) : 0,
     maintenance: existingMaintenance,
   };
 }
 
 function computeNBV(asset) {
-  if (asset.apiNbv != null && asset.apiAccDep != null) {
-    return { nbv: asset.apiNbv, accDep: asset.apiAccDep };
-  }
   const cost = Number(asset.cost) || 0;
-  const residual = Number(asset.residualValue) || 0;
-  const life = Number(asset.usefulLife) || 1;
-  const rate = Number(asset.rate) || 0;
-  const acquired = new Date(asset.acquisitionDate);
-  const elapsed = yearsBetween(acquired, new Date());
-
-  if (asset.depreciationMethod === "Reducing Balance") {
-    const r = rate
-      ? rate / 100
-      : life
-        ? 1 - Math.pow(residual / cost || 0.1, 1 / life)
-        : 0.15;
-    const nbv = cost * Math.pow(1 - r, elapsed);
-    return {
-      nbv: Math.max(nbv, residual),
-      accDep: cost - Math.max(nbv, residual),
-    };
-  }
-  // Straight-line default
-  const annualDep = (cost - residual) / (life || 1);
-  const accDep = Math.min(annualDep * elapsed, cost - residual);
-  return { nbv: cost - accDep, accDep };
+  // Carrying amount = cost − accumulated depreciation (from posted runs only)
+  const accDep = Math.max(
+    0,
+    Number(
+      asset.apiAccDep != null && !Number.isNaN(Number(asset.apiAccDep))
+        ? asset.apiAccDep
+        : 0,
+    ),
+  );
+  return { nbv: Math.max(0, cost - accDep), accDep };
 }
 
 const emptyDraft = {
@@ -201,7 +180,6 @@ const emptyDraft = {
   vendor: "",
   supplierNumber: "",
   invoiceRef: "",
-  recordedInPurchase: false,
   location: "",
   department: "",
   custodian: "",
@@ -394,8 +372,16 @@ export default function AssetRegister() {
       toast.error("No active facility found");
       return;
     }
+    const isReducing = draft.depreciationMethod === "Reducing Balance";
+    if (isReducing && !(Number(draft.rate) > 0)) {
+      toast.error("Rate (%) is required for Reducing Balance");
+      return;
+    }
+    if (!isReducing && !(Number(draft.usefulLife) > 0)) {
+      toast.error("Useful life (years) is required for Straight-line");
+      return;
+    }
     const cost = Number(draft.cost) || 0;
-    const recordedInPurchase = Boolean(draft.recordedInPurchase);
     setSaveState("saving");
     fetch(`${apiURL}/api/assets`, {
       method: "POST",
@@ -407,7 +393,7 @@ export default function AssetRegister() {
         category: draft.category,
         acquisitionDate: draft.acquisitionDate,
         acquisitionCost: cost,
-        usefulLife: Number(draft.usefulLife) || 0,
+        usefulLife: Number(draft.usefulLife) || (isReducing ? 1 : 0),
         residualValue: Number(draft.residualValue) || 0,
         depreciationMethod: toApiDepreciationMethod(draft.depreciationMethod),
         depreciationRate: Number(draft.rate) || 0,
@@ -419,9 +405,9 @@ export default function AssetRegister() {
         invoiceRef: draft.invoiceRef || undefined,
         notes: draft.notes,
         status: draft.status,
-        // Already booked in purchase — skip capitalization / dep acquisition GL
-        postToLedger: !recordedInPurchase,
-        recordedInPurchase,
+        // Register only — ledger / account treatment happens when depreciation is run
+        postToLedger: false,
+        recordedInPurchase: false,
         createdBy: user?.id,
       }),
     })
@@ -433,18 +419,12 @@ export default function AssetRegister() {
           setJournal((prev) =>
             postEntry(prev, {
               date: asset.acquisitionDate,
-              memo: recordedInPurchase
-                ? `Register ${asset.name} (${asset.code}) — already in purchase (no GL)`
-                : `Capitalize ${asset.name} (${asset.code})`,
-              journalRef: data.journalRef || null,
+              memo: `Register ${asset.name} (${asset.code}) — no GL until depreciation`,
+              journalRef: null,
             }),
           );
           toast.success(
-            data.ledgerWarning
-              ? "Asset saved, but ledger posting failed"
-              : recordedInPurchase
-                ? "Asset recorded (no ledger entries — already in purchase)"
-                : "Asset recorded successfully",
+            "Asset recorded (ledger posts when you run depreciation)",
           );
           setDraft(makeEmptyDraft(defaultDepreciationMethod));
           setTab("register");
@@ -757,7 +737,8 @@ export default function AssetRegister() {
           Asset Register
         </h1>
           <p className="text-xs text-muted-foreground font-medium mt-1">
-            Add assets, track depreciation, dispose when done
+            Register assets without ledger impact; account treatment posts when
+            you run depreciation
             {activeBusiness?.auto_depreciation_enabled
               ? " · auto-run enabled"
               : ""}
@@ -955,7 +936,7 @@ export default function AssetRegister() {
               >
                 <thead>
                   <tr style={{ background: "#FAFBFD", textAlign: "left" }}>
-                    {["Asset", "Category", "Warehouse", "NBV", "Status", ""].map(
+                    {["Asset", "Category", "Warehouse", "Carrying amount", "Status", ""].map(
                       (h) => (
                         <th
                           key={h}
@@ -1078,9 +1059,10 @@ export default function AssetRegister() {
         {tab === "ledger" && (
           <div className="bg-white border border-muted rounded-2xl overflow-hidden shadow-sm">
             <div className="px-4 py-3.5 border-b border-muted text-xs text-muted-foreground bg-slate-50/40">
-              A local summary of the actions taken this session — acquisitions,
-              depreciation runs, maintenance, and disposals. Full double-entry
-              postings appear in <b>Account → General Ledger</b>.
+              A local summary of actions this session. Account treatment
+              (depreciation expense / accumulated depreciation) posts to the
+              ledger when you <b>Run Depreciation</b>. Full double-entry
+              appears in <b>Account → General Ledger</b>.
             </div>
             {journal.length === 0 ? (
               <div
@@ -1096,8 +1078,8 @@ export default function AssetRegister() {
                   No entries posted yet
                 </div>
                 <div style={{ fontSize: 13, marginTop: 4 }}>
-                  Record an asset, log maintenance, run depreciation, or dispose
-                  an asset to see postings here.
+                  Register assets without ledger impact. Run depreciation,
+                  maintenance, or dispose to see postings here.
                 </div>
               </div>
             ) : (
@@ -1196,27 +1178,13 @@ export default function AssetRegister() {
               </button>
             </div>
 
-            <label
-              className="mb-5 flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3"
-              style={{ borderColor: draft.recordedInPurchase ? primaryColor : "#e2e8f0" }}
+            <div
+              className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600"
             >
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={Boolean(draft.recordedInPurchase)}
-                onChange={(e) =>
-                  setDraft({ ...draft, recordedInPurchase: e.target.checked })
-                }
-              />
-              <span>
-                <span className="block text-[12px] font-bold text-foreground">
-                  Already recorded in purchase
-                </span>
-                <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                  If checked, no capitalization or depreciation ledger entries are posted — purchase already booked it.
-                </span>
-              </span>
-            </label>
+              Register only — no ledger posting until you{" "}
+              <span className="font-semibold text-slate-800">Run Depreciation</span>.
+              Carrying amount starts as Cost (accum. dep = ₦0).
+            </div>
 
             <div
               style={{
@@ -1290,7 +1258,7 @@ export default function AssetRegister() {
               </div>
 
               <div>
-                <label className="ar-label">Invoice / purchase ref (optional)</label>
+                <label className="ar-label">Invoice ref (optional)</label>
                 <input
                   className="ar-input"
                   placeholder="e.g. INV-2041"
@@ -1368,7 +1336,7 @@ export default function AssetRegister() {
                     marginBottom: 10,
                   }}
                 >
-                  Depreciation
+                  Depreciation setup
                 </div>
               </div>
 
@@ -1388,13 +1356,9 @@ export default function AssetRegister() {
                   <option>Reducing Balance</option>
                 </select>
               </div>
-              <div>
-                <label className="ar-label">
-                  {draft.depreciationMethod === "Reducing Balance"
-                    ? "Rate (%)"
-                    : "Useful life (years)"}
-                </label>
-                {draft.depreciationMethod === "Reducing Balance" ? (
+              {draft.depreciationMethod === "Reducing Balance" ? (
+                <div>
+                  <label className="ar-label">Rate (%)</label>
                   <input
                     type="number"
                     className="ar-input"
@@ -1404,7 +1368,10 @@ export default function AssetRegister() {
                       setDraft({ ...draft, rate: e.target.value })
                     }
                   />
-                ) : (
+                </div>
+              ) : (
+                <div>
+                  <label className="ar-label">Useful life (years)</label>
                   <input
                     type="number"
                     className="ar-input"
@@ -1414,8 +1381,8 @@ export default function AssetRegister() {
                       setDraft({ ...draft, usefulLife: e.target.value })
                     }
                   />
-                )}
-              </div>
+                </div>
+              )}
 
               <div>
                 <label className="ar-label">Residual value (₦)</label>
@@ -1437,10 +1404,35 @@ export default function AssetRegister() {
                     setDraft({ ...draft, status: e.target.value })
                   }
                 >
-                  {Object.keys(STATUS_STYLE).map((s) => (
-                    <option key={s}>{s}</option>
-                  ))}
+                  <option>Active</option>
+                  <option>Idle</option>
                 </select>
+              </div>
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+                  <div className="font-semibold text-slate-800">
+                    Carrying amount = Cost − Accumulated depreciation
+                  </div>
+                  <div className="mt-1">
+                    On save: Cost{" "}
+                    <span className="font-mono font-semibold text-slate-800">
+                      {draft.cost !== "" && draft.cost != null
+                        ? naira(Number(draft.cost) || 0)
+                        : "—"}
+                    </span>
+                    {" − "}Accum. dep{" "}
+                    <span className="font-mono font-semibold text-slate-800">
+                      {naira(0)}
+                    </span>
+                    {" = "}
+                    <span className="font-mono font-semibold text-slate-800">
+                      {draft.cost !== "" && draft.cost != null
+                        ? naira(Number(draft.cost) || 0)
+                        : "—"}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div style={{ gridColumn: "1 / -1" }}>
@@ -1558,7 +1550,6 @@ function AssetDetail({
             {asset.location ? ` · ${asset.location}` : " · No location set"}
             {departmentName ? ` · ${departmentName}` : ""}
             {asset.invoiceRef ? ` · Ref ${asset.invoiceRef}` : ""}
-            {asset.recordedInPurchase ? " · Recorded in purchase" : ""}
           </div>
         </div>
         <span
@@ -1597,7 +1588,7 @@ function AssetDetail({
         {[
           ["Cost", naira(asset.cost)],
           ["Accum. depreciation", naira(accDep)],
-          ["Net book value", naira(nbv)],
+          ["Carrying amount", naira(nbv)],
           ["Custodian", asset.custodian || "—"],
         ].map(([l, v]) => (
           <div
