@@ -131,7 +131,19 @@ export default function CrmSegments() {
                   {s.description || "No description"}
                 </p>
                 <Link
-                  to={`/app/crm/customers?segment=${encodeURIComponent(s.segment_key)}`}
+                  to={(() => {
+                    let filters = s.filters;
+                    if (typeof filters === "string") {
+                      try {
+                        filters = JSON.parse(filters);
+                      } catch {
+                        filters = null;
+                      }
+                    }
+                    return filters?.crm_status
+                      ? `/app/crm/customers?status=${encodeURIComponent(filters.crm_status)}`
+                      : `/app/crm/customers?segment=${encodeURIComponent(s.segment_key)}`;
+                  })()}
                   className="mt-3 inline-block text-sm text-[#4267B2] hover:underline"
                 >
                   View customers

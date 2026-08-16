@@ -1437,7 +1437,7 @@ const routeModules = {
   },
 
   "Asset Register": {
-    path: "assets",
+    path: "assets/*",
     element: <AssetRegister />,
   },
 };

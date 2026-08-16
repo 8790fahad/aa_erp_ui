@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useSelector } from "react-redux";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Plus,
@@ -11,6 +11,8 @@ import {
   Trash2,
   Tag,
   ChevronRight,
+  ChevronDown,
+  Check,
   Building2,
   Package,
   Car,
@@ -19,42 +21,57 @@ import {
   Boxes,
   Loader2,
 } from "lucide-react";
-import { apiURL, _fetchApi } from "@/redux/actions/api";
+import { apiURL, _fetchApi, _postApi } from "@/redux/actions/api";
+import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
 
-// ---------- Category config: name, icon, GL account mapping ----------
+// ---------- Category config: name, icon, GL account mapping (matches API CoA) ----------
 const CATEGORIES = {
   "Land & Building": {
     icon: Building2,
-    cost: "1500",
-    accDep: "1510",
-    depExp: "5510",
+    cost: "111002",
+    accDep: "111012",
+    depExp: "801101",
   },
   "Plant & Machinery": {
     icon: Package,
-    cost: "1520",
-    accDep: "1530",
-    depExp: "5520",
+    cost: "111007",
+    accDep: "111017",
+    depExp: "801105",
   },
-  "Motor Vehicles": { icon: Car, cost: "1540", accDep: "1550", depExp: "5530" },
+  "Motor Vehicles": {
+    icon: Car,
+    cost: "111003",
+    accDep: "111013",
+    depExp: "801103",
+  },
   "Furniture & Fittings": {
     icon: Sofa,
-    cost: "1560",
-    accDep: "1570",
-    depExp: "5540",
+    cost: "111004",
+    accDep: "111014",
+    depExp: "801101",
   },
   "IT Equipment": {
     icon: Monitor,
-    cost: "1580",
-    accDep: "1590",
-    depExp: "5550",
+    cost: "111006",
+    accDep: "111016",
+    depExp: "801104",
   },
   "Office Equipment": {
     icon: Boxes,
-    cost: "1600",
-    accDep: "1610",
-    depExp: "5560",
+    cost: "111005",
+    accDep: "111015",
+    depExp: "801102",
   },
 };
+
+function defaultAccountCodes(category) {
+  const gl = CATEGORIES[category] || CATEGORIES["Office Equipment"];
+  return {
+    assetAccountCode: gl.cost,
+    accumulatedDepreciationAccountCode: gl.accDep,
+    depreciationExpenseAccountCode: gl.depExp,
+  };
+}
 
 const STATUS_STYLE = {
   Active: { bg: "#E9F6EF", fg: "#1F9D6B", dot: "#1F9D6B" },
@@ -62,6 +79,40 @@ const STATUS_STYLE = {
   Disposed: { bg: "#F1EEF9", fg: "#6952B3", dot: "#8B72D9" },
   "Written Off": { bg: "#FBEAEA", fg: "#C24444", dot: "#C24444" },
 };
+
+/** Route-driven status filters (path segment → display label). */
+const STATUS_ROUTES = [
+  { slug: "", label: "All", status: "All" },
+  { slug: "active", label: "Active", status: "Active" },
+  { slug: "under-maintenance", label: "Under Maintenance", status: "Under Maintenance" },
+  { slug: "disposed", label: "Disposed", status: "Disposed" },
+  { slug: "written-off", label: "Written Off", status: "Written Off" },
+];
+
+const ASSET_TABS = [
+  { id: "register", label: "Register", to: "/app/assets" },
+  { id: "ledger", label: "Activity log", to: "/app/assets/ledger" },
+  { id: "add", label: "Add Asset", to: "/app/assets/add" },
+];
+
+function statusFromPathname(pathname) {
+  const rest = pathname.replace(/^\/app\/assets\/?/, "").split("/")[0] || "";
+  if (!rest || rest === "ledger" || rest === "add" || rest === "view") {
+    return { slug: "", label: "All", status: "All", view: rest || "register" };
+  }
+  const match = STATUS_ROUTES.find((s) => s.slug === rest);
+  if (match) {
+    return { ...match, view: "register" };
+  }
+  return { slug: "", label: "All", status: "All", view: "register" };
+}
+
+function viewFromPathname(pathname) {
+  if (pathname.includes("/app/assets/ledger")) return "ledger";
+  if (pathname.includes("/app/assets/add")) return "add";
+  if (pathname.includes("/app/assets/view/")) return "detail";
+  return "register";
+}
 
 const naira = (n) =>
   "₦" + Number(n || 0).toLocaleString("en-NG", { maximumFractionDigits: 0 });
@@ -154,6 +205,16 @@ function mapApiAsset(a, existingMaintenance = []) {
     gainLoss: a.gainLoss != null ? Number(a.gainLoss) : undefined,
     apiNbv: apiNbv != null ? Number(apiNbv) : undefined,
     apiAccDep: apiAccDep != null ? Number(apiAccDep) : 0,
+    assetAccountCode:
+      a.asset_account_code || a.assetAccountCode || "",
+    accumulatedDepreciationAccountCode:
+      a.accumulated_depreciation_account_code ||
+      a.accumulatedDepreciationAccountCode ||
+      "",
+    depreciationExpenseAccountCode:
+      a.depreciation_expense_account_code ||
+      a.depreciationExpenseAccountCode ||
+      "",
     maintenance: existingMaintenance,
   };
 }
@@ -189,6 +250,7 @@ const emptyDraft = {
   residualValue: "0",
   status: "Active",
   notes: "",
+  ...defaultAccountCodes("IT Equipment"),
 };
 
 function makeEmptyDraft(depreciationMethod = "Straight-line") {
@@ -197,6 +259,7 @@ function makeEmptyDraft(depreciationMethod = "Straight-line") {
     acquisitionDate: new Date().toISOString().slice(0, 10),
     invoiceRef: "",
     supplierNumber: "",
+    ...defaultAccountCodes("IT Equipment"),
     depreciationMethod:
       depreciationMethod === "Reducing Balance"
         ? "Reducing Balance"
@@ -204,17 +267,78 @@ function makeEmptyDraft(depreciationMethod = "Straight-line") {
   };
 }
 
-const ASSET_TABS = [
-  { id: "register", label: "Register" },
-  { id: "add", label: "Add Asset" },
-];
+function StatusRouteMenu({ primaryColor, currentStatus }) {
+  const [open, setOpen] = useState(false);
+  const current =
+    STATUS_ROUTES.find((s) => s.status === currentStatus) || STATUS_ROUTES[0];
+
+  return (
+    <div className="relative" style={{ width: 200 }}>
+      <button
+        type="button"
+        className="ar-input flex w-full items-center justify-between gap-2 text-left"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        <span className="truncate">{current.label}</span>
+        <ChevronDown size={14} className="shrink-0 opacity-60" />
+      </button>
+      {open ? (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-30 cursor-default bg-transparent"
+            aria-label="Close status menu"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            className="absolute right-0 z-40 mt-1 min-w-full overflow-hidden rounded-xl py-1 shadow-lg"
+            style={{ background: shadeColor(primaryColor, -45) }}
+          >
+            {STATUS_ROUTES.map((s) => {
+              const active = s.status === currentStatus;
+              const to = s.slug ? `/app/assets/${s.slug}` : "/app/assets";
+              return (
+                <Link
+                  key={s.label}
+                  to={to}
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-[13px] no-underline transition-colors"
+                  style={
+                    active
+                      ? {
+                          background: primaryColor,
+                          color: "#fff",
+                        }
+                      : { color: "#fff" }
+                  }
+                  onMouseEnter={(e) => {
+                    if (!active) e.currentTarget.style.background = hexToRgba(primaryColor, 0.45);
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) e.currentTarget.style.background = "transparent";
+                  }}
+                >
+                  <span className="w-4 shrink-0">
+                    {active ? <Check size={14} /> : null}
+                  </span>
+                  {s.label}
+                </Link>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 export default function AssetRegister() {
   const { user, activeBusiness } = useSelector((state) => state.auth);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const facilityId = activeBusiness?.id || user?.facilityId;
   const primaryColor = activeBusiness?.primary_color || "#4267B2";
-  const secondaryColor = activeBusiness?.secondary_color;
   const darkColor = useMemo(
     () => shadeColor(primaryColor, -38),
     [primaryColor],
@@ -223,37 +347,21 @@ export default function AssetRegister() {
     () => hexToRgba(primaryColor, 0.12),
     [primaryColor],
   );
-  const gradientEnd =
-    secondaryColor && String(secondaryColor).toLowerCase() !== "#ffffff"
-      ? secondaryColor
-      : primaryColor;
-  const headerGradient = `linear-gradient(to right, ${primaryColor}, ${gradientEnd})`;
   const defaultDepreciationMethod = fromApiDepreciationMethod(
     activeBusiness?.depreciation_method || "Straight Line",
   );
 
-  const tabParam = searchParams.get("tab") || "register";
-  const tab = ASSET_TABS.some((t) => t.id === tabParam) ? tabParam : "register";
-
-  const setTab = useCallback(
-    (nextTab) => {
-      const next = new URLSearchParams(searchParams);
-      if (!nextTab || nextTab === "register") next.delete("tab");
-      else next.set("tab", nextTab);
-      setSearchParams(next, { replace: true });
-    },
-    [searchParams, setSearchParams],
-  );
+  const view = viewFromPathname(location.pathname);
+  const statusRoute = statusFromPathname(location.pathname);
+  const statusFilter = statusRoute.status;
 
   const [assets, setAssets] = useState([]);
   const [journal, setJournal] = useState([]);
   const [branches, setBranches] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [selected, setSelected] = useState(null); // asset id for detail panel
   const [query, setQuery] = useState("");
   const [catFilter, setCatFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState("All");
   const [draft, setDraft] = useState(() =>
     makeEmptyDraft(
       fromApiDepreciationMethod(
@@ -269,6 +377,8 @@ export default function AssetRegister() {
   });
   const [saveState, setSaveState] = useState("idle");
   const [depRunning, setDepRunning] = useState(false);
+  const [accountEntries, setAccountEntries] = useState([]);
+  const [entriesLoading, setEntriesLoading] = useState(false);
 
   // ---- load ----
   const loadAssets = useCallback(() => {
@@ -302,18 +412,41 @@ export default function AssetRegister() {
     loadAssets();
   }, [loadAssets]);
 
-  useEffect(() => {
-    if (tabParam !== tab) {
-      setTab("register");
+  const loadAccountEntries = useCallback(() => {
+    if (!facilityId || view !== "register") {
+      setAccountEntries([]);
+      return;
     }
-  }, [tabParam, tab, setTab]);
+    setEntriesLoading(true);
+    const statusParam =
+      statusFilter && statusFilter !== "All"
+        ? `&status=${encodeURIComponent(statusFilter)}`
+        : "";
+    fetch(
+      `${apiURL}/api/assets/account-entries?facilityId=${facilityId}${statusParam}`,
+      { headers: authHeaders() },
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success) {
+          setAccountEntries(data.data?.entries || []);
+        } else {
+          setAccountEntries([]);
+        }
+      })
+      .catch(() => setAccountEntries([]))
+      .finally(() => setEntriesLoading(false));
+  }, [facilityId, statusFilter, view]);
 
   useEffect(() => {
-    if (tab !== "register") setSelected(null);
-    if (tab === "add") {
+    loadAccountEntries();
+  }, [loadAccountEntries]);
+
+  useEffect(() => {
+    if (view === "add") {
       setDraft(makeEmptyDraft(defaultDepreciationMethod));
     }
-  }, [tab, defaultDepreciationMethod]);
+  }, [view, defaultDepreciationMethod]);
 
   useEffect(() => {
     if (!facilityId) return;
@@ -333,30 +466,8 @@ export default function AssetRegister() {
     );
   }, [facilityId]);
 
-  // Optionally pull the maintenance log for the asset opened in the detail panel.
-  useEffect(() => {
-    if (!selected) return;
-    fetch(`${apiURL}/api/assets/${selected}/maintenance`, {
-      headers: authHeaders(),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!data?.success) return;
-        const records = (data.data?.records || []).map((r) => ({
-          id: r.id,
-          date: (r.actualDate || r.scheduledDate || "").slice(0, 10),
-          cost: Number(r.cost) || 0,
-          vendor: r.vendor || "",
-          description: r.description || "",
-        }));
-        setAssets((prev) =>
-          prev.map((a) =>
-            a.id === selected ? { ...a, maintenance: records } : a,
-          ),
-        );
-      })
-      .catch(() => {});
-  }, [selected]);
+  // Maintenance log is loaded with the detail route (view/:assetId).
+  // (Legacy selected-id fetch removed — status/detail are route-driven.)
 
   const postEntry = (next, entry) => [
     { ...entry, id: Date.now() + Math.random().toString(36).slice(2, 7) },
@@ -379,6 +490,18 @@ export default function AssetRegister() {
     }
     if (!isReducing && !(Number(draft.usefulLife) > 0)) {
       toast.error("Useful life (years) is required for Straight-line");
+      return;
+    }
+    if (!draft.assetAccountCode) {
+      toast.error("Select the asset account head to post into");
+      return;
+    }
+    if (!draft.accumulatedDepreciationAccountCode) {
+      toast.error("Select the accumulated depreciation account head");
+      return;
+    }
+    if (!draft.depreciationExpenseAccountCode) {
+      toast.error("Select the depreciation expense account head");
       return;
     }
     const cost = Number(draft.cost) || 0;
@@ -405,6 +528,10 @@ export default function AssetRegister() {
         invoiceRef: draft.invoiceRef || undefined,
         notes: draft.notes,
         status: draft.status,
+        assetAccountCode: draft.assetAccountCode,
+        accumulatedDepreciationAccountCode:
+          draft.accumulatedDepreciationAccountCode,
+        depreciationExpenseAccountCode: draft.depreciationExpenseAccountCode,
         // Register only — ledger / account treatment happens when depreciation is run
         postToLedger: false,
         recordedInPurchase: false,
@@ -427,7 +554,7 @@ export default function AssetRegister() {
             "Asset recorded (ledger posts when you run depreciation)",
           );
           setDraft(makeEmptyDraft(defaultDepreciationMethod));
-          setTab("register");
+          navigate("/app/assets");
           setSaveState("saved");
         } else {
           toast.error(data?.message || "Failed to save asset");
@@ -477,6 +604,7 @@ export default function AssetRegister() {
               ? "Asset disposed, but ledger posting failed"
               : "Asset disposed successfully",
           );
+          navigate("/app/assets/disposed");
         } else {
           toast.error(data?.message || "Failed to dispose asset");
         }
@@ -514,7 +642,7 @@ export default function AssetRegister() {
               ? "Asset written off, but ledger posting failed"
               : "Asset written off successfully",
           );
-          setSelected(null);
+          navigate("/app/assets/written-off");
         } else {
           toast.error(data?.message || "Failed to write off asset");
         }
@@ -659,6 +787,7 @@ export default function AssetRegister() {
             );
             toast.success(data.message || "Depreciation run completed");
             loadAssets();
+            loadAccountEntries();
           } else {
             toast.info("No assets were due for depreciation");
           }
@@ -686,7 +815,8 @@ export default function AssetRegister() {
     });
   }, [assets, catFilter, statusFilter, query]);
 
-  const selectedAsset = assets.find((a) => a.id === selected);
+  const listPath =
+    statusRoute.slug ? `/app/assets/${statusRoute.slug}` : "/app/assets";
 
   return (
     <div
@@ -702,22 +832,22 @@ export default function AssetRegister() {
         .ar-input {
           width: 100%; padding: 9px 11px; border-radius: 0.75rem;
           border: 1px solid #e2e8f0; background: #fff; font-size: 13.5px;
-          color: #0f172a; outline: none; box-sizing: border-box;
+          color: #0f172a; outline: none; transition: border-color .15s;
         }
         .ar-input:focus { border-color: var(--ar-primary); box-shadow: 0 0 0 3px var(--ar-primary-alpha); }
-        .ar-label { font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; display: block; }
+        .ar-label { display:block; font-size:11.5px; font-weight:600; color:#64748b; margin-bottom:5px; }
         .ar-btn-primary {
-          background: var(--ar-primary); color: white; border: none; border-radius: 0.75rem;
-          padding: 10px 18px; font-weight: 700; font-size: 12px; cursor: pointer;
-          display: inline-flex; align-items: center; gap: 6px; transition: opacity 0.15s;
-          text-transform: uppercase; letter-spacing: 0.04em;
+          display:inline-flex; align-items:center; gap:6px;
+          background: var(--ar-primary); color:#fff; border:none;
+          padding:9px 16px; border-radius:0.75rem; font-size:13px; font-weight:700;
+          cursor:pointer;
         }
-        .ar-btn-primary:hover { opacity: 0.92; }
-        .ar-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+        .ar-btn-primary:disabled { opacity:.6; cursor:not-allowed; }
         .ar-btn-ghost {
-          background: transparent; color: #475569; border: 1px solid #e2e8f0; border-radius: 0.75rem;
-          padding: 9px 14px; font-weight: 700; font-size: 12px; cursor: pointer;
           display: inline-flex; align-items: center; gap: 6px;
+          background: transparent; border: 1px solid #e2e8f0; color: #475569;
+          padding: 8px 12px; border-radius: 0.75rem; font-size: 13px; font-weight: 600;
+          cursor: pointer;
         }
         .ar-btn-ghost:hover { background: #f8fafc; }
         .ar-table-row:hover { background: #F8FAFC; cursor: pointer; }
@@ -745,13 +875,18 @@ export default function AssetRegister() {
           </p>
       </div>
 
-      {/* Tab bar */}
+      {/* Tab bar — route driven */}
       <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-muted px-0 pt-1 pb-0 mb-4">
         <div className="flex items-end gap-1 overflow-x-auto">
           {ASSET_TABS.map((t) => {
-            const active = tab === t.id;
+            const active =
+              t.id === "register"
+                ? view === "register" || view === "detail"
+                : view === t.id;
             const to =
-              t.id === "register" ? "/app/assets" : `/app/assets?tab=${t.id}`;
+              t.id === "register"
+                ? listPath
+                : t.to;
             return (
               <Link
                 key={t.id}
@@ -781,7 +916,7 @@ export default function AssetRegister() {
       {/* Brand action strip */}
       <div
         className="rounded-2xl px-5 py-4 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-white relative overflow-hidden"
-        style={{ background: headerGradient }}
+        style={{ background: primaryColor }}
       >
         <div className="absolute right-4 top-2 opacity-10 pointer-events-none">
           <Building2 className="size-20" />
@@ -819,22 +954,216 @@ export default function AssetRegister() {
             ) : null}
             Run Depreciation
           </button>
-          <button
-            type="button"
-            className="h-10 px-5 rounded-xl text-xs font-black uppercase tracking-widest bg-white hover:bg-white/90 transition-opacity"
+          <Link
+            to="/app/assets/add"
+            className="inline-flex h-10 items-center px-5 rounded-xl text-xs font-black uppercase tracking-widest bg-white hover:bg-white/90 transition-opacity no-underline"
             style={{ color: primaryColor }}
-            onClick={() => {
-              setSelected(null);
-              setTab("add");
-            }}
           >
             <Plus size={14} className="inline mr-1.5" /> Add Asset
-          </button>
+          </Link>
         </div>
       </div>
 
       <div className="pb-16">
-        {tab === "register" && !selectedAsset && (
+        <Routes>
+          <Route
+            index
+            element={
+              <AssetListPanel
+                loaded={loaded}
+                assets={assets}
+                filtered={filtered}
+                query={query}
+                setQuery={setQuery}
+                catFilter={catFilter}
+                setCatFilter={setCatFilter}
+                statusFilter={statusFilter}
+                primaryColor={primaryColor}
+                accountEntries={accountEntries}
+                entriesLoading={entriesLoading}
+                onOpenAsset={(id) => navigate(`/app/assets/view/${id}`)}
+                onAdd={() => navigate("/app/assets/add")}
+              />
+            }
+          />
+          {STATUS_ROUTES.filter((s) => s.slug).map((s) => (
+            <Route
+              key={s.slug}
+              path={s.slug}
+              element={
+                <AssetListPanel
+                  loaded={loaded}
+                  assets={assets}
+                  filtered={filtered}
+                  query={query}
+                  setQuery={setQuery}
+                  catFilter={catFilter}
+                  setCatFilter={setCatFilter}
+                  statusFilter={statusFilter}
+                  primaryColor={primaryColor}
+                  accountEntries={accountEntries}
+                  entriesLoading={entriesLoading}
+                  onOpenAsset={(id) => navigate(`/app/assets/view/${id}`)}
+                  onAdd={() => navigate("/app/assets/add")}
+                />
+              }
+            />
+          ))}
+          <Route
+            path="ledger"
+            element={
+              <AssetLedgerPanel journal={journal} primaryColor={primaryColor} />
+            }
+          />
+          <Route
+            path="add"
+            element={
+              <AssetAddPanel
+                draft={draft}
+                setDraft={setDraft}
+                branches={branches}
+                departments={departments}
+                primaryColor={primaryColor}
+                saveState={saveState}
+                onSave={addAsset}
+                onCancel={() => navigate(listPath)}
+                businessName={activeBusiness?.business_name}
+              />
+            }
+          />
+          <Route
+            path="view/:assetId"
+            element={
+              <AssetDetailRoute
+                assets={assets}
+                departments={departments}
+                maintDraft={maintDraft}
+                setMaintDraft={setMaintDraft}
+                onDispose={disposeAsset}
+                onToggleMaintenance={toggleMaintenance}
+                onWriteOff={writeOffAsset}
+                onAddMaintenance={addMaintenanceEntry}
+                listPath={listPath}
+                setAssets={setAssets}
+              />
+            }
+          />
+          <Route path="*" element={<Navigate to="/app/assets" replace />} />
+        </Routes>
+      </div>
+
+      {loaded && saveState !== "idle" && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 20,
+            right: 20,
+            background: saveState === "error" ? "#C24444" : primaryColor,
+            color: "#fff",
+            padding: "10px 16px",
+            borderRadius: 10,
+            fontSize: 13,
+            fontWeight: 600,
+            zIndex: 50,
+          }}
+        >
+          {saveState === "saving"
+            ? "Saving…"
+            : saveState === "error"
+              ? "Save failed — try again"
+              : "Saved"}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssetDetailRoute({
+  assets,
+  departments,
+  maintDraft,
+  setMaintDraft,
+  onDispose,
+  onToggleMaintenance,
+  onWriteOff,
+  onAddMaintenance,
+  listPath,
+  setAssets,
+}) {
+  const { assetId } = useParams();
+  const navigate = useNavigate();
+  const asset = assets.find((a) => a.id === assetId);
+
+  useEffect(() => {
+    if (!assetId) return;
+    fetch(`${apiURL}/api/assets/${assetId}/maintenance`, {
+      headers: authHeaders(),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data?.success) return;
+        const records = (data.data?.records || []).map((r) => ({
+          id: r.id,
+          date: (r.actualDate || r.scheduledDate || "").slice(0, 10),
+          cost: Number(r.cost) || 0,
+          vendor: r.vendor || "",
+          description: r.description || "",
+        }));
+        setAssets((prev) =>
+          prev.map((a) =>
+            a.id === assetId ? { ...a, maintenance: records } : a,
+          ),
+        );
+      })
+      .catch(() => {});
+  }, [assetId, setAssets]);
+
+  if (!asset) {
+    return <Navigate to={listPath || "/app/assets"} replace />;
+  }
+  return (
+    <AssetDetail
+      asset={asset}
+      departments={departments}
+      onBack={() => navigate(listPath || "/app/assets")}
+      onDispose={onDispose}
+      onToggleMaintenance={onToggleMaintenance}
+      onWriteOff={onWriteOff}
+      maintDraft={maintDraft}
+      setMaintDraft={setMaintDraft}
+      onAddMaintenance={onAddMaintenance}
+    />
+  );
+}
+
+function AssetListPanel({
+  loaded,
+  assets,
+  filtered,
+  query,
+  setQuery,
+  catFilter,
+  setCatFilter,
+  statusFilter,
+  primaryColor,
+  accountEntries = [],
+  entriesLoading = false,
+  onOpenAsset,
+  onAdd,
+}) {
+  const entryHint =
+    statusFilter === "Active"
+      ? "Acquisition & depreciation account entries for active assets"
+      : statusFilter === "Under Maintenance"
+        ? "Maintenance account entries"
+        : statusFilter === "Disposed"
+          ? "Disposal account entries"
+          : statusFilter === "Written Off"
+            ? "Write-off / disposal account entries"
+            : "All asset account entries";
+
+  return (
+    <div className="flex flex-col gap-4">
           <div className="bg-white border border-muted rounded-2xl overflow-hidden shadow-sm">
             {/* Filters */}
             <div className="flex gap-2.5 p-3.5 border-b border-muted flex-wrap bg-slate-50/40">
@@ -867,17 +1196,10 @@ export default function AssetRegister() {
                   <option key={c}>{c}</option>
                 ))}
               </select>
-              <select
-                className="ar-input"
-                style={{ width: 170 }}
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option>All</option>
-                {Object.keys(STATUS_STYLE).map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
+              <StatusRouteMenu
+                primaryColor={primaryColor}
+                currentStatus={statusFilter}
+              />
             </div>
 
             {!loaded ? (
@@ -919,6 +1241,13 @@ export default function AssetRegister() {
                     <div style={{ fontSize: 13, marginTop: 4 }}>
                       Record your first asset to start the register.
                     </div>
+                    <button
+                      type="button"
+                      className="ar-btn-primary mt-4"
+                      onClick={onAdd}
+                    >
+                      <Plus size={14} /> Add Asset
+                    </button>
                   </>
                 ) : (
                   <div style={{ fontSize: 13.5 }}>
@@ -965,7 +1294,7 @@ export default function AssetRegister() {
                       <tr
                         key={a.id}
                         className="ar-table-row"
-                        onClick={() => setSelected(a.id)}
+                        onClick={() => onOpenAsset(a.id)}
                         style={{ borderBottom: "1px solid #F2F5F9" }}
                       >
                         <td style={{ padding: "11px 14px" }}>
@@ -1054,9 +1383,134 @@ export default function AssetRegister() {
               </table>
             )}
           </div>
-        )}
 
-        {tab === "ledger" && (
+          {/* Account entries for this status route */}
+          <div className="bg-white border border-muted rounded-2xl overflow-hidden shadow-sm">
+            <div
+              className="flex items-center justify-between gap-3 px-4 py-3.5 border-b border-muted"
+              style={{ background: hexToRgba(primaryColor, 0.06) }}
+            >
+              <div>
+                <div
+                  className="text-xs font-black uppercase tracking-widest"
+                  style={{ color: primaryColor }}
+                >
+                  Account entries
+                  {statusFilter && statusFilter !== "All"
+                    ? ` · ${statusFilter}`
+                    : ""}
+                </div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">
+                  {entryHint}
+                </div>
+              </div>
+              <span
+                className="rounded-full px-2.5 py-0.5 text-[11px] font-bold text-white"
+                style={{ background: primaryColor }}
+              >
+                {accountEntries.length}
+              </span>
+            </div>
+            {entriesLoading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
+                <Loader2 size={16} className="animate-spin" /> Loading entries…
+              </div>
+            ) : accountEntries.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-slate-500">
+                No account entries for this status yet.
+              </div>
+            ) : (
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  fontSize: 13,
+                }}
+              >
+                <thead>
+                  <tr style={{ background: "#FAFBFD", textAlign: "left" }}>
+                    {["Date", "Type", "Asset", "Description", "Amount", "Journal"].map(
+                      (h) => (
+                        <th
+                          key={h}
+                          style={{
+                            padding: "10px 14px",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: "#8996A8",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.03em",
+                            borderBottom: "1px solid #EDF1F6",
+                          }}
+                        >
+                          {h}
+                        </th>
+                      ),
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {accountEntries.map((e) => (
+                    <tr key={e.id} style={{ borderBottom: "1px solid #F2F5F9" }}>
+                      <td
+                        className="ar-font-mono"
+                        style={{ padding: "10px 14px", color: "#64748B" }}
+                      >
+                        {String(e.transactionDate || "").slice(0, 10)}
+                      </td>
+                      <td style={{ padding: "10px 14px" }}>
+                        <span
+                          className="inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold text-white"
+                          style={{ background: primaryColor }}
+                        >
+                          {e.transactionType}
+                        </span>
+                      </td>
+                      <td style={{ padding: "10px 14px" }}>
+                        <div style={{ fontWeight: 600 }}>{e.assetName}</div>
+                        <div
+                          className="ar-font-mono"
+                          style={{ fontSize: 11, color: "#94A3B8" }}
+                        >
+                          {e.assetCode}
+                        </div>
+                      </td>
+                      <td
+                        style={{
+                          padding: "10px 14px",
+                          color: "#475569",
+                          maxWidth: 280,
+                        }}
+                      >
+                        {e.description || "—"}
+                      </td>
+                      <td
+                        className="ar-font-mono"
+                        style={{ padding: "10px 14px", fontWeight: 600 }}
+                      >
+                        {naira(e.amount)}
+                      </td>
+                      <td style={{ padding: "10px 14px" }}>
+                        {e.journalRef ? (
+                          <span className="ar-tag">{e.journalRef}</span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: "#94A3B8" }}>
+                            —
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+    </div>
+  );
+}
+
+function AssetLedgerPanel({ journal }) {
+  return (
           <div className="bg-white border border-muted rounded-2xl overflow-hidden shadow-sm">
             <div className="px-4 py-3.5 border-b border-muted text-xs text-muted-foreground bg-slate-50/40">
               A local summary of actions this session. Account treatment
@@ -1124,11 +1578,11 @@ export default function AssetRegister() {
                     >
                       {e.journalRef ? (
                         <>
-                          Posted to ledger — ref{" "}
+                          Journal{" "}
                           <span className="ar-tag">{e.journalRef}</span>
                         </>
                       ) : (
-                        "Postings appear in Account → General Ledger"
+                        "No journal reference"
                       )}
                     </div>
                   </div>
@@ -1136,26 +1590,49 @@ export default function AssetRegister() {
               </div>
             )}
           </div>
-        )}
+  );
+}
 
-        {/* Detail panel */}
-        {selectedAsset && (
-          <AssetDetail
-            asset={selectedAsset}
-            departments={departments}
-            onBack={() => setSelected(null)}
-            onDispose={disposeAsset}
-            onToggleMaintenance={toggleMaintenance}
-            onWriteOff={writeOffAsset}
-            maintDraft={maintDraft}
-            setMaintDraft={setMaintDraft}
-            onAddMaintenance={addMaintenanceEntry}
-          />
-        )}
 
-        {/* Add asset form */}
-        {tab === "add" && (
-          <div className="bg-white border border-muted rounded-2xl p-5 shadow-sm">
+
+function AssetAddPanel({
+  draft,
+  setDraft,
+  branches,
+  departments,
+  primaryColor,
+  saveState,
+  onSave,
+  onCancel,
+  businessName,
+}) {
+  const [chartOfAccount, setChartOfAccount] = useState([]);
+
+  useEffect(() => {
+    if (!businessName) return;
+    _postApi(
+      `/account/chart-of-account?query_type=select`,
+      { store: businessName },
+      (resp) => {
+        if (resp.success) setChartOfAccount(resp.results || []);
+      },
+      (err) => console.error("Chart of accounts error:", err),
+    );
+  }, [businessName]);
+
+  const findAccount = (code) =>
+    chartOfAccount.find((a) => String(a.head) === String(code)) || null;
+
+  const selectedAssetAccount = findAccount(draft.assetAccountCode);
+  const selectedAccDepAccount = findAccount(
+    draft.accumulatedDepreciationAccountCode,
+  );
+  const selectedDepExpAccount = findAccount(
+    draft.depreciationExpenseAccountCode,
+  );
+
+  return (
+<div className="bg-white border border-muted rounded-2xl p-5 shadow-sm">
             <div
               style={{
                 display: "flex",
@@ -1172,7 +1649,7 @@ export default function AssetRegister() {
               </div>
               <button
                 className="ar-btn-ghost"
-                onClick={() => setTab("register")}
+                onClick={onCancel}
               >
                 <X size={14} /> Cancel
               </button>
@@ -1183,6 +1660,7 @@ export default function AssetRegister() {
             >
               Register only — no ledger posting until you{" "}
               <span className="font-semibold text-slate-800">Run Depreciation</span>.
+              Account heads below are used when depreciation (and later disposal) posts.
               Carrying amount starts as Cost (accum. dep = ₦0).
             </div>
 
@@ -1210,9 +1688,14 @@ export default function AssetRegister() {
                 <select
                   className="ar-input"
                   value={draft.category}
-                  onChange={(e) =>
-                    setDraft({ ...draft, category: e.target.value })
-                  }
+                  onChange={(e) => {
+                    const category = e.target.value;
+                    setDraft({
+                      ...draft,
+                      category,
+                      ...defaultAccountCodes(category),
+                    });
+                  }}
                 >
                   {Object.keys(CATEGORIES).map((c) => (
                     <option key={c}>{c}</option>
@@ -1231,6 +1714,74 @@ export default function AssetRegister() {
                       acquisitionDate: e.target.value,
                     })
                   }
+                />
+              </div>
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                <div
+                  className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Account heads (post into)
+                </div>
+              </div>
+
+              <div>
+                <label className="ar-label">
+                  Asset / cost account <span className="text-red-500">*</span>
+                </label>
+                <TypeaheadCustom
+                  options={chartOfAccount}
+                  placeholder="Select asset account"
+                  labelKey={(i) => `${i.description} - (${i.head})`}
+                  onChange={(selectedItems) => {
+                    setDraft({
+                      ...draft,
+                      assetAccountCode: selectedItems[0]?.head || "",
+                    });
+                  }}
+                  fixed
+                  flip
+                  selected={selectedAssetAccount ? [selectedAssetAccount] : []}
+                />
+              </div>
+              <div>
+                <label className="ar-label">
+                  Accumulated depreciation <span className="text-red-500">*</span>
+                </label>
+                <TypeaheadCustom
+                  options={chartOfAccount}
+                  placeholder="Select accum. dep account"
+                  labelKey={(i) => `${i.description} - (${i.head})`}
+                  onChange={(selectedItems) => {
+                    setDraft({
+                      ...draft,
+                      accumulatedDepreciationAccountCode:
+                        selectedItems[0]?.head || "",
+                    });
+                  }}
+                  fixed
+                  flip
+                  selected={selectedAccDepAccount ? [selectedAccDepAccount] : []}
+                />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label className="ar-label">
+                  Depreciation expense <span className="text-red-500">*</span>
+                </label>
+                <TypeaheadCustom
+                  options={chartOfAccount}
+                  placeholder="Select depreciation expense account"
+                  labelKey={(i) => `${i.description} - (${i.head})`}
+                  onChange={(selectedItems) => {
+                    setDraft({
+                      ...draft,
+                      depreciationExpenseAccountCode:
+                        selectedItems[0]?.head || "",
+                    });
+                  }}
+                  fixed
+                  flip
+                  selected={selectedDepExpAccount ? [selectedDepExpAccount] : []}
                 />
               </div>
 
@@ -1457,44 +2008,19 @@ export default function AssetRegister() {
             >
               <button
                 className="ar-btn-ghost"
-                onClick={() => setTab("register")}
+                onClick={onCancel}
               >
                 Cancel
               </button>
               <button
                 className="ar-btn-primary"
-                onClick={addAsset}
+                onClick={onSave}
                 disabled={saveState === "saving"}
               >
                 <Plus size={15} /> Save Asset
               </button>
             </div>
           </div>
-        )}
-
-        {loaded && saveState !== "idle" && (
-          <div
-            style={{
-              position: "fixed",
-              bottom: 18,
-              right: 18,
-              background: saveState === "error" ? "#C24444" : "var(--ar-dark)",
-              color: "#fff",
-              padding: "8px 14px",
-              borderRadius: 8,
-              fontSize: 12.5,
-              fontWeight: 600,
-            }}
-          >
-            {saveState === "saving"
-              ? "Saving…"
-              : saveState === "error"
-                ? "Save failed — try again"
-                : "Saved"}
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -1513,7 +2039,13 @@ function AssetDetail({
   const st = STATUS_STYLE[asset.status] || STATUS_STYLE.Active;
   const [proceeds, setProceeds] = useState("");
   const [confirmDispose, setConfirmDispose] = useState(false);
-  const gl = CATEGORIES[asset.category] || CATEGORIES["Office Equipment"];
+  const categoryGl =
+    CATEGORIES[asset.category] || CATEGORIES["Office Equipment"];
+  const glCost = asset.assetAccountCode || categoryGl.cost;
+  const glAccDep =
+    asset.accumulatedDepreciationAccountCode || categoryGl.accDep;
+  const glDepExp =
+    asset.depreciationExpenseAccountCode || categoryGl.depExp;
   const departmentName =
     departments.find((d) => String(d.id) === String(asset.department))
       ?.departmentName || null;
@@ -1629,14 +2161,14 @@ function AssetDetail({
         style={{ display: "flex", gap: 22, marginBottom: 20, flexWrap: "wrap" }}
       >
         <div style={{ fontSize: 13, color: "#475569" }}>
-          <b>GL cost a/c:</b> <span className="ar-font-mono">{gl.cost}</span>
+          <b>GL cost a/c:</b> <span className="ar-font-mono">{glCost}</span>
         </div>
         <div style={{ fontSize: 13, color: "#475569" }}>
-          <b>Acc. dep a/c:</b> <span className="ar-font-mono">{gl.accDep}</span>
+          <b>Acc. dep a/c:</b> <span className="ar-font-mono">{glAccDep}</span>
         </div>
         <div style={{ fontSize: 13, color: "#475569" }}>
           <b>Dep. expense a/c:</b>{" "}
-          <span className="ar-font-mono">{gl.depExp}</span>
+          <span className="ar-font-mono">{glDepExp}</span>
         </div>
         <div style={{ fontSize: 13, color: "#475569" }}>
           <b>Method:</b> {asset.depreciationMethod}

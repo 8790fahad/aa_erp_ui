@@ -22,7 +22,13 @@ export default function CrmTemplates() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: "", body: "", is_active: true });
+  const [form, setForm] = useState({
+    name: "",
+    channel: "sms",
+    subject: "",
+    body: "",
+    is_active: true,
+  });
 
   const load = useCallback(() => {
     if (!facilityId) return;
@@ -46,7 +52,13 @@ export default function CrmTemplates() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", body: "", is_active: true });
+    setForm({
+      name: "",
+      channel: "sms",
+      subject: "",
+      body: "",
+      is_active: true,
+    });
     setOpen(true);
   };
 
@@ -54,6 +66,8 @@ export default function CrmTemplates() {
     setEditing(t);
     setForm({
       name: t.name,
+      channel: t.channel === "email" ? "email" : "sms",
+      subject: t.subject || "",
       body: t.body,
       is_active: !!t.is_active,
     });
@@ -63,6 +77,10 @@ export default function CrmTemplates() {
   const save = () => {
     if (!form.name.trim() || !form.body.trim()) {
       toast.error("Name and body required");
+      return;
+    }
+    if (form.channel === "email" && !form.subject.trim()) {
+      toast.error("Subject required for email templates");
       return;
     }
     if (editing) {
@@ -106,9 +124,11 @@ export default function CrmTemplates() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-[#1a2d5e]">SMS templates</h2>
+          <h2 className="text-lg font-semibold text-[#1a2d5e]">
+            Outreach templates
+          </h2>
           <p className="text-sm text-slate-500">
-            Reusable messages with {"{{customer_name}}"} variables.
+            SMS and email templates with {"{{customer_name}}"} variables.
           </p>
         </div>
         <Button
@@ -133,7 +153,17 @@ export default function CrmTemplates() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-semibold text-[#1a2d5e]">{t.name}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-[#1a2d5e]">{t.name}</h3>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                        {t.channel === "email" ? "Email" : "SMS"}
+                      </span>
+                    </div>
+                    {t.channel === "email" && t.subject ? (
+                      <p className="mt-1 text-sm font-medium text-slate-700">
+                        {t.subject}
+                      </p>
+                    ) : null}
                     <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">
                       {t.body}
                     </p>
@@ -175,6 +205,25 @@ export default function CrmTemplates() {
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             />
+            <select
+              className="h-10 w-full rounded-md border px-3 text-sm"
+              value={form.channel}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, channel: e.target.value }))
+              }
+            >
+              <option value="sms">SMS</option>
+              <option value="email">Email</option>
+            </select>
+            {form.channel === "email" ? (
+              <Input
+                placeholder="Subject"
+                value={form.subject}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, subject: e.target.value }))
+                }
+              />
+            ) : null}
             <textarea
               className="min-h-[140px] w-full rounded-md border p-3 text-sm"
               placeholder="Message body"

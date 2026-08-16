@@ -195,7 +195,7 @@ export default function CrmDashboard() {
               to="/app/crm/sms"
               className="inline-flex h-8 items-center rounded-md border px-3 text-sm text-slate-700 hover:bg-slate-50"
             >
-              Send SMS
+              Send outreach
             </Link>
             <Link
               to="/app/crm/settings"
