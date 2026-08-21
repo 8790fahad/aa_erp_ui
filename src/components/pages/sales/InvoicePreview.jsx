@@ -2,7 +2,10 @@ import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import CreditSaleInvoiceImproved from "./CreditSaleInvoiceImproved";
-import ThermalReceipt, { printThermalReceipt } from "./ThermalReceipt";
+import ThermalReceipt, {
+  printThermalReceipt,
+  printAllThermalReceipts,
+} from "./ThermalReceipt";
 import useQuery from "@/hooks/useQuery";
 import { useSelector } from "react-redux";
 import { _fetchApi } from "@/redux/actions/api";
@@ -130,6 +133,10 @@ function InvoicePreview() {
   const branchNameParam = query.get("branch_name");
   const printAll = query.get("print_all") === "1" || query.get("print_all") === "true";
   const autoPrint = query.get("auto_print") === "1" || query.get("auto_print") === "true";
+  const forceThermal =
+    query.get("thermal") === "1" ||
+    query.get("thermal") === "true" ||
+    query.get("receipt") === "terminal";
   const isCollectionReceipt =
     query.get("collect") === "1" ||
     query.get("collect") === "true" ||
@@ -255,13 +262,15 @@ function InvoicePreview() {
   }, [printAll, invoiceData, packs]);
 
   // Respect business system setting: PDF/A4 or Terminal/thermal.
-  // Collection receipts always use thermal layout (dual signatures + barcode).
+  // Collection receipts always use thermal. Invoice Separation print-all can force thermal=1.
   const receiptType =
     activeBusiness?.default_receipt_type ||
     invoiceData?.business?.default_receipt_type ||
     "pdf";
   const isTerminalReceipt =
-    receiptType === "terminal" || isCollectionReceipt;
+    forceThermal ||
+    receiptType === "terminal" ||
+    isCollectionReceipt;
 
   useEffect(() => {
     if (!autoPrint || didAutoPrint || isLoading) return;
@@ -269,14 +278,14 @@ function InvoicePreview() {
     if (!printAll && !resolvedInvoiceData) return;
     setDidAutoPrint(true);
     const t = setTimeout(() => {
-      // Single thermal invoice preview uses thermal print helper.
-      // print_all uses the page @media print CSS (window.print).
-      if (isTerminalReceipt && !printAll) {
+      if (isTerminalReceipt && printAll) {
+        printAllThermalReceipts();
+      } else if (isTerminalReceipt) {
         printThermalReceipt("both");
       } else {
         window.print();
       }
-    }, 600);
+    }, 800);
     return () => clearTimeout(t);
   }, [
     autoPrint,
@@ -298,12 +307,24 @@ function InvoicePreview() {
   };
 
   const handlePrintAll = () => {
-    // print_all page has its own @media print CSS (A4 or thermal).
-    // Do not use printThermalReceipt here — its visibility hack breaks multi-branch layout.
+    if (isTerminalReceipt) {
+      toast.message("One complete receipt per sheet", {
+        description:
+          "Each warehouse copy is its own page (no mid-cut). Set Scale to Actual size / 100%. Paper may still show 72×210 — that only adds blank under each copy.",
+        duration: 7000,
+      });
+      printAllThermalReceipts();
+      return;
+    }
     window.print();
   };
 
   const handlePrintThermal = () => {
+    toast.message("Check Paper size in the print dialog", {
+      description:
+        "If it says 72 × 210 mm you will get blank space. Choose the shorter size matching the receipt (or create Custom 72 × 120 mm). Use Actual size / 100%.",
+      duration: 8000,
+    });
     printThermalReceipt("both");
   };
 
@@ -338,7 +359,6 @@ function InvoicePreview() {
           @media print {
             .no-print { display: none !important; }
             body { background: white !important; margin: 0 !important; }
-            /* Hide app chrome (sidebar / top bar) while printing branch copies */
             aside, nav, header, [data-sidebar], .app-sidebar, .sidebar {
               display: none !important;
             }
@@ -346,87 +366,83 @@ function InvoicePreview() {
               background: white !important;
               min-height: 0 !important;
               padding: 0 !important;
+              margin: 0 !important;
             }
             ${
               isTerminalReceipt
                 ? `
-            @page { size: 80mm auto; margin: 0; }
-            /* Hide everything except the thermal receipts */
-            body * { visibility: hidden !important; }
-            .print-receipt-only,
-            .print-receipt-only * {
+            /* Backup only — thermal print-all uses printAllThermalReceipts() */
+            @page { size: 72mm auto; margin: 0; }
+            html, body {
+              width: 72mm !important;
+              max-width: 72mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            body * { display: none !important; }
+            .print-all-thermal-list,
+            .print-all-thermal-list * {
+              display: revert !important;
               visibility: visible !important;
             }
-            .print-all-root,
-            .print-all-thermal-list,
-            .branch-invoice-copy,
-            .print-receipt-frame,
-            .print-receipt-only,
-            .print-receipt-only * {
-              visibility: visible !important;
+            .print-all-thermal-list {
+              display: block !important;
+              position: absolute !important;
+              top: 0 !important;
+              left: 0 !important;
+              width: 72mm !important;
+              max-width: 72mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
             }
             .no-print,
             .no-print * {
               display: none !important;
-              visibility: hidden !important;
-            }
-            aside, nav, header, [data-sidebar], .app-sidebar, .sidebar,
-            aside *, nav *, header * {
-              display: none !important;
-              visibility: hidden !important;
-            }
-            .print-all-thermal-list {
-              display: block !important;
-              max-width: none !important;
-              margin: 0 !important;
-              padding: 0 !important;
             }
             .branch-invoice-copy {
               display: block !important;
-              break-after: page;
-              page-break-after: always;
-              break-inside: avoid;
-              page-break-inside: avoid;
               margin: 0 !important;
               padding: 0 !important;
+              width: 72mm !important;
+              break-inside: avoid;
+              page-break-inside: avoid;
             }
-            .branch-invoice-copy:last-child {
-              break-after: auto;
-              page-break-after: auto;
-            }
-            .print-receipt-only {
+            .thermal-cut-mark {
               display: block !important;
-              width: 80mm !important;
+              width: 72mm !important;
+              margin: 2mm 0 3mm !important;
+              text-align: center;
+              font-family: "Courier New", Courier, monospace;
+              font-size: 10px;
+            }
+            .thermal-cut-mark::before {
+              content: "- - - - - cut here - - - - -";
+              display: block;
+            }
+            .print-receipt-only,
+            .print-receipt-frame,
+            .thermal-receipt-set {
+              display: block !important;
+              width: 72mm !important;
               margin: 0 !important;
               padding: 0 !important;
               border: none !important;
               box-shadow: none !important;
               background: white !important;
               overflow: visible !important;
-            }
-            .print-receipt-frame {
-              border: none !important;
-              box-shadow: none !important;
-              background: transparent !important;
-              overflow: visible !important;
-            }
-            .thermal-receipt-set {
-              display: block !important;
-              width: 80mm !important;
-              margin: 0 !important;
             }
             .thermal-receipt-root,
             .thermal-receipt-root.thermal-receipt-preview {
               display: block !important;
-              visibility: visible !important;
-              width: 80mm !important;
-              max-width: 80mm !important;
+              width: 72mm !important;
+              max-width: 72mm !important;
               margin: 0 !important;
-              padding: 0.5mm !important;
+              padding: 1mm 1mm 0 !important;
               box-shadow: none !important;
               border: none !important;
               background: white !important;
               color: #000 !important;
+              font-family: "Courier New", Courier, monospace !important;
             }
             `
                 : `
@@ -442,17 +458,29 @@ function InvoicePreview() {
             `
             }
           }
+          .print-all-thermal-list .print-receipt-frame {
+            display: inline-block;
+            width: 80mm;
+            max-width: 80mm;
+            height: auto !important;
+            min-height: 0 !important;
+          }
+          .print-all-thermal-list .print-receipt-only {
+            height: auto !important;
+            min-height: 0 !important;
+            padding: 0 !important;
+            background: #fff !important;
+          }
         `}</style>
         <div className="no-print max-w-4xl mx-auto px-4 mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="rounded-md border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900 flex-1">
             <strong>Print all branch copies</strong>
             <span className="block text-xs text-violet-700 mt-0.5">
               {printAllCopies.length} branch cop
-              {printAllCopies.length === 1 ? "y" : "ies"} for {saleCode} — one
-              per warehouse ·{" "}
+              {printAllCopies.length === 1 ? "y" : "ies"} for {saleCode} —{" "}
               {isTerminalReceipt
-                ? "Thermal (80mm) from system settings — 1 customer copy each"
-                : "A4 / PDF from system settings"}
+                ? "continuous 80mm roll with cut marks between copies"
+                : "one A4 page per warehouse"}
             </span>
           </div>
           <div className="flex gap-2">
@@ -471,12 +499,13 @@ function InvoicePreview() {
             No branch copies found for this invoice.
           </div>
         ) : isTerminalReceipt ? (
-          <div className="print-all-thermal-list max-w-4xl mx-auto px-4 space-y-8">
+          <div className="print-all-thermal-list max-w-4xl mx-auto px-4 space-y-4">
             {printAllCopies.map(({ pack, data }, idx) => {
               const branchLabel =
                 pack.branch_name || `Warehouse ${pack.branch_id}`;
+              const isLast = idx === printAllCopies.length - 1;
               return (
-                <div key={pack.id} className="branch-invoice-copy mb-8">
+                <div key={pack.id} className="branch-invoice-copy mb-4">
                   <div className="no-print mb-2 text-center">
                     <div className="text-sm font-medium text-violet-900">
                       Copy {idx + 1} of {printAllCopies.length} · {branchLabel}{" "}
@@ -485,13 +514,13 @@ function InvoicePreview() {
                   </div>
                   {data ? (
                     <div className="flex justify-center">
-                      <div className="rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden print-receipt-frame">
+                      <div className="rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden print-receipt-frame w-[80mm]">
                         <div className="no-print border-b border-gray-100 bg-gray-50 px-3 py-1 text-center">
                           <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
                             80mm · {branchLabel} · Customer copy
                           </span>
                         </div>
-                        <div className="print-receipt-only p-0.5 bg-gray-100">
+                        <div className="print-receipt-only bg-white">
                           <ThermalReceipt
                             preview
                             invoiceData={data}
@@ -505,6 +534,9 @@ function InvoicePreview() {
                         </div>
                       </div>
                     </div>
+                  ) : null}
+                  {!isLast ? (
+                    <div className="thermal-cut-mark" aria-hidden="true" />
                   ) : null}
                 </div>
               );
@@ -605,6 +637,11 @@ function InvoicePreview() {
                 {isCollectionReceipt
                   ? "Terminal / thermal (80mm) — warehouse collection copy"
                   : "Terminal / thermal (80mm) — review before printing"}
+              </p>
+              <p className="text-xs text-amber-700 mt-1 max-w-md">
+                To avoid blank paper: in the print dialog set Paper size away from
+                fixed <strong>72 × 210 mm</strong> (use the short custom size or
+                create 72 × 120 mm). Scale = Actual size.
               </p>
             </div>
             <div className="flex items-center gap-2">

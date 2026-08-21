@@ -320,7 +320,7 @@ export default function InvoiceSeparation() {
       navigate(
         `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
           selected.sale_code,
-        )}&print_all=1`,
+        )}&print_all=1&auto_print=1&thermal=1`,
       );
     };
 
@@ -653,7 +653,7 @@ export default function InvoiceSeparation() {
                     {needsCreditApproval && !isHistoryRecord
                       ? "Store copies appear only after credit is approved at Collection Points."
                       : packs.length
-                        ? `One evidence copy per store involved (${packs.length}). Print each store invoice, then mark separated to send packs to warehouse.`
+                        ? `One evidence copy per store (${packs.length}). Use Print all for a continuous 80mm thermal strip (cut marks between stores), then mark separated.`
                         : "One evidence copy is created for each store involved in this invoice."}
                   </p>
 
