@@ -61,19 +61,39 @@ export default function authReducer(state = initialState, action) {
 
   switch (action.type) {
     case LOGIN: {
+      const payload = action.payload || {};
+      const user = payload.user || {};
+      const businessTree = Array.isArray(payload.business)
+        ? payload.business
+        : [];
+      const firstBusinessRow = Array.isArray(businessTree[0])
+        ? businessTree[0]
+        : businessTree;
+      const activeFromTree =
+        (Array.isArray(firstBusinessRow) && firstBusinessRow[0]) ||
+        firstBusinessRow ||
+        {};
+      const businessesList = Array.isArray(payload.businessesList)
+        ? payload.businessesList
+        : [];
+
       return Object.assign({}, state, {
         authenticated: true,
-        user: Object.assign({}, state.user, action.payload.user, {
-          facilityId: action.payload.user.facilityID,
+        loggedIn: true,
+        user: Object.assign({}, state.user, user, {
+          facilityId: user.facilityId || user.facilityID || state.user.facilityId,
         }),
-        token: action.payload.token,
+        token: payload.token || state.token,
         error: "",
-        business: action.payload.business[0],
-        businessesList: action.payload.businessesList ?? [],
-        businessCount: action.payload.businessCount ?? (action.payload.businessesList?.length ?? 0),
-        activeBusiness: action.payload.business
-          ? action.payload.business[0][0]
-          : {},
+        business: firstBusinessRow || state.business,
+        businessesList,
+        businessCount:
+          payload.businessCount ??
+          businessesList.length ??
+          state.businessCount,
+        activeBusiness: activeFromTree?.id
+          ? activeFromTree
+          : businessesList[0] || state.activeBusiness || {},
       });
     }
     case UPDATE_BUSINESS: {

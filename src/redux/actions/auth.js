@@ -111,40 +111,49 @@ export function initUser(navigate = null, callback = (f) => f) {
   return (dispatch) => {
     let token = localStorage.getItem("@@__token");
     if (!token) {
-      toast("You are not logged in");
       callback();
-      navigate("/login");
+      if (navigate) navigate("/login");
       return;
     }
 
-
-      /**
-       * Token present
-       * verifyToken */
-      verifyToken(token)
-        .then((data) => {
-
-          if (!data.success) {
+    verifyToken(token)
+      .then((data) => {
+        if (!data || data.success !== true) {
+          // Only clear session on explicit auth failure (expired / invalid)
+          const authFailed =
+            data &&
+            (data.success === false ||
+              data.code === "TokenExpiredError" ||
+              data.code === "JsonWebTokenError");
+          if (authFailed) {
             callback();
             localStorage.removeItem("@@__token");
-            navigate("/login");
-            console.log("Token expired");
+            if (navigate) navigate("/login");
             dispatch({ type: LOGOUT });
             return;
           }
-       dispatch({ type: LOGIN, payload: data });
-            // navigate.push('/app');
-            callback();
-        })
-        .catch((err) => {
-          console.log(err)
+          // Network / empty response — keep token, do not force logout
+          console.warn("[initUser] verify-token returned no success payload");
           callback();
-          localStorage.removeItem("@@__token");
-          navigate("/login");
-          console.log("Token expired");
-          dispatch({ type: LOGOUT });
-        });
-  
+          return;
+        }
+
+        if (data.token) {
+          localStorage.setItem(
+            "@@__token",
+            data.token.startsWith("Bearer ")
+              ? data.token
+              : `Bearer ${data.token}`,
+          );
+        }
+        dispatch({ type: LOGIN, payload: data });
+        callback();
+      })
+      .catch((err) => {
+        // Transient errors should not log the user out on refresh
+        console.warn("[initUser] verify-token failed:", err);
+        callback();
+      });
   };
 }
 
@@ -159,7 +168,8 @@ async function verifyToken(token) {
     let data = await response.json();
     return data;
   } catch (error) {
-    console.log(error);
+    console.warn("[verifyToken]", error);
+    throw error;
   }
 }
 
