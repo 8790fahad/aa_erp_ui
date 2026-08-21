@@ -1,0 +1,2 @@
+fullname,address,phone,email,branch,receivable_code,unearned_deposits_receivable_code,credit_limit,opening_balance,opening_balance_date
+Test Customer,No 12 Zaria Road Kano,07012345678,customer@gmail.com,Main Branch,1205101,1205100,500000,150000,2025-01-01
