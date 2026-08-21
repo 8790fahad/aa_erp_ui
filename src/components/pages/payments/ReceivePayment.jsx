@@ -8,6 +8,7 @@ import {
   CreditCard,
   History,
   Loader2,
+  Percent,
   Plus,
   RefreshCw,
   ScanLine,
@@ -28,7 +29,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
+import { useAdvancePaymentAccounts, isCashInHandHead } from "@/components/common/useAdvancePaymentAccounts";
 import { WorkflowStatusBadge } from "@/lib/saleWorkflowStatus.js";
 import useScanDetection from "@/hooks/useScanDetection";
 import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
@@ -45,6 +46,10 @@ const bankPayThroughLabel = (option) => {
 const payThroughTypeaheadClass =
   "w-full [&_.rbt-input-main]:h-10 [&_.rbt-input-main]:rounded-md [&_.rbt-input-main]:border [&_.rbt-input-main]:border-slate-300 [&_.rbt-input-main]:bg-white [&_.rbt-input-main]:px-3 [&_.rbt-input-main]:text-sm [&_.rbt-input-main]:shadow-none outline-none focus-within:[&_.rbt-input-main]:border-[var(--aa-accent)]";
 
+/** Keep Pay Through menu above the collection sheet overlay */
+const payThroughMenuClassName =
+  "!z-[200] max-h-60 overflow-auto rounded-md border border-slate-200 bg-white shadow-lg";
+
 const METHOD_TABS = [
   { id: "cash", label: "Cash", icon: Banknote, privilege: "Cash Collection" },
   {
@@ -52,6 +57,12 @@ const METHOD_TABS = [
     label: "Transfer",
     icon: Building2,
     privilege: "Transfer Collection",
+  },
+  {
+    id: "discount",
+    label: "Discount",
+    icon: Percent,
+    privilege: "Cash Collection",
   },
   {
     id: "credit",
@@ -194,6 +205,7 @@ export default function ReceivePayment() {
   const [loading, setLoading] = useState(false);
   const [pending, setPending] = useState([]);
   const [creditPending, setCreditPending] = useState([]);
+  const [discountPending, setDiscountPending] = useState([]);
   const [history, setHistory] = useState([]);
   const [summary, setSummary] = useState({
     pending_cash: 0,
@@ -293,6 +305,7 @@ export default function ReceivePayment() {
         if (res?.success) {
           setPending(res.results?.pending || []);
           setCreditPending(res.results?.credit_pending || []);
+          setDiscountPending(res.results?.discount_pending || []);
           setHistory(res.results?.history || []);
           setSummary(
             res.results?.summary || {
@@ -300,6 +313,7 @@ export default function ReceivePayment() {
               pending_transfer: 0,
               pending_split: 0,
               pending_credit: 0,
+              pending_discount: 0,
               pending_count: 0,
               pending_total: 0,
               collected_cash_today: 0,
@@ -339,7 +353,10 @@ export default function ReceivePayment() {
       !cashAccounts.accountHead?.head &&
       cashAccounts.headList?.length
     ) {
-      cashAccounts.setAccountHead(cashAccounts.headList[0]);
+      const preferred =
+        cashAccounts.headList.find((h) => isCashInHandHead(h)) ||
+        cashAccounts.headList[0];
+      cashAccounts.setAccountHead(preferred);
     }
   }, [
     collectOpen,
@@ -391,10 +408,12 @@ export default function ReceivePayment() {
         showTransfer: false,
         showSplit: false,
         showCredit: false,
+        showDiscount: false,
         pending_cash: sumAmounts(cashQueue),
         pending_transfer: 0,
         pending_split: 0,
         pending_credit: 0,
+        pending_discount: 0,
         collected_cash_today: summary.collected_cash_today,
         collected_transfer_today: 0,
         pending_count: cashQueue.length,
@@ -406,10 +425,12 @@ export default function ReceivePayment() {
         showTransfer: true,
         showSplit: false,
         showCredit: false,
+        showDiscount: false,
         pending_cash: 0,
         pending_transfer: sumAmounts(transferQueue),
         pending_split: 0,
         pending_credit: 0,
+        pending_discount: 0,
         collected_cash_today: 0,
         collected_transfer_today: summary.collected_transfer_today,
         pending_count: transferQueue.length,
@@ -421,14 +442,34 @@ export default function ReceivePayment() {
         showTransfer: false,
         showSplit: false,
         showCredit: true,
+        showDiscount: false,
         pending_cash: 0,
         pending_transfer: 0,
         pending_split: 0,
         pending_credit:
           Number(summary.pending_credit) || sumAmounts(creditPending),
+        pending_discount: 0,
         collected_cash_today: 0,
         collected_transfer_today: 0,
         pending_count: creditPending.length,
+      };
+    }
+    if (methodTab === "discount") {
+      return {
+        showCash: false,
+        showTransfer: false,
+        showSplit: false,
+        showCredit: false,
+        showDiscount: true,
+        pending_cash: 0,
+        pending_transfer: 0,
+        pending_split: 0,
+        pending_credit: 0,
+        pending_discount:
+          Number(summary.pending_discount) || sumAmounts(discountPending),
+        collected_cash_today: 0,
+        collected_transfer_today: 0,
+        pending_count: discountPending.length,
       };
     }
     return {
@@ -436,18 +477,25 @@ export default function ReceivePayment() {
       showTransfer: true,
       showSplit: false,
       showCredit: false,
+      showDiscount: false,
       pending_cash: summary.pending_cash,
       pending_transfer: summary.pending_transfer,
       pending_split: summary.pending_split,
       pending_credit: summary.pending_credit || 0,
+      pending_discount: summary.pending_discount || 0,
       collected_cash_today: summary.collected_cash_today,
       collected_transfer_today: summary.collected_transfer_today,
       pending_count: summary.pending_count,
     };
-  }, [methodTab, pending, creditPending, summary]);
+  }, [methodTab, pending, creditPending, discountPending, summary]);
 
   const methodPendingCounts = useMemo(() => {
-    const counts = { cash: 0, transfer: 0, credit: creditPending.length };
+    const counts = {
+      cash: 0,
+      transfer: 0,
+      credit: creditPending.length,
+      discount: discountPending.length,
+    };
     for (const r of pending) {
       if (matchesMethod(r.payment_type, "cash") && needsCollectionSide(r, "cash")) {
         counts.cash += 1;
@@ -460,17 +508,19 @@ export default function ReceivePayment() {
       }
     }
     return counts;
-  }, [pending, creditPending]);
+  }, [pending, creditPending, discountPending]);
 
   const filteredPending = useMemo(() => {
     let list =
       methodTab === "credit"
         ? creditPending
-        : pending.filter(
-            (r) =>
-              matchesMethod(r.payment_type, methodTab) &&
-              needsCollectionSide(r, methodTab),
-          );
+        : methodTab === "discount"
+          ? discountPending
+          : pending.filter(
+              (r) =>
+                matchesMethod(r.payment_type, methodTab) &&
+                needsCollectionSide(r, methodTab),
+            );
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((r) =>
@@ -478,7 +528,7 @@ export default function ReceivePayment() {
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q)),
     );
-  }, [pending, creditPending, methodTab, search]);
+  }, [pending, creditPending, discountPending, methodTab, search]);
 
   const filteredHistory = useMemo(() => {
     let list = history.filter((r) => {
@@ -827,6 +877,36 @@ export default function ReceivePayment() {
     );
   };
 
+  const approveDiscount = (row) => {
+    if (!row || !activeBusiness?.id) return;
+    setSubmitting(true);
+    _postApi(
+      "/api/v1/sale-workflows/advance",
+      {
+        facilityId: activeBusiness.id,
+        saleCode: row.sale_code,
+        action: "advance",
+        updated_by: user?.id,
+        note: "Discount approved",
+      },
+      (res) => {
+        setSubmitting(false);
+        if (res?.success) {
+          toast.success(
+            res.message || "Discount approved — invoice released to collection",
+          );
+          fetchDashboard();
+        } else {
+          toast.error(res?.message || "Could not approve discount");
+        }
+      },
+      (err) => {
+        setSubmitting(false);
+        toast.error(err?.message || "Could not approve discount");
+      },
+    );
+  };
+
   const confirmPayment = () => {
     if (!selected || !activeBusiness?.id) return;
     const cashAmt = parseFloat(String(cashAmount).replace(/,/g, "")) || 0;
@@ -939,7 +1019,7 @@ export default function ReceivePayment() {
     (parseFloat(String(transferAmount).replace(/,/g, "")) || 0);
 
   const summaryGridCols =
-    methodTab === "credit"
+    methodTab === "credit" || methodTab === "discount"
       ? "xl:grid-cols-1 sm:grid-cols-1"
       : "xl:grid-cols-2";
 
@@ -983,7 +1063,7 @@ export default function ReceivePayment() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {methodTab !== "credit" ? (
+            {methodTab !== "credit" && methodTab !== "discount" ? (
               <button
                 type="button"
                 onClick={() => openAdvanceSheet()}
@@ -1094,6 +1174,23 @@ export default function ReceivePayment() {
             </div>
           ) : null}
 
+          {viewSummary.showDiscount ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <Percent className="h-4 w-4 text-orange-600" />
+                Discount awaiting approval
+              </div>
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">
+                ₦{formatNumber1(viewSummary.pending_discount)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {viewSummary.pending_count} discounted invoice
+                {viewSummary.pending_count === 1 ? "" : "s"} — approve before
+                collection
+              </p>
+            </div>
+          ) : null}
+
           {viewSummary.showCash ? (
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -1192,9 +1289,11 @@ export default function ReceivePayment() {
                 No invoices awaiting{" "}
                 {methodTab === "credit"
                   ? "credit approval"
-                  : methodTab === "transfer"
-                    ? "transfer payment"
-                    : "cash payment"}
+                  : methodTab === "discount"
+                    ? "discount approval"
+                    : methodTab === "transfer"
+                      ? "transfer payment"
+                      : "cash payment"}
                 .
               </div>
             ) : (
@@ -1334,6 +1433,15 @@ export default function ReceivePayment() {
                               className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
                             >
                               Approve Credit
+                            </button>
+                          ) : methodTab === "discount" ? (
+                            <button
+                              type="button"
+                              disabled={submitting}
+                              onClick={() => approveDiscount(row)}
+                              className="rounded-md bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
+                            >
+                              Approve Discount
                             </button>
                           ) : (
                             <button
@@ -1542,11 +1650,12 @@ export default function ReceivePayment() {
                   id="collection-pay-through-cash"
                   labelKey={cashPayThroughLabel}
                   options={cashAccounts.headList || []}
-                  placeholder="Search cash account…"
+                  placeholder="Search cash / COA account…"
                   clearButton
                   positionFixed
                   flip
                   className={payThroughTypeaheadClass}
+                  menuClassName={payThroughMenuClassName}
                   selected={
                     cashAccounts.accountHead?.head
                       ? (cashAccounts.headList || []).filter(
@@ -1559,12 +1668,19 @@ export default function ReceivePayment() {
                   onChange={(items) => {
                     cashAccounts.setAccountHead(items?.[0] || {});
                   }}
+                  filterBy={(option, props) => {
+                    const q = String(props.text || "")
+                      .toLowerCase()
+                      .trim();
+                    if (!q) return true;
+                    return cashPayThroughLabel(option)
+                      .toLowerCase()
+                      .includes(q);
+                  }}
                 />
-                {paymentType === "cash" ? (
-                  <p className="text-xs text-slate-500">
-                    Cash collections use Cash on Hand only.
-                  </p>
-                ) : null}
+                <p className="text-xs text-slate-500">
+                  Select the cash Chart of Accounts head for this collection.
+                </p>
               </div>
             ) : null}
 
@@ -1599,6 +1715,7 @@ export default function ReceivePayment() {
                   positionFixed
                   flip
                   className={payThroughTypeaheadClass}
+                  menuClassName={payThroughMenuClassName}
                   selected={
                     bankAccounts.bankAccount?.id
                       ? (bankAccounts.accountList || []).filter(
@@ -1620,6 +1737,9 @@ export default function ReceivePayment() {
                     return hay.includes(q);
                   }}
                 />
+                <p className="text-xs text-slate-500">
+                  Select the bank / COA account for this transfer.
+                </p>
               </div>
             ) : null}
 
@@ -1741,6 +1861,7 @@ export default function ReceivePayment() {
                     positionFixed
                     flip
                     className={payThroughTypeaheadClass}
+                  menuClassName={payThroughMenuClassName}
                     selected={
                       cashAccounts.accountHead?.head
                         ? (cashAccounts.headList || []).filter(
@@ -1790,6 +1911,7 @@ export default function ReceivePayment() {
                     positionFixed
                     flip
                     className={payThroughTypeaheadClass}
+                  menuClassName={payThroughMenuClassName}
                     selected={
                       bankAccounts.bankAccount?.id
                         ? (bankAccounts.accountList || []).filter(
@@ -1842,6 +1964,7 @@ export default function ReceivePayment() {
                       positionFixed
                       flip
                       className={payThroughTypeaheadClass}
+                  menuClassName={payThroughMenuClassName}
                       selected={
                         cashAccounts.accountHead?.head
                           ? (cashAccounts.headList || []).filter(
@@ -1878,6 +2001,7 @@ export default function ReceivePayment() {
                       positionFixed
                       flip
                       className={payThroughTypeaheadClass}
+                  menuClassName={payThroughMenuClassName}
                       selected={
                         bankAccounts.bankAccount?.id
                           ? (bankAccounts.accountList || []).filter(

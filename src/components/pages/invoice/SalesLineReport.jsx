@@ -28,20 +28,100 @@ import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 
 const PAGE_SIZE = 100;
 
+const REPORT_VIEWS = [
+  { key: "summary", label: "Sales Summary" },
+  { key: "detail", label: "Sales Detail" },
+  { key: "daily", label: "Daily Sales" },
+  { key: "monthly", label: "Monthly/Annual Sales" },
+  { key: "customer", label: "Sales by Customer" },
+  { key: "product", label: "Sales by Product" },
+  { key: "category", label: "Sales by Category" },
+  { key: "salesperson", label: "Sales by Salesperson" },
+  { key: "branch", label: "Sales by Branch" },
+];
+
+function num(v) {
+  return parseFloat(v) || 0;
+}
+
+function lineVat(row) {
+  return num(row.vat_amount ?? row.vat);
+}
+
+function aggregateBy(rows, keyFn, labelFn) {
+  const map = new Map();
+  for (const row of rows) {
+    const key = keyFn(row);
+    const prev = map.get(key) || {
+      key,
+      label: labelFn(row),
+      lines: 0,
+      invoices: new Set(),
+      qty: 0,
+      line_total: 0,
+      vat_amount: 0,
+    };
+    prev.lines += 1;
+    if (row.invoice_no) prev.invoices.add(row.invoice_no);
+    prev.qty += num(row.qty);
+    prev.line_total += num(row.line_total);
+    prev.vat_amount += lineVat(row);
+    if (!prev.label) prev.label = labelFn(row);
+    map.set(key, prev);
+  }
+  return [...map.values()]
+    .map((r) => ({
+      ...r,
+      invoice_count: r.invoices.size,
+      total_incl_vat: r.line_total + r.vat_amount,
+    }))
+    .sort((a, b) => b.line_total - a.line_total);
+}
+
+function Th({ children, align = "left", className = "" }) {
+  return (
+    <th
+      className={`py-3 px-3 text-xs font-semibold uppercase tracking-wide border-b border-slate-500 ${
+        align === "right" ? "text-right" : "text-left"
+      } ${className}`}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({ children, align = "left", className = "" }) {
+  return (
+    <td
+      className={`py-3 px-3 ${align === "right" ? "text-right tabular-nums" : ""} ${className}`}
+    >
+      {children}
+    </td>
+  );
+}
+
 export default function SalesLineReport() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const reportExportRef = useRef(null);
 
-  const [fromDate, setFromDate] = useState(() =>
-    searchParams.get("fromDate") ||
+  const [reportView, setReportView] = useState(
+    () => searchParams.get("view") || "detail",
+  );
+  const [fromDate, setFromDate] = useState(
+    () =>
+      searchParams.get("fromDate") ||
       moment().startOf("month").format("YYYY-MM-DD"),
   );
   const [toDate, setToDate] = useState(
     () => searchParams.get("toDate") || moment().format("YYYY-MM-DD"),
   );
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
+  const [category, setCategory] = useState(
+    () => searchParams.get("category") || "",
+  );
+  const [categories, setCategories] = useState([]);
   const [branchFromUrl, setBranchFromUrl] = useState(
     () => searchParams.get("branchId") || "",
   );
@@ -53,6 +133,9 @@ export default function SalesLineReport() {
 
   const userId = user?.id || user?.user_id || "";
 
+  const activeViewMeta =
+    REPORT_VIEWS.find((v) => v.key === reportView) || REPORT_VIEWS[1];
+
   useEffect(() => {
     if (!activeBusiness?.id) return;
     _fetchApi(
@@ -61,6 +144,22 @@ export default function SalesLineReport() {
         if (res.success) setBranches(res.results || []);
       },
       () => {},
+    );
+    _fetchApi(
+      `/api/products/categories?facilityId=${activeBusiness.id}`,
+      (res) => {
+        const list = Array.isArray(res?.data) ? res.data : [];
+        setCategories(
+          list
+            .map((c) =>
+              typeof c === "string"
+                ? c
+                : String(c.category || c.name || "").trim(),
+            )
+            .filter(Boolean),
+        );
+      },
+      () => setCategories([]),
     );
   }, [activeBusiness?.id]);
 
@@ -89,16 +188,14 @@ export default function SalesLineReport() {
         fromDate,
         toDate,
         search: search.trim(),
+        category: category.trim(),
         branchId: branchFromUrl,
       });
       setRows(allRows);
-      if (!allRows.length) {
-        setError("");
-      }
     } catch (e) {
       console.error(e);
-      setError("Unable to load sales line report");
-      toast.error("Unable to load sales line report");
+      setError("Unable to load sales report");
+      toast.error("Unable to load sales report");
       setRows([]);
     } finally {
       setLoading(false);
@@ -109,6 +206,7 @@ export default function SalesLineReport() {
     fromDate,
     toDate,
     search,
+    category,
     branchFromUrl,
   ]);
 
@@ -116,8 +214,35 @@ export default function SalesLineReport() {
     runFetch();
   }, [runFetch]);
 
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    next.set("view", reportView);
+    if (fromDate) next.set("fromDate", fromDate);
+    if (toDate) next.set("toDate", toDate);
+    if (category) next.set("category", category);
+    else next.delete("category");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportView]);
+
   const totalLineAmount = useMemo(
-    () => rows.reduce((s, r) => s + (parseFloat(r.line_total) || 0), 0),
+    () => rows.reduce((s, r) => s + num(r.line_total), 0),
+    [rows],
+  );
+  const totalVatAmount = useMemo(
+    () => rows.reduce((s, r) => s + lineVat(r), 0),
+    [rows],
+  );
+  const totalInclVat = useMemo(
+    () => totalLineAmount + totalVatAmount,
+    [totalLineAmount, totalVatAmount],
+  );
+  const totalQty = useMemo(
+    () => rows.reduce((s, r) => s + num(r.qty), 0),
+    [rows],
+  );
+  const invoiceCount = useMemo(
+    () => new Set(rows.map((r) => r.invoice_no).filter(Boolean)).size,
     [rows],
   );
 
@@ -134,25 +259,343 @@ export default function SalesLineReport() {
     )}`;
   }, [fromDate, toDate]);
 
+  const byCustomer = useMemo(
+    () =>
+      aggregateBy(
+        rows,
+        (r) => r.customer_no || r.customer_name || "—",
+        (r) => r.customer_name || r.customer_no || "—",
+      ),
+    [rows],
+  );
+  const byProduct = useMemo(
+    () =>
+      aggregateBy(
+        rows,
+        (r) => r.product_sku || r.product_name || "—",
+        (r) => r.product_name || r.product_sku || "—",
+      ).map((r) => {
+        const sample = rows.find(
+          (x) => (x.product_sku || x.product_name || "—") === r.key,
+        );
+        return {
+          ...r,
+          sub: sample?.product_sku || "",
+          category: sample?.product_category || sample?.category || "",
+        };
+      }),
+    [rows],
+  );
+  const byCategory = useMemo(
+    () =>
+      aggregateBy(
+        rows,
+        (r) => r.product_category || r.category || "Uncategorized",
+        (r) => r.product_category || r.category || "Uncategorized",
+      ),
+    [rows],
+  );
+  const bySalesperson = useMemo(
+    () =>
+      aggregateBy(
+        rows,
+        (r) => r.salesperson_id || r.salesperson_name || "—",
+        (r) => r.salesperson_name || r.salesperson_id || "—",
+      ),
+    [rows],
+  );
+  const byBranch = useMemo(
+    () =>
+      aggregateBy(
+        rows,
+        (r) => String(r.branch_id || r.branch_name || "—"),
+        (r) => r.branch_name || `Branch ${r.branch_id}` || "—",
+      ),
+    [rows],
+  );
+  const byDaily = useMemo(
+    () =>
+      aggregateBy(
+        rows,
+        (r) =>
+          r.invoice_date
+            ? moment(r.invoice_date).format("YYYY-MM-DD")
+            : "—",
+        (r) =>
+          r.invoice_date
+            ? moment(r.invoice_date).format("DD-MMM-YYYY")
+            : "—",
+      ).sort((a, b) => String(b.key).localeCompare(String(a.key))),
+    [rows],
+  );
+  const byMonthly = useMemo(
+    () =>
+      aggregateBy(
+        rows,
+        (r) =>
+          r.invoice_date ? moment(r.invoice_date).format("YYYY-MM") : "—",
+        (r) =>
+          r.invoice_date ? moment(r.invoice_date).format("MMM YYYY") : "—",
+      )
+        .map((r) => ({
+          ...r,
+          year: r.key !== "—" ? r.key.slice(0, 4) : "—",
+          month: r.key !== "—" ? moment(r.key, "YYYY-MM").format("MMMM") : "—",
+        }))
+        .sort((a, b) => String(b.key).localeCompare(String(a.key))),
+    [rows],
+  );
+  const byAnnual = useMemo(
+    () =>
+      aggregateBy(
+        rows,
+        (r) =>
+          r.invoice_date ? moment(r.invoice_date).format("YYYY") : "—",
+        (r) =>
+          r.invoice_date ? moment(r.invoice_date).format("YYYY") : "—",
+      ).sort((a, b) => String(b.key).localeCompare(String(a.key))),
+    [rows],
+  );
+
+  const exportRows = useMemo(() => {
+    switch (reportView) {
+      case "customer":
+        return {
+          headers: [
+            "Customer",
+            "Invoices",
+            "Lines",
+            "Qty",
+            "Sales (₦)",
+            "VAT (₦)",
+            "Total incl. VAT (₦)",
+          ],
+          rows: byCustomer.map((r) => [
+            r.label,
+            r.invoice_count,
+            r.lines,
+            r.qty,
+            r.line_total,
+            r.vat_amount,
+            r.total_incl_vat,
+          ]),
+        };
+      case "product":
+        return {
+          headers: [
+            "Product",
+            "SKU",
+            "Category",
+            "Qty",
+            "Sales (₦)",
+            "VAT (₦)",
+            "Total incl. VAT (₦)",
+          ],
+          rows: byProduct.map((r) => [
+            r.label,
+            r.sub,
+            r.category,
+            r.qty,
+            r.line_total,
+            r.vat_amount,
+            r.total_incl_vat,
+          ]),
+        };
+      case "category":
+        return {
+          headers: [
+            "Category",
+            "Invoices",
+            "Lines",
+            "Qty",
+            "Sales (₦)",
+            "VAT (₦)",
+            "Total incl. VAT (₦)",
+          ],
+          rows: byCategory.map((r) => [
+            r.label,
+            r.invoice_count,
+            r.lines,
+            r.qty,
+            r.line_total,
+            r.vat_amount,
+            r.total_incl_vat,
+          ]),
+        };
+      case "salesperson":
+        return {
+          headers: [
+            "Salesperson",
+            "Invoices",
+            "Lines",
+            "Qty",
+            "Sales (₦)",
+            "VAT (₦)",
+            "Total incl. VAT (₦)",
+          ],
+          rows: bySalesperson.map((r) => [
+            r.label,
+            r.invoice_count,
+            r.lines,
+            r.qty,
+            r.line_total,
+            r.vat_amount,
+            r.total_incl_vat,
+          ]),
+        };
+      case "branch":
+        return {
+          headers: [
+            "Branch",
+            "Invoices",
+            "Lines",
+            "Qty",
+            "Sales (₦)",
+            "VAT (₦)",
+            "Total incl. VAT (₦)",
+          ],
+          rows: byBranch.map((r) => [
+            r.label,
+            r.invoice_count,
+            r.lines,
+            r.qty,
+            r.line_total,
+            r.vat_amount,
+            r.total_incl_vat,
+          ]),
+        };
+      case "daily":
+        return {
+          headers: [
+            "Date",
+            "Invoices",
+            "Lines",
+            "Qty",
+            "Sales (₦)",
+            "VAT (₦)",
+            "Total incl. VAT (₦)",
+          ],
+          rows: byDaily.map((r) => [
+            r.label,
+            r.invoice_count,
+            r.lines,
+            r.qty,
+            r.line_total,
+            r.vat_amount,
+            r.total_incl_vat,
+          ]),
+        };
+      case "monthly":
+        return {
+          headers: [
+            "Year",
+            "Month",
+            "Invoices",
+            "Lines",
+            "Qty",
+            "Sales (₦)",
+            "VAT (₦)",
+            "Total incl. VAT (₦)",
+          ],
+          rows: [
+            ...byMonthly.map((r) => [
+              r.year,
+              r.month,
+              r.invoice_count,
+              r.lines,
+              r.qty,
+              r.line_total,
+              r.vat_amount,
+              r.total_incl_vat,
+            ]),
+            [],
+            ["Annual totals"],
+            ...byAnnual.map((r) => [
+              r.label,
+              "Full year",
+              r.invoice_count,
+              r.lines,
+              r.qty,
+              r.line_total,
+              r.vat_amount,
+              r.total_incl_vat,
+            ]),
+          ],
+        };
+      case "summary":
+        return {
+          headers: ["Metric", "Value"],
+          rows: [
+            ["Invoices", invoiceCount],
+            ["Lines", rows.length],
+            ["Quantity", totalQty],
+            ["Sales (ex-VAT)", totalLineAmount],
+            ["VAT", totalVatAmount],
+            ["Total incl. VAT", totalInclVat],
+          ],
+        };
+      default:
+        return {
+          headers: [
+            "Invoice No.",
+            "Date",
+            "Customer",
+            "Product",
+            "Category",
+            "Salesperson",
+            "Branch",
+            "Qty",
+            "Unit Price (₦)",
+            "VAT (₦)",
+            "Line Total (₦)",
+          ],
+          rows: rows.map((row) => [
+            row.invoice_no,
+            row.invoice_date
+              ? moment(row.invoice_date).format("DD-MMM-YYYY")
+              : "",
+            row.customer_name,
+            row.product_name,
+            row.product_category || row.category || "",
+            row.salesperson_name || "",
+            row.branch_name || "",
+            row.qty,
+            row.unit_price,
+            lineVat(row),
+            row.line_total,
+          ]),
+        };
+    }
+  }, [
+    reportView,
+    rows,
+    byCustomer,
+    byProduct,
+    byCategory,
+    bySalesperson,
+    byBranch,
+    byDaily,
+    byMonthly,
+    byAnnual,
+    invoiceCount,
+    totalQty,
+    totalLineAmount,
+    totalVatAmount,
+    totalInclVat,
+  ]);
+
   const handleExportExcel = useCallback(async () => {
-    if (!rows.length) {
+    if (!rows.length && reportView !== "summary") {
       toast.error("No rows to export");
       return;
     }
     try {
       const workbook = new ExcelJS.Workbook();
-      const ws = workbook.addWorksheet("Sales Line Report");
-      ws.columns = [
-        { width: 16 },
-        { width: 14 },
-        { width: 28 },
-        { width: 32 },
-        { width: 10 },
-        { width: 14 },
-        { width: 16 },
-      ];
+      const ws = workbook.addWorksheet(activeViewMeta.label.slice(0, 31));
+      const colCount = Math.max(exportRows.headers.length, 2);
+      ws.columns = Array.from({ length: colCount }, () => ({ width: 16 }));
       let r = 1;
-      ws.mergeCells(r, 1, r, 7);
+      ws.mergeCells(r, 1, r, colCount);
       ws.getCell(r, 1).value =
         activeBusiness?.business_name ||
         activeBusiness?.name ||
@@ -160,26 +603,19 @@ export default function SalesLineReport() {
       ws.getCell(r, 1).font = { bold: true, size: 14 };
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
-      ws.mergeCells(r, 1, r, 7);
-      ws.getCell(r, 1).value = "Sales Line Report";
+      ws.mergeCells(r, 1, r, colCount);
+      ws.getCell(r, 1).value = activeViewMeta.label;
       ws.getCell(r, 1).font = { bold: true, size: 12 };
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
-      ws.mergeCells(r, 1, r, 7);
-      ws.getCell(r, 1).value = `Period: ${periodLabel} · All amounts in ₦`;
+      ws.mergeCells(r, 1, r, colCount);
+      ws.getCell(r, 1).value = `Period: ${periodLabel} · All amounts in ₦${
+        category ? ` · Category: ${category}` : ""
+      }`;
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r += 2;
 
-      const headers = [
-        "Invoice No.",
-        "Date",
-        "Customer",
-        "Product",
-        "Qty",
-        "Unit Price (₦)",
-        "Line Total (₦)",
-      ];
-      headers.forEach((h, i) => {
+      exportRows.headers.forEach((h, i) => {
         const c = ws.getCell(r, i + 1);
         c.value = h;
         c.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -191,26 +627,18 @@ export default function SalesLineReport() {
       });
       r++;
 
-      rows.forEach((row) => {
-        ws.getCell(r, 1).value = row.invoice_no;
-        ws.getCell(r, 2).value = row.invoice_date
-          ? moment(row.invoice_date).format("DD-MMM-YYYY")
-          : "";
-        ws.getCell(r, 3).value = row.customer_name;
-        ws.getCell(r, 4).value = row.product_name;
-        ws.getCell(r, 5).value = row.qty;
-        ws.getCell(r, 6).value = row.unit_price;
-        ws.getCell(r, 6).numFmt = "#,##0.00";
-        ws.getCell(r, 7).value = row.line_total;
-        ws.getCell(r, 7).numFmt = "#,##0.00";
+      exportRows.rows.forEach((row) => {
+        if (!row.length) {
+          r++;
+          return;
+        }
+        row.forEach((val, i) => {
+          const c = ws.getCell(r, i + 1);
+          c.value = val;
+          if (typeof val === "number" && i > 0) c.numFmt = "#,##0.00";
+        });
         r++;
       });
-
-      ws.getCell(r, 1).value = "Total";
-      ws.getCell(r, 1).font = { bold: true };
-      ws.getCell(r, 7).value = totalLineAmount;
-      ws.getCell(r, 7).numFmt = "#,##0.00";
-      ws.getCell(r, 7).font = { bold: true };
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
@@ -219,7 +647,7 @@ export default function SalesLineReport() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `sales-line-report-${fromDate}-to-${toDate}.xlsx`;
+      a.download = `sales-${reportView}-${fromDate}-to-${toDate}.xlsx`;
       a.click();
       window.URL.revokeObjectURL(url);
       toast.success("Excel downloaded");
@@ -227,7 +655,17 @@ export default function SalesLineReport() {
       console.error(e);
       toast.error("Could not export Excel");
     }
-  }, [rows, totalLineAmount, activeBusiness, periodLabel, fromDate, toDate]);
+  }, [
+    rows.length,
+    reportView,
+    activeViewMeta,
+    exportRows,
+    activeBusiness,
+    periodLabel,
+    category,
+    fromDate,
+    toDate,
+  ]);
 
   const handleExportPdf = useCallback(async () => {
     const el = reportExportRef.current;
@@ -254,7 +692,7 @@ export default function SalesLineReport() {
         pdf.addImage(imgData, "PNG", 0, -y, pageWidth, imgHeight);
         y += pageHeight;
       }
-      pdf.save(`sales-line-report-${fromDate}-to-${toDate}.pdf`);
+      pdf.save(`sales-${reportView}-${fromDate}-to-${toDate}.pdf`);
       toast.success("PDF downloaded");
     } catch (e) {
       console.error(e);
@@ -262,11 +700,313 @@ export default function SalesLineReport() {
     } finally {
       setPdfExporting(false);
     }
-  }, [fromDate, toDate]);
+  }, [fromDate, toDate, reportView]);
+
+  const renderAggTable = (items, firstHeader, options = {}) => (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="bg-slate-600 text-white">
+            <Th className="px-6">{firstHeader}</Th>
+            {options.showSub && <Th>{options.subHeader || "SKU"}</Th>}
+            {options.showCategory && <Th>Category</Th>}
+            <Th align="right">Invoices</Th>
+            <Th align="right">Lines</Th>
+            <Th align="right">Qty</Th>
+            <Th align="right">Sales (₦)</Th>
+            <Th align="right">VAT (₦)</Th>
+            <Th align="right" className="px-6">
+              Total incl. VAT (₦)
+            </Th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((r) => (
+            <tr key={r.key} className="border-b">
+              <Td className="px-6 font-medium">{r.label}</Td>
+              {options.showSub && (
+                <Td className="text-gray-500 text-sm">{r.sub || "—"}</Td>
+              )}
+              {options.showCategory && (
+                <Td>{r.category || "—"}</Td>
+              )}
+              <Td align="right">{formatNumber1(r.invoice_count)}</Td>
+              <Td align="right">{formatNumber1(r.lines)}</Td>
+              <Td align="right">{formatNumber1(r.qty)}</Td>
+              <Td align="right">{formatNumber1(r.line_total)}</Td>
+              <Td align="right">{formatNumber1(r.vat_amount)}</Td>
+              <Td align="right" className="px-6 font-semibold">
+                {formatNumber1(r.total_incl_vat)}
+              </Td>
+            </tr>
+          ))}
+          {items.length > 0 && (
+            <tr className="bg-white font-semibold border-t">
+              <td
+                className="py-4 px-6"
+                colSpan={
+                  1 +
+                  (options.showSub ? 1 : 0) +
+                  (options.showCategory ? 1 : 0) +
+                  2
+                }
+              >
+                Total
+              </td>
+              <Td align="right">{formatNumber1(totalQty)}</Td>
+              <Td align="right">{formatNumber1(totalLineAmount)}</Td>
+              <Td align="right">{formatNumber1(totalVatAmount)}</Td>
+              <Td align="right" className="px-6">
+                {formatNumber1(totalInclVat)}
+              </Td>
+            </tr>
+          )}
+          {items.length === 0 && (
+            <tr>
+              <td
+                colSpan={9}
+                className="py-12 text-center text-sm text-gray-500"
+              >
+                No sales found for this period.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderReportBody = () => {
+    if (reportView === "summary") {
+      return (
+        <div className="px-6 py-5 space-y-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {[
+              { label: "Invoices", value: invoiceCount, money: false },
+              { label: "Lines", value: rows.length, money: false },
+              { label: "Quantity", value: totalQty, money: false },
+              { label: "Sales (ex-VAT)", value: totalLineAmount, money: true },
+              { label: "VAT", value: totalVatAmount, money: true },
+              { label: "Total incl. VAT", value: totalInclVat, money: true },
+            ].map((card) => (
+              <div
+                key={card.label}
+                className="rounded-xl border border-gray-200 bg-slate-50 px-3 py-3"
+              >
+                <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                  {card.label}
+                </p>
+                <p className="mt-1 text-lg font-bold tabular-nums text-slate-800">
+                  {card.money
+                    ? `₦${formatNumber1(card.value)}`
+                    : formatNumber1(card.value)}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-gray-800">
+              Top categories
+            </h4>
+            {renderAggTable(byCategory.slice(0, 8), "Category")}
+          </div>
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-gray-800">
+              Top products
+            </h4>
+            {renderAggTable(byProduct.slice(0, 8), "Product", {
+              showSub: true,
+              showCategory: true,
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    if (reportView === "daily") {
+      return renderAggTable(byDaily, "Date");
+    }
+    if (reportView === "monthly") {
+      return (
+        <div className="space-y-6">
+          <div>
+            <h4 className="px-6 pt-4 mb-2 text-sm font-semibold text-gray-800">
+              Monthly sales
+            </h4>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-slate-600 text-white">
+                    <Th className="px-6">Year</Th>
+                    <Th>Month</Th>
+                    <Th align="right">Invoices</Th>
+                    <Th align="right">Lines</Th>
+                    <Th align="right">Qty</Th>
+                    <Th align="right">Sales (₦)</Th>
+                    <Th align="right">VAT (₦)</Th>
+                    <Th align="right" className="px-6">
+                      Total incl. VAT (₦)
+                    </Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {byMonthly.map((r) => (
+                    <tr key={r.key} className="border-b">
+                      <Td className="px-6">{r.year}</Td>
+                      <Td className="font-medium">{r.month}</Td>
+                      <Td align="right">{formatNumber1(r.invoice_count)}</Td>
+                      <Td align="right">{formatNumber1(r.lines)}</Td>
+                      <Td align="right">{formatNumber1(r.qty)}</Td>
+                      <Td align="right">{formatNumber1(r.line_total)}</Td>
+                      <Td align="right">{formatNumber1(r.vat_amount)}</Td>
+                      <Td align="right" className="px-6 font-semibold">
+                        {formatNumber1(r.total_incl_vat)}
+                      </Td>
+                    </tr>
+                  ))}
+                  {byMonthly.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="py-12 text-center text-sm text-gray-500"
+                      >
+                        No sales found for this period.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h4 className="px-6 mb-2 text-sm font-semibold text-gray-800">
+              Annual totals
+            </h4>
+            {renderAggTable(byAnnual, "Year")}
+          </div>
+        </div>
+      );
+    }
+    if (reportView === "customer") return renderAggTable(byCustomer, "Customer");
+    if (reportView === "product") {
+      return renderAggTable(byProduct, "Product", {
+        showSub: true,
+        showCategory: true,
+      });
+    }
+    if (reportView === "category") return renderAggTable(byCategory, "Category");
+    if (reportView === "salesperson") {
+      return renderAggTable(bySalesperson, "Salesperson");
+    }
+    if (reportView === "branch") return renderAggTable(byBranch, "Branch");
+
+    // Sales Detail (default)
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-slate-600 text-white">
+              <Th className="px-6">Invoice No.</Th>
+              <Th className="whitespace-nowrap min-w-[100px]">Date</Th>
+              <Th>Customer</Th>
+              <Th>Product</Th>
+              <Th>Category</Th>
+              <Th>Salesperson</Th>
+              <Th>Branch</Th>
+              <Th align="right">Qty</Th>
+              <Th align="right">Unit Price (₦)</Th>
+              <Th align="right">VAT (₦)</Th>
+              <Th align="right" className="px-6">
+                Line Total (₦)
+              </Th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, idx) => {
+              const vat = lineVat(r);
+              return (
+                <tr key={`${r.invoice_no}-${idx}`} className="border-b">
+                  <Td className="px-6 font-semibold">
+                    {r.invoice_no ? (
+                      <Link
+                        to={`/app/sales/invoice-preview?sale_code=${encodeURIComponent(r.invoice_no)}`}
+                        className="text-blue-700 hover:underline"
+                      >
+                        {r.invoice_no}
+                      </Link>
+                    ) : (
+                      "—"
+                    )}
+                  </Td>
+                  <Td className="whitespace-nowrap">
+                    {r.invoice_date
+                      ? moment(r.invoice_date).format("DD-MMM-YYYY")
+                      : "—"}
+                  </Td>
+                  <Td>{r.customer_name || "—"}</Td>
+                  <Td>{r.product_name || "—"}</Td>
+                  <Td className="text-gray-700">
+                    {r.product_category || r.category || "—"}
+                  </Td>
+                  <Td>{r.salesperson_name || "—"}</Td>
+                  <Td>{r.branch_name || "—"}</Td>
+                  <Td align="right">{formatNumber1(r.qty || 0)}</Td>
+                  <Td align="right">{formatNumber1(r.unit_price || 0)}</Td>
+                  <Td align="right">{formatNumber1(vat)}</Td>
+                  <Td align="right" className="px-6 font-semibold">
+                    {formatNumber1(r.line_total || 0)}
+                  </Td>
+                </tr>
+              );
+            })}
+            {rows.length > 0 && (
+              <tr className="bg-white font-semibold border-t">
+                <td className="py-4 px-6" colSpan={9}>
+                  Total
+                </td>
+                <Td align="right">{formatNumber1(totalVatAmount)}</Td>
+                <Td align="right" className="px-6">
+                  {formatNumber1(totalLineAmount)}
+                </Td>
+              </tr>
+            )}
+            {rows.length === 0 && (
+              <tr>
+                <td
+                  colSpan={11}
+                  className="py-12 text-center text-sm text-gray-500"
+                >
+                  No sales lines found for this period.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-3 p-1">
       <div className="bg-gray-100 rounded-lg px-2 py-2 no-print">
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {REPORT_VIEWS.map((view) => (
+            <button
+              key={view.key}
+              type="button"
+              onClick={() => setReportView(view.key)}
+              className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                reportView === view.key
+                  ? "bg-[#4267B2] text-white shadow-sm"
+                  : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+              }`}
+            >
+              {view.label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex items-end gap-2 flex-wrap flex-1">
             <div>
@@ -297,6 +1037,23 @@ export default function SalesLineReport() {
                 className="border rounded px-2 py-2 text-sm bg-white w-full"
               />
             </div>
+            <div className="min-w-[160px]">
+              <label className="text-xs text-gray-600 block mb-1">
+                Category
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="border rounded px-2 py-2 text-sm bg-white w-full"
+              >
+                <option value="">All categories</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
             {branches.length > 0 && (
               <div className="min-w-[180px]">
                 <label className="text-xs text-gray-600 block mb-1">
@@ -305,7 +1062,9 @@ export default function SalesLineReport() {
                 <MultipleSelector
                   value={selectedBranchOptions}
                   onChange={(opts) => {
-                    setBranchFromUrl((opts || []).map((o) => o.value).join(","));
+                    setBranchFromUrl(
+                      (opts || []).map((o) => o.value).join(","),
+                    );
                   }}
                   options={branchOptions}
                   placeholder="All Warehouses"
@@ -327,7 +1086,7 @@ export default function SalesLineReport() {
                   type="button"
                   variant="outline"
                   className="border-gray-300"
-                  disabled={!rows.length || loading}
+                  disabled={(!rows.length && reportView !== "summary") || loading}
                 >
                   Export
                   <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />
@@ -336,7 +1095,7 @@ export default function SalesLineReport() {
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuItem
                   className="cursor-pointer"
-                  disabled={!rows.length || loading}
+                  disabled={(!rows.length && reportView !== "summary") || loading}
                   onClick={() => handleExportExcel()}
                 >
                   <FileSpreadsheet className="h-4 w-4 shrink-0" />
@@ -344,7 +1103,11 @@ export default function SalesLineReport() {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="cursor-pointer"
-                  disabled={!rows.length || loading || pdfExporting}
+                  disabled={
+                    (!rows.length && reportView !== "summary") ||
+                    loading ||
+                    pdfExporting
+                  }
                   onClick={() => handleExportPdf()}
                 >
                   {pdfExporting ? (
@@ -389,7 +1152,7 @@ export default function SalesLineReport() {
         >
           <BusinessDocumentHeader
             business={activeBusiness}
-            title="Sales Line Report"
+            title={activeViewMeta.label}
             numberLabel={`Period: ${periodLabel}`}
             extraLine="All amounts in ₦"
             date={new Date()}
@@ -397,94 +1160,26 @@ export default function SalesLineReport() {
             className="mb-0 border-b border-blue-950"
           />
 
-          <div className="px-6 py-4 flex justify-between text-sm text-gray-700">
-            <p className="font-semibold">Invoice line details</p>
-            <p>{rows.length} line(s)</p>
+          <div className="px-6 py-4 flex flex-wrap justify-between gap-2 text-sm text-gray-700">
+            <p className="font-semibold">{activeViewMeta.label}</p>
+            <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
+              <p>{rows.length} line(s)</p>
+              <p>
+                VAT:{" "}
+                <span className="font-semibold tabular-nums">
+                  ₦{formatNumber1(totalVatAmount)}
+                </span>
+              </p>
+              <p>
+                Total incl. VAT:{" "}
+                <span className="font-semibold tabular-nums">
+                  ₦{formatNumber1(totalInclVat)}
+                </span>
+              </p>
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-slate-600 text-white">
-                  <th className="text-left py-3 px-6 text-xs font-semibold uppercase tracking-wide border-b border-slate-500">
-                    Invoice No.
-                  </th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wide border-b border-slate-500 whitespace-nowrap min-w-[100px]">
-                    Date
-                  </th>
-                  <th className="text-left py-3 px-3 text-xs font-semibold uppercase tracking-wide border-b border-slate-500">
-                    Customer
-                  </th>
-                  <th className="text-left py-3 px-3 text-xs font-semibold uppercase tracking-wide border-b border-slate-500">
-                    Product
-                  </th>
-                  <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wide border-b border-slate-500">
-                    Qty
-                  </th>
-                  <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wide border-b border-slate-500">
-                    Unit Price (₦)
-                  </th>
-                  <th className="text-right py-3 px-6 text-xs font-semibold uppercase tracking-wide border-b border-slate-500">
-                    Line Total (₦)
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, idx) => (
-                  <tr key={`${r.invoice_no}-${idx}`} className="border-b">
-                    <td className="py-3 px-6 font-semibold">
-                      {r.invoice_no ? (
-                        <Link
-                          to={`/app/sales/invoice-preview?sale_code=${encodeURIComponent(r.invoice_no)}`}
-                          className="text-blue-700 hover:underline"
-                        >
-                          {r.invoice_no}
-                        </Link>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="py-3 px-4 whitespace-nowrap">
-                      {r.invoice_date
-                        ? moment(r.invoice_date).format("DD-MMM-YYYY")
-                        : "—"}
-                    </td>
-                    <td className="py-3 px-3">{r.customer_name || "—"}</td>
-                    <td className="py-3 px-3">{r.product_name || "—"}</td>
-                    <td className="py-3 px-3 text-right tabular-nums">
-                      {formatNumber1(r.qty || 0)}
-                    </td>
-                    <td className="py-3 px-3 text-right tabular-nums">
-                      {formatNumber1(r.unit_price || 0)}
-                    </td>
-                    <td className="py-3 px-6 text-right tabular-nums font-semibold">
-                      {formatNumber1(r.line_total || 0)}
-                    </td>
-                  </tr>
-                ))}
-                {rows.length > 0 && (
-                  <tr className="bg-white font-semibold border-t">
-                    <td className="py-4 px-6" colSpan={6}>
-                      Total
-                    </td>
-                    <td className="py-4 px-6 text-right tabular-nums">
-                      {formatNumber1(totalLineAmount)}
-                    </td>
-                  </tr>
-                )}
-                {rows.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="py-12 text-center text-sm text-gray-500"
-                    >
-                      No sales lines found for this period.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          {renderReportBody()}
         </div>
       )}
     </div>
@@ -497,6 +1192,7 @@ async function fetchAllSalesLines({
   fromDate,
   toDate,
   search,
+  category,
   branchId,
 }) {
   let page = 1;
@@ -509,6 +1205,7 @@ async function fetchAllSalesLines({
       fromDate,
       toDate,
       search,
+      category,
       branchId,
       page,
       pageSize: PAGE_SIZE,
@@ -529,6 +1226,7 @@ function fetchSalesLinePage({
   fromDate,
   toDate,
   search,
+  category,
   branchId,
   page,
   pageSize,
@@ -543,6 +1241,7 @@ function fetchSalesLinePage({
       pageSize: String(pageSize),
     });
     if (search) params.set("search", search);
+    if (category) params.set("category", category);
     if (branchId) params.set("branchId", branchId);
 
     _fetchApi(

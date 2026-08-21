@@ -138,6 +138,14 @@ export const SALE_WORKFLOW_STATUS_META = {
     dot: "bg-amber-500",
     row: "bg-amber-50",
   },
+  awaiting_discount_approval: {
+    label: "Discount approval",
+    short: "Discount",
+    color: "orange",
+    badge: "bg-orange-100 text-orange-800 border-orange-200",
+    dot: "bg-orange-500",
+    row: "bg-orange-50",
+  },
   payment_confirmed: {
     label: "Separation",
     short: "Separation",

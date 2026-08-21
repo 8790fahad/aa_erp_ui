@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowDownLeft,
@@ -6,6 +6,8 @@ import {
   ArrowUpRight,
   ChevronDown,
   FileText,
+  Wallet,
+  HandCoins,
 } from "lucide-react";
 import moment from "moment";
 import { format } from "date-fns";
@@ -31,6 +33,13 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import SpecialInvoiceTreatment from "@/components/sales/SpecialInvoiceTreatment";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 /** Distinct series colors (Trend-style soft palette, one hue each) */
 const CHART_GRID = "#f1f5f4";
@@ -174,29 +183,350 @@ function KpiCard({
   changeLabel,
   invertChange = false,
   color = "#1a2d5e",
+  onClick,
 }) {
+  const clickable = typeof onClick === "function";
   return (
-    <div
-      className={`${CARD_CLASS} relative overflow-hidden p-4 sm:p-5`}
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!clickable}
+      className={`${CARD_CLASS} relative overflow-hidden p-4 sm:p-5 text-left w-full ${
+        clickable
+          ? "cursor-pointer hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+          : "cursor-default"
+      }`}
       style={{
         background: `linear-gradient(135deg, ${color}12 0%, #ffffff 55%)`,
         borderColor: `${color}33`,
+        ...(clickable ? { ["--tw-ring-color"]: color } : {}),
       }}
     >
       <span
         className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
         style={{ backgroundColor: color }}
       />
-      <p className="mb-2 text-xs font-semibold tracking-wide" style={{ color }}>
-        {title}
-      </p>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold tracking-wide" style={{ color }}>
+          {title}
+        </p>
+        {clickable && (
+          <span className="text-[10px] font-medium text-gray-400">
+            View report
+          </span>
+        )}
+      </div>
       <div className="flex items-end justify-between gap-2 flex-wrap">
         <p className="text-2xl font-bold tracking-tight" style={{ color }}>
           ₦{formatCompact(value)}
         </p>
         <ChangeBadge value={change} label={changeLabel} invert={invertChange} />
       </div>
+    </button>
+  );
+}
+
+const KPI_REPORT_META = {
+  revenue: {
+    title: "Revenue report",
+    description: "Sales breakdown for the selected dashboard period",
+    color: PL_COLORS.revenue,
+    amountKey: "revenue",
+    tabs: ["category", "product"],
+  },
+  cogs: {
+    title: "COGS report",
+    description: "Cost of goods sold by category and product",
+    color: PL_COLORS.cogs,
+    amountKey: "cogs",
+    tabs: ["category", "product"],
+  },
+  grossProfit: {
+    title: "Gross profit report",
+    description: "Revenue − COGS by category and product",
+    color: PL_COLORS.grossProfit,
+    amountKey: "grossProfit",
+    tabs: ["category", "product"],
+  },
+  operatingExpenses: {
+    title: "Operating expenses report",
+    description: "Operating expense breakdown for the selected period",
+    color: PL_COLORS.operatingExpenses,
+    amountKey: "amount",
+    tabs: ["category"],
+  },
+  netProfit: {
+    title: "Net profit overview",
+    description: "Revenue − COGS − Operating expenses for the selected period",
+    color: PL_COLORS.netProfit,
+    amountKey: "netProfit",
+    tabs: ["summary"],
+  },
+};
+
+function ReportBreakdownRows({ rows, amountKey, accent }) {
+  const max = Math.max(...rows.map((r) => Math.abs(r.amount || 0)), 1);
+  if (!rows.length) {
+    return (
+      <p className="py-10 text-center text-sm text-gray-400">
+        No activity in this period
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-2.5">
+      {rows.map((row) => {
+        const amt = parseFloat(row.amount || 0);
+        const width = Math.max((Math.abs(amt) / max) * 100, 3);
+        return (
+          <div key={row.id || row.name}>
+            <div className="mb-1 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-gray-900">
+                  {row.name}
+                </p>
+                {row.sub ? (
+                  <p className="truncate text-xs text-gray-400">{row.sub}</p>
+                ) : null}
+              </div>
+              <div className="flex-shrink-0 text-right">
+                <p
+                  className="text-sm font-semibold tabular-nums"
+                  style={{ color: accent }}
+                >
+                  ₦{formatCompact(amt)}
+                </p>
+                {row.units != null ? (
+                  <p className="text-[11px] text-gray-400 tabular-nums">
+                    {formatNumber1(row.units)} units
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded bg-gray-100">
+              <div
+                className="h-full rounded"
+                style={{ width: `${width}%`, backgroundColor: accent }}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
+  );
+}
+
+function KpiReportSheet({
+  open,
+  onOpenChange,
+  kpiKey,
+  period,
+  kpis,
+  salesByCategory,
+  topProducts,
+  operating,
+  navigate,
+}) {
+  const meta = KPI_REPORT_META[kpiKey] || KPI_REPORT_META.revenue;
+  const [tab, setTab] = useState(meta.tabs[0]);
+
+  useEffect(() => {
+    setTab(meta.tabs[0]);
+  }, [kpiKey, meta.tabs]);
+
+  const periodLabel = `${moment(period.from).format("DD MMM YYYY")} – ${moment(
+    period.to,
+  ).format("DD MMM YYYY")}`;
+
+  const products = topProducts?.all || topProducts?.byPrice || [];
+
+  const categoryRows = useMemo(() => {
+    if (kpiKey === "operatingExpenses") {
+      return (operating || []).map((item) => ({
+        name: item.name,
+        amount: item.amount,
+        units: null,
+      }));
+    }
+    return (salesByCategory || []).map((item) => {
+      const revenue = parseFloat(item.revenue || 0);
+      const cogs = parseFloat(item.cogs || 0);
+      let amount = revenue;
+      if (kpiKey === "cogs") amount = cogs;
+      if (kpiKey === "grossProfit") amount = revenue - cogs;
+      return {
+        name: item.name,
+        amount,
+        units: item.units,
+      };
+    });
+  }, [kpiKey, salesByCategory, operating]);
+
+  const productRows = useMemo(() => {
+    return (products || []).map((item) => {
+      const revenue = parseFloat(item.revenue || 0);
+      const cogs = parseFloat(item.cogs || 0);
+      let amount = revenue;
+      if (kpiKey === "cogs") amount = cogs;
+      if (kpiKey === "grossProfit") amount = revenue - cogs;
+      return {
+        id: item.id || item.sku || item.name,
+        name: item.name,
+        sub: [item.sku, item.category].filter(Boolean).join(" · "),
+        amount,
+        units: item.units,
+      };
+    });
+  }, [kpiKey, products]);
+
+  const totalValue =
+    kpiKey === "revenue"
+      ? kpis.totalRevenue ?? kpis.totalIncome
+      : kpiKey === "cogs"
+        ? kpis.cogs
+        : kpiKey === "grossProfit"
+          ? kpis.grossProfit
+          : kpiKey === "operatingExpenses"
+            ? kpis.operatingExpenses ?? kpis.totalExpenses
+            : kpis.netProfit;
+
+  const sortedCategory = [...categoryRows].sort(
+    (a, b) => Math.abs(b.amount) - Math.abs(a.amount),
+  );
+  const sortedProduct = [...productRows].sort(
+    (a, b) => Math.abs(b.amount) - Math.abs(a.amount),
+  );
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-lg overflow-y-auto"
+      >
+        <SheetHeader className="text-left">
+          <SheetTitle style={{ color: meta.color }}>{meta.title}</SheetTitle>
+          <SheetDescription>
+            {meta.description}
+            <span className="mt-1 block text-xs text-gray-500">
+              {periodLabel}
+            </span>
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+          <p className="text-xs text-gray-500">Period total</p>
+          <p
+            className="text-2xl font-bold tabular-nums"
+            style={{ color: meta.color }}
+          >
+            ₦{formatCompact(totalValue)}
+          </p>
+        </div>
+
+        {meta.tabs.includes("summary") ? (
+          <div className="mt-5 space-y-3">
+            {[
+              {
+                label: "Revenue",
+                value: kpis.totalRevenue ?? kpis.totalIncome,
+                color: PL_COLORS.revenue,
+              },
+              {
+                label: "COGS",
+                value: kpis.cogs,
+                color: PL_COLORS.cogs,
+              },
+              {
+                label: "Gross Profit",
+                value: kpis.grossProfit,
+                color: PL_COLORS.grossProfit,
+              },
+              {
+                label: "Operating Expenses",
+                value: kpis.operatingExpenses ?? kpis.totalExpenses,
+                color: PL_COLORS.operatingExpenses,
+              },
+              {
+                label: "Net Profit",
+                value: kpis.netProfit,
+                color: PL_COLORS.netProfit,
+              },
+            ].map((row) => (
+              <div
+                key={row.label}
+                className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2"
+              >
+                <span className="text-sm text-gray-700">{row.label}</span>
+                <span
+                  className="text-sm font-semibold tabular-nums"
+                  style={{ color: row.color }}
+                >
+                  ₦{formatCompact(row.value)}
+                </span>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                navigate("/app/reports/accounting-reports/inventria-income-statement")
+              }
+              className="mt-2 w-full rounded-lg border border-gray-200 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Open full income statement
+            </button>
+          </div>
+        ) : (
+          <>
+            {meta.tabs.length > 1 && (
+              <div className="mt-4 inline-flex w-full items-center rounded-lg border border-gray-200 bg-white p-0.5 text-xs font-medium">
+                {meta.tabs.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTab(t)}
+                    className={`flex-1 rounded-md px-3 py-2 transition-colors ${
+                      tab === t ? "text-white shadow-sm" : "text-gray-500"
+                    }`}
+                    style={
+                      tab === t ? { backgroundColor: meta.color } : undefined
+                    }
+                  >
+                    {t === "category"
+                      ? "By category"
+                      : t === "product"
+                        ? "By product"
+                        : t}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4">
+              <ReportBreakdownRows
+                rows={
+                  tab === "product" ||
+                  (meta.tabs.length === 1 && meta.tabs[0] === "product")
+                    ? sortedProduct
+                    : sortedCategory
+                }
+                amountKey={meta.amountKey}
+                accent={meta.color}
+              />
+            </div>
+
+            {kpiKey === "revenue" && (
+              <button
+                type="button"
+                onClick={() => navigate("/app/sales/sales-line-report")}
+                className="mt-5 w-full rounded-lg border border-gray-200 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Open sales line report
+              </button>
+            )}
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -844,6 +1174,7 @@ export default function FinancialOverviewSection({
   const [payView, setPayView] = useState("total"); // total | aging
   const [billsMode, setBillsMode] = useState("purchases"); // purchases | expenses
   const [plChartMode, setPlChartMode] = useState("bar"); // bar | line
+  const [kpiReport, setKpiReport] = useState(null); // revenue | cogs | ...
 
   const formatDateForAPI = (date) => moment(date).format("DD-MM-YYYY");
 
@@ -883,8 +1214,20 @@ export default function FinancialOverviewSection({
   const production = overview?.recentProduction || [];
   const topProducts = overview?.topProducts || {};
   const topCustomers = overview?.topCustomers || {};
+  const salesByCategory = overview?.salesByCategory || [];
   const arAp = overview?.receivablesPayables || {};
   const outstanding = overview?.outstandingBills || {};
+  const advanceDeposit = overview?.advanceDepositBalances || {};
+  const customerDeposits = advanceDeposit.customerDeposits || {
+    total: 0,
+    count: 0,
+    parties: [],
+  };
+  const supplierAdvances = advanceDeposit.supplierAdvances || {
+    total: 0,
+    count: 0,
+    parties: [],
+  };
   const bankBalance =
     kpis.cashInBank ??
     accounts.reduce((sum, a) => sum + parseFloat(a.balance || 0), 0);
@@ -939,6 +1282,7 @@ export default function FinancialOverviewSection({
           change={kpis.revenueChange ?? kpis.incomeChange}
           changeLabel={kpis.revenueChangeLabel ?? kpis.incomeChangeLabel}
           color={PL_COLORS.revenue}
+          onClick={() => setKpiReport("revenue")}
         />
         <KpiCard
           title="COGS"
@@ -947,6 +1291,7 @@ export default function FinancialOverviewSection({
           changeLabel={kpis.cogsChangeLabel}
           invertChange
           color={PL_COLORS.cogs}
+          onClick={() => setKpiReport("cogs")}
         />
         <KpiCard
           title="Gross Profit"
@@ -954,6 +1299,7 @@ export default function FinancialOverviewSection({
           change={kpis.grossProfitChange}
           changeLabel={kpis.grossProfitChangeLabel}
           color={PL_COLORS.grossProfit}
+          onClick={() => setKpiReport("grossProfit")}
         />
         <KpiCard
           title="Operating Expenses"
@@ -964,6 +1310,7 @@ export default function FinancialOverviewSection({
           }
           invertChange
           color={PL_COLORS.operatingExpenses}
+          onClick={() => setKpiReport("operatingExpenses")}
         />
         <KpiCard
           title="Net Profit"
@@ -971,8 +1318,23 @@ export default function FinancialOverviewSection({
           change={kpis.netProfitChange}
           changeLabel={kpis.netProfitChangeLabel}
           color={PL_COLORS.netProfit}
+          onClick={() => setKpiReport("netProfit")}
         />
       </div>
+
+      <KpiReportSheet
+        open={!!kpiReport}
+        onOpenChange={(open) => {
+          if (!open) setKpiReport(null);
+        }}
+        kpiKey={kpiReport || "revenue"}
+        period={period}
+        kpis={kpis}
+        salesByCategory={salesByCategory}
+        topProducts={topProducts}
+        operating={operating}
+        navigate={navigate}
+      />
 
       <div className={`${CARD_CLASS} p-4 sm:p-5`}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -1372,6 +1734,159 @@ export default function FinancialOverviewSection({
                 colors={PAY_AGING_COLORS}
               />
             </button>
+          )}
+        </div>
+      </div>
+
+      {/* Advance & Deposit Balances — quick decision view */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:gap-5">
+        <div
+          className={`${CARD_CLASS} relative overflow-hidden p-5`}
+          style={{
+            background: `linear-gradient(135deg, ${PL_COLORS.grossProfit}14 0%, #ffffff 55%)`,
+            borderColor: `${PL_COLORS.grossProfit}40`,
+          }}
+        >
+          <span
+            className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+            style={{ backgroundColor: PL_COLORS.grossProfit }}
+          />
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Wallet
+                className="h-[18px] w-[18px]"
+                style={{ color: PL_COLORS.grossProfit }}
+              />
+              <span
+                className="text-[13px] font-semibold"
+                style={{ color: PL_COLORS.grossProfit }}
+              >
+                Customer deposit balances
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/app/payments/collection-points")}
+              className="text-xs font-medium hover:underline"
+              style={{ color: PL_COLORS.grossProfit }}
+            >
+              Collection Points
+            </button>
+          </div>
+          <div
+            className="text-[30px] font-semibold tabular-nums tracking-tight"
+            style={{ color: PL_COLORS.grossProfit }}
+          >
+            ₦{formatCompact(customerDeposits.total)}
+          </div>
+          <p className="mt-1 mb-3 text-[13px] text-gray-600">
+            {customerDeposits.count || 0} customer
+            {(customerDeposits.count || 0) === 1 ? "" : "s"} with prepaid
+            deposits
+          </p>
+          {(customerDeposits.parties || []).length === 0 ? (
+            <p className="py-2 text-xs text-gray-400">
+              No customer deposit balances
+            </p>
+          ) : (
+            <div className="max-h-44 space-y-2 overflow-y-auto">
+              {customerDeposits.parties.slice(0, 6).map((party) => (
+                <div
+                  key={party.partyNo}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-white/80 px-2.5 py-1.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-gray-900">
+                      {party.partyName}
+                    </div>
+                    <div className="truncate text-[11px] text-gray-500">
+                      {party.partyNo}
+                    </div>
+                  </div>
+                  <span
+                    className="flex-shrink-0 text-sm font-semibold tabular-nums"
+                    style={{ color: PL_COLORS.grossProfit }}
+                  >
+                    ₦{formatCompact(party.balance)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div
+          className={`${CARD_CLASS} relative overflow-hidden p-5`}
+          style={{
+            background: `linear-gradient(135deg, ${PL_COLORS.cogs}14 0%, #ffffff 55%)`,
+            borderColor: `${PL_COLORS.cogs}40`,
+          }}
+        >
+          <span
+            className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+            style={{ backgroundColor: PL_COLORS.cogs }}
+          />
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <HandCoins
+                className="h-[18px] w-[18px]"
+                style={{ color: PL_COLORS.cogs }}
+              />
+              <span
+                className="text-[13px] font-semibold"
+                style={{ color: PL_COLORS.cogs }}
+              >
+                Supplier advance balances
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/app/payments/apply-deposit")}
+              className="text-xs font-medium hover:underline"
+              style={{ color: PL_COLORS.cogs }}
+            >
+              Apply advance
+            </button>
+          </div>
+          <div
+            className="text-[30px] font-semibold tabular-nums tracking-tight"
+            style={{ color: PL_COLORS.cogs }}
+          >
+            ₦{formatCompact(supplierAdvances.total)}
+          </div>
+          <p className="mt-1 mb-3 text-[13px] text-gray-600">
+            {supplierAdvances.count || 0} supplier
+            {(supplierAdvances.count || 0) === 1 ? "" : "s"} with prepaid
+            advances
+          </p>
+          {(supplierAdvances.parties || []).length === 0 ? (
+            <p className="py-2 text-xs text-gray-400">
+              No supplier advance balances
+            </p>
+          ) : (
+            <div className="max-h-44 space-y-2 overflow-y-auto">
+              {supplierAdvances.parties.slice(0, 6).map((party) => (
+                <div
+                  key={party.partyNo}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-white/80 px-2.5 py-1.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-gray-900">
+                      {party.partyName}
+                    </div>
+                    <div className="truncate text-[11px] text-gray-500">
+                      {party.partyNo}
+                    </div>
+                  </div>
+                  <span
+                    className="flex-shrink-0 text-sm font-semibold tabular-nums"
+                    style={{ color: PL_COLORS.cogs }}
+                  >
+                    ₦{formatCompact(party.balance)}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>

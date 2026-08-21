@@ -49,6 +49,11 @@ const FILTERS = [
     label: "Warehouse Collection",
     statuses: ["warehouse_picking"],
   },
+  {
+    id: "discount",
+    label: "Discount",
+    statuses: ["awaiting_discount_approval"],
+  },
   { id: "credit", label: "Credit", statuses: ["awaiting_credit_approval"] },
   {
     id: "done",
@@ -263,6 +268,9 @@ export default function SalesManagement() {
     if (["awaiting_payment", "awaiting_cashier_confirm"].includes(s)) {
       return "awaiting_cashier_confirm";
     }
+    if (["awaiting_discount_approval"].includes(s)) {
+      return "awaiting_discount_approval";
+    }
     if (["awaiting_credit_approval"].includes(s)) {
       return "awaiting_credit_approval";
     }
@@ -295,6 +303,15 @@ export default function SalesManagement() {
       return {
         title: "Next: Collection Points",
         description: "Collect payment for this invoice at Collection Points.",
+        to: "/app/payments/collection-points",
+        label: "Open Collection Points",
+      };
+    }
+    if (s === "awaiting_discount_approval") {
+      return {
+        title: "Next: Discount approval",
+        description:
+          "Approve the discount at Collection Points before cash/transfer collection.",
         to: "/app/payments/collection-points",
         label: "Open Collection Points",
       };

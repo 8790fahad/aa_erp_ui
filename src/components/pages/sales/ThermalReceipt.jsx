@@ -285,16 +285,19 @@ function ThermalReceiptCopy({
         <div className="tr-barcode tr-barcode-footer">
           <Barcode
             value={barcodeValue}
-            width={1.6}
-            height={36}
+            format="CODE128"
+            width={2.2}
+            height={52}
             displayValue
-            fontSize={14}
+            fontSize={13}
             fontOptions="bold"
-            margin={0}
+            textMargin={4}
+            margin={12}
             marginTop={10}
-            marginBottom={0}
+            marginBottom={4}
             background="#ffffff"
             lineColor="#000000"
+            flat
           />
         </div>
       ) : null}
@@ -469,17 +472,18 @@ export default function ThermalReceipt({
           display: flex;
           justify-content: center;
           margin: 10px 0 0;
-          padding: 0;
-          overflow: hidden;
+          padding: 0 2mm;
+          overflow: visible;
         }
         .thermal-receipt-root .tr-barcode-footer {
           margin: 12px 0 0;
-          padding-bottom: 0;
+          padding-bottom: 2mm;
         }
         .thermal-receipt-root .tr-barcode svg {
           max-width: 100%;
           height: auto;
           display: block;
+          image-rendering: pixelated;
         }
         .thermal-receipt-root .tr-dual-sign {
           display: flex;
@@ -564,9 +568,9 @@ const THERMAL_IFRAME_CSS = `
   .tr-sku { font-size: 11px; font-weight: 400; }
   .tr-total { margin-top: 2px; font-size: 16px; font-weight: 700; }
   .tr-footer { font-size: 12px; font-weight: 400; margin: 8px 0 0; }
-  .tr-barcode { display: flex; justify-content: center; margin: 10px 0 0; padding: 0; overflow: hidden; }
-  .tr-barcode-footer { margin: 12px 0 0; padding-bottom: 0 !important; }
-  .tr-barcode svg { max-width: 100%; height: auto; display: block; }
+  .tr-barcode { display: flex; justify-content: center; margin: 10px 0 0; padding: 0 2mm; overflow: visible; }
+  .tr-barcode-footer { margin: 12px 0 0; padding-bottom: 2mm !important; }
+  .tr-barcode svg { max-width: 100%; height: auto; display: block; image-rendering: pixelated; }
   .tr-dual-sign { display: flex; flex-direction: column; gap: 14px; margin: 6px 0 4px; }
   .tr-sign-block { text-align: center; font-weight: 400; }
   .tr-sign-line { border-bottom: 1px solid #000; height: 18px; margin-top: 2px; }

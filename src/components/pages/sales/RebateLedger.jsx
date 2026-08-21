@@ -238,21 +238,28 @@ export default function RebateLedger() {
   const [payingKey, setPayingKey] = useState(null);
   const [addRuleOpen, setAddRuleOpen] = useState(false);
   const [creditNoteDoc, setCreditNoteDoc] = useState(null);
+  const [coaCategories, setCoaCategories] = useState([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
   const productTypeaheadRef = useRef(null);
 
+  // Prefer CoA/product categories from API (BUA, Dangote, …); fall back to product list.
   const productCategories = useMemo(() => {
+    if (coaCategories.length) {
+      return coaCategories.map((c) => ({
+        name: c.category || c.name,
+        count: c.count || 0,
+      }));
+    }
     const map = new Map();
     for (const p of products) {
       const cat = String(p.category || "").trim();
-      const type = String(p.item_type || "").trim();
-      const key = cat || type;
-      if (!key) continue;
-      map.set(key, (map.get(key) || 0) + 1);
+      if (!cat) continue;
+      map.set(cat, (map.get(cat) || 0) + 1);
     }
     return [...map.entries()]
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [products]);
+  }, [coaCategories, products]);
 
   const productBySku = useMemo(() => {
     const map = new Map();
@@ -335,6 +342,7 @@ export default function RebateLedger() {
   useEffect(() => {
     if (!facilityId) return;
     setLoadingProducts(true);
+    setLoadingCategories(true);
     _fetchApi(
       `/api/products?facilityId=${facilityId}`,
       (resp) => {
@@ -352,6 +360,29 @@ export default function RebateLedger() {
         toast.error("Unable to load product list");
         setProducts([]);
         setLoadingProducts(false);
+      },
+    );
+    _fetchApi(
+      `/api/products/categories?facilityId=${facilityId}`,
+      (resp) => {
+        const list = Array.isArray(resp?.data) ? resp.data : [];
+        setCoaCategories(
+          list
+            .map((c) =>
+              typeof c === "string"
+                ? { category: c, count: 0 }
+                : {
+                    category: c.category || c.name || "",
+                    count: c.count || 0,
+                  },
+            )
+            .filter((c) => c.category),
+        );
+        setLoadingCategories(false);
+      },
+      () => {
+        setCoaCategories([]);
+        setLoadingCategories(false);
       },
     );
     _fetchApi(
@@ -1090,10 +1121,10 @@ export default function RebateLedger() {
                               : "",
                           }));
                         }}
-                        disabled={loadingProducts}
+                        disabled={loadingProducts || loadingCategories}
                       >
                         <option value="">
-                          {loadingProducts
+                          {loadingProducts || loadingCategories
                             ? "Loading categories…"
                             : productCategories.length
                               ? "Select category…"
@@ -1101,7 +1132,8 @@ export default function RebateLedger() {
                         </option>
                         {productCategories.map((c) => (
                           <option key={c.name} value={c.name}>
-                            {c.name} ({c.count})
+                            {c.name}
+                            {c.count ? ` (${c.count})` : ""}
                           </option>
                         ))}
                       </select>
