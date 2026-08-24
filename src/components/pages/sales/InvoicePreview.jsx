@@ -6,6 +6,9 @@ import ThermalReceipt, {
   printThermalReceipt,
   printAllThermalReceipts,
 } from "./ThermalReceipt";
+import ThermalDeliveryOrder, {
+  printThermalDeliveryOrder,
+} from "./ThermalDeliveryOrder";
 import useQuery from "@/hooks/useQuery";
 import { useSelector } from "react-redux";
 import { _fetchApi } from "@/redux/actions/api";
@@ -85,42 +88,134 @@ function buildBranchInvoiceView(
   const discounts = Array.isArray(invoiceData.discounts)
     ? invoiceData.discounts
     : [];
-  const packSubtotal = items.reduce(
-    (sum, item) => sum + Number(item.amount || 0),
-    0,
+  const packSubtotal = items.reduce((sum, item) => {
+    const qty = Number(
+      item.quantity_sold ?? item.quantity ?? item.qty ?? 0,
+    );
+    const line =
+      item.amount != null
+        ? Number(item.amount)
+        : Number(item.selling_price || item.price || 0) * qty;
+    return sum + (Number.isFinite(line) ? line : 0);
+  }, 0);
+  const fullSubtotal = Number(
+    invoiceData.subtotal ??
+      (Array.isArray(invoiceData.items)
+        ? invoiceData.items.reduce((sum, item) => {
+            const qty = Number(
+              item.quantity_sold ?? item.quantity ?? item.qty ?? 0,
+            );
+            const line =
+              item.amount != null
+                ? Number(item.amount)
+                : Number(item.selling_price || item.price || 0) * qty;
+            return sum + (Number.isFinite(line) ? line : 0);
+          }, 0)
+        : 0),
   );
   const usePackTotals =
     (hasPackLines || (Number.isFinite(filterBid) && items.length > 0)) &&
     (hasPackLines ||
       items.some((it) => it.branch_id != null || it.branchId != null));
 
+  // Keep VAT/discount on branch packs — scale by pack share of the sale
+  const packRatio =
+    usePackTotals && fullSubtotal > 0
+      ? Math.min(1, Math.max(0, packSubtotal / fullSubtotal))
+      : 1;
+  const fullTax = Number(invoiceData.totalTax ?? 0);
+  const fullDiscount = Number(
+    invoiceData.discountAmount ?? invoiceData.discount_amount ?? 0,
+  );
+  const packTaxes = usePackTotals
+    ? taxes.map((tax) => {
+        const amount = Number(tax.amount || tax.cost || 0) * packRatio;
+        return { ...tax, amount, cost: amount };
+      })
+    : taxes;
+  const packTaxTotal = usePackTotals
+    ? packTaxes.reduce((sum, tax) => sum + Number(tax.amount || 0), 0)
+    : fullTax;
+  const packDiscountTotal = usePackTotals
+    ? fullDiscount * packRatio
+    : fullDiscount;
+  const packGrandTotal = usePackTotals
+    ? packSubtotal + packTaxTotal - packDiscountTotal
+    : Number(invoiceData.totalAmount ?? invoiceData.total_amount ?? 0);
+
   return {
     ...invoiceData,
-    items,
+    items: items.map((item) => {
+      // Invoice UI reads quantity_sold — pack mapping may only set qty/quantity
+      const qty = Number(
+        item.quantity_sold ?? item.quantity ?? item.qty ?? 0,
+      );
+      return {
+        ...item,
+        quantity_sold: qty || Number(item.quantity_sold) || 0,
+      };
+    }),
     deliveryItems: usePackTotals ? items : invoiceData.deliveryItems || items,
-    taxes: usePackTotals ? [] : taxes,
-    discounts: usePackTotals ? [] : discounts,
+    taxes: packTaxes,
+    discounts: usePackTotals
+      ? packDiscountTotal > 0
+        ? discounts.map((d) => ({
+            ...d,
+            amount: Number(d.amount || 0) * packRatio,
+          }))
+        : []
+      : discounts,
     discount: usePackTotals
-      ? null
+      ? packDiscountTotal > 0
+        ? {
+            ...(invoiceData.discount || discounts[0] || {}),
+            amount: packDiscountTotal,
+            value: packDiscountTotal,
+            discount_type: "Fixed",
+            type: "fixed",
+          }
+        : null
       : invoiceData.discount || discounts[0] || null,
     business: invoiceData.business || {},
     customer: invoiceData.customer || {},
     customerCopyEnabled: false,
     customerCopyPrices: {},
-    customerCopyTaxes: usePackTotals ? [] : taxes,
+    customerCopyTaxes: packTaxes,
     customerCopyDiscount: null,
     customerCopyItems: [],
     subtotal: usePackTotals ? packSubtotal : Number(invoiceData.subtotal ?? 0),
-    totalTax: usePackTotals ? 0 : Number(invoiceData.totalTax ?? 0),
+    totalTax: usePackTotals ? packTaxTotal : fullTax,
     totalAmount: usePackTotals
-      ? packSubtotal
+      ? packGrandTotal
       : Number(invoiceData.totalAmount ?? invoiceData.total_amount ?? 0),
-    discountAmount: usePackTotals
-      ? 0
-      : Number(invoiceData.discountAmount ?? 0),
+    discountAmount: usePackTotals ? packDiscountTotal : fullDiscount,
+    discount_amount: usePackTotals ? packDiscountTotal : fullDiscount,
     pack_code: packCode || null,
     branch_pack_id: Number.isFinite(filterBid) ? filterBid : null,
     branch_name: branchName || null,
+    warehouse: branchName || invoiceData.warehouse || null,
+    warehouse_name: branchName || invoiceData.warehouse_name || null,
+    mode_of_payment:
+      invoiceData.mode_of_payment ||
+      invoiceData.transaction?.mode_of_payment ||
+      null,
+    amount_paid:
+      invoiceData.amount_paid ?? invoiceData.transaction?.amount_paid ?? 0,
+    cash_paid:
+      invoiceData.cash_paid ?? invoiceData.transaction?.cash_paid ?? 0,
+    transfer_paid:
+      invoiceData.transfer_paid ?? invoiceData.transaction?.transfer_paid ?? 0,
+    transfer_banks:
+      invoiceData.transfer_banks ||
+      invoiceData.transaction?.transfer_banks ||
+      [],
+    payment_breakdown:
+      invoiceData.payment_breakdown ||
+      invoiceData.transaction?.payment_breakdown ||
+      [],
+    invoice_total_amount: Number(
+      invoiceData.totalAmount ?? invoiceData.total_amount ?? 0,
+    ),
   };
 }
 
@@ -141,6 +236,22 @@ function InvoicePreview() {
     query.get("collect") === "1" ||
     query.get("collect") === "true" ||
     query.get("collection") === "1";
+  const docParam = String(query.get("doc") || "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  // Collection Points → invoice; Invoice Separation → gin/dispatch
+  const isDispatchDoc =
+    docParam === "gin" ||
+    docParam === "dispatch" ||
+    docParam === "goods_issue" ||
+    docParam === "goods_issue_note" ||
+    docParam === "delivery_order" ||
+    (!docParam &&
+      !isCollectionReceipt &&
+      Boolean(packCode || printAll || branchIdFilter));
+  const isInvoiceDoc = !isDispatchDoc;
+  const documentMode = isDispatchDoc ? "dispatch" : "invoice";
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const facilityId = activeBusiness?.id;
   const [invoiceData, setInvoiceData] = useState(null);
@@ -261,16 +372,83 @@ function InvoicePreview() {
     }));
   }, [printAll, invoiceData, packs]);
 
-  // Respect business system setting: PDF/A4 or Terminal/thermal.
-  // Collection receipts always use thermal. Invoice Separation print-all can force thermal=1.
-  const receiptType =
-    activeBusiness?.default_receipt_type ||
+  // Respect business system setting: PDF/A4, A5, or Terminal/thermal.
+  // Prefer live invoice business over stale Redux session when present.
+  // Collection receipts always use thermal. Do not let thermal=1 override A5/PDF settings.
+  const receiptType = String(
     invoiceData?.business?.default_receipt_type ||
-    "pdf";
+      activeBusiness?.default_receipt_type ||
+      "pdf",
+  )
+    .trim()
+    .toLowerCase();
   const isTerminalReceipt =
-    forceThermal ||
+    isCollectionReceipt ||
     receiptType === "terminal" ||
-    isCollectionReceipt;
+    (forceThermal && receiptType !== "a5" && receiptType !== "pdf");
+  const paperSize = receiptType === "a5" ? "a5" : "a4";
+  const paperLabel = paperSize === "a5" ? "A5" : "A4";
+
+  const printDeliveryOrderRaw = [
+    invoiceData?.business?.print_delivery_order,
+    activeBusiness?.print_delivery_order,
+  ].find((v) => v !== undefined && v !== null);
+  const deliveryOrderEnabled =
+    printDeliveryOrderRaw === undefined || printDeliveryOrderRaw === null
+      ? true
+      : !!printDeliveryOrderRaw;
+  const deliveryOrderFormat = String(
+    invoiceData?.business?.delivery_order_format ||
+      activeBusiness?.delivery_order_format ||
+      "match",
+  )
+    .trim()
+    .toLowerCase();
+  const deliveryDocumentType = String(
+    invoiceData?.business?.delivery_document_type ||
+      activeBusiness?.delivery_document_type ||
+      "delivery_order",
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  const isGoodsIssueNote = deliveryDocumentType === "goods_issue_note";
+  const dispatchDocLabel = isGoodsIssueNote
+    ? "Goods Issue Note"
+    : "Delivery Order";
+  const showThermalDeliveryOrder =
+    isDispatchDoc &&
+    !isCollectionReceipt &&
+    deliveryOrderEnabled &&
+    deliveryOrderFormat === "thermal";
+  const showMatchDispatchOnly =
+    isDispatchDoc &&
+    !isCollectionReceipt &&
+    deliveryOrderEnabled &&
+    deliveryOrderFormat !== "thermal";
+  const showSalesInvoice = isInvoiceDoc && !isTerminalReceipt;
+  const showMatchDispatchDocument = showMatchDispatchOnly;
+  const showTerminalSalesReceipt =
+    isTerminalReceipt && !showThermalDeliveryOrder && !showMatchDispatchDocument;
+
+  const importantNoteText = (() => {
+    const configured = [
+      invoiceData?.business?.terms_conditions,
+      activeBusiness?.terms_conditions,
+    ].find((v) => v !== undefined && v !== null);
+    if (configured === undefined) {
+      return "Thank you for patronizing us. We look forward to your return and to continuing to do business with you.";
+    }
+    return String(configured).trim();
+  })();
+
+  const handlePrintThermalDeliveryOrder = () => {
+    toast.message("Check Paper size in the print dialog", {
+      description: `For ${dispatchDocLabel} use 80mm / 72mm thermal paper. Scale = Actual size / 100%.`,
+      duration: 7000,
+    });
+    printThermalDeliveryOrder();
+  };
 
   useEffect(() => {
     if (!autoPrint || didAutoPrint || isLoading) return;
@@ -278,7 +456,9 @@ function InvoicePreview() {
     if (!printAll && !resolvedInvoiceData) return;
     setDidAutoPrint(true);
     const t = setTimeout(() => {
-      if (isTerminalReceipt && printAll) {
+      if (showThermalDeliveryOrder) {
+        printThermalDeliveryOrder();
+      } else if (isTerminalReceipt && printAll) {
         printAllThermalReceipts();
       } else if (isTerminalReceipt) {
         printThermalReceipt("both");
@@ -295,6 +475,7 @@ function InvoicePreview() {
     printAll,
     printAllCopies.length,
     resolvedInvoiceData,
+    showThermalDeliveryOrder,
   ]);
 
   const handleCancel = () => {
@@ -307,6 +488,14 @@ function InvoicePreview() {
   };
 
   const handlePrintAll = () => {
+    if (showThermalDeliveryOrder) {
+      toast.message("Check Paper size in the print dialog", {
+        description: `For ${dispatchDocLabel} use 80mm / 72mm thermal paper. Scale = Actual size / 100%.`,
+        duration: 7000,
+      });
+      printThermalDeliveryOrder();
+      return;
+    }
     if (isTerminalReceipt) {
       toast.message("One complete receipt per sheet", {
         description:
@@ -446,7 +635,7 @@ function InvoicePreview() {
             }
             `
                 : `
-            @page { size: A4 portrait; margin: 10mm; }
+            @page { size: ${paperLabel} portrait; margin: 8mm; }
             .branch-invoice-copy {
               break-after: page;
               page-break-after: always;
@@ -474,13 +663,22 @@ function InvoicePreview() {
         `}</style>
         <div className="no-print max-w-4xl mx-auto px-4 mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="rounded-md border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900 flex-1">
-            <strong>Print all branch copies</strong>
+            <strong>
+              {isDispatchDoc
+                ? `Print all ${dispatchDocLabel}s`
+                : "Print all branch copies"}
+            </strong>
             <span className="block text-xs text-violet-700 mt-0.5">
-              {printAllCopies.length} branch cop
-              {printAllCopies.length === 1 ? "y" : "ies"} for {saleCode} —{" "}
-              {isTerminalReceipt
-                ? "continuous 80mm roll with cut marks between copies"
-                : "one A4 page per warehouse"}
+              {printAllCopies.length}{" "}
+              {isDispatchDoc
+                ? `${dispatchDocLabel.toLowerCase()}${printAllCopies.length === 1 ? "" : "s"}`
+                : `branch cop${printAllCopies.length === 1 ? "y" : "ies"}`}{" "}
+              for {saleCode} —{" "}
+              {showThermalDeliveryOrder
+                ? "continuous 80mm roll with cut marks between stores"
+                : isTerminalReceipt
+                  ? "continuous 80mm roll with cut marks between copies"
+                  : `one ${paperLabel} page per warehouse`}
             </span>
           </div>
           <div className="flex gap-2">
@@ -497,6 +695,60 @@ function InvoicePreview() {
         {printAllCopies.length === 0 ? (
           <div className="max-w-4xl mx-auto px-4 text-sm text-gray-500">
             No branch copies found for this invoice.
+          </div>
+        ) : showThermalDeliveryOrder ? (
+          <div className="print-all-thermal-list max-w-4xl mx-auto px-4 space-y-4">
+            {printAllCopies.map(({ pack, data }, idx) => {
+              const branchLabel =
+                pack.branch_name || `Warehouse ${pack.branch_id}`;
+              const isLast = idx === printAllCopies.length - 1;
+              return (
+                <div key={pack.id} className="branch-invoice-copy mb-4">
+                  <div className="no-print mb-2 text-center">
+                    <div className="text-sm font-medium text-violet-900">
+                      Copy {idx + 1} of {printAllCopies.length} · {branchLabel}{" "}
+                      · <span className="font-mono">{pack.pack_code}</span>
+                    </div>
+                  </div>
+                  {data ? (
+                    <div className="flex justify-center">
+                      <div className="rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden print-receipt-frame w-[80mm]">
+                        <div className="no-print border-b border-gray-100 bg-gray-50 px-3 py-1 text-center">
+                          <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                            80mm · {dispatchDocLabel} · {branchLabel}
+                          </span>
+                        </div>
+                        <div className="print-receipt-only bg-white">
+                          <ThermalDeliveryOrder
+                            preview
+                            documentType={deliveryDocumentType}
+                            importantNote={importantNoteText}
+                            preparedBy={
+                              data?.user?.name ||
+                              [data?.user?.firstname, data?.user?.lastname]
+                                .filter(Boolean)
+                                .join(" ") ||
+                              activeBusiness?.business_admin_name ||
+                              ""
+                            }
+                            invoiceData={data}
+                            business={
+                              data.business?.business_name
+                                ? data.business
+                                : activeBusiness
+                            }
+                            customer={data.customer}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  {!isLast ? (
+                    <div className="thermal-cut-mark" aria-hidden="true" />
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         ) : isTerminalReceipt ? (
           <div className="print-all-thermal-list max-w-4xl mx-auto px-4 space-y-4">
@@ -572,6 +824,8 @@ function InvoicePreview() {
                       showCustomerCopyActions={false}
                       enableInlineCustomerCopyPreview={false}
                       warehouseDualSignature
+                      documentMode={documentMode}
+                      paperSize={paperSize}
                       onCancel={handleCancel}
                     />
                   </div>
@@ -602,7 +856,9 @@ function InvoicePreview() {
             <strong>
               {isCollectionReceipt
                 ? "Warehouse collection receipt"
-                : "Warehouse invoice copy"}
+                : isDispatchDoc
+                  ? `${dispatchDocLabel} · warehouse copy`
+                  : "Warehouse invoice copy"}
             </strong>
             {resolvedInvoiceData.branch_name
               ? ` · ${resolvedInvoiceData.branch_name}`
@@ -616,15 +872,19 @@ function InvoicePreview() {
               {isCollectionReceipt
                 ? isTerminalReceipt
                   ? "Thermal (80mm) collection slip — warehouse release + customer receive signatures."
-                  : "A4 collection slip — warehouse release + customer receive signatures."
-                : isTerminalReceipt
-                  ? "Thermal (80mm) from system settings — one customer copy for this branch."
-                  : "A4 / PDF from system settings — full invoice for this warehouse branch."}
+                  : `${paperLabel} collection slip — warehouse release + customer receive signatures.`
+                : isDispatchDoc
+                  ? showThermalDeliveryOrder
+                    ? `Thermal (80mm) ${dispatchDocLabel} for this warehouse — print at Invoice Separation.`
+                    : `${paperLabel} ${dispatchDocLabel} for this warehouse — print at Invoice Separation.`
+                  : isTerminalReceipt
+                    ? "Thermal (80mm) from system settings — one customer copy for this branch."
+                    : `${paperLabel} / PDF from system settings — full invoice for this warehouse branch.`}
             </span>
           </div>
         </div>
       ) : null}
-      {isTerminalReceipt && (
+      {showTerminalSalesReceipt && (
         <div className="invoice-print-section max-w-4xl mx-auto px-4">
           <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -704,7 +964,7 @@ function InvoicePreview() {
         </div>
       )}
 
-      {!isTerminalReceipt && (
+      {(showSalesInvoice || showMatchDispatchDocument) && (
         <div className="invoice-print-section">
           <CreditSaleInvoiceImproved
             invoiceData={resolvedInvoiceData}
@@ -724,14 +984,77 @@ function InvoicePreview() {
               resolvedInvoiceData.branch_name ||
               (packCode ? `Pack ${packCode}` : "")
             }
-            showCustomerCopyActions={!packCode && !branchIdFilter}
+            showCustomerCopyActions={
+              showSalesInvoice && !packCode && !branchIdFilter
+            }
             enableInlineCustomerCopyPreview={false}
             warehouseDualSignature={Boolean(packCode || branchIdFilter)}
+            documentMode={documentMode}
+            paperSize={paperSize}
             onCancel={handleCancel}
             onCustomerCopySaved={fetchInvoice}
           />
         </div>
       )}
+
+      {showThermalDeliveryOrder && resolvedInvoiceData ? (
+        <div className="max-w-4xl mx-auto px-4 pt-2 pb-10">
+          <div className="no-print mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Thermal {dispatchDocLabel}
+              </h2>
+              <p className="text-sm text-gray-500">
+                80mm {dispatchDocLabel} — print at Invoice Separation (Sales
+                Invoice is printed at Collection Points)
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button color="primary" onClick={handlePrintThermalDeliveryOrder}>
+                <Printer className="inline w-4 h-4 mr-2" />
+                Print {dispatchDocLabel}
+              </Button>
+              <Button color="secondary" outline onClick={handleCancel}>
+                Close
+              </Button>
+            </div>
+          </div>
+          <div className="flex justify-center">
+            <div className="rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
+              <div className="border-b border-gray-100 bg-gray-50 px-3 py-1 text-center">
+                <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                  80mm · {dispatchDocLabel}
+                </span>
+              </div>
+              <div className="p-0.5 bg-gray-100">
+                <ThermalDeliveryOrder
+                  preview
+                  documentType={deliveryDocumentType}
+                  importantNote={importantNoteText}
+                  preparedBy={
+                    resolvedInvoiceData?.user?.name ||
+                    [
+                      resolvedInvoiceData?.user?.firstname,
+                      resolvedInvoiceData?.user?.lastname,
+                    ]
+                      .filter(Boolean)
+                      .join(" ") ||
+                    activeBusiness?.business_admin_name ||
+                    ""
+                  }
+                  invoiceData={resolvedInvoiceData}
+                  business={
+                    resolvedInvoiceData.business?.business_name
+                      ? resolvedInvoiceData.business
+                      : activeBusiness
+                  }
+                  customer={resolvedInvoiceData.customer}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

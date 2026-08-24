@@ -39,11 +39,14 @@ import BusinessDocumentHeader, {
 } from "@/components/common/BusinessDocumentHeader";
 
 function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
+  const DEFAULT_IMPORTANT_NOTE =
+    "Thank you for patronizing us. We look forward to your return and to continuing to do business with you.";
+
   const [customerNotes, setCustomerNotes] = useState(
     () => activeBusiness?.customer_notes || "Thanks for your business.",
   );
   const [termsConditions, setTermsConditions] = useState(
-    () => activeBusiness?.terms_conditions || "",
+    () => activeBusiness?.terms_conditions || DEFAULT_IMPORTANT_NOTE,
   );
   const [saving, setSaving] = useState(false);
 
@@ -51,7 +54,9 @@ function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
     setCustomerNotes(
       activeBusiness?.customer_notes || "Thanks for your business.",
     );
-    setTermsConditions(activeBusiness?.terms_conditions || "");
+    setTermsConditions(
+      activeBusiness?.terms_conditions || DEFAULT_IMPORTANT_NOTE,
+    );
   }, [
     activeBusiness?.id,
     activeBusiness?.customer_notes,
@@ -61,7 +66,8 @@ function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
   const dirty =
     customerNotes !==
       (activeBusiness?.customer_notes || "Thanks for your business.") ||
-    termsConditions !== (activeBusiness?.terms_conditions || "");
+    termsConditions !==
+      (activeBusiness?.terms_conditions || DEFAULT_IMPORTANT_NOTE);
 
   const save = () => {
     if (!activeBusiness?.id || saving || !dirty) return;
@@ -80,6 +86,7 @@ function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
             type: "UPDATE_BUSINESS_SETTINGS",
             payload: {
               business: {
+                id: activeBusiness.id,
                 customer_notes: customerNotes,
                 terms_conditions: termsConditions,
               },
@@ -105,8 +112,7 @@ function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
           <div>
             <h5 className="mb-0 fw-bold">Invoice Notes</h5>
             <small className="text-muted">
-              Defaults for Customer Notes and Terms &amp; Conditions on New
-              Invoice
+              Customer notes and the Important Note printed on Sales Invoice
             </small>
           </div>
         </div>
@@ -137,15 +143,19 @@ function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
         </div>
         <div>
           <label className="form-label fw-semibold">
-            Terms &amp; Conditions
+            Important Note (printed on invoice)
           </label>
           <textarea
             className="form-control"
             rows={4}
             value={termsConditions}
             onChange={(e) => setTermsConditions(e.target.value)}
-            placeholder="Enter the terms and conditions of your business"
+            placeholder={DEFAULT_IMPORTANT_NOTE}
           />
+          <small className="text-muted">
+            Shown in the yellow Important Note box on the Sales Invoice. Leave
+            blank to hide the note.
+          </small>
         </div>
       </div>
     </div>
@@ -266,7 +276,7 @@ function HeaderSettingsPanel({ activeBusiness, dispatch }) {
               onClick={() => setDraftStyle(opt.value)}
               className={`text-left rounded-xl border-2 p-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                 selected
-                  ? "border-blue-600 bg-blue-50/60 shadow-sm"
+                  ? "border-[var(--aa-accent)] bg-[var(--aa-sidebar-active)] shadow-sm"
                   : "border-slate-200 bg-white hover:border-slate-300"
               }`}
             >
@@ -280,7 +290,7 @@ function HeaderSettingsPanel({ activeBusiness, dispatch }) {
                   </p>
                 </div>
                 {selected ? (
-                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-700 bg-blue-100 px-2 py-1 rounded-full">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[var(--aa-navy)] bg-[var(--aa-sidebar-active)] px-2 py-1 rounded-full">
                     {isSaved && !dirty ? "Active" : "Selected"}
                   </span>
                 ) : null}
@@ -328,6 +338,10 @@ export default function SettingsTabPanels({
   toggleOnlineOrdering,
   receiptLoading,
   updateDefaultReceiptType,
+  deliveryOrderLoading,
+  togglePrintDeliveryOrder,
+  updateDeliveryOrderFormat,
+  updateDeliveryDocumentType,
   getMarketplaceTinyLink,
   getMarketplaceStorefrontLink,
   openLinkUserModal,
@@ -582,9 +596,8 @@ export default function SettingsTabPanels({
                 </div>
                 <div className="card-body">
                   <p className="text-muted mb-3" style={{ fontSize: "0.85rem" }}>
-                    Choose how receipts are produced for this business.{" "}
-                    <strong>Terminal</strong> opens the browser print dialog with an
-                    80mm thermal layout.
+                    Choose how receipts are produced for this business after
+                    checkout and on invoice preview.
                   </p>
                   <div className="d-flex flex-column gap-2">
                     <label
@@ -605,9 +618,31 @@ export default function SettingsTabPanels({
                         onChange={() => updateDefaultReceiptType("pdf")}
                       />
                       <span>
-                        <span className="fw-semibold d-block">PDF invoice</span>
+                        <span className="fw-semibold d-block">PDF invoice (A4)</span>
                         <small className="text-muted">
-                          Full A4-style invoice (current default)
+                          Full A4-style invoice
+                        </small>
+                      </span>
+                    </label>
+                    <label
+                      className={`d-flex align-items-start gap-2 p-2 rounded border ${
+                        activeBusiness.default_receipt_type === "a5"
+                          ? "border-primary bg-primary bg-opacity-10"
+                          : "border-light"
+                      } ${receiptLoading ? "opacity-50" : ""}`}
+                    >
+                      <input
+                        type="radio"
+                        name="defaultReceiptType"
+                        className="mt-1"
+                        checked={activeBusiness.default_receipt_type === "a5"}
+                        disabled={receiptLoading}
+                        onChange={() => updateDefaultReceiptType("a5")}
+                      />
+                      <span>
+                        <span className="fw-semibold d-block">A5 invoice</span>
+                        <small className="text-muted">
+                          Compact A5 paper size (148 × 210 mm)
                         </small>
                       </span>
                     </label>
@@ -637,6 +672,184 @@ export default function SettingsTabPanels({
                     </label>
                   </div>
                   {receiptLoading && (
+                    <p className="text-muted small mb-0 mt-2">Saving…</p>
+                  )}
+                </div>
+              </div>
+            </Col>
+            <Col md={12} lg={8}>
+              <div className="card shadow-sm border-0 h-100">
+                <div className="card-header bg-white border-0 d-flex align-items-center justify-content-between">
+                  <div className="d-flex align-items-center gap-2">
+                    <span style={{ fontSize: "1.5rem" }}>🚚</span>
+                    <div>
+                      <h5 className="mb-0 fw-bold">Delivery Order</h5>
+                      <small className="text-muted">
+                        Include Delivery Order on invoice preview and print
+                      </small>
+                    </div>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <div className="form-check form-switch mb-3">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      role="switch"
+                      id="printDeliveryOrderSwitch"
+                      checked={
+                        activeBusiness.print_delivery_order === undefined ||
+                        activeBusiness.print_delivery_order === null
+                          ? true
+                          : !!activeBusiness.print_delivery_order
+                      }
+                      disabled={deliveryOrderLoading}
+                      onChange={togglePrintDeliveryOrder}
+                    />
+                    <label
+                      className="form-check-label fw-semibold"
+                      htmlFor="printDeliveryOrderSwitch"
+                    >
+                      Print Delivery Order with invoice
+                    </label>
+                  </div>
+
+                  {(activeBusiness.print_delivery_order === undefined ||
+                    activeBusiness.print_delivery_order === null ||
+                    !!activeBusiness.print_delivery_order) && (
+                    <div className="d-flex flex-column gap-2">
+                      <p
+                        className="text-muted mb-1"
+                        style={{ fontSize: "0.85rem" }}
+                      >
+                        Delivery Order format
+                      </p>
+                      <label
+                        className={`d-flex align-items-start gap-2 p-2 rounded border ${
+                          (activeBusiness.delivery_order_format || "match") ===
+                          "match"
+                            ? "border-primary bg-primary bg-opacity-10"
+                            : "border-light"
+                        } ${deliveryOrderLoading ? "opacity-50" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name="deliveryOrderFormat"
+                          className="mt-1"
+                          checked={
+                            (activeBusiness.delivery_order_format ||
+                              "match") === "match"
+                          }
+                          disabled={deliveryOrderLoading}
+                          onChange={() => updateDeliveryOrderFormat("match")}
+                        />
+                        <span>
+                          <span className="fw-semibold d-block">
+                            Match invoice (A4 / A5)
+                          </span>
+                          <small className="text-muted">
+                            Full Delivery Order section under the Sales Invoice
+                          </small>
+                        </span>
+                      </label>
+                      <label
+                        className={`d-flex align-items-start gap-2 p-2 rounded border ${
+                          activeBusiness.delivery_order_format === "thermal"
+                            ? "border-primary bg-primary bg-opacity-10"
+                            : "border-light"
+                        } ${deliveryOrderLoading ? "opacity-50" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name="deliveryOrderFormat"
+                          className="mt-1"
+                          checked={
+                            activeBusiness.delivery_order_format === "thermal"
+                          }
+                          disabled={deliveryOrderLoading}
+                          onChange={() => updateDeliveryOrderFormat("thermal")}
+                        />
+                        <span>
+                          <span className="fw-semibold d-block">
+                            Thermal (80mm)
+                          </span>
+                          <small className="text-muted">
+                            Separate compact Delivery Order for POS thermal
+                            printers
+                          </small>
+                        </span>
+                      </label>
+
+                      <p
+                        className="text-muted mb-1 mt-3"
+                        style={{ fontSize: "0.85rem" }}
+                      >
+                        Document type
+                      </p>
+                      <label
+                        className={`d-flex align-items-start gap-2 p-2 rounded border ${
+                          (activeBusiness.delivery_document_type ||
+                            "delivery_order") === "delivery_order"
+                            ? "border-primary bg-primary bg-opacity-10"
+                            : "border-light"
+                        } ${deliveryOrderLoading ? "opacity-50" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name="deliveryDocumentType"
+                          className="mt-1"
+                          checked={
+                            (activeBusiness.delivery_document_type ||
+                              "delivery_order") === "delivery_order"
+                          }
+                          disabled={deliveryOrderLoading}
+                          onChange={() =>
+                            updateDeliveryDocumentType("delivery_order")
+                          }
+                        />
+                        <span>
+                          <span className="fw-semibold d-block">
+                            Delivery Order
+                          </span>
+                          <small className="text-muted">
+                            Includes Vehicle No and Driver&apos;s Name fields
+                          </small>
+                        </span>
+                      </label>
+                      <label
+                        className={`d-flex align-items-start gap-2 p-2 rounded border ${
+                          activeBusiness.delivery_document_type ===
+                          "goods_issue_note"
+                            ? "border-primary bg-primary bg-opacity-10"
+                            : "border-light"
+                        } ${deliveryOrderLoading ? "opacity-50" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name="deliveryDocumentType"
+                          className="mt-1"
+                          checked={
+                            activeBusiness.delivery_document_type ===
+                            "goods_issue_note"
+                          }
+                          disabled={deliveryOrderLoading}
+                          onChange={() =>
+                            updateDeliveryDocumentType("goods_issue_note")
+                          }
+                        />
+                        <span>
+                          <span className="fw-semibold d-block">
+                            Goods Issue Note
+                          </span>
+                          <small className="text-muted">
+                            Same slip without Vehicle No or Driver&apos;s Name
+                          </small>
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
+                  {deliveryOrderLoading && (
                     <p className="text-muted small mb-0 mt-2">Saving…</p>
                   )}
                 </div>
@@ -1244,6 +1457,14 @@ export default function SettingsTabPanels({
                 code={activeBusiness.vat_policy}
                 title="Company VAT Policy"
                 description="Set whether VAT is exclusive or inclusive of prices"
+              />
+            </Col>
+            <Col md={12} lg={8}>
+              <PayableSettings
+                title="VAT Account"
+                code={activeBusiness.vat_account_code}
+                description="Default VAT account head — used on VAT Report as the amount you are supposed to pay"
+                icon="🧾"
               />
             </Col>
           </Row>

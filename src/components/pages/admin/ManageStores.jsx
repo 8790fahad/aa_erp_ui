@@ -520,7 +520,7 @@ const ManageDepartments = ({ embedded = false }) => {
                 <input
                   type="text"
                   placeholder="Search departments by name, code, or ID..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -578,7 +578,7 @@ const ManageDepartments = ({ embedded = false }) => {
                   <input
                     type="text"
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     value={formData.name}
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
@@ -593,7 +593,7 @@ const ManageDepartments = ({ embedded = false }) => {
                   </label>
                   <input
                     type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     value={formData.code}
                     onChange={(e) =>
                       setFormData({ ...formData, code: e.target.value })
@@ -608,7 +608,7 @@ const ManageDepartments = ({ embedded = false }) => {
                   </label>
                   <textarea
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent resize-none"
                     value={formData.description}
                     onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
@@ -623,7 +623,7 @@ const ManageDepartments = ({ embedded = false }) => {
                       Head of Department
                     </label>
                     <select
-                      className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       value={formData.head}
                       onChange={(e) =>
                         setFormData({ ...formData, head: e.target.value })
@@ -643,7 +643,7 @@ const ManageDepartments = ({ embedded = false }) => {
                       Status <span className="text-red-500">*</span>
                     </label>
                     <select
-                      className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       value={formData.status}
                       onChange={(e) =>
                         setFormData({ ...formData, status: e.target.value })
@@ -660,7 +660,7 @@ const ManageDepartments = ({ embedded = false }) => {
                     type="button"
                     onClick={handleSubmit}
                     disabled={loading2}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 bg-[var(--aa-accent)] hover:bg-[var(--aa-accent-hover)] text-white py-2 px-4 rounded-md transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading2 ? (
                       <>
@@ -831,7 +831,7 @@ const ManageDepartments = ({ embedded = false }) => {
                       onChange={(e) =>
                         setMemberFormData({ userId: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-blue-500 outline-none"
                     >
                       <option value="">Select staff member</option>
                       {staffMembers

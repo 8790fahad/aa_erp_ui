@@ -310,7 +310,7 @@ export default function RateTable({ embedded = false }) {
                 <input
                   type="text"
                   placeholder="Search rate by name..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -360,7 +360,7 @@ export default function RateTable({ embedded = false }) {
                   <input
                     type="text"
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     value={formData.rate}
                     onChange={(e) =>
                       setFormData({ ...formData, rate: e.target.value })
@@ -374,7 +374,7 @@ export default function RateTable({ embedded = false }) {
                   <input
                     type="number"
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     value={formData.amount}
                     onChange={(e) =>
                       setFormData({ ...formData, amount: e.target.value })
@@ -388,7 +388,7 @@ export default function RateTable({ embedded = false }) {
                       Status <span className="text-red-500">*</span>
                     </label>
                     <select
-                      className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       value={formData.status}
                       //  disabled={editingUser}
                       onChange={(e) =>
@@ -405,7 +405,7 @@ export default function RateTable({ embedded = false }) {
                       Rate Type <span className="text-red-500">*</span>
                     </label>
                     <select
-                      className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       value={formData.rate_type}
                       onChange={(e) =>
                         setFormData({ ...formData, rate_type: e.target.value })
@@ -424,7 +424,7 @@ export default function RateTable({ embedded = false }) {
                     Customer Type <span className="text-red-500">*</span>
                   </label>
                   <select
-                    className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     value={formData.customer_type}
                     onChange={(e) =>
                       setFormData({
@@ -448,7 +448,7 @@ export default function RateTable({ embedded = false }) {
                       editingRate ? handleSubmitEdit() : handleSubmit()
                     }
                     disabled={loading2}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 bg-[var(--aa-accent)] hover:bg-[var(--aa-accent-hover)] text-white py-2 px-4 rounded-md transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading2 ? (
                       <>

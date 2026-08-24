@@ -6,6 +6,7 @@ import {
   FileDown,
   FileSpreadsheet,
   Loader2,
+  Settings,
   X,
 } from "lucide-react";
 import moment from "moment";
@@ -13,7 +14,7 @@ import ExcelJS from "exceljs";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { toast } from "sonner";
-import { _fetchApi } from "@/redux/actions/api";
+import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,6 +24,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import MultipleSelector from "@/components/ui/multiselect";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 
@@ -90,24 +98,26 @@ function Th({ children, align = "left", className = "" }) {
   );
 }
 
-function Td({ children, align = "left", className = "" }) {
+function Td({ children, align = "left", className = "", ...rest }) {
   return (
     <td
       className={`py-3 px-3 ${align === "right" ? "text-right tabular-nums" : ""} ${className}`}
+      {...rest}
     >
       {children}
     </td>
   );
 }
 
-export default function SalesLineReport() {
+export default function SalesLineReport({ variant = "sales" } = {}) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const reportExportRef = useRef(null);
+  const isVatReport = variant === "vat";
 
-  const [reportView, setReportView] = useState(
-    () => searchParams.get("view") || "detail",
+  const [reportView, setReportView] = useState(() =>
+    isVatReport ? "detail" : searchParams.get("view") || "detail",
   );
   const [fromDate, setFromDate] = useState(
     () =>
@@ -130,11 +140,24 @@ export default function SalesLineReport() {
   const [error, setError] = useState("");
   const [pdfExporting, setPdfExporting] = useState(false);
   const [branches, setBranches] = useState([]);
+  const [vatLedger, setVatLedger] = useState(null);
+  const [vatLedgerLoading, setVatLedgerLoading] = useState(false);
+  const [vatLedgerModalOpen, setVatLedgerModalOpen] = useState(false);
 
   const userId = user?.id || user?.user_id || "";
+  const vatAccountCode = String(
+    activeBusiness?.vat_account_code || "",
+  ).trim();
 
-  const activeViewMeta =
-    REPORT_VIEWS.find((v) => v.key === reportView) || REPORT_VIEWS[1];
+  const activeViewMeta = isVatReport
+    ? { key: "detail", label: "VAT Report" }
+    : REPORT_VIEWS.find((v) => v.key === reportView) || REPORT_VIEWS[1];
+
+  useEffect(() => {
+    if (isVatReport && reportView !== "detail") {
+      setReportView("detail");
+    }
+  }, [isVatReport, reportView]);
 
   useEffect(() => {
     if (!activeBusiness?.id) return;
@@ -215,15 +238,45 @@ export default function SalesLineReport() {
   }, [runFetch]);
 
   useEffect(() => {
+    if (!isVatReport || !activeBusiness?.id || !vatAccountCode) {
+      setVatLedger(null);
+      return;
+    }
+    setVatLedgerLoading(true);
+    _postApi(
+      "/account/account-ledger-report",
+      {
+        facilityId: activeBusiness.id,
+        fromDate,
+        toDate,
+        accountCodes: [vatAccountCode],
+      },
+      (res) => {
+        setVatLedgerLoading(false);
+        if (res?.success && Array.isArray(res.results) && res.results.length) {
+          setVatLedger(res.results[0]);
+        } else {
+          setVatLedger(null);
+        }
+      },
+      () => {
+        setVatLedgerLoading(false);
+        setVatLedger(null);
+      },
+    );
+  }, [isVatReport, activeBusiness?.id, vatAccountCode, fromDate, toDate]);
+
+  useEffect(() => {
     const next = new URLSearchParams(searchParams);
-    next.set("view", reportView);
+    if (!isVatReport) next.set("view", reportView);
+    else next.delete("view");
     if (fromDate) next.set("fromDate", fromDate);
     if (toDate) next.set("toDate", toDate);
     if (category) next.set("category", category);
     else next.delete("category");
     setSearchParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportView]);
+  }, [reportView, isVatReport]);
 
   const totalLineAmount = useMemo(
     () => rows.reduce((s, r) => s + num(r.line_total), 0),
@@ -248,16 +301,93 @@ export default function SalesLineReport() {
 
   const periodLabel = useMemo(() => {
     if (!fromDate || !toDate) return "";
-    const sameYear = moment(fromDate).year() === moment(toDate).year();
-    if (sameYear) {
-      return `${moment(fromDate).format("MMMM")} - ${moment(toDate).format(
-        "MMMM YYYY",
-      )}`;
+    const from = moment(fromDate);
+    const to = moment(toDate);
+    if (from.isSame(to, "day")) {
+      return from.format("DD MMMM YYYY");
     }
-    return `${moment(fromDate).format("MMMM YYYY")} - ${moment(toDate).format(
-      "MMMM YYYY",
-    )}`;
+    if (from.year() === to.year()) {
+      return `${from.format("DD MMMM")} - ${to.format("DD MMMM YYYY")}`;
+    }
+    return `${from.format("DD MMMM YYYY")} - ${to.format("DD MMMM YYYY")}`;
   }, [fromDate, toDate]);
+
+  const vatLedgerBreakdown = useMemo(() => {
+    if (!vatLedger) return null;
+    const txns = vatLedger.transactions || [];
+    const nature = String(vatLedger.account_nature || "LIABILITY")
+      .trim()
+      .toUpperCase();
+    const creditNormal = ["LIABILITY", "EQUITY", "REVENUE"].includes(nature);
+    const isOutput = (t) =>
+      /output\s*vat/i.test(
+        String(t.transaction_description || t.account_description || ""),
+      );
+    const isInput = (t) =>
+      /input\s*vat/i.test(
+        String(t.transaction_description || t.account_description || ""),
+      );
+    const opening = Number(vatLedger.opening_balance || 0);
+    // Standard signed movement: liability/equity/revenue = Cr − Dr; asset/expense = Dr − Cr
+    const signedMove = (dr, cr) =>
+      creditNormal ? Number(cr || 0) - Number(dr || 0) : Number(dr || 0) - Number(cr || 0);
+    let running = opening;
+    const rowsWithBalance = txns.map((t) => {
+      running += signedMove(t.dr, t.cr);
+      return { ...t, running_balance: Number(running.toFixed(4)) };
+    });
+    const closeBal =
+      opening + signedMove(vatLedger.total_debit, vatLedger.total_credit);
+
+    const formatSide = (signed) => {
+      const abs = Math.abs(Number(signed) || 0);
+      if (abs < 0.005) {
+        return {
+          text: formatNumber1(0),
+          side: "",
+          colorClass: "text-slate-700",
+        };
+      }
+      // Positive = normal side for account nature
+      const onNormalSide = Number(signed) > 0;
+      const side = creditNormal
+        ? onNormalSide
+          ? "Cr"
+          : "Dr"
+        : onNormalSide
+          ? "Dr"
+          : "Cr";
+      // Cr = amount owed / payable (emerald); Dr on liability = credit to business / recoverable (sky)
+      const colorClass =
+        side === "Cr" ? "text-emerald-700" : "text-sky-700";
+      return { text: formatNumber1(abs), side, colorClass };
+    };
+
+    const closeSide = formatSide(Number(closeBal.toFixed(4)));
+    // Liability: Cr = amount to pay; Dr = recoverable / credit for the business
+    const closeLabel =
+      closeSide.side === "Cr"
+        ? "Amount to pay"
+        : closeSide.side === "Dr"
+          ? "Credit for business"
+          : "Balance";
+
+    return {
+      txns: rowsWithBalance,
+      isOutput,
+      isInput,
+      nature,
+      creditNormal,
+      formatSide,
+      closeLabel,
+      closeSide,
+      closeBal: Number(closeBal.toFixed(4)),
+      opening,
+      totalDebit: Number(vatLedger.total_debit || 0),
+      totalCredit: Number(vatLedger.total_credit || 0),
+      description: vatLedger.description || "VAT Account",
+    };
+  }, [vatLedger]);
 
   const byCustomer = useMemo(
     () =>
@@ -647,7 +777,7 @@ export default function SalesLineReport() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `sales-${reportView}-${fromDate}-to-${toDate}.xlsx`;
+      a.download = `${isVatReport ? "vat-report" : `sales-${reportView}`}-${fromDate}-to-${toDate}.xlsx`;
       a.click();
       window.URL.revokeObjectURL(url);
       toast.success("Excel downloaded");
@@ -658,6 +788,7 @@ export default function SalesLineReport() {
   }, [
     rows.length,
     reportView,
+    isVatReport,
     activeViewMeta,
     exportRows,
     activeBusiness,
@@ -692,7 +823,9 @@ export default function SalesLineReport() {
         pdf.addImage(imgData, "PNG", 0, -y, pageWidth, imgHeight);
         y += pageHeight;
       }
-      pdf.save(`sales-${reportView}-${fromDate}-to-${toDate}.pdf`);
+      pdf.save(
+        `${isVatReport ? "vat-report" : `sales-${reportView}`}-${fromDate}-to-${toDate}.pdf`,
+      );
       toast.success("PDF downloaded");
     } catch (e) {
       console.error(e);
@@ -700,7 +833,7 @@ export default function SalesLineReport() {
     } finally {
       setPdfExporting(false);
     }
-  }, [fromDate, toDate, reportView]);
+  }, [fromDate, toDate, reportView, isVatReport]);
 
   const renderAggTable = (items, firstHeader, options = {}) => (
     <div className="overflow-x-auto">
@@ -990,22 +1123,32 @@ export default function SalesLineReport() {
   return (
     <div className="space-y-3 p-1">
       <div className="bg-gray-100 rounded-lg px-2 py-2 no-print">
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {REPORT_VIEWS.map((view) => (
-            <button
-              key={view.key}
-              type="button"
-              onClick={() => setReportView(view.key)}
-              className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                reportView === view.key
-                  ? "bg-[#4267B2] text-white shadow-sm"
-                  : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
-              }`}
-            >
-              {view.label}
-            </button>
-          ))}
-        </div>
+        {!isVatReport ? (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {REPORT_VIEWS.map((view) => (
+              <button
+                key={view.key}
+                type="button"
+                onClick={() => setReportView(view.key)}
+                className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                  reportView === view.key
+                    ? "bg-[#4267B2] text-white shadow-sm"
+                    : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                {view.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="mb-2 px-1">
+            <h2 className="text-sm font-semibold text-gray-800">VAT Report</h2>
+            <p className="text-xs text-gray-500">
+              Sales lines with VAT for the selected period (same detail as Sales
+              Detail).
+            </p>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex items-end gap-2 flex-wrap flex-1">
@@ -1120,6 +1263,19 @@ export default function SalesLineReport() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+          {isVatReport ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 shrink-0 border-slate-300"
+              onClick={() => setVatLedgerModalOpen(true)}
+              aria-label="VAT account ledger"
+              title="VAT account ledger"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="destructive"
@@ -1179,9 +1335,284 @@ export default function SalesLineReport() {
             </div>
           </div>
 
+          {isVatReport && !vatAccountCode ? (
+            <div className="mx-6 mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              <p>
+                Set the default{" "}
+                <Link
+                  to="/app/admin/settings?tab=vat-policy"
+                  className="font-semibold text-blue-700 underline"
+                >
+                  VAT Account
+                </Link>{" "}
+                in Settings → VAT Policy, then open the settings icon for the
+                ledger breakdown.
+              </p>
+            </div>
+          ) : null}
+
           {renderReportBody()}
         </div>
       )}
+
+      {isVatReport ? (
+        <Dialog open={vatLedgerModalOpen} onOpenChange={setVatLedgerModalOpen}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+            <DialogHeader className="px-5 pt-5 pb-3 border-b bg-amber-50 text-left">
+              <DialogTitle className="text-amber-950">
+                VAT account ledger —{" "}
+                {vatLedgerBreakdown?.description || "VAT Account"}
+                {vatAccountCode ? ` (${vatAccountCode})` : ""}
+              </DialogTitle>
+              <DialogDescription className="text-amber-800 text-xs sm:text-sm">
+                Ledger for the VAT account in this period. Cr = amount to pay ·
+                Dr = credit for business.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="p-4 space-y-3">
+              {!vatAccountCode ? (
+                <p className="text-sm text-slate-600">
+                  No VAT account configured.{" "}
+                  <Link
+                    to="/app/admin/settings?tab=vat-policy"
+                    className="text-blue-700 underline font-medium"
+                    onClick={() => setVatLedgerModalOpen(false)}
+                  >
+                    Open Settings → VAT Policy
+                  </Link>
+                </p>
+              ) : vatLedgerLoading ? (
+                <p className="text-sm text-slate-500">Loading VAT ledger…</p>
+              ) : !vatLedgerBreakdown ? (
+                <p className="text-sm text-slate-500">
+                  No ledger data for this account in the selected period.
+                </p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-slate-500">
+                      Period: {periodLabel || `${fromDate} → ${toDate}`}
+                      {" · "}
+                      Running balance:{" "}
+                      {vatLedgerBreakdown.creditNormal
+                        ? "Liability standard (Cr − Dr)"
+                        : "Asset standard (Dr − Cr)"}
+                    </p>
+                    <div className="text-right">
+                      <p
+                        className={`text-[10px] uppercase tracking-wide font-semibold ${
+                          vatLedgerBreakdown.closeSide.side === "Cr"
+                            ? "text-emerald-800"
+                            : "text-sky-800"
+                        }`}
+                      >
+                        {vatLedgerBreakdown.closeLabel}
+                      </p>
+                      <p
+                        className={`text-base font-bold tabular-nums ${vatLedgerBreakdown.closeSide.colorClass}`}
+                      >
+                        ₦{vatLedgerBreakdown.closeSide.text}
+                        {vatLedgerBreakdown.closeSide.side
+                          ? ` ${vatLedgerBreakdown.closeSide.side}`
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-px bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
+                    {[
+                      {
+                        label: "Opening",
+                        value: vatLedgerBreakdown.opening,
+                        signed: true,
+                      },
+                      {
+                        label: "Total Debit (period)",
+                        value: vatLedgerBreakdown.totalDebit,
+                        signed: false,
+                      },
+                      {
+                        label: "Total Credit (period)",
+                        value: vatLedgerBreakdown.totalCredit,
+                        signed: false,
+                      },
+                    ].map((item) => {
+                      const side = item.signed
+                        ? vatLedgerBreakdown.formatSide(item.value)
+                        : { text: formatNumber1(item.value), side: "" };
+                      return (
+                      <div
+                        key={item.label}
+                        className="bg-white px-3 py-2 text-center"
+                      >
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                          {item.label}
+                        </p>
+                        <p
+                          className={`text-sm font-semibold tabular-nums mt-0.5 ${
+                            item.signed && side.colorClass
+                              ? side.colorClass
+                              : "text-slate-900"
+                          }`}
+                        >
+                          ₦{side.text}
+                          {side.side ? ` ${side.side}` : ""}
+                        </p>
+                      </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="bg-slate-600 text-white">
+                          <Th className="px-4">Date</Th>
+                          <Th>Reference</Th>
+                          <Th>Type</Th>
+                          <Th>Description</Th>
+                          <Th align="right">Debit (₦)</Th>
+                          <Th align="right">Credit (₦)</Th>
+                          <Th align="right" className="px-4">
+                            Balance (₦)
+                          </Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="border-b bg-slate-50">
+                          <Td className="px-4 text-slate-500" colSpan={4}>
+                            Opening balance
+                          </Td>
+                          <Td align="right">—</Td>
+                          <Td align="right">—</Td>
+                          <Td
+                            align="right"
+                            className={`px-4 font-semibold ${
+                              vatLedgerBreakdown.formatSide(
+                                vatLedgerBreakdown.opening,
+                              ).colorClass
+                            }`}
+                          >
+                            {(() => {
+                              const b = vatLedgerBreakdown.formatSide(
+                                vatLedgerBreakdown.opening,
+                              );
+                              return `${b.text}${b.side ? ` ${b.side}` : ""}`;
+                            })()}
+                          </Td>
+                        </tr>
+                        {vatLedgerBreakdown.txns.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={7}
+                              className="px-4 py-6 text-center text-slate-500"
+                            >
+                              No ledger movements on this VAT account for the
+                              selected period.
+                            </td>
+                          </tr>
+                        ) : (
+                          vatLedgerBreakdown.txns.map((txn, idx) => {
+                            const type = vatLedgerBreakdown.isOutput(txn)
+                              ? "Output"
+                              : vatLedgerBreakdown.isInput(txn)
+                                ? "Input"
+                                : "Other";
+                            return (
+                              <tr
+                                key={`${txn.transaction_id || txn.reference_number || idx}-${idx}`}
+                                className="border-b"
+                              >
+                                <Td className="px-4 whitespace-nowrap">
+                                  {txn.transaction_date
+                                    ? moment(txn.transaction_date).format(
+                                        "DD-MMM-YYYY",
+                                      )
+                                    : "—"}
+                                </Td>
+                                <Td className="font-mono text-xs">
+                                  {txn.reference_number ||
+                                    txn.transaction_ref ||
+                                    "—"}
+                                </Td>
+                                <Td>
+                                  <span
+                                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                      type === "Output"
+                                        ? "bg-emerald-100 text-emerald-800"
+                                        : type === "Input"
+                                          ? "bg-sky-100 text-sky-800"
+                                          : "bg-slate-100 text-slate-700"
+                                    }`}
+                                  >
+                                    {type}
+                                  </span>
+                                </Td>
+                                <Td>
+                                  {txn.transaction_description ||
+                                    txn.account_description ||
+                                    txn.purpose_of_payment ||
+                                    "—"}
+                                </Td>
+                                <Td align="right">
+                                  {Number(txn.dr || 0) > 0
+                                    ? formatNumber1(txn.dr)
+                                    : "—"}
+                                </Td>
+                                <Td align="right">
+                                  {Number(txn.cr || 0) > 0
+                                    ? formatNumber1(txn.cr)
+                                    : "—"}
+                                </Td>
+                                <Td
+                                  align="right"
+                                  className={`px-4 font-semibold tabular-nums ${
+                                    vatLedgerBreakdown.formatSide(
+                                      Number(txn.running_balance || 0),
+                                    ).colorClass
+                                  }`}
+                                >
+                                  {(() => {
+                                    const b = vatLedgerBreakdown.formatSide(
+                                      Number(txn.running_balance || 0),
+                                    );
+                                    return `${b.text}${b.side ? ` ${b.side}` : ""}`;
+                                  })()}
+                                </Td>
+                              </tr>
+                            );
+                          })
+                        )}
+                        <tr className="border-t-2 border-slate-400 bg-amber-50/80">
+                          <Td className="px-4 font-semibold" colSpan={4}>
+                            {vatLedgerBreakdown.closeLabel}
+                          </Td>
+                          <Td align="right" className="font-semibold">
+                            {formatNumber1(vatLedgerBreakdown.totalDebit)}
+                          </Td>
+                          <Td align="right" className="font-semibold">
+                            {formatNumber1(vatLedgerBreakdown.totalCredit)}
+                          </Td>
+                          <Td
+                            align="right"
+                            className={`px-4 font-bold tabular-nums ${vatLedgerBreakdown.closeSide.colorClass}`}
+                          >
+                            {vatLedgerBreakdown.closeSide.text}
+                            {vatLedgerBreakdown.closeSide.side
+                              ? ` ${vatLedgerBreakdown.closeSide.side}`
+                              : ""}
+                          </Td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </div>
   );
 }

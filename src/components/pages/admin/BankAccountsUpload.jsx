@@ -77,7 +77,7 @@ const BankAccountsUpload = ({ open, onClose, onUploadSuccess }) => {
   const [previewData, setPreviewData] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const inputRef = useRef(null);
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "var(--aa-navy)";
 
   const convertExcelDate = (value) => {
     if (!value && value !== 0) return "";
@@ -471,14 +471,14 @@ const BankAccountsUpload = ({ open, onClose, onUploadSuccess }) => {
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
+        <div className="bg-[var(--aa-navy)] text-white p-4">
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-xl font-bold flex items-center gap-2">
                 <Upload className="h-5 w-5" />
                 Upload Bank Accounts
               </h3>
-              <p className="text-blue-100 text-sm mt-1">
+              <p className="text-white/70 text-sm mt-1">
                 {showPreview
                   ? "Review bank account data before uploading"
                   : "Bulk import bank accounts with opening balances"}
@@ -676,7 +676,7 @@ const BankAccountsUpload = ({ open, onClose, onUploadSuccess }) => {
                 <div className="flex justify-center">
                   <Button
                     onClick={generateTemplate}
-                    className="flex items-center gap-2 bg-[#4267B2] hover:bg-[#36549B]"
+                    className="flex items-center gap-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]"
                   >
                     <Download className="h-4 w-4" />
                     Download Template
@@ -686,7 +686,7 @@ const BankAccountsUpload = ({ open, onClose, onUploadSuccess }) => {
                 <div
                   className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                     isDragging
-                      ? "border-blue-500 bg-blue-50"
+                      ? "border-blue-500 bg-[var(--aa-sidebar-active)]"
                       : "border-gray-300 hover:border-gray-400"
                   }`}
                   onDragOver={handleDragOver}
@@ -718,7 +718,7 @@ const BankAccountsUpload = ({ open, onClose, onUploadSuccess }) => {
                       />
                       <Button
                         type="button"
-                        className="flex items-center gap-2 bg-[#4267B2] hover:bg-[#36549B]"
+                        className="flex items-center gap-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]"
                         onClick={() => inputRef.current?.click()}
                       >
                         <Upload className="h-4 w-4" />
@@ -815,7 +815,7 @@ const BankAccountsUpload = ({ open, onClose, onUploadSuccess }) => {
                     <div className="flex justify-end gap-2">
                       <Button
                         onClick={clearResults}
-                        className="bg-[#4267B2] hover:bg-[#36549B]"
+                        className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]"
                       >
                         Done
                       </Button>

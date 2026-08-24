@@ -393,7 +393,7 @@ export default function DiscountTable({ embedded = false }) {
                 <input
                   type="text"
                   placeholder="Search discount by name..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -443,7 +443,7 @@ export default function DiscountTable({ embedded = false }) {
                   <input
                     type="text"
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     value={formData.discountName}
                     onChange={(e) =>
                       setFormData({ ...formData, discountName: e.target.value })
@@ -459,7 +459,7 @@ export default function DiscountTable({ embedded = false }) {
                     type="number"
                     min="0"
                     step="0.01"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     value={formData.minOrderAmount}
                     onChange={(e) =>
                       setFormData({ ...formData, minOrderAmount: e.target.value })
@@ -473,7 +473,7 @@ export default function DiscountTable({ embedded = false }) {
                       Discount Type <span className="text-red-500">*</span>
                     </label>
                     <select
-                      className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       value={formData.discountType}
                       onChange={(e) =>
                         setFormData({
@@ -496,7 +496,7 @@ export default function DiscountTable({ embedded = false }) {
                       required
                       min="0.01"
                       step="0.01"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       value={formData.value}
                       onChange={(e) =>
                         setFormData({ ...formData, value: e.target.value })
@@ -510,7 +510,7 @@ export default function DiscountTable({ embedded = false }) {
                     Customer Type
                   </label>
                   <select
-                    className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     value={formData.customerType}
                     onChange={(e) =>
                       setFormData({
@@ -554,7 +554,7 @@ export default function DiscountTable({ embedded = false }) {
                     Status <span className="text-red-500">*</span>
                   </label>
                   <select
-                    className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     value={formData.status}
                     onChange={(e) =>
                       setFormData({ ...formData, status: e.target.value })
@@ -571,7 +571,7 @@ export default function DiscountTable({ embedded = false }) {
                       editingDiscount ? handleSubmitEdit() : handleSubmit()
                     }
                     disabled={loading2}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 bg-[var(--aa-accent)] hover:bg-[var(--aa-accent-hover)] text-white py-2 px-4 rounded-md transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading2 ? (
                       <>

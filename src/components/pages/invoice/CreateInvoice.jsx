@@ -528,7 +528,7 @@ export default function CreateInvoice() {
                         </div>
                         <div className="col-span-12 md:col-span-2">
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Rate <span className="text-red-500">*</span>
+                            Selling Price <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="number"

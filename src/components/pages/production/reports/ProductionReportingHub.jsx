@@ -59,7 +59,7 @@ export default function ProductionReportingHub() {
           <CardContent>
             <p className="text-sm text-gray-600">
               You do not have permission to view production reports. Ask an
-              administrator to grant access under Admin → Manage Staffs →
+              administrator to grant access under Admin → Manage Users →
               Permissions.
             </p>
           </CardContent>

@@ -19,7 +19,7 @@ const emptyForm = () => ({
 });
 
 const inputClass =
-  "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+  "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent";
 
 /**
  * Facility bank directory (`bank_list`): list, add, edit, delete.
@@ -294,13 +294,13 @@ export default function BankListSettings() {
       {modalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
+            <div className="bg-[var(--aa-navy)] text-white p-4">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-bold">
                     {isEdit ? "Edit bank" : "Add bank"}
                   </h3>
-                  <p className="text-blue-100 text-sm mt-1">
+                  <p className="text-white/70 text-sm mt-1">
                     {isEdit
                       ? "Update bank name and codes for this facility"
                       : "Add a bank to your facility’s directory"}

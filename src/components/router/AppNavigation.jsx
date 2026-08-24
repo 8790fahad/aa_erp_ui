@@ -827,6 +827,10 @@ const routeModules = {
         element: <SalesLineReport />,
       },
       {
+        path: "vat-report",
+        element: <SalesLineReport variant="vat" />,
+      },
+      {
         path: "rebate",
         element: <RebateLedger />,
       },

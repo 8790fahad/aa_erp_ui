@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Banknote,
   Building2,
@@ -18,8 +18,6 @@ import {
 } from "lucide-react";
 import moment from "moment";
 import { toast } from "sonner";
-import { Typeahead } from "react-bootstrap-typeahead";
-import "react-bootstrap-typeahead/css/Typeahead.css";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import {
@@ -29,6 +27,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAdvancePaymentAccounts, isCashInHandHead } from "@/components/common/useAdvancePaymentAccounts";
 import { WorkflowStatusBadge } from "@/lib/saleWorkflowStatus.js";
 import useScanDetection from "@/hooks/useScanDetection";
@@ -43,12 +48,10 @@ const bankPayThroughLabel = (option) => {
   return num ? `${name} (${num})` : String(name);
 };
 
-const payThroughTypeaheadClass =
-  "w-full [&_.rbt-input-main]:h-10 [&_.rbt-input-main]:rounded-md [&_.rbt-input-main]:border [&_.rbt-input-main]:border-slate-300 [&_.rbt-input-main]:bg-white [&_.rbt-input-main]:px-3 [&_.rbt-input-main]:text-sm [&_.rbt-input-main]:shadow-none outline-none focus-within:[&_.rbt-input-main]:border-[var(--aa-accent)]";
-
-/** Keep Pay Through menu above the collection sheet overlay */
-const payThroughMenuClassName =
-  "!z-[200] max-h-60 overflow-auto rounded-md border border-slate-200 bg-white shadow-lg";
+/** Select menu must sit above Sheet (z-50) */
+const payThroughSelectContentClass = "z-[220] max-h-64";
+const payThroughSelectTriggerClass =
+  "h-10 w-full border-slate-300 bg-white text-sm focus:ring-[var(--aa-accent)]";
 
 const METHOD_TABS = [
   { id: "cash", label: "Cash", icon: Banknote, privilege: "Cash Collection" },
@@ -147,6 +150,7 @@ function needsCollectionSide(row, method) {
 }
 
 export default function ReceivePayment() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
@@ -1000,9 +1004,26 @@ export default function ReceivePayment() {
       (res) => {
         setSubmitting(false);
         if (res?.success) {
+          const saleCode = selected.sale_code;
+          const status = String(res.results?.status || "").toLowerCase();
+          const fullyPaid =
+            ["invoice_separation", "payment_confirmed", "final_invoice"].includes(
+              status,
+            ) ||
+            (!isSplit && Math.abs(total - amountDue) <= 0.05) ||
+            (isSplit && total + 0.05 >= remainingDue);
+
           toast.success(res.message || "Payment confirmed");
           closeCollect();
           fetchDashboard();
+
+          if (fullyPaid && saleCode) {
+            navigate(
+              `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
+                saleCode,
+              )}&doc=invoice`,
+            );
+          }
         } else {
           toast.error(res?.message || "Could not confirm payment");
         }
@@ -1316,9 +1337,9 @@ export default function ReceivePayment() {
                           <Link
                             to={`/app/sales/invoice-preview?sale_code=${encodeURIComponent(
                               row.sale_code,
-                            )}`}
+                            )}&doc=invoice`}
                             className="text-[var(--aa-accent)] hover:underline"
-                            title="Open invoice PDF"
+                            title="Open Sales Invoice"
                           >
                             {row.sale_code}
                           </Link>
@@ -1490,9 +1511,9 @@ export default function ReceivePayment() {
                           <Link
                             to={`/app/sales/invoice-preview?sale_code=${encodeURIComponent(
                               row.sale_code,
-                            )}`}
+                            )}&doc=invoice`}
                             className="text-[var(--aa-accent)] hover:underline"
-                            title="Open invoice PDF"
+                            title="Open Sales Invoice"
                           >
                             {row.sale_code}
                           </Link>
@@ -1646,38 +1667,30 @@ export default function ReceivePayment() {
                 <label className="text-sm font-medium text-slate-700">
                   {isCashOnly || isSplit ? "Pay Through" : "Cash account"}
                 </label>
-                <Typeahead
-                  id="collection-pay-through-cash"
-                  labelKey={cashPayThroughLabel}
-                  options={cashAccounts.headList || []}
-                  placeholder="Search cash / COA account…"
-                  clearButton
-                  positionFixed
-                  flip
-                  className={payThroughTypeaheadClass}
-                  menuClassName={payThroughMenuClassName}
-                  selected={
+                <Select
+                  value={
                     cashAccounts.accountHead?.head
-                      ? (cashAccounts.headList || []).filter(
-                          (h) =>
-                            String(h.head) ===
-                            String(cashAccounts.accountHead.head),
-                        )
-                      : []
+                      ? String(cashAccounts.accountHead.head)
+                      : undefined
                   }
-                  onChange={(items) => {
-                    cashAccounts.setAccountHead(items?.[0] || {});
+                  onValueChange={(val) => {
+                    const found = (cashAccounts.headList || []).find(
+                      (h) => String(h.head) === String(val),
+                    );
+                    cashAccounts.setAccountHead(found || {});
                   }}
-                  filterBy={(option, props) => {
-                    const q = String(props.text || "")
-                      .toLowerCase()
-                      .trim();
-                    if (!q) return true;
-                    return cashPayThroughLabel(option)
-                      .toLowerCase()
-                      .includes(q);
-                  }}
-                />
+                >
+                  <SelectTrigger className={payThroughSelectTriggerClass}>
+                    <SelectValue placeholder="Select cash / COA account…" />
+                  </SelectTrigger>
+                  <SelectContent className={payThroughSelectContentClass}>
+                    {(cashAccounts.headList || []).map((h) => (
+                      <SelectItem key={String(h.head)} value={String(h.head)}>
+                        {cashPayThroughLabel(h)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <p className="text-xs text-slate-500">
                   Select the cash Chart of Accounts head for this collection.
                 </p>
@@ -1706,37 +1719,30 @@ export default function ReceivePayment() {
                 <label className="text-sm font-medium text-slate-700">
                   {isTransferOnly || isSplit ? "Pay Through" : "Bank account"}
                 </label>
-                <Typeahead
-                  id="collection-pay-through-bank"
-                  labelKey={bankPayThroughLabel}
-                  options={bankAccounts.accountList || []}
-                  placeholder="Search bank account…"
-                  clearButton
-                  positionFixed
-                  flip
-                  className={payThroughTypeaheadClass}
-                  menuClassName={payThroughMenuClassName}
-                  selected={
-                    bankAccounts.bankAccount?.id
-                      ? (bankAccounts.accountList || []).filter(
-                          (b) =>
-                            String(b.id) ===
-                            String(bankAccounts.bankAccount.id),
-                        )
-                      : []
+                <Select
+                  value={
+                    bankAccounts.bankAccount?.id != null
+                      ? String(bankAccounts.bankAccount.id)
+                      : undefined
                   }
-                  onChange={(items) => {
-                    bankAccounts.setBankAccount(items?.[0] || null);
+                  onValueChange={(val) => {
+                    const found = (bankAccounts.accountList || []).find(
+                      (b) => String(b.id) === String(val),
+                    );
+                    bankAccounts.setBankAccount(found || null);
                   }}
-                  filterBy={(option, props) => {
-                    const q = String(props.text || "")
-                      .toLowerCase()
-                      .trim();
-                    if (!q) return true;
-                    const hay = bankPayThroughLabel(option).toLowerCase();
-                    return hay.includes(q);
-                  }}
-                />
+                >
+                  <SelectTrigger className={payThroughSelectTriggerClass}>
+                    <SelectValue placeholder="Select bank account…" />
+                  </SelectTrigger>
+                  <SelectContent className={payThroughSelectContentClass}>
+                    {(bankAccounts.accountList || []).map((b) => (
+                      <SelectItem key={String(b.id)} value={String(b.id)}>
+                        {bankPayThroughLabel(b)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <p className="text-xs text-slate-500">
                   Select the bank / COA account for this transfer.
                 </p>
@@ -1852,27 +1858,16 @@ export default function ReceivePayment() {
                   <label className="text-sm font-medium text-slate-700">
                     Pay Through (Cash)
                   </label>
-                  <Typeahead
-                    id="advance-pay-through-cash"
-                    labelKey={cashPayThroughLabel}
-                    options={cashAccounts.headList || []}
-                    placeholder="Search cash account…"
-                    clearButton
-                    positionFixed
-                    flip
-                    className={payThroughTypeaheadClass}
-                  menuClassName={payThroughMenuClassName}
-                    selected={
+                  <Select
+                    value={
                       cashAccounts.accountHead?.head
-                        ? (cashAccounts.headList || []).filter(
-                            (h) =>
-                              String(h.head) ===
-                              String(cashAccounts.accountHead.head),
-                          )
-                        : []
+                        ? String(cashAccounts.accountHead.head)
+                        : undefined
                     }
-                    onChange={(items) => {
-                      const cash = items?.[0];
+                    onValueChange={(val) => {
+                      const cash = (cashAccounts.headList || []).find(
+                        (h) => String(h.head) === String(val),
+                      );
                       cashAccounts.setAccountHead(
                         cash
                           ? {
@@ -1882,7 +1877,18 @@ export default function ReceivePayment() {
                           : {},
                       );
                     }}
-                  />
+                  >
+                    <SelectTrigger className={payThroughSelectTriggerClass}>
+                      <SelectValue placeholder="Select cash account…" />
+                    </SelectTrigger>
+                    <SelectContent className={payThroughSelectContentClass}>
+                      {(cashAccounts.headList || []).map((h) => (
+                        <SelectItem key={String(h.head)} value={String(h.head)}>
+                          {cashPayThroughLabel(h)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">
@@ -1902,29 +1908,30 @@ export default function ReceivePayment() {
                   <label className="text-sm font-medium text-slate-700">
                     Pay Through (Transfer)
                   </label>
-                  <Typeahead
-                    id="advance-pay-through-bank"
-                    labelKey={bankPayThroughLabel}
-                    options={bankAccounts.accountList || []}
-                    placeholder="Search bank account…"
-                    clearButton
-                    positionFixed
-                    flip
-                    className={payThroughTypeaheadClass}
-                  menuClassName={payThroughMenuClassName}
-                    selected={
-                      bankAccounts.bankAccount?.id
-                        ? (bankAccounts.accountList || []).filter(
-                            (b) =>
-                              String(b.id) ===
-                              String(bankAccounts.bankAccount.id),
-                          )
-                        : []
+                  <Select
+                    value={
+                      bankAccounts.bankAccount?.id != null
+                        ? String(bankAccounts.bankAccount.id)
+                        : undefined
                     }
-                    onChange={(items) => {
-                      bankAccounts.setBankAccount(items?.[0] || null);
+                    onValueChange={(val) => {
+                      const found = (bankAccounts.accountList || []).find(
+                        (b) => String(b.id) === String(val),
+                      );
+                      bankAccounts.setBankAccount(found || null);
                     }}
-                  />
+                  >
+                    <SelectTrigger className={payThroughSelectTriggerClass}>
+                      <SelectValue placeholder="Select bank account…" />
+                    </SelectTrigger>
+                    <SelectContent className={payThroughSelectContentClass}>
+                      {(bankAccounts.accountList || []).map((b) => (
+                        <SelectItem key={String(b.id)} value={String(b.id)}>
+                          {bankPayThroughLabel(b)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <p className="text-xs text-slate-500">
                   Total advance: ₦
@@ -1955,27 +1962,16 @@ export default function ReceivePayment() {
                     <label className="text-sm font-medium text-slate-700">
                       Pay Through
                     </label>
-                    <Typeahead
-                      id="advance-pay-through-cash-only"
-                      labelKey={cashPayThroughLabel}
-                      options={cashAccounts.headList || []}
-                      placeholder="Search cash account…"
-                      clearButton
-                      positionFixed
-                      flip
-                      className={payThroughTypeaheadClass}
-                  menuClassName={payThroughMenuClassName}
-                      selected={
+                    <Select
+                      value={
                         cashAccounts.accountHead?.head
-                          ? (cashAccounts.headList || []).filter(
-                              (h) =>
-                                String(h.head) ===
-                                String(cashAccounts.accountHead.head),
-                            )
-                          : []
+                          ? String(cashAccounts.accountHead.head)
+                          : undefined
                       }
-                      onChange={(items) => {
-                        const cash = items?.[0];
+                      onValueChange={(val) => {
+                        const cash = (cashAccounts.headList || []).find(
+                          (h) => String(h.head) === String(val),
+                        );
                         cashAccounts.setAccountHead(
                           cash
                             ? {
@@ -1985,36 +1981,51 @@ export default function ReceivePayment() {
                             : {},
                         );
                       }}
-                    />
+                    >
+                      <SelectTrigger className={payThroughSelectTriggerClass}>
+                        <SelectValue placeholder="Select cash account…" />
+                      </SelectTrigger>
+                      <SelectContent className={payThroughSelectContentClass}>
+                        {(cashAccounts.headList || []).map((h) => (
+                          <SelectItem
+                            key={String(h.head)}
+                            value={String(h.head)}
+                          >
+                            {cashPayThroughLabel(h)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700">
                       Pay Through
                     </label>
-                    <Typeahead
-                      id="advance-pay-through-bank-only"
-                      labelKey={bankPayThroughLabel}
-                      options={bankAccounts.accountList || []}
-                      placeholder="Search bank account…"
-                      clearButton
-                      positionFixed
-                      flip
-                      className={payThroughTypeaheadClass}
-                  menuClassName={payThroughMenuClassName}
-                      selected={
-                        bankAccounts.bankAccount?.id
-                          ? (bankAccounts.accountList || []).filter(
-                              (b) =>
-                                String(b.id) ===
-                                String(bankAccounts.bankAccount.id),
-                            )
-                          : []
+                    <Select
+                      value={
+                        bankAccounts.bankAccount?.id != null
+                          ? String(bankAccounts.bankAccount.id)
+                          : undefined
                       }
-                      onChange={(items) => {
-                        bankAccounts.setBankAccount(items?.[0] || null);
+                      onValueChange={(val) => {
+                        const found = (bankAccounts.accountList || []).find(
+                          (b) => String(b.id) === String(val),
+                        );
+                        bankAccounts.setBankAccount(found || null);
                       }}
-                    />
+                    >
+                      <SelectTrigger className={payThroughSelectTriggerClass}>
+                        <SelectValue placeholder="Select bank account…" />
+                      </SelectTrigger>
+                      <SelectContent className={payThroughSelectContentClass}>
+                        {(bankAccounts.accountList || []).map((b) => (
+                          <SelectItem key={String(b.id)} value={String(b.id)}>
+                            {bankPayThroughLabel(b)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
               </>

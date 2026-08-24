@@ -105,7 +105,7 @@ export const accessData = [
         path: "setup-chart-of-account",
       },
       { name: "Account Review", icon: <Table />, path: "account-review" },
-      { name: "Manage Staff", icon: <Users />, path: "org-staff" },
+      { name: "Manage Users", icon: <Users />, path: "org-staff" },
       {
         name: "Payment Voucher",
         icon: <CreditCard />,

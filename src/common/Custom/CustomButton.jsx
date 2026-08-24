@@ -7,7 +7,7 @@ import { Button } from "reactstrap";
 
 function CustomButton(props) {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
-  const primary = activeBusiness?.primary_color || "#4267B2";
+  const primary = activeBusiness?.primary_color || "var(--aa-navy)";
   const {
     className,
     handleSubmit,
@@ -58,7 +58,7 @@ function CustomEyeButton(props) {
         backgroundColor: activeBusiness?.primary_color,
         borderColor: activeBusiness?.primary_color,
       }}
-      className={`${props.className} d-flex align-items-center rounded-r-lg bg-blue-600 text-white px-2.5 py-2.5`}
+      className={`${props.className} d-flex align-items-center rounded-r-lg bg-[var(--aa-navy)] text-white px-2.5 py-2.5`}
       onClick={props.handleSubmit}
       size={props.size}
       {...props}

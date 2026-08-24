@@ -211,7 +211,7 @@ const BusinessLogoModal = ({ isOpen, onClose, business, onUpdateSuccess }) => {
               </div>
               {processingImage && (
                 <div className="mt-3 flex items-center justify-center gap-2 text-sm text-blue-600">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[var(--aa-accent)]" />
                   Optimizing image…
                 </div>
               )}

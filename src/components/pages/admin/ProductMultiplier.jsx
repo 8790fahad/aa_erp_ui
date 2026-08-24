@@ -276,9 +276,7 @@ const ProductMultiplier = () => {
       <div
         className="card-header border-0 text-white position-relative overflow-hidden"
         style={{
-          background: `linear-gradient(135deg, ${
-            activeBusiness?.primary_color || "#007bff"
-          } 0%, ${activeBusiness?.primary_color || "#007bff"}dd 100%)`,
+          background: "var(--aa-navy)",
           padding: "1rem",
         }}
       >
@@ -582,7 +580,7 @@ const ProductMultiplier = () => {
                   !form.multiplier_value ||
                   !form.product_id
                 }
-                className="bg-[#4267B2] hover:bg-[#4267B2]/90"
+                className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy)]/90"
               >
                 {loading ? (
                   <>

@@ -319,13 +319,15 @@ export function PageContextBar() {
   const isSalesLineReportPage = location.pathname.includes(
     "/sales/sales-line-report",
   );
+  const isVatReportPage = location.pathname.includes("/sales/vat-report");
   const showViewSwitch =
     isSalesRoute &&
     !isInvoicesListPage &&
     !isMarkupPage &&
     !isPriceSetupPage &&
     !isSalesInvoicesReportPage &&
-    !isSalesLineReportPage;
+    !isSalesLineReportPage &&
+    !isVatReportPage;
   return (
     <div className="flex h-11 shrink-0 items-center gap-2 border-b bg-white px-4">
       <Breadcrumb>

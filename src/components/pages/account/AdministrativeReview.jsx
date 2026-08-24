@@ -104,11 +104,14 @@ function MemoReviewal() {
       (data) => {
         setLoading(false);
         if (data.success) {
-          setMemos(data.results);
+          setMemos(Array.isArray(data.results) ? data.results : []);
+        } else {
+          setMemos([]);
         }
       },
       (err) => {
         setLoading(false);
+        setMemos([]);
         console.log(err);
       }
     );
@@ -306,7 +309,7 @@ function MemoReviewal() {
     getMemos();
   }, [getMemos]);
 
-  const filteredMemos = memos.filter((memo) =>
+  const filteredMemos = (Array.isArray(memos) ? memos : []).filter((memo) =>
     searchTerm
       ? String(memo.from_name || "")
           .toLowerCase()

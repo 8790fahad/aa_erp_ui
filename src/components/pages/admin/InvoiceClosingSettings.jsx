@@ -104,7 +104,7 @@ export default function InvoiceClosingSettings({
       <div
         className="card-header border-0 text-white position-relative overflow-hidden"
         style={{
-          background: "linear-gradient(135deg, #1e3a5f 0%, #2C5CC5 100%)",
+          background: "var(--aa-navy)",
         }}
       >
         <div className="d-flex align-items-center justify-content-between py-2">

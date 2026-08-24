@@ -74,7 +74,7 @@ export default function BusinessFeatureToggle({
       <div
         className="card-header border-0 text-white position-relative overflow-hidden"
         style={{
-          background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)`,
+          background: "var(--aa-navy)",
           padding: "1rem",
         }}
       >

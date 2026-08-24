@@ -12,6 +12,7 @@ import {
   Upload,
 } from "lucide-react";
 import BankAccountsUpload from "@/components/pages/admin/BankAccountsUpload";
+import BankOpeningBalances from "@/components/pages/admin/BankOpeningBalances";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import CustomButton from "@/common/Custom/CustomButton";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -42,6 +43,7 @@ import {
   TypeaheadMenu,
 } from "react-bootstrap-typeahead";
 import "react-bootstrap-typeahead/css/Typeahead.css";
+import { validateOpeningBalanceFields } from "@/lib/openingBalanceDate";
 
 const bankDirectoryLabelKey = (b) =>
   b ? `${b.bank_name || ""} (${b.bank_code || ""})` : "";
@@ -63,6 +65,7 @@ const BankSetup = ({ embedded = false }) => {
   const [loading2, setLoading2] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [setupTab, setSetupTab] = useState("accounts"); // accounts | opening-balances
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [editingBank, setEditingBank] = useState(null);
   const [selectedBank, setSelectedBank] = useState(null);
@@ -163,18 +166,14 @@ const BankSetup = ({ embedded = false }) => {
       return;
     }
 
-    // Validate that opening balance date is provided if opening balance is set
-    if (
-      formData.opening_balance &&
-      formData.opening_balance !== "" &&
-      parseFloat(formData.opening_balance) !== 0
-    ) {
-      if (!formData.opening_balance_date) {
-        toast.error(
-          "Please provide Opening Balance Date when Opening Balance is set",
-        );
-        return;
-      }
+    // Opening balance: amount requires a valid date; future dates allowed
+    const obCheck = validateOpeningBalanceFields(
+      formData.opening_balance,
+      formData.opening_balance_date,
+    );
+    if (!obCheck.ok) {
+      toast.error(obCheck.message);
+      return;
     }
 
     setLoading2(true);
@@ -190,8 +189,8 @@ const BankSetup = ({ embedded = false }) => {
       account_bank_type: formData.code,
       head: formData.head,
       facilityId: activeBusiness.id,
-      opening_balance: formData.opening_balance || 0,
-      opening_balance_date: formData.opening_balance_date,
+      opening_balance: obCheck.amount,
+      opening_balance_date: obCheck.date,
       opening_balance_equity: activeBusiness.opening_balance_equity,
     };
 
@@ -432,7 +431,7 @@ const BankSetup = ({ embedded = false }) => {
             }}
           >
             <div className="py-1">
-              <div className="font-semibold text-blue-700">
+              <div className="font-semibold text-[var(--aa-navy)]">
                 + Create &ldquo;{q}&rdquo;
               </div>
               <small className="text-slate-600 text-xs">
@@ -633,28 +632,54 @@ const BankSetup = ({ embedded = false }) => {
         <div className="max-w-7xl mx-auto">
           <div className="">
             <div className="p-">
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex justify-between items-center mb-4">
                 <h1 className="text-2xl font-bold text-gray-900">
                   Manage Bank Accounts
                 </h1>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-600">
-                    Total:{" "}
-                    <span className="font-semibold text-gray-900">
-                      {filteredBanks.length}
+                {setupTab === "accounts" && (
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm text-gray-600">
+                      Total:{" "}
+                      <span className="font-semibold text-gray-900">
+                        {filteredBanks.length}
+                      </span>
                     </span>
-                  </span>
-                </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mb-6 flex gap-1 border-b border-slate-200">
+                {[
+                  ["accounts", "Bank Accounts"],
+                  ["opening-balances", "Opening Balances"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setSetupTab(value)}
+                    className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                      setupTab === value
+                        ? "border-[var(--aa-navy)] text-[var(--aa-navy)]"
+                        : "border-transparent text-slate-500 hover:text-[var(--aa-navy)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
 
+            {setupTab === "opening-balances" ? (
+              <BankOpeningBalances embedded nested />
+            ) : (
+              <>
             <div className="flex flex-col sm:flex-row gap-4 mb-6">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
                   placeholder="Search bank accounts by name, number, type, subhead, or bank code..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -696,6 +721,8 @@ const BankSetup = ({ embedded = false }) => {
                 </Alert>
               )}
             </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -714,14 +741,14 @@ const BankSetup = ({ embedded = false }) => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
+            <div className="bg-[var(--aa-navy)] text-white p-4">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-bold flex items-center gap-2">
                     <Building2 className="h-5 w-5" />
                     {editingBank ? "Edit Bank Account" : "Add New Bank Account"}
                   </h3>
-                  <p className="text-blue-100 text-sm mt-1">
+                  <p className="text-white/70 text-sm mt-1">
                     {editingBank
                       ? "Update bank account information"
                       : "Create a new bank account for your business"}
@@ -801,13 +828,13 @@ const BankSetup = ({ embedded = false }) => {
                         control: (base, state) => ({
                           ...base,
                           minHeight: "42px",
-                          borderColor: state.isFocused ? "#4267B2" : "#d1d5db",
+                          borderColor: state.isFocused ? "var(--aa-accent)" : "#d1d5db",
                           boxShadow: state.isFocused
-                            ? "0 0 0 3px rgb(66 103 178 / 0.2)"
+                            ? "0 0 0 3px color-mix(in srgb, var(--aa-accent) 25%, transparent)"
                             : "none",
                           "&:hover": {
                             borderColor: state.isFocused
-                              ? "#4267B2"
+                              ? "var(--aa-accent)"
                               : "#d1d5db",
                           },
                         }),
@@ -951,7 +978,7 @@ const BankSetup = ({ embedded = false }) => {
                             </button>
                             <button
                               type="button"
-                              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                              className="px-3 py-1.5 text-sm bg-[var(--aa-accent)] text-white rounded-md hover:bg-[var(--aa-accent-hover)] disabled:opacity-50"
                               onClick={handleQuickAddBankDirectory}
                               disabled={savingQuickBank}
                             >
@@ -974,7 +1001,7 @@ const BankSetup = ({ embedded = false }) => {
                         pattern="[0-9]*"
                         inputMode="numeric"
                         maxLength={10}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                         value={formData.account_number}
                         onChange={(e) => {
                           // Only allow numeric characters and limit to 10 digits
@@ -997,7 +1024,7 @@ const BankSetup = ({ embedded = false }) => {
                     <input
                       type="text"
                       required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       value={formData.account_name}
                       onChange={(e) =>
                         setFormData({
@@ -1039,16 +1066,15 @@ const BankSetup = ({ embedded = false }) => {
                       </SelectContent>
                     </Select>
                   </div>
-                  {/*
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Opening Balance
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Opening Balance (₦)
                       </label>
                       <input
                         type="number"
                         step="0.01"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-[var(--aa-accent)]"
                         value={formData.opening_balance}
                         onChange={(e) =>
                           setFormData({
@@ -1061,13 +1087,16 @@ const BankSetup = ({ embedded = false }) => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Opening Balance Date{" "}
-                        <span className="text-red-500">*</span>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Opening Balance Date
+                        {formData.opening_balance &&
+                          parseFloat(formData.opening_balance) !== 0 && (
+                            <span className="text-red-500"> *</span>
+                          )}
                       </label>
                       <input
                         type="date"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-[var(--aa-accent)]"
                         value={formData.opening_balance_date}
                         onChange={(e) =>
                           setFormData({
@@ -1076,8 +1105,12 @@ const BankSetup = ({ embedded = false }) => {
                           })
                         }
                       />
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Required when amount is entered. Future dates are
+                        allowed.
+                      </p>
                     </div>
-                  </div> */}
+                  </div>
                 </div>
               </div>
 
@@ -1094,7 +1127,7 @@ const BankSetup = ({ embedded = false }) => {
                   type="button"
                   onClick={handleSubmit}
                   disabled={loading2}
-                  className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-4 py-2 text-sm bg-[var(--aa-accent)] hover:bg-[var(--aa-accent-hover)] text-white rounded transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {loading2 ? (
                     <>

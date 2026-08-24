@@ -40,6 +40,7 @@ export default function BusinessDocumentHeader({
   date,
   dateFormat = "DD MMM, YYYY",
   extraLine,
+  warehouse,
   forceStyle,
   className = "",
   compact = false,
@@ -47,7 +48,7 @@ export default function BusinessDocumentHeader({
   const style = forceStyle || getDocumentHeaderStyle(business);
   const c = companyBits(business);
   const showLogo = style === "logo" && Boolean(c.logo);
-  const pad = compact ? "p-2" : "p-2.5";
+  const pad = compact ? "px-2 py-1.5" : "p-2.5";
   const dateText = date
     ? moment(date).isValid()
       ? moment(date).format(dateFormat)
@@ -62,57 +63,148 @@ export default function BusinessDocumentHeader({
     .filter(Boolean)
     .join(" | ");
 
+  const warehouseText = String(warehouse || "").trim();
+
+  // A5 / compact previews are often < sm breakpoint — always keep side-by-side.
+  const rowClass = compact
+    ? "flex flex-row items-start justify-between gap-2"
+    : "flex flex-col gap-3 md:flex-row md:items-start md:justify-between";
+
   return (
     <div
       className={`bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white ${pad} mb-1.5 shadow-md print:bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] ${className}`}
     >
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-        <div className={`flex-1 min-w-0 ${showLogo ? "flex gap-3 items-start" : ""}`}>
+      <div className={rowClass}>
+        <div
+          className={`min-w-0 ${compact ? "flex-[1.4]" : "flex-1"} ${
+            showLogo ? "flex gap-2 items-start" : ""
+          }`}
+        >
           {showLogo && (
-            <div className="shrink-0 bg-white rounded-md p-1.5 shadow-sm">
+            <div
+              className={`shrink-0 bg-white rounded-md shadow-sm ${
+                compact ? "p-0.5" : "p-1.5"
+              }`}
+            >
               <img
                 src={c.logo}
                 alt=""
-                className="h-16 w-16 object-contain"
+                className={
+                  compact ? "h-9 w-9 object-contain" : "h-16 w-16 object-contain"
+                }
               />
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <h1 className="text-xl sm:text-2xl font-bold uppercase tracking-wide leading-tight">
+            <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
+              <h1
+                className={`font-bold uppercase tracking-wide leading-tight ${
+                  compact ? "text-[11px] sm:text-sm" : "text-xl sm:text-2xl"
+                }`}
+              >
                 {c.name}
               </h1>
               {c.rc ? (
-                <span className="text-sm font-semibold text-white/80">
+                <span
+                  className={`font-semibold text-white/85 whitespace-nowrap ${
+                    compact ? "text-[9px]" : "text-sm"
+                  }`}
+                >
                   RC. {c.rc}
                 </span>
               ) : null}
             </div>
             {c.description ? (
-              <p className="mt-0.5 text-sm italic text-white/80">{c.description}</p>
+              <p
+                className={`italic text-white/80 ${
+                  compact
+                    ? "text-[9px] leading-snug mt-0.5 line-clamp-2"
+                    : "text-sm mt-0.5"
+                }`}
+              >
+                {c.description}
+              </p>
             ) : null}
             {c.address ? (
-              <p className="mt-1 text-xs text-white/75">{c.address}</p>
+              <p
+                className={`text-white/75 ${
+                  compact
+                    ? "text-[8px] leading-snug mt-0.5"
+                    : "text-xs mt-1"
+                }`}
+              >
+                {c.address}
+              </p>
             ) : null}
             {contactLine ? (
-              <p className="mt-0.5 text-xs text-white/75">{contactLine}</p>
+              <p
+                className={`text-white/75 ${
+                  compact
+                    ? "text-[8px] leading-snug mt-0.5"
+                    : "text-xs mt-0.5"
+                }`}
+              >
+                {contactLine}
+              </p>
             ) : null}
           </div>
         </div>
 
-        <div className="flex flex-col items-stretch gap-1.5 text-right md:items-end shrink-0">
-          <div className="rounded-sm bg-white/15 px-2 py-2 text-center md:min-w-[200px]">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/80">
+        <div
+          className={`flex flex-col items-end shrink-0 text-right ${
+            compact ? "w-[38%] min-w-[7.5rem] gap-1" : "md:min-w-[200px] gap-1.5"
+          }`}
+        >
+          <div
+            className={`w-full rounded-sm bg-white/15 text-center border border-white/20 ${
+              compact ? "px-1.5 py-1.5" : "px-2 py-2"
+            }`}
+          >
+            <p
+              className={`font-bold uppercase text-white ${
+                compact
+                  ? "text-[10px] tracking-[0.12em] leading-tight"
+                  : "text-xs tracking-[0.2em]"
+              }`}
+            >
               {title}
             </p>
             {numberLabel ? (
-              <p className="mt-0.5 text-lg font-bold leading-tight">{numberLabel}</p>
+              <p
+                className={`mt-1 font-bold leading-tight text-white ${
+                  compact ? "text-xs" : "text-lg"
+                }`}
+              >
+                {numberLabel}
+              </p>
             ) : null}
-            {extraLine ? (
-              <p className="mt-1 text-sm text-white/80">{extraLine}</p>
+            {warehouseText ? (
+              <p
+                className={`mt-1 text-white/90 leading-tight ${
+                  compact ? "text-[9px]" : "text-sm"
+                }`}
+              >
+                <span className="font-semibold text-white/70">Warehouse:</span>{" "}
+                <span className="font-semibold">{warehouseText}</span>
+              </p>
+            ) : null}
+            {extraLine && !warehouseText ? (
+              <p
+                className={`mt-1 text-white/85 ${
+                  compact ? "text-[9px]" : "text-sm"
+                }`}
+              >
+                {extraLine}
+              </p>
             ) : null}
           </div>
-          <p className="text-sm font-semibold text-white/80">Date: {dateText}</p>
+          <p
+            className={`font-semibold text-white/90 ${
+              compact ? "text-[9px]" : "text-sm"
+            }`}
+          >
+            Date: {dateText}
+          </p>
         </div>
       </div>
     </div>

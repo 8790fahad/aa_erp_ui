@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useReactToPrint } from "react-to-print";
 import { Printer, X, Check, Copy } from "lucide-react";
-import { formatNumber1 } from "@/components/router/utilities";
 import useQuery from "@/hooks/useQuery";
 import { toast } from "sonner";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -29,6 +28,10 @@ export default function CreditSaleInvoice({
   enableInlineCustomerCopyPreview = true,
   showPrintButton = true,
   warehouseDualSignature = false,
+  /** "a4" | "a5" — print page size from business receipt setting */
+  paperSize = "a4",
+  /** "invoice" | "dispatch" | "both" — Collection Points vs Invoice Separation */
+  documentMode = "both",
   onConfirm,
   onCancel,
   onApplyCustomerCopy,
@@ -36,40 +39,41 @@ export default function CreditSaleInvoice({
 }) {
   const query = useQuery();
   const invoiceRef = useRef(null);
+  const isA5 = String(paperSize || "a4").toLowerCase() === "a5";
+  const pageWidthMm = isA5 ? 148 : 210;
+  const pageHeightMm = isA5 ? 210 : 297;
+  const pageSizeLabel = isA5 ? "A5" : "A4";
   const saleCode =
     typeof window !== "undefined" && query ? query.get("sale_code") : null;
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const currentUser = useSelector((state) => state.auth.user);
   const [customerCopyEnabled, setCustomerCopyEnabled] = useState(
-    propCustomerCopyEnabled
+    propCustomerCopyEnabled,
   );
   const [customerCopyPrices, setCustomerCopyPrices] = useState(
-    propCustomerCopyPrices
+    propCustomerCopyPrices,
   );
   const [showCustomerCopyModal, setShowCustomerCopyModal] = useState(false);
   const [customerCopyTaxes, setCustomerCopyTaxes] = useState(
-    propCustomerCopyTaxes.length ? propCustomerCopyTaxes : propTaxes
+    propCustomerCopyTaxes.length ? propCustomerCopyTaxes : propTaxes,
   );
   const [customerCopyDiscount, setCustomerCopyDiscount] = useState(
-    propCustomerCopyDiscount || propDiscount
+    propCustomerCopyDiscount || propDiscount,
   );
   const [fetchedInvoice, setFetchedInvoice] = useState(null);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [isSavingCustomerCopy, setIsSavingCustomerCopy] = useState(false);
+  /** Customer print view: amount = VAT in unit price; vat = show VAT breakdown */
+  const [customerPrintMode, setCustomerPrintMode] = useState("amount");
 
   const isInlineLoading = !propInvoiceData && loadingInvoice && !fetchedInvoice;
-  const defaultAuthorizationUser = {
-    name: "Admin User",
-    id: "4",
-    signature: null,
-  };
   useEffect(() => {
     setCustomerCopyEnabled(propCustomerCopyEnabled);
   }, [propCustomerCopyEnabled]);
 
   useEffect(() => {
     setCustomerCopyTaxes(
-      propCustomerCopyTaxes.length ? propCustomerCopyTaxes : propTaxes
+      propCustomerCopyTaxes.length ? propCustomerCopyTaxes : propTaxes,
     );
   }, [propCustomerCopyTaxes, propTaxes]);
 
@@ -96,7 +100,7 @@ export default function CreditSaleInvoice({
         console.error("Error fetching sale:", err);
         toast.error("Error fetching sale");
         setLoadingInvoice(false);
-      }
+      },
     );
   }, [saleCode, activeBusiness?.id, propInvoiceData]);
 
@@ -114,7 +118,9 @@ export default function CreditSaleInvoice({
           rate: tax.rate ?? computedRate,
           tax_type: tax.tax_type || "Sales Tax",
           amount: tax.amount,
-          inclusive_type: tax.inclusive_type || (tax.tax_type === "inclusive" ? "inclusive" : "exclusive"),
+          inclusive_type:
+            tax.inclusive_type ||
+            (tax.tax_type === "inclusive" ? "inclusive" : "exclusive"),
         };
       });
       setCustomerCopyTaxes(mappedTaxes);
@@ -133,11 +139,76 @@ export default function CreditSaleInvoice({
   const invoice = fetchedInvoice || propInvoiceData;
 
   const customer = fetchedInvoice?.customer || propCustomer;
-  const invoiceUser = fetchedInvoice?.user || propInvoiceData?.user;
-  const user = invoiceUser;
+  const invoiceCreator =
+    fetchedInvoice?.user || propInvoiceData?.user || invoice?.user || null;
+  const preparedByName =
+    invoiceCreator?.name ||
+    [invoiceCreator?.firstname, invoiceCreator?.lastname]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
+    currentUser?.name ||
+    [currentUser?.firstname, currentUser?.lastname].filter(Boolean).join(" ") ||
+    "—";
+  const preparedById =
+    invoiceCreator?.id || currentUser?.id || currentUser?.userId || "";
+  const preparedBySignature =
+    invoiceCreator?.signature || currentUser?.signature || null;
+  const DEFAULT_IMPORTANT_NOTE =
+    "Thank you for patronizing us. We look forward to your return and to continuing to do business with you.";
+  const configuredImportantNote = [
+    invoice?.business?.terms_conditions,
+    business?.terms_conditions,
+    activeBusiness?.terms_conditions,
+  ].find((v) => v !== undefined && v !== null);
+  const importantNoteText =
+    configuredImportantNote === undefined
+      ? DEFAULT_IMPORTANT_NOTE
+      : String(configuredImportantNote).trim();
+  const showImportantNote =
+    configuredImportantNote === undefined ? true : importantNoteText.length > 0;
+  const printDeliveryOrderRaw = [
+    invoice?.business?.print_delivery_order,
+    business?.print_delivery_order,
+    activeBusiness?.print_delivery_order,
+  ].find((v) => v !== undefined && v !== null);
+  const deliveryOrderFormat = String(
+    invoice?.business?.delivery_order_format ||
+      business?.delivery_order_format ||
+      activeBusiness?.delivery_order_format ||
+      "match",
+  )
+    .trim()
+    .toLowerCase();
+  const deliveryDocumentType = String(
+    invoice?.business?.delivery_document_type ||
+      business?.delivery_document_type ||
+      activeBusiness?.delivery_document_type ||
+      "delivery_order",
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  const isGoodsIssueNote = deliveryDocumentType === "goods_issue_note";
+  const dispatchDocTitle = isGoodsIssueNote
+    ? "Goods Issue Note"
+    : "Delivery Order";
+  const dispatchDocPrefix = isGoodsIssueNote ? "GIN" : "DO";
+  const mode = String(documentMode || "both")
+    .trim()
+    .toLowerCase();
+  const showInvoiceSection = mode !== "dispatch";
+  const deliveryOrderEnabled =
+    printDeliveryOrderRaw === undefined || printDeliveryOrderRaw === null
+      ? true
+      : !!printDeliveryOrderRaw;
+  const showDeliveryOrder =
+    mode !== "invoice" &&
+    (mode === "dispatch" || deliveryOrderEnabled) &&
+    deliveryOrderFormat !== "thermal";
   const items = useMemo(
-    () => (Array.isArray(invoice.items) ? invoice.items : []),
-    [invoice.items]
+    () => (Array.isArray(invoice?.items) ? invoice.items : []),
+    [invoice?.items],
   );
 
   const isServiceLineItem = (item) => {
@@ -146,7 +217,8 @@ export default function CreditSaleInvoice({
     if (type.includes("service") || itemType === "service") {
       return true;
     }
-    const label = `${item?.item_name || ""} ${item?.description || ""}`.toLowerCase();
+    const label =
+      `${item?.item_name || ""} ${item?.description || ""}`.toLowerCase();
     return (
       label.includes("handling & transport") ||
       label.includes("handling and transport") ||
@@ -208,8 +280,6 @@ export default function CreditSaleInvoice({
     setCustomerCopyPrices([]);
   }, [items, propCustomerCopyPrices]);
 
-  const authorizationUser =
-    user || items.find((item) => item.user)?.user || defaultAuthorizationUser;
   // Calculations
   const resolveCustomerPrice = useCallback(
     (item, index) => {
@@ -235,18 +305,36 @@ export default function CreditSaleInvoice({
       }
       return Number(item?.selling_price) || 0;
     },
-    [customerCopyPrices]
+    [customerCopyPrices],
   );
 
   const customerCopyPriceList = useMemo(
     () => items.map((item, index) => resolveCustomerPrice(item, index)),
-    [items, resolveCustomerPrice]
+    [items, resolveCustomerPrice],
   );
 
   // Get VAT policy from business
   const vatPolicy =
     business?.vat_policy || activeBusiness?.vat_policy || "vat_exclusive";
   const isInclusiveTax = vatPolicy === "vat_inclusive";
+
+  const isItemTaxable = (item) => {
+    const flag = String(item?.taxable || "").toLowerCase();
+    return (
+      flag === "taxable" || flag === "yes" || flag === "true" || flag === "1"
+    );
+  };
+
+  const isExclusiveTaxRow = (tax) => {
+    if (vatPolicy === "vat_inclusive") return false;
+    if (vatPolicy === "vat_exclusive") return true;
+    const inc = String(tax?.inclusive_type || "").toLowerCase();
+    const typ = String(tax?.tax_type || "").toLowerCase();
+    if (inc === "inclusive" || typ === "inclusive") return false;
+    if (inc === "exclusive" || typ === "exclusive") return true;
+    // Stored sale tax lines without flags are treated as exclusive add-ons
+    return Number(tax?.amount || tax?.cost || 0) > 0;
+  };
 
   // Step 1: Calculate gross selling price (subtotal) - all items
   const subtotal =
@@ -262,11 +350,12 @@ export default function CreditSaleInvoice({
   // Step 2: Calculate discount on gross selling price (BEFORE VAT)
   const discountAmount =
     invoice.discount_amount ??
+    invoice.discountAmount ??
     (propDiscount
       ? propDiscount.discount_type === "Percentage" ||
         propDiscount.type === "percentage"
         ? (subtotal * parseFloat(propDiscount.value)) / 100
-        : parseFloat(propDiscount.value)
+        : parseFloat(propDiscount.value || propDiscount.amount || 0)
       : 0);
 
   // Step 3: Calculate net amount after discount
@@ -274,8 +363,7 @@ export default function CreditSaleInvoice({
 
   // Step 4: Calculate taxable subtotal (only from taxable items)
   const taxableSubtotal = items.reduce((sum, item) => {
-    const isTaxable = item.taxable === "Taxable";
-    if (!isTaxable) return sum;
+    if (!isItemTaxable(item)) return sum;
     const price =
       customPricing && customPrices[item.id] !== undefined
         ? customPrices[item.id]
@@ -293,21 +381,29 @@ export default function CreditSaleInvoice({
   // Step 7: Calculate VAT based on VAT policy (only on taxable items)
   let totalTax = 0;
 
-  if (invoice.totalTax !== undefined || invoice.tax_amount !== undefined) {
-    // Use tax from invoice if available
-    totalTax = invoice.totalTax ?? invoice.tax_amount ?? 0;
+  const taxesWithAmounts = (propTaxes || []).map((tax) => ({
+    ...tax,
+    amount: Number(tax.amount ?? tax.cost ?? 0),
+  }));
+  const taxesAmountSum = taxesWithAmounts.reduce(
+    (sum, tax) => sum + (Number.isFinite(tax.amount) ? tax.amount : 0),
+    0,
+  );
+
+  if (
+    (invoice.totalTax !== undefined && invoice.totalTax !== null) ||
+    (invoice.tax_amount !== undefined && invoice.tax_amount !== null)
+  ) {
+    // Prefer tax stored on the sale
+    totalTax = Number(invoice.totalTax ?? invoice.tax_amount ?? 0);
+  } else if (taxesAmountSum > 0) {
+    totalTax = taxesAmountSum;
   } else if (propTaxes && propTaxes.length > 0) {
     // Calculate tax from taxes array
     if (vatPolicy === "all") {
       // Handle mixed taxes: separate inclusive and exclusive
-      const inclusiveTaxes = propTaxes.filter((tax) =>
-        tax.inclusive_type === "inclusive" ||
-        (tax.inclusive_type === undefined && tax.tax_type === "inclusive")
-      );
-      const exclusiveTaxes = propTaxes.filter((tax) =>
-        tax.inclusive_type === "exclusive" ||
-        (tax.inclusive_type === undefined && tax.tax_type === "exclusive")
-      );
+      const inclusiveTaxes = propTaxes.filter((tax) => !isExclusiveTaxRow(tax));
+      const exclusiveTaxes = propTaxes.filter((tax) => isExclusiveTaxRow(tax));
 
       // For inclusive taxes: Extract VAT from taxable amount AFTER discount (37,000 → 2,581.40)
       if (inclusiveTaxes.length > 0 && taxableNetAmount > 0) {
@@ -315,7 +411,8 @@ export default function CreditSaleInvoice({
           return sum + (parseFloat(tax.rate) || 0);
         }, 0);
         if (inclusiveTaxRate > 0) {
-          totalTax += (taxableNetAmount * inclusiveTaxRate) / (100 + inclusiveTaxRate);
+          totalTax +=
+            (taxableNetAmount * inclusiveTaxRate) / (100 + inclusiveTaxRate);
         }
       }
 
@@ -344,53 +441,59 @@ export default function CreditSaleInvoice({
     }
   }
 
-  // Step 8: Calculate total amount (grand total) based on VAT policy
-  // This must match the cart calculation in MakeSale.jsx
-  let totalAmount = 0;
-  if (vatPolicy === "all" && propTaxes && propTaxes.length > 0) {
-    // Handle mixed taxes: separate inclusive and exclusive
-    const inclusiveTaxes = propTaxes.filter((tax) =>
-      tax.inclusive_type === "inclusive" ||
-      (tax.inclusive_type === undefined && tax.tax_type === "inclusive")
-    );
-    const exclusiveTaxes = propTaxes.filter((tax) =>
-      tax.inclusive_type === "exclusive" ||
-      (tax.inclusive_type === undefined && tax.tax_type === "exclusive")
-    );
-
-    // Calculate exclusive VAT only (inclusive VAT is already in subtotal)
-    let exclusiveVAT = 0;
-    if (exclusiveTaxes.length > 0 && taxableNetAmount > 0) {
-      exclusiveVAT = exclusiveTaxes.reduce((sum, tax) => {
-        return sum + (taxableNetAmount * (parseFloat(tax.rate) || 0)) / 100;
-      }, 0);
+  // Exclusive VAT to fold into Amount(₦) / add to grand total
+  const exclusiveTaxTotal = (() => {
+    if (!propTaxes?.length && totalTax > 0 && !isInclusiveTax) {
+      return totalTax;
     }
+    const fromRows = (propTaxes || [])
+      .filter((tax) => isExclusiveTaxRow(tax))
+      .reduce((sum, tax) => sum + Number(tax.amount ?? tax.cost ?? 0), 0);
+    if (fromRows > 0) return fromRows;
+    if (vatPolicy === "all" || vatPolicy === "vat_exclusive") {
+      return totalTax;
+    }
+    return 0;
+  })();
+  const foldVatIntoUnitPrice =
+    customerPrintMode === "amount" &&
+    (Number(exclusiveTaxTotal) > 0 || Number(totalTax) > 0);
+  const vatToFold =
+    Number(exclusiveTaxTotal) > 0 ? exclusiveTaxTotal : Number(totalTax) || 0;
+  const displaySubtotal = foldVatIntoUnitPrice
+    ? subtotal + vatToFold
+    : subtotal;
 
-    // Grand total = Subtotal - Discount + Exclusive VAT
-    // (Inclusive VAT is already part of subtotal, so we don't add it)
+  // Step 8: Calculate total amount (grand total) based on VAT policy
+  // Prefer sale totals from API when present (includes Output VAT).
+  let totalAmount = 0;
+  const backendTotal = Number(
+    invoice.totalAmount ?? invoice.total_amount ?? NaN,
+  );
+  if (Number.isFinite(backendTotal) && backendTotal > 0) {
+    totalAmount = backendTotal;
+  } else if (vatPolicy === "all" && propTaxes && propTaxes.length > 0) {
+    const exclusiveVAT =
+      exclusiveTaxTotal > 0
+        ? exclusiveTaxTotal
+        : (() => {
+            const exclusiveTaxes = propTaxes.filter((tax) =>
+              isExclusiveTaxRow(tax),
+            );
+            if (exclusiveTaxes.length > 0 && taxableNetAmount > 0) {
+              return exclusiveTaxes.reduce((sum, tax) => {
+                return (
+                  sum + (taxableNetAmount * (parseFloat(tax.rate) || 0)) / 100
+                );
+              }, 0);
+            }
+            return 0;
+          })();
     totalAmount = netAmountAfterDiscount + exclusiveVAT;
   } else if (isInclusiveTax) {
-    // For inclusive: Total = Subtotal - Discount (VAT is already included in prices)
-    // This matches: return subtotal - discountAmount; in MakeSale.jsx
     totalAmount = subtotal - discountAmount;
   } else {
-    // For exclusive: Total = Subtotal - Discount + VAT
-    // This matches: return subtotal - discountAmount + tax; in MakeSale.jsx
     totalAmount = netAmountAfterDiscount + totalTax;
-  }
-
-  // Only use invoice total if it's explicitly provided and we want to trust backend
-  // Otherwise, recalculate to match cart
-  if (invoice.totalAmount !== undefined || invoice.total_amount !== undefined) {
-    const invoiceTotal = invoice.totalAmount ?? invoice.total_amount ?? 0;
-    // Use calculated total to ensure it matches cart, but log if there's a discrepancy
-    if (Math.abs(invoiceTotal - totalAmount) > 0.01) {
-      console.warn(
-        `Invoice total mismatch: Backend=${invoiceTotal}, Calculated=${totalAmount}. Using calculated value.`
-      );
-    }
-    // Use calculated total to match cart
-    // totalAmount = invoiceTotal; // Commented out to use calculated value
   }
 
   const handleCustomerCopyPriceChange = useCallback(
@@ -421,7 +524,7 @@ export default function CreditSaleInvoice({
         return next;
       });
     },
-    [items, propSetCustomerCopyPrices]
+    [items, propSetCustomerCopyPrices],
   );
 
   // Calculate customer copy: Step 1 - Gross selling price
@@ -430,7 +533,7 @@ export default function CreditSaleInvoice({
       const quantity = items[index]?.quantity_sold || 0;
       return sum + price * quantity;
     },
-    0
+    0,
   );
 
   // Calculate customer copy: Step 2 - Discount on gross selling price
@@ -454,7 +557,7 @@ export default function CreditSaleInvoice({
       const quantity = item?.quantity_sold || 0;
       return sum + price * quantity;
     },
-    0
+    0,
   );
 
   // Calculate customer copy: Step 5 - Discount on taxable items (proportional)
@@ -474,13 +577,15 @@ export default function CreditSaleInvoice({
   if (customerCopyTaxes && customerCopyTaxes.length > 0) {
     if (vatPolicy === "all") {
       // Handle mixed taxes: separate inclusive and exclusive
-      const inclusiveTaxes = customerCopyTaxes.filter((tax) =>
-        tax.inclusive_type === "inclusive" ||
-        (tax.inclusive_type === undefined && tax.tax_type === "inclusive")
+      const inclusiveTaxes = customerCopyTaxes.filter(
+        (tax) =>
+          tax.inclusive_type === "inclusive" ||
+          (tax.inclusive_type === undefined && tax.tax_type === "inclusive"),
       );
-      const exclusiveTaxes = customerCopyTaxes.filter((tax) =>
-        tax.inclusive_type === "exclusive" ||
-        (tax.inclusive_type === undefined && tax.tax_type === "exclusive")
+      const exclusiveTaxes = customerCopyTaxes.filter(
+        (tax) =>
+          tax.inclusive_type === "exclusive" ||
+          (tax.inclusive_type === undefined && tax.tax_type === "exclusive"),
       );
 
       // For inclusive taxes: Extract VAT from subtotal (before discount) since subtotal includes VAT
@@ -490,14 +595,19 @@ export default function CreditSaleInvoice({
         }, 0);
         if (inclusiveTaxRate > 0) {
           // Extract VAT from subtotal: VAT = subtotal × rate / (100 + rate)
-          customerCopyTaxAmount += (customerCopyTaxableSubtotal * inclusiveTaxRate) / (100 + inclusiveTaxRate);
+          customerCopyTaxAmount +=
+            (customerCopyTaxableSubtotal * inclusiveTaxRate) /
+            (100 + inclusiveTaxRate);
         }
       }
 
       // For exclusive taxes: Calculate VAT on taxable net amount (after discount)
       if (exclusiveTaxes.length > 0 && customerCopyTaxableNetAmount > 0) {
         customerCopyTaxAmount += exclusiveTaxes.reduce((sum, tax) => {
-          return sum + (customerCopyTaxableNetAmount * (parseFloat(tax.rate) || 0)) / 100;
+          return (
+            sum +
+            (customerCopyTaxableNetAmount * (parseFloat(tax.rate) || 0)) / 100
+          );
         }, 0);
       }
     } else if (isInclusiveTax) {
@@ -528,22 +638,31 @@ export default function CreditSaleInvoice({
   // Calculate customer copy: Step 8 - Total (grand total) based on VAT policy
   // This must match the cart calculation in MakeSale.jsx
   let customerCopyTotalAmount = 0;
-  if (vatPolicy === "all" && customerCopyTaxes && customerCopyTaxes.length > 0) {
+  if (
+    vatPolicy === "all" &&
+    customerCopyTaxes &&
+    customerCopyTaxes.length > 0
+  ) {
     // Handle mixed taxes: separate inclusive and exclusive
-    const inclusiveTaxes = customerCopyTaxes.filter((tax) =>
-      tax.inclusive_type === "inclusive" ||
-      (tax.inclusive_type === undefined && tax.tax_type === "inclusive")
+    const inclusiveTaxes = customerCopyTaxes.filter(
+      (tax) =>
+        tax.inclusive_type === "inclusive" ||
+        (tax.inclusive_type === undefined && tax.tax_type === "inclusive"),
     );
-    const exclusiveTaxes = customerCopyTaxes.filter((tax) =>
-      tax.inclusive_type === "exclusive" ||
-      (tax.inclusive_type === undefined && tax.tax_type === "exclusive")
+    const exclusiveTaxes = customerCopyTaxes.filter(
+      (tax) =>
+        tax.inclusive_type === "exclusive" ||
+        (tax.inclusive_type === undefined && tax.tax_type === "exclusive"),
     );
 
     // Calculate exclusive VAT only (inclusive VAT is already in subtotal)
     let exclusiveVAT = 0;
     if (exclusiveTaxes.length > 0 && customerCopyTaxableNetAmount > 0) {
       exclusiveVAT = exclusiveTaxes.reduce((sum, tax) => {
-        return sum + (customerCopyTaxableNetAmount * (parseFloat(tax.rate) || 0)) / 100;
+        return (
+          sum +
+          (customerCopyTaxableNetAmount * (parseFloat(tax.rate) || 0)) / 100
+        );
       }, 0);
     }
 
@@ -584,7 +703,7 @@ export default function CreditSaleInvoice({
             Number(item?.selling_price || 0) * (item?.quantity_sold || 0),
         };
       }),
-    [customerCopyPriceList, items]
+    [customerCopyPriceList, items],
   );
 
   const getItemQuantity = (item) =>
@@ -602,7 +721,23 @@ export default function CreditSaleInvoice({
   );
 
   const formatNumber = (num) => {
-    return num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const n = Number(num);
+    if (!Number.isFinite(n)) return "0";
+    const isWhole = Math.abs(n - Math.round(n)) < 0.0005;
+    return n.toLocaleString(undefined, {
+      minimumFractionDigits: isWhole ? 0 : 2,
+      maximumFractionDigits: isWhole ? 0 : 2,
+    });
+  };
+
+  const formatPaymentMode = (mode) => {
+    const raw = String(mode || "").trim();
+    if (!raw) return "—";
+    return raw
+      .replace(/_/g, " ")
+      .split(" ")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
   };
 
   const invoiceDateValue =
@@ -613,17 +748,99 @@ export default function CreditSaleInvoice({
     invoice.transaction?.reference ||
     saleCode ||
     "N/A";
+
+  const warehouseLabel =
+    invoice?.warehouse_name ||
+    invoice?.warehouse ||
+    invoice?.branch_name ||
+    (Array.isArray(invoice?.warehouses) && invoice.warehouses.length
+      ? invoice.warehouses.join(", ")
+      : null) ||
+    [
+      ...new Set(
+        items
+          .map((it) => it.warehouse_name || it.warehouse || it.branch_name)
+          .filter(Boolean),
+      ),
+    ].join(", ") ||
+    "—";
+
+  const modeOfPayment =
+    invoice?.mode_of_payment ||
+    invoice?.transaction?.mode_of_payment ||
+    invoice?.transaction?.payment_type ||
+    items.find((it) => it.mode_of_payment)?.mode_of_payment ||
+    "CREDIT";
+
+  const amountPaid = Number(
+    invoice?.amount_paid ??
+      invoice?.transaction?.amount_paid ??
+      invoice?.paid_amount ??
+      0,
+  );
+
+  const paymentBreakdown = Array.isArray(invoice?.payment_breakdown)
+    ? invoice.payment_breakdown
+    : Array.isArray(invoice?.transaction?.payment_breakdown)
+      ? invoice.transaction.payment_breakdown
+      : [];
+
+  const cashPaid = Number(
+    invoice?.cash_paid ??
+      invoice?.transaction?.cash_paid ??
+      paymentBreakdown
+        .filter((p) => String(p.mode || "").toLowerCase() === "cash")
+        .reduce((s, p) => s + Number(p.amount || 0), 0),
+  );
+
+  const transferLines = paymentBreakdown.filter((p) => {
+    const m = String(p.mode || "").toLowerCase();
+    return m === "transfer" || m === "bank";
+  });
+
+  const transferPaid = Number(
+    invoice?.transfer_paid ??
+      invoice?.transaction?.transfer_paid ??
+      transferLines.reduce((s, p) => s + Number(p.amount || 0), 0),
+  );
+
+  const transferBanks = (() => {
+    const fromApi =
+      invoice?.transfer_banks || invoice?.transaction?.transfer_banks || [];
+    if (Array.isArray(fromApi) && fromApi.length)
+      return fromApi.filter(Boolean);
+    return [...new Set(transferLines.map((p) => p.bank_name).filter(Boolean))];
+  })();
+
+  const invoiceTotalForBalance = Number(
+    invoice?.invoice_total_amount ??
+      invoice?.totalAmount ??
+      invoice?.total_amount ??
+      totalAmount ??
+      0,
+  );
+
+  const balanceDue = Math.max(
+    0,
+    Number(invoiceTotalForBalance) - Number(amountPaid || 0),
+  );
+
+  const paymentModeLabel = (() => {
+    if (cashPaid > 0 && transferPaid > 0) return "Cash + Transfer";
+    if (cashPaid > 0 && transferPaid <= 0) return "Cash";
+    if (transferPaid > 0 && cashPaid <= 0) return "Transfer";
+    return formatPaymentMode(modeOfPayment);
+  })();
   const handleReactToPrint = useReactToPrint({
     contentRef: invoiceRef,
     documentTitle: `Invoice-${invoiceReference}`,
     pageStyle: `
       @page {
-        size: A4;
-        margin: 0 !important;
+        size: ${pageSizeLabel} portrait;
+        margin: ${isA5 ? "6mm" : "0"} !important;
       }
       html, body {
-        width: 210mm;
-        min-height: 297mm;
+        width: ${pageWidthMm}mm;
         margin: 0 !important;
         padding: 0 !important;
         background: #fff !important;
@@ -631,37 +848,43 @@ export default function CreditSaleInvoice({
         -webkit-print-color-adjust: exact;
       }
       .invoice-container {
-        width: 210mm !important;
-        height: 297mm !important;
-        min-height: 297mm !important;
-        max-height: 297mm !important;
+        width: ${pageWidthMm}mm !important;
+        max-width: ${pageWidthMm}mm !important;
         margin: 0 auto !important;
         padding: 0 !important;
         box-shadow: none !important;
         border: none !important;
         background: #fff !important;
-        overflow: hidden !important;
+        overflow: visible !important;
+        ${isA5 ? "" : `height: ${pageHeightMm}mm !important; min-height: ${pageHeightMm}mm !important; max-height: ${pageHeightMm}mm !important; overflow: hidden !important;`}
       }
       .invoice-page {
         display: flex !important;
         flex-direction: column !important;
-        height: 297mm !important;
-        min-height: 297mm !important;
+        ${isA5 ? "" : `height: ${pageHeightMm}mm !important; min-height: ${pageHeightMm}mm !important;`}
       }
       .invoice-page-half {
-        flex: 1 1 50% !important;
         display: flex !important;
         flex-direction: column !important;
         min-height: 0 !important;
-        overflow: hidden !important;
+        ${
+          isA5
+            ? `width: 100% !important; page-break-after: always !important; break-after: page !important;`
+            : `flex: 1 1 50% !important; overflow: hidden !important;`
+        }
+      }
+      .invoice-page-half:last-child {
+        page-break-after: auto !important;
+        break-after: auto !important;
       }
       .invoice-page-half-fill {
-        flex: 1 1 auto !important;
-        min-height: 0.5rem !important;
+        ${isA5 ? "display: none !important;" : "flex: 1 1 auto !important; min-height: 0.5rem !important;"}
       }
       .invoice-page-divider {
         flex-shrink: 0 !important;
+        ${isA5 ? "display: none !important;" : ""}
       }
+      .a5-tight { font-size: 10px !important; }
       .border-dashed { border-style: dashed !important; }
       .no-print { display: none !important; }
     `,
@@ -672,7 +895,6 @@ export default function CreditSaleInvoice({
           resolve();
           return;
         }
-        // Small delay to ensure DOM is fully rendered
         setTimeout(() => {
           resolve();
         }, 100);
@@ -720,7 +942,7 @@ export default function CreditSaleInvoice({
           "/api/v1/transactions/customer-copy",
           payload,
           (response) => resolve(response),
-          (err) => reject(err)
+          (err) => reject(err),
         );
       });
 
@@ -738,7 +960,7 @@ export default function CreditSaleInvoice({
           },
           (err) => {
             console.error("Failed to refresh sale", err);
-          }
+          },
         );
       }
       if (enableInlineCustomerCopyPreview) {
@@ -801,7 +1023,7 @@ export default function CreditSaleInvoice({
   const resolvedTaxes = fetchedInvoice ? customerCopyTaxes : propTaxes;
 
   const renderSkeletonFrame = () => (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="bg-gray-50 p-4">
       <div className="max-w-5xl mx-auto space-y-4">
         <div className="h-6 w-48 bg-gray-200 animate-pulse rounded" />
         <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 space-y-4">
@@ -843,39 +1065,50 @@ export default function CreditSaleInvoice({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 print:bg-white print:min-h-0">
+    <div className="bg-gray-50 pb-2 print:bg-white print:pb-0">
       <style>{`
         @media print {
           .no-print { display: none !important; }
           .invoice-container {
-            width: 210mm !important;
-            height: 297mm !important;
-            min-height: 297mm !important;
-            max-height: 297mm !important;
+            width: ${pageWidthMm}mm !important;
+            max-width: ${pageWidthMm}mm !important;
             padding: 0 !important;
             box-shadow: none !important;
             border: none !important;
-            overflow: hidden !important;
+            ${
+              isA5
+                ? "overflow: visible !important; height: auto !important; max-height: none !important;"
+                : `height: ${pageHeightMm}mm !important; min-height: ${pageHeightMm}mm !important; max-height: ${pageHeightMm}mm !important; overflow: hidden !important;`
+            }
           }
           .invoice-page {
             display: flex !important;
             flex-direction: column !important;
-            height: 297mm !important;
-            min-height: 297mm !important;
+            ${isA5 ? "" : `height: ${pageHeightMm}mm !important; min-height: ${pageHeightMm}mm !important;`}
           }
           .invoice-page-half {
-            flex: 1 1 50% !important;
             display: flex !important;
             flex-direction: column !important;
             min-height: 0 !important;
-            overflow: hidden !important;
+            ${
+              isA5
+                ? "page-break-after: always !important; break-after: page !important;"
+                : "flex: 1 1 50% !important; overflow: hidden !important;"
+            }
+          }
+          .invoice-page-half:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
           }
           .invoice-page-half-fill {
-            flex: 1 1 auto !important;
+            ${isA5 ? "display: none !important;" : "flex: 1 1 auto !important;"}
+          }
+          .invoice-page-divider {
+            ${isA5 ? "display: none !important;" : ""}
           }
           @page {
-            margin: 0mm;
-            size: A4;
+            margin: ${isA5 ? "6mm" : "0"};
+            size: ${pageSizeLabel} portrait;
           }
           body {
             print-color-adjust: exact;
@@ -884,6 +1117,17 @@ export default function CreditSaleInvoice({
           .border-dashed {
             border-style: dashed !important;
           }
+        }
+        ${
+          isA5
+            ? `
+        .invoice-a5 .invoice-page-half-fill { display: none; }
+        .invoice-a5 .invoice-page-divider { display: none; }
+        .invoice-a5 table th,
+        .invoice-a5 table td { padding: 2px 4px !important; font-size: 10px !important; }
+        .invoice-a5 .a5-section { padding: 0 2px; }
+        `
+            : ""
         }
       `}</style>
 
@@ -900,7 +1144,45 @@ export default function CreditSaleInvoice({
           ) : (
             <div />
           )}
-          <div className="flex gap-2 ml-auto">
+          <div className="flex flex-wrap gap-2 ml-auto items-center">
+            {showPrintButton &&
+            showInvoiceSection &&
+            (Number(exclusiveTaxTotal) > 0 ||
+              Number(totalTax) > 0 ||
+              (resolvedTaxes && resolvedTaxes.length > 0)) ? (
+              <div
+                className="inline-flex rounded-md border border-slate-300 overflow-hidden bg-white"
+                role="tablist"
+                aria-label="Customer copy type"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={customerPrintMode === "amount"}
+                  onClick={() => setCustomerPrintMode("amount")}
+                  className={`px-3 py-0.5 text-sm transition-colors ${
+                    customerPrintMode === "amount"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  Amount only
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={customerPrintMode === "vat"}
+                  onClick={() => setCustomerPrintMode("vat")}
+                  className={`px-3 py-0.5 text-sm border-l border-slate-300 transition-colors ${
+                    customerPrintMode === "vat"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  With VAT
+                </button>
+              </div>
+            ) : null}
             {showCustomerCopyActions && onCancel && (
               <button
                 onClick={() => setShowCustomerCopyModal(true)}
@@ -916,6 +1198,16 @@ export default function CreditSaleInvoice({
                 className="px-3 py-0.5 text-sm bg-blue-600 text-white rounded flex items-center gap-1 hover:bg-blue-700 transition-colors"
               >
                 <Printer size={14} /> Print
+                {showInvoiceSection &&
+                (Number(exclusiveTaxTotal) > 0 ||
+                  Number(totalTax) > 0 ||
+                  (resolvedTaxes && resolvedTaxes.length > 0))
+                  ? customerPrintMode === "amount"
+                    ? " (Amount)"
+                    : " (VAT)"
+                  : showDeliveryOrder
+                    ? ` ${dispatchDocTitle}`
+                    : ""}
               </button>
             )}
             {showCustomerCopyActions && onConfirm && (
@@ -934,615 +1226,846 @@ export default function CreditSaleInvoice({
 
       <div
         ref={invoiceRef}
-        className="max-w-5xl mx-auto bg-white shadow-sm invoice-container border border-gray-200"
+        className={`${
+          isA5 ? "max-w-[148mm] invoice-a5" : "max-w-5xl"
+        } mx-auto bg-white shadow-sm invoice-container border border-gray-200`}
+        style={isA5 ? { width: "148mm" } : undefined}
       >
-        <div className="invoice-page flex flex-col min-h-[297mm] print:h-[297mm]">
-          <section className="invoice-page-half flex flex-col flex-1 min-h-0">
-          <BusinessDocumentHeader
-            business={business}
-            title={`Credit Sale Invoice${copyLabel ? ` • ${copyLabel}` : ""}`}
-            numberLabel={`No: ${invoiceReference}`}
-            date={invoiceDateValue}
-          />
+        <div
+          className={`invoice-page flex flex-col ${
+            isA5 ? "min-h-0" : "min-h-0 print:min-h-[297mm] print:h-[297mm]"
+          }`}
+        >
+          {showInvoiceSection ? (
+          <section
+            className={`invoice-page-half flex flex-col min-h-0 ${
+              isA5 ? "mb-2 print:mb-0 a5-section" : "flex-1"
+            }`}
+          >
+            <BusinessDocumentHeader
+              business={business}
+              title="Sales Invoice"
+              numberLabel={`No: ${invoiceReference}`}
+              warehouse={
+                copyLabel ||
+                (warehouseLabel && warehouseLabel !== "—" ? warehouseLabel : "")
+              }
+              date={invoiceDateValue}
+              compact={isA5}
+            />
 
-          {/* Invoice Details Grid */}
-          <div className="grid gap-1 mb-1">
-            <div className="bg-blue-50 border border-blue-200  p-1">
-              <h6 className="text-xs font-semibold text-blue-800 mb- uppercase tracking-wide">
-                Bill To
-              </h6>
-              <p className="text-xs text-gray-700 leading-relaxed">
-                <span className="font-semibold text-gray-600">
-                  Account Name:
-                </span>{" "}
-                <span className="text-gray-900">{customer.customer_name}</span>{" "}
-                <span className="text-gray-400 mx-1">|</span>
-                <span className="font-semibold text-gray-600">
-                  Account No:
-                </span>{" "}
-                <span className="text-gray-900">{customer.customerNo}</span>
-                {customer.address && (
-                  <>
-                    <span className="text-gray-400 mx-1">|</span>
-                    <span className="font-semibold text-gray-600">
-                      Address:
-                    </span>{" "}
-                    <span className="text-gray-900">{customer.address}</span>
-                  </>
-                )}
-              </p>
+            {/* Invoice Details Grid */}
+            <div className={`grid gap-1 ${isA5 ? "mb-0.5" : "mb-1"}`}>
+              <div
+                className={`bg-blue-50 border border-blue-200 ${isA5 ? "p-0.5 px-1" : "p-1"}`}
+              >
+                <h6
+                  className={`font-semibold text-blue-800 uppercase tracking-wide ${isA5 ? "text-[10px] mb-0" : "text-xs mb-"}`}
+                >
+                  Bill To
+                </h6>
+                <p
+                  className={`${isA5 ? "text-[10px] leading-snug" : "text-xs leading-relaxed"} text-gray-700`}
+                >
+                  <span className="font-semibold text-gray-600">
+                    Account Name:
+                  </span>{" "}
+                  <span className="text-gray-900">
+                    {customer.customer_name}
+                  </span>{" "}
+                  <span className="text-gray-400 mx-1">|</span>
+                  <span className="font-semibold text-gray-600">
+                    Account No:
+                  </span>{" "}
+                  <span className="text-gray-900">{customer.customerNo}</span>
+                  {customer.address && (
+                    <>
+                      <span className="text-gray-400 mx-1">|</span>
+                      <span className="font-semibold text-gray-600">
+                        Address:
+                      </span>{" "}
+                      <span className="text-gray-900">{customer.address}</span>
+                    </>
+                  )}
+                  <span className="text-gray-400 mx-1">|</span>
+                  <span className="font-semibold text-gray-600">
+                    Warehouse:
+                  </span>{" "}
+                  <span className="text-gray-900">{warehouseLabel}</span>
+                </p>
+              </div>
             </div>
-          </div>
 
-          {/* Items Table */}
-          <div className="mb-1">
-            <table className="w-full border-collapse border border-gray-300  overflow-hidden shadow-sm">
-              <thead>
-                <tr className="bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white">
-                  <th className="border-r border-blue-500 px-2 py-1.5 text-center text-xs font-semibold">
-                    #
-                  </th>
-                  <th className="border-r border-blue-500 px-2 py-1.5 text-left text-xs font-semibold">
-                    Description / Size
-                  </th>
-                  <th className="border-r border-blue-500 px-2 py-1.5 text-center text-xs font-semibold">
-                    Quantity
-                  </th>
-                  <th className="border-r border-blue-500 px-2 py-1.5 text-right text-xs font-semibold">
-                    Unit Price(₦)
-                  </th>
-                  <th className="px-2 py-1.5 text-right text-xs font-semibold">
-                    Amount(₦)
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="bg-white">
-                {items.map((item, index) => {
-                  const resolvedCustomPrice = customerCopyPriceList[index];
-                  const displayPrice = customerCopyEnabled
-                    ? resolvedCustomPrice
-                    : item.selling_price;
-                  const displayAmount =
-                    displayPrice * (item.quantity_sold || 0);
-
-                  return (
-                    <tr
-                      key={item.id}
-                      className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+            {/* Items Table */}
+            <div className={isA5 ? "mb-0.5" : "mb-1"}>
+              <table className="w-full border-collapse border border-gray-300 overflow-hidden shadow-sm">
+                <thead>
+                  <tr className="bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white">
+                    <th
+                      className={`border-r border-blue-500 text-center font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
                     >
-                      <td className="border-r border-t border-gray-200 px-2 py-1.5 text-center text-xs font-semibold text-gray-600">
-                        {index + 1}
-                      </td>
-                      <td className="border-r border-t border-gray-200 px-2 py-1.5 text-xs">
-                        <strong className="text-gray-800">
-                          {item.item_name || item.description || "N/A"}
-                        </strong>
-                        {item.taxable === "Taxable" ? (
-                          <span
-                            className={`ml-2 px-2 py-0.5 rounded text-xs font-semibold ${
-                              item.taxable === "Taxable"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-600"
-                            }`}
-                          >
-                            {item.taxable}
-                          </span>
-                        ) : null}
-                        {item.unit_of_measure && (
-                          <span className="ml-2 text-xs text-gray-500">
-                            ({item.unit_of_measure})
-                          </span>
+                      #
+                    </th>
+                    <th
+                      className={`border-r border-blue-500 text-left font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
+                    >
+                      Description / Size
+                    </th>
+                    <th
+                      className={`border-r border-blue-500 text-center font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
+                    >
+                      Quantity
+                    </th>
+                    <th
+                      className={`border-r border-blue-500 text-right font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
+                    >
+                      Unit Price(₦)
+                    </th>
+                    <th
+                      className={`text-right font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
+                    >
+                      Amount(₦)
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="bg-white">
+                  {items.map((item, index) => {
+                    const resolvedCustomPrice = customerCopyPriceList[index];
+                    const baseUnitPrice = Number(
+                      customerCopyEnabled
+                        ? resolvedCustomPrice
+                        : item.selling_price || 0,
+                    );
+                    const qty = Number(item.quantity_sold || 0);
+                    const lineExVat = baseUnitPrice * qty;
+                    // Amount-only tab: fold exclusive VAT into Unit Price
+                    let lineVat = 0;
+                    if (foldVatIntoUnitPrice && isItemTaxable(item)) {
+                      lineVat =
+                        taxableNetAmount > 0
+                          ? (lineExVat / taxableNetAmount) * vatToFold
+                          : vatToFold /
+                            (items.filter((it) => isItemTaxable(it)).length ||
+                              1);
+                    } else if (
+                      foldVatIntoUnitPrice &&
+                      !items.some((it) => isItemTaxable(it))
+                    ) {
+                      // No taxable flags — spread VAT across all lines
+                      lineVat =
+                        items.length > 0 ? vatToFold / items.length : vatToFold;
+                    }
+                    const unitVat = qty > 0 ? lineVat / qty : lineVat;
+                    const displayUnitPrice = baseUnitPrice + unitVat;
+                    const displayAmount = displayUnitPrice * qty;
+
+                    return (
+                      <tr
+                        key={item.id}
+                        className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                      >
+                        <td className="border-r border-t border-gray-200 px-2 py-1.5 text-center text-xs font-semibold text-gray-600">
+                          {index + 1}
+                        </td>
+                        <td className="border-r border-t border-gray-200 px-2 py-1.5 text-xs">
+                          <strong className="text-gray-800">
+                            {item.item_name || item.description || "N/A"}
+                          </strong>
+                        </td>
+                        <td className="border-r border-t border-gray-200 px-2 py-1.5 text-center text-xs text-gray-700">
+                          {formatNumber(item.quantity_sold)}
+                        </td>
+                        <td className="border-r border-t border-gray-200 px-2 py-1.5 text-right text-xs text-gray-700">
+                          {formatNumber(displayUnitPrice)}
+                        </td>
+                        <td className="border-t border-gray-200 px-2 py-1.5 text-right text-xs font-semibold text-gray-900">
+                          {formatNumber(displayAmount)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="bg-blue-50 border-t-2 border-blue-200">
+                    <td colSpan="2"></td>
+                    <td className="border-r border-t border-gray-300 px-2 py-1.5 text-center  text-xs font-semibold text-gray-700">
+                      <h6>
+                        {" "}
+                        {formatNumber(
+                          items.reduce(
+                            (sum, item) => sum + (item.quantity_sold || 0),
+                            0,
+                          ),
                         )}
-                      </td>
-                      <td className="border-r border-t border-gray-200 px-2 py-1.5 text-center text-xs text-gray-700">
-                        {formatNumber1(item.quantity_sold)}
-                      </td>
-                      <td className="border-r border-t border-gray-200 px-2 py-1.5 text-right text-xs text-gray-700">
-                        {formatNumber(item.selling_price)}
-                      </td>
-                      <td className="border-t border-gray-200 px-2 py-1.5 text-right text-xs font-semibold text-gray-900">
-                        {formatNumber(displayAmount)}
-                      </td>
-                    </tr>
-                  );
-                })}
-                <tr className="bg-blue-50 border-t-2 border-blue-200">
-                  <td colSpan="2"></td>
-                  <td className="border-r border-t border-gray-300 px-2 py-1.5 text-center  text-xs font-semibold text-gray-700">
-                    <h6>
-                      {" "}
-                      {formatNumber1(
-                        items.reduce(
-                          (sum, item) => sum + (item.quantity_sold || 0),
-                          0
-                        )
-                      )}
-                    </h6>
-                  </td>
-                  <td className="border-r border-t border-gray-300 px-2 py-1.5 text-right text-xs font-semibold text-gray-900">
-                    <div className="font-semibold text-gray-700">SUBTOTAL:</div>
-                  </td>
-                  <td className="border-t border-gray-300 px-2 py-1.5 text-right text-xs">
-                    <div className="font-bold text-gray-900">
-                      {formatNumber(
-                        customerCopyEnabled ? customerCopySubtotal : subtotal
-                      )}
-                    </div>
-                  </td>
-                </tr>
-                {propDiscount && (
-                  <tr className="bg-red-50">
-                    <td
-                      colSpan="4"
-                      className="border-r border-t border-gray-200 px-2 py-1 text-right text-xs font-semibold text-gray-700"
-                    >
-                      {propDiscount.discount_name || "Discount"} :
+                      </h6>
                     </td>
-                    <td className="border-t border-gray-200 px-2 py-1 text-right text-xs font-semibold text-red-600">
-                      -
-                      {formatNumber(
-                        customerCopyEnabled
-                          ? customerCopyDiscountAmount
-                          : discountAmount
-                      )}
+                    <td className="border-r border-t border-gray-300 px-2 py-1.5 text-right text-xs font-semibold text-gray-900">
+                      <div className="font-semibold text-gray-700">
+                        SUBTOTAL:
+                      </div>
+                    </td>
+                    <td className="border-t border-gray-300 px-2 py-1.5 text-right text-xs">
+                      <div className="font-bold text-gray-900">
+                        {formatNumber(
+                          customerCopyEnabled
+                            ? customerCopySubtotal
+                            : displaySubtotal,
+                        )}
+                      </div>
                     </td>
                   </tr>
-                )}
-                {resolvedTaxes.map((tax, index) => {
-                  // Determine if this specific tax is inclusive or exclusive
-                  const isTaxInclusive = vatPolicy === "all"
-                    ? (tax.inclusive_type === "inclusive" ||
-                       (tax.inclusive_type === undefined && tax.tax_type === "inclusive"))
-                    : isInclusiveTax;
-
-                  // Calculate tax amount for this specific tax using the tax percentage
-                  let taxAmount = 0;
-                  if (customerCopyEnabled) {
-                    // Customer copy tax calculation
-                    if (isTaxInclusive) {
-                      // For inclusive: Extract VAT from subtotal (before discount) since subtotal includes VAT
-                      // Formula: VAT = subtotal × rate / (100 + rate)
-                      const totalTaxRate = customerCopyTaxes
-                        .filter((t) => {
-                          const tIsInclusive = vatPolicy === "all"
-                            ? (t.inclusive_type === "inclusive" ||
-                               (t.inclusive_type === undefined && t.tax_type === "inclusive"))
-                            : isInclusiveTax;
-                          return tIsInclusive;
-                        })
-                        .reduce((sum, t) => {
-                          return sum + (parseFloat(t.rate) || 0);
-                        }, 0);
-                      if (totalTaxRate > 0 && customerCopyTaxableSubtotal > 0) {
-                        const taxRate = parseFloat(tax.rate) || 0;
-                        const taxProportion = taxRate / totalTaxRate;
-                        // Extract VAT from subtotal (inclusive amount)
-                        const totalVAT =
-                          (customerCopyTaxableSubtotal * totalTaxRate) /
-                          (100 + totalTaxRate);
-                        taxAmount = totalVAT * taxProportion;
-                      }
-                    } else {
-                      // For exclusive: Calculate VAT on taxable net amount (after discount)
-                      // Formula: VAT = taxable_amount × rate / 100
-                      taxAmount =
-                        (customerCopyTaxableNetAmount * parseFloat(tax.rate)) /
-                        100;
-                    }
-                  } else {
-                    // Main invoice tax calculation
-                    if (isTaxInclusive) {
-                      // For inclusive: Extract VAT from taxable amount AFTER discount (37,000 → 2,581.40)
-                      const totalTaxRate = propTaxes
-                        .filter((t) => {
-                          const tIsInclusive = vatPolicy === "all"
-                            ? (t.inclusive_type === "inclusive" ||
-                               (t.inclusive_type === undefined && t.tax_type === "inclusive"))
-                            : isInclusiveTax;
-                          return tIsInclusive;
-                        })
-                        .reduce((sum, t) => {
-                          return sum + (parseFloat(t.rate) || 0);
-                        }, 0);
-                      if (totalTaxRate > 0 && taxableNetAmount > 0) {
-                        const taxRate = parseFloat(tax.rate) || 0;
-                        const taxProportion = taxRate / totalTaxRate;
-                        const totalVAT =
-                          (taxableNetAmount * totalTaxRate) /
-                          (100 + totalTaxRate);
-                        taxAmount = totalVAT * taxProportion;
-                      }
-                    } else {
-                      // For exclusive: Calculate VAT on taxable net amount (after discount)
-                      // Formula: VAT = taxable_amount × rate / 100
-                      taxAmount =
-                        (taxableNetAmount * parseFloat(tax.rate)) / 100;
-                    }
-                  }
-
-                  return (
-                    <tr key={index} className="bg-gray-50">
+                  {propDiscount && (
+                    <tr className="bg-red-50">
                       <td
                         colSpan="4"
                         className="border-r border-t border-gray-200 px-2 py-1 text-right text-xs font-semibold text-gray-700"
                       >
-                        {tax.description} ({tax.rate}%{" "}
-                        {vatPolicy === "all"
-                          ? (tax.inclusive_type === "inclusive"
-                              ? "Inclusive"
-                              : tax.inclusive_type === "exclusive"
-                              ? "Exclusive"
-                              : tax.tax_type === "inclusive"
-                              ? "Inclusive"
-                              : "Exclusive")
-                          : isInclusiveTax
-                          ? "inclusive"
-                          : "exclusive"}):
+                        {propDiscount.discount_name || "Discount"} :
                       </td>
-                      <td className="border-t border-gray-200 px-2 py-1 text-right text-xs font-semibold text-gray-900">
+                      <td className="border-t border-gray-200 px-2 py-1 text-right text-xs font-semibold text-red-600">
+                        -
                         {formatNumber(
-                          taxAmount ||
-                            (customerCopyEnabled
-                              ? customerCopyTaxAmount
-                              : totalTax)
+                          customerCopyEnabled
+                            ? customerCopyDiscountAmount
+                            : discountAmount,
                         )}
                       </td>
                     </tr>
-                  );
-                })}
-                {customerCopyEnabled && (
-                  <tr className="bg-gray-100">
-                    <td
-                      colSpan="4"
-                      className="border-r border-t border-gray-300 px-2 py-1.5 text-right text-xs font-semibold text-gray-600"
-                    >
-                      Original Total:
-                    </td>
-                    <td className="border-t border-gray-300 px-2 py-1.5 text-right text-xs font-semibold text-gray-700">
-                      ₦{formatNumber(totalAmount)}
-                    </td>
-                  </tr>
-                )}
-                <tr className="bg-gradient-to-r from-green-600 to-green-700 text-white border-t-2 border-green-800">
-                  <td
-                    colSpan="4"
-                    className="border-r border-green-500 px-2 py-2 text-right text-sm font-bold"
-                  >
-                    GRAND TOTAL:
-                  </td>
-                  <td className="px-2 py-2 text-right text-sm font-bold">
-                    ₦
-                    {formatNumber(
-                      customerCopyEnabled
-                        ? customerCopyTotalAmount
-                        : totalAmount
-                    )}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+                  )}
+                  {!foldVatIntoUnitPrice &&
+                    resolvedTaxes.map((tax, index) => {
+                      // Determine if this specific tax is inclusive or exclusive
+                      const isTaxInclusive =
+                        vatPolicy === "all"
+                          ? tax.inclusive_type === "inclusive" ||
+                            (tax.inclusive_type === undefined &&
+                              tax.tax_type === "inclusive")
+                          : isInclusiveTax;
 
-          <div className="invoice-page-half-fill flex-1 min-h-[1rem]" aria-hidden="true" />
+                      // Prefer VAT amount stored on the sale; fall back to rate calc
+                      let taxAmount = Number(tax.amount ?? tax.cost ?? 0);
+                      if (!(taxAmount > 0)) {
+                        if (customerCopyEnabled) {
+                          // Customer copy tax calculation
+                          if (isTaxInclusive) {
+                            // For inclusive: Extract VAT from subtotal (before discount) since subtotal includes VAT
+                            // Formula: VAT = subtotal × rate / (100 + rate)
+                            const totalTaxRate = customerCopyTaxes
+                              .filter((t) => {
+                                const tIsInclusive =
+                                  vatPolicy === "all"
+                                    ? t.inclusive_type === "inclusive" ||
+                                      (t.inclusive_type === undefined &&
+                                        t.tax_type === "inclusive")
+                                    : isInclusiveTax;
+                                return tIsInclusive;
+                              })
+                              .reduce((sum, t) => {
+                                return sum + (parseFloat(t.rate) || 0);
+                              }, 0);
+                            if (
+                              totalTaxRate > 0 &&
+                              customerCopyTaxableSubtotal > 0
+                            ) {
+                              const taxRate = parseFloat(tax.rate) || 0;
+                              const taxProportion = taxRate / totalTaxRate;
+                              // Extract VAT from subtotal (inclusive amount)
+                              const totalVAT =
+                                (customerCopyTaxableSubtotal * totalTaxRate) /
+                                (100 + totalTaxRate);
+                              taxAmount = totalVAT * taxProportion;
+                            }
+                          } else {
+                            // For exclusive: Calculate VAT on taxable net amount (after discount)
+                            // Formula: VAT = taxable_amount × rate / 100
+                            taxAmount =
+                              (customerCopyTaxableNetAmount *
+                                parseFloat(tax.rate)) /
+                              100;
+                          }
+                        } else {
+                          // Main invoice tax calculation
+                          if (isTaxInclusive) {
+                            // For inclusive: Extract VAT from taxable amount AFTER discount (37,000 → 2,581.40)
+                            const totalTaxRate = propTaxes
+                              .filter((t) => {
+                                const tIsInclusive =
+                                  vatPolicy === "all"
+                                    ? t.inclusive_type === "inclusive" ||
+                                      (t.inclusive_type === undefined &&
+                                        t.tax_type === "inclusive")
+                                    : isInclusiveTax;
+                                return tIsInclusive;
+                              })
+                              .reduce((sum, t) => {
+                                return sum + (parseFloat(t.rate) || 0);
+                              }, 0);
+                            if (totalTaxRate > 0 && taxableNetAmount > 0) {
+                              const taxRate = parseFloat(tax.rate) || 0;
+                              const taxProportion = taxRate / totalTaxRate;
+                              const totalVAT =
+                                (taxableNetAmount * totalTaxRate) /
+                                (100 + totalTaxRate);
+                              taxAmount = totalVAT * taxProportion;
+                            }
+                          } else {
+                            // For exclusive: Calculate VAT on taxable net amount (after discount)
+                            // Formula: VAT = taxable_amount × rate / 100
+                            taxAmount =
+                              (taxableNetAmount * parseFloat(tax.rate)) / 100;
+                          }
+                        }
+                      }
+                      if (
+                        !(taxAmount > 0) &&
+                        exclusiveTaxTotal > 0 &&
+                        resolvedTaxes.length === 1
+                      ) {
+                        taxAmount = exclusiveTaxTotal;
+                      }
 
-          {/* Footer Section */}
-          <div className="grid grid-cols-2 gap-2 mb-1 shrink-0">
-            <div className="bg-gray-50 border border-gray-200  p-2">
-              <h3 className="text-xs font-bold text-gray-800 mb-2 border-b border-gray-300 pb-1">
-                Invoice Details
-              </h3>
-              <p className="text-xs mb-1 text-gray-700">
-                <span className="font-semibold">Receipt No:</span>{" "}
-                <span className="text-gray-900">{invoiceReference}</span>
-              </p>
-              {invoiceReference ? (
-                <div className="mb-2 flex justify-center overflow-hidden">
-                  <Barcode
-                    value={String(invoiceReference)}
-                    width={1.1}
-                    height={32}
-                    displayValue={false}
-                    margin={0}
-                    background="#f9fafb"
-                    lineColor="#000000"
-                  />
-                </div>
-              ) : null}
-              <p className="text-xs mb-1 text-gray-700">
-                <span className="font-semibold">Delivery Order No:</span>{" "}
-                <span className="text-gray-900">
-                  DO-{invoice.transaction?.id || "N/A"}
-                </span>
-              </p>
-              <p className="text-xs mb-2 text-gray-700">
-                <span className="font-semibold">Customer:</span>{" "}
-                <span className="text-gray-900">{customer.customer_name}</span>
-              </p>
-              <div className="border-t-2 border-gray-300 mt-2 pt-1.5">
-                {warehouseDualSignature ? (
-                  <div className="space-y-3">
-                    <div>
-                      <div className="h-8 border-b border-gray-400" />
-                      <p className="text-xs font-semibold text-gray-600 mt-1">
-                        Released by (Warehouse)
-                      </p>
-                    </div>
-                    <div>
-                      <div className="h-8 border-b border-gray-400" />
-                      <p className="text-xs font-semibold text-gray-600 mt-1">
-                        Received by (Customer)
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-xs font-semibold text-gray-600">
-                    Customer Signature
-                  </p>
-                )}
-                {/* <div className="h-8"></div> */}
-              </div>
-            </div>
-            <div className="bg-blue-50 border border-blue-200 p-1.5">
-              <h6 className="text-xs font-bold text-gray-800 mb-2 border-b border-blue-300 pb-1">
-                {warehouseDualSignature ? "Warehouse Details" : "Prepared Details"}
-              </h6>
-              <p className="text-xs mb-1.5 text-gray-700">
-                <span className="font-semibold">
-                  {warehouseDualSignature ? "Printed By:" : "Prepared By:"}
-                </span>{" "}
-                {user?.name} ({user?.id})
-              </p>
-              {warehouseDualSignature ? (
-                <div className="space-y-3 mt-2">
-                  <div>
-                    <div className="h-8 border-b border-blue-300" />
-                    <p className="text-[0.65rem] text-gray-500 uppercase tracking-wide mt-1">
-                      Warehouse signature
-                    </p>
-                  </div>
-                  <div>
-                    <div className="h-8 border-b border-blue-300" />
-                    <p className="text-[0.65rem] text-gray-500 uppercase tracking-wide mt-1">
-                      Checker / dual signature
-                    </p>
-                  </div>
-                </div>
-              ) : authorizationUser.signature ? (
-                <div className="flex flex-col items-center gap-1">
-                  <img
-                    src={authorizationUser.signature}
-                    alt="Authorized signature"
-                    className="h-6 object-contain"
-                  />
-                  <span className="text-[0.65rem] text-gray-500 uppercase tracking-wide">
-                    Signature
-                  </span>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-1 ">
-                  <div className="h-6 "></div>
-                  <span className="text-[0.65rem] text-gray-500 uppercase tracking-wide">
-                    Signature
-                  </span>
-                </div>
-              )}
-              <p className="mt- text-xs font-bold text-center text-blue-800 py-1 bg-blue-100 rounded">
-                FOR {business.business_name}
-              </p>
-            </div>
-          </div>
-
-          {/* Warning Notice */}
-          <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border-r-4 border-l-4 border-amber-500 p-1 shadow-sm shrink-0 mt-auto">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <svg
-                  className="h-5 w-5 text-amber-600"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <div className="ml-2">
-                <h6 className="text-xs font-semibold text-amber-900">
-                  IMPORTANT NOTE
-                </h6>
-                <h6 className="text-xs text-amber-800 mt-">
-                  The Company will not accept refund claims on Gases or any
-                  other goods once they are sold to customers.
-                </h6>
-              </div>
-            </div>
-          </div>
-          </section>
-
-        {/* Dashed Separator */}
-        <div className="invoice-page-divider relative shrink-0 py-1">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t-2 border-dashed border-gray-400"></div>
-          </div>
-          <div className="relative flex justify-center">
-            <span className="bg-white px-0 text-xs font-semibold text-gray-500 uppercase tracking-wide"></span>
-          </div>
-        </div>
-
-        {/* Delivery Order Section */}
-        <section className="invoice-page-half flex flex-col flex-1 min-h-0 bg-gradient-to-b from-gray-50 to-white">
-          <BusinessDocumentHeader
-            business={business}
-            title={`Delivery Order${copyLabel ? ` • ${copyLabel}` : ""}`}
-            numberLabel={`No: DO-${invoiceReference}`}
-            date={invoiceDateValue}
-          />
-
-          <div className="grid gap-1 mb-1">
-            <div className="bg-blue-50 border border-blue-200 p-1 pl-3">
-              <p className="text-xs font-semibold text-blue-800 mb-1 uppercase tracking-wide">
-                Bill To
-              </p>
-              <p className="text-xs text-gray-700 leading-relaxed">
-                <span className="font-semibold text-gray-600">
-                  Account Name:
-                </span>{" "}
-                <span className="text-gray-900">{customer.customer_name}</span>{" "}
-                <span className="text-gray-400 mx-1">|</span>
-                <span className="font-semibold text-gray-600">
-                  Account No:
-                </span>{" "}
-                <span className="text-gray-900">{customer.customerNo}</span>
-                {customer.address && (
-                  <>
-                    <span className="text-gray-400 mx-1">|</span>
-                    <span className="font-semibold text-gray-600">
-                      Address:
-                    </span>{" "}
-                    <span className="text-gray-900">{customer.address}</span>
-                  </>
-                )}
-              </p>
-            </div>
-          </div>
-          <div className="mb-1">
-            <table className="w-full border-collapse border border-gray-300  overflow-hidden shadow-sm">
-              <thead>
-                <tr className="bg-gradient-to-r from-green-600 to-green-700 text-white">
-                  <th className="border-r border-green-500 px-2 py-1.5 text-center text-xs font-semibold">
-                    #
-                  </th>
-                  <th className="border-r border-green-500 px-2 py-1.5 text-left text-xs font-semibold">
-                    DESCRIPTION
-                  </th>
-                  {/* <th className="border-r border-green-500 px-2 py-1.5 text-center text-xs font-semibold">
-                    SIZES
-                  </th> */}
-                  <th className="px-2 py-1.5 text-center text-xs font-semibold">
-                    Quantity
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white">
-                {deliveryOrderItems.map((item, index) => (
-                    <tr
-                      key={item.id ?? item.entry_id ?? index}
-                      className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
-                    >
-                      <td className="border-r border-t border-gray-200 px-2 py-1.5 text-center text-xs font-semibold text-gray-600">
-                        {index + 1}
+                      return (
+                        <tr key={index} className="bg-gray-50">
+                          <td
+                            colSpan="4"
+                            className="border-r border-t border-gray-200 px-2 py-1 text-right text-xs font-semibold text-gray-700"
+                          >
+                            {tax.description} ({tax.rate}%{" "}
+                            {vatPolicy === "all"
+                              ? tax.inclusive_type === "inclusive"
+                                ? "Inclusive"
+                                : tax.inclusive_type === "exclusive"
+                                  ? "Exclusive"
+                                  : tax.tax_type === "inclusive"
+                                    ? "Inclusive"
+                                    : "Exclusive"
+                              : isInclusiveTax
+                                ? "inclusive"
+                                : "exclusive"}
+                            ):
+                          </td>
+                          <td className="border-t border-gray-200 px-2 py-1 text-right text-xs font-semibold text-gray-900">
+                            {formatNumber(
+                              taxAmount ||
+                                (customerCopyEnabled
+                                  ? customerCopyTaxAmount
+                                  : totalTax),
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  {customerCopyEnabled && (
+                    <tr className="bg-gray-100">
+                      <td
+                        colSpan="4"
+                        className="border-r border-t border-gray-300 px-2 py-1.5 text-right text-xs font-semibold text-gray-600"
+                      >
+                        Original Total:
                       </td>
-                      <td className="border-r border-t border-gray-200 px-2 py-1.5 text-xs text-gray-800">
-                        {item.item_name || item.description || "—"}
-                      </td>
-                      <td className="border-t border-gray-200 px-2 py-1.5 text-center text-xs text-gray-700">
-                        {getItemQuantity(item)}
+                      <td className="border-t border-gray-300 px-2 py-1.5 text-right text-xs font-semibold text-gray-700">
+                        ₦{formatNumber(totalAmount)}
                       </td>
                     </tr>
-                  ))}
-                <tr className="bg-gradient-to-r from-blue-50 to-blue-100 border-t-2 border-blue-200">
-                  <td
-                    colSpan="2"
-                    className="border-r border-t border-gray-300 px-2 py-1.5 text-right text-xs font-bold text-gray-800"
-                  >
-                    Total:
-                  </td>
-                  <td className="border-t border-gray-300 px-2 py-1.5 text-center text-xs font-bold text-gray-900">
-                    {totalCylinders}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+                  )}
+                  <tr className="bg-gradient-to-r from-green-600 to-green-700 text-white border-t-2 border-green-800">
+                    <td
+                      colSpan="4"
+                      className={`border-r border-green-500 text-right font-bold ${isA5 ? "px-1 py-1 text-xs" : "px-2 py-2 text-sm"}`}
+                    >
+                      GRAND TOTAL:
+                    </td>
+                    <td
+                      className={`text-right font-bold ${isA5 ? "px-1 py-1 text-xs" : "px-2 py-2 text-sm"}`}
+                    >
+                      ₦
+                      {formatNumber(
+                        customerCopyEnabled
+                          ? customerCopyTotalAmount
+                          : totalAmount,
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
 
-          <div className="invoice-page-half-fill flex-1 min-h-[1rem]" aria-hidden="true" />
-
-          <div className="grid grid-cols-2 gap-2 mb-1 shrink-0">
-            <div className="bg-gray-50 border border-gray-200 p-1.5">
-              <h3 className="text-xs font-bold text-gray-800 mb-2 border-b border-gray-300 pb-1">
-                Delivery Information
-              </h3>
-              <h6 className="text-xs mb-1 text-gray-700">
-                <span className="font-semibold">Vehicle No:</span>{" "}
-                ___________________________________
+            {/* Mode of Payment — after totals */}
+            <div
+              className={`bg-emerald-50 border border-emerald-200 shrink-0 ${
+                isA5 ? "p-0.5 px-1 mb-0.5 mt-0.5" : "p-1 mb-1 mt-1"
+              }`}
+            >
+              <h6
+                className={`font-semibold text-emerald-800 uppercase tracking-wide ${
+                  isA5 ? "text-[10px] mb-0" : "text-xs mb-0.5"
+                }`}
+              >
+                Mode of Payment
               </h6>
-              {/* <p className="text-xs mb-2 text-gray-700">
-                <span className="font-semibold">Prepared By:</span> Christiana
-              </p> */}
-              <div className="mt-3 p-2 bg-blue-50 border border-blue-200 ">
-                <h6 className="font-semibold text-xs text-blue-900 mb-1">
-                  DELIVERED BY STORES OFFICER:
+              <div
+                className={`${
+                  isA5 ? "text-[10px] leading-snug" : "text-xs leading-relaxed"
+                } text-gray-700 space-y-0.5`}
+              >
+                <p>
+                  <span className="font-semibold text-gray-600">
+                    Payment Mode:
+                  </span>{" "}
+                  <span className="text-gray-900 font-semibold">
+                    {paymentModeLabel}
+                  </span>
+                  <span className="text-gray-400 mx-1">|</span>
+                  <span className="font-semibold text-gray-600">
+                    Total Paid:
+                  </span>{" "}
+                  <span className="text-gray-900 font-semibold">
+                    ₦{formatNumber(amountPaid)}
+                  </span>
+                  <span className="text-gray-400 mx-1">|</span>
+                  <span className="font-semibold text-gray-600">
+                    Balance:
+                  </span>{" "}
+                  <span className="text-gray-900 font-semibold">
+                    ₦{formatNumber(balanceDue)}
+                  </span>
+                </p>
+                {(cashPaid > 0 ||
+                  transferPaid > 0 ||
+                  paymentBreakdown.length > 0) && (
+                  <p className="flex flex-wrap gap-x-3 gap-y-0.5">
+                    {cashPaid > 0 && (
+                      <span>
+                        <span className="font-semibold text-gray-600">
+                          Cash:
+                        </span>{" "}
+                        <span className="text-gray-900 font-semibold">
+                          ₦{formatNumber(cashPaid)}
+                        </span>
+                      </span>
+                    )}
+                    {transferLines.length > 0
+                      ? transferLines.map((line, idx) => (
+                          <span key={`xfer-${idx}`}>
+                            <span className="font-semibold text-gray-600">
+                              Transfer:
+                            </span>{" "}
+                            <span className="text-gray-900 font-semibold">
+                              ₦{formatNumber(line.amount)}
+                            </span>
+                            {line.bank_name ? (
+                              <span className="text-gray-700">
+                                {" "}
+                                ({line.bank_name})
+                              </span>
+                            ) : null}
+                          </span>
+                        ))
+                      : transferPaid > 0 && (
+                          <span>
+                            <span className="font-semibold text-gray-600">
+                              Transfer:
+                            </span>{" "}
+                            <span className="text-gray-900 font-semibold">
+                              ₦{formatNumber(transferPaid)}
+                            </span>
+                            {transferBanks.length > 0 ? (
+                              <span className="text-gray-700">
+                                {" "}
+                                ({transferBanks.join(", ")})
+                              </span>
+                            ) : null}
+                          </span>
+                        )}
+                    {cashPaid <= 0 &&
+                      transferPaid <= 0 &&
+                      amountPaid > 0 &&
+                      String(modeOfPayment).toLowerCase() === "credit" && (
+                        <span>
+                          <span className="font-semibold text-gray-600">
+                            Credit:
+                          </span>{" "}
+                          <span className="text-gray-900 font-semibold">
+                            ₦{formatNumber(amountPaid)}
+                          </span>
+                        </span>
+                      )}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div
+              className={`invoice-page-half-fill min-h-0 ${isA5 ? "hidden" : "hidden print:block print:flex-1 print:min-h-[1rem]"}`}
+              aria-hidden="true"
+            />
+
+            {/* Invoice + Prepared details */}
+            <div
+              className={`grid grid-cols-2 gap-2 shrink-0 ${
+                isA5 ? "mb-0.5 mt-1" : "mb-1"
+              }`}
+            >
+              <div
+                className={`bg-gray-50 border border-gray-200 ${
+                  isA5 ? "p-1" : "p-2"
+                }`}
+              >
+                <h3
+                  className={`font-bold text-gray-800 border-b border-gray-300 pb-1 ${
+                    isA5 ? "text-[10px] mb-1" : "text-xs mb-2"
+                  }`}
+                >
+                  Invoice Details
+                </h3>
+                <p
+                  className={`${isA5 ? "text-[10px]" : "text-xs"} mb-1 text-gray-700`}
+                >
+                  <span className="font-semibold">Invoice No.:</span>{" "}
+                  <span className="text-gray-900">{invoiceReference}</span>
+                </p>
+                {invoiceReference ? (
+                  <div
+                    className={`${isA5 ? "mb-1" : "mb-2"} flex justify-center overflow-hidden`}
+                  >
+                    <Barcode
+                      value={String(invoiceReference)}
+                      width={isA5 ? 0.9 : 1.1}
+                      height={isA5 ? 24 : 32}
+                      displayValue={false}
+                      margin={0}
+                      background="#f9fafb"
+                      lineColor="#000000"
+                    />
+                  </div>
+                ) : null}
+                <p
+                  className={`${isA5 ? "text-[10px]" : "text-xs"} mb-1 text-gray-700`}
+                >
+                  <span className="font-semibold">
+                    {isGoodsIssueNote
+                      ? "Goods Issue Note No:"
+                      : "Delivery Order No:"}
+                  </span>{" "}
+                  <span className="text-gray-900">
+                    {dispatchDocPrefix}-{invoiceReference}
+                  </span>
+                </p>
+                <p
+                  className={`${isA5 ? "text-[10px]" : "text-xs"} mb-1 text-gray-700`}
+                >
+                  <span className="font-semibold">Customer:</span>{" "}
+                  <span className="text-gray-900">
+                    {customer?.customer_name || "—"}
+                  </span>
+                </p>
+              </div>
+
+              <div
+                className={`bg-blue-50 border border-blue-200 ${
+                  isA5 ? "p-1" : "p-1.5"
+                }`}
+              >
+                <h6
+                  className={`font-bold text-gray-800 border-b border-blue-300 pb-1 ${
+                    isA5 ? "text-[10px] mb-1" : "text-xs mb-2"
+                  }`}
+                >
+                  Prepared Details
                 </h6>
-                <h6 className="italic text-xs text-blue-700">
-                  Received the above items in good condition
-                </h6>
-                <div className="mt-2 border-t border-blue-300 pt-2">
-                  <p className="text-xs text-gray-600">
-                    Signature: ___________________________________
+                <p
+                  className={`${isA5 ? "text-[10px]" : "text-xs"} mb-1.5 text-gray-700`}
+                >
+                  <span className="font-semibold">Prepared By:</span>{" "}
+                  {preparedByName}
+                  {preparedById ? ` (${preparedById})` : ""}
+                </p>
+                {preparedBySignature ? (
+                  <div className="flex flex-col items-center gap-1 my-1">
+                    <img
+                      src={preparedBySignature}
+                      alt="Prepared by signature"
+                      className={`${isA5 ? "h-8" : "h-10"} object-contain`}
+                    />
+                    <span className="text-[0.65rem] text-gray-500 uppercase tracking-wide">
+                      Signature
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-1 my-1">
+                    <div
+                      className={`${isA5 ? "h-8" : "h-10"} w-full border-b border-blue-300`}
+                    />
+                    <span className="text-[0.65rem] text-gray-500 uppercase tracking-wide">
+                      Signature
+                    </span>
+                  </div>
+                )}
+                <p className="mt-1 text-xs font-bold text-center text-blue-800 py-1 bg-blue-100 rounded">
+                  FOR {business?.business_name || "COMPANY"}
+                </p>
+              </div>
+            </div>
+
+            {/* Warning Notice */}
+            {showImportantNote ? (
+              <div
+                className={`bg-gradient-to-r from-amber-50 to-yellow-50 border-r-4 border-l-4 border-amber-500 shadow-sm shrink-0 ${isA5 ? "px-2 py-1.5 mt-1" : "px-2.5 py-2 mt-2 print:mt-auto"}`}
+              >
+                <div className="flex items-start gap-2">
+                  <div className="flex-shrink-0 pt-0.5">
+                    <svg
+                      className={`${isA5 ? "h-3.5 w-3.5" : "h-5 w-5"} text-amber-600`}
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h6
+                      className={`${isA5 ? "text-[10px]" : "text-xs"} font-semibold text-amber-900 leading-tight`}
+                    >
+                      IMPORTANT NOTE
+                    </h6>
+                    <h6
+                      className={`${isA5 ? "text-[10px] leading-snug" : "text-xs leading-snug"} text-amber-800 mt-1`}
+                    >
+                      {importantNoteText}
+                    </h6>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </section>
+          ) : null}
+
+          {/* Dashed Separator — A4 cut sheet only */}
+          {showDeliveryOrder && showInvoiceSection ? (
+            <div
+              className={`invoice-page-divider relative shrink-0 py-1 ${isA5 ? "hidden" : "print:block"}`}
+            >
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t-2 border-dashed border-gray-400"></div>
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-white px-0 text-xs font-semibold text-gray-500 uppercase tracking-wide"></span>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Delivery Order Section */}
+          {showDeliveryOrder ? (
+            <section
+              className={`invoice-page-half flex flex-col min-h-0 bg-gradient-to-b from-gray-50 to-white ${
+                isA5 ? "a5-section" : "flex-1"
+              }`}
+            >
+              <BusinessDocumentHeader
+                business={business}
+                title={dispatchDocTitle}
+                numberLabel={`No: ${dispatchDocPrefix}-${invoiceReference}`}
+                warehouse={
+                  copyLabel ||
+                  (warehouseLabel && warehouseLabel !== "—"
+                    ? warehouseLabel
+                    : "")
+                }
+                date={invoiceDateValue}
+                compact={isA5}
+              />
+
+              <div className="grid gap-1 mb-1">
+                <div className="bg-blue-50 border border-blue-200 p-1 pl-3">
+                  <p className="text-xs font-semibold text-blue-800 mb-1 uppercase tracking-wide">
+                    Bill To
+                  </p>
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <span className="font-semibold text-gray-600">
+                      Account Name:
+                    </span>{" "}
+                    <span className="text-gray-900">
+                      {customer.customer_name}
+                    </span>{" "}
+                    <span className="text-gray-400 mx-1">|</span>
+                    <span className="font-semibold text-gray-600">
+                      Account No:
+                    </span>{" "}
+                    <span className="text-gray-900">{customer.customerNo}</span>
+                    {customer.address && (
+                      <>
+                        <span className="text-gray-400 mx-1">|</span>
+                        <span className="font-semibold text-gray-600">
+                          Address:
+                        </span>{" "}
+                        <span className="text-gray-900">
+                          {customer.address}
+                        </span>
+                      </>
+                    )}
+                  </p>
+                </div>
+                <div className="border border-slate-200 bg-slate-50 p-1 pl-3">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <span className="font-semibold text-gray-600">
+                      Warehouse:
+                    </span>{" "}
+                    <span className="text-gray-900">{warehouseLabel}</span>
                   </p>
                 </div>
               </div>
-            </div>
-            <div className="bg-green-50 border border-green-200  p-1">
-              <h3 className="text-xs font-bold text-gray-800 mb-2 border-b border-green-300 pb-1">
-                Driver & Authorization
-              </h3>
-              <p className="text-xs mb-1 text-gray-700">
-                <span className="font-semibold">Driver&apos;s Name:</span>{" "}
-                _________________________________________________________________
-              </p>
-              {/* <p className="text-xs mb-2 text-gray-700">
-                <span className="font-semibold">Authorized By:</span> Dorcas
-              </p> */}
-              <div className="mt-3 p-2 bg-white border border-gray-300 ">
-                <p className="font-semibold text-xs text-gray-900 mb-2">
-                  RECEIVED BY:
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <p className="text-xs text-gray-600 mb-1">Name:</p>
-                    <div className="border-b border-gray-400 h-5"></div>
+              <div className="mb-1">
+                <table className="w-full border-collapse border border-gray-300  overflow-hidden shadow-sm">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-green-600 to-green-700 text-white">
+                      <th className="border-r border-green-500 px-2 py-1.5 text-center text-xs font-semibold">
+                        #
+                      </th>
+                      <th className="border-r border-green-500 px-2 py-1.5 text-left text-xs font-semibold">
+                        DESCRIPTION
+                      </th>
+                      {/* <th className="border-r border-green-500 px-2 py-1.5 text-center text-xs font-semibold">
+                    SIZES
+                  </th> */}
+                      <th className="px-2 py-1.5 text-center text-xs font-semibold">
+                        Quantity
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {deliveryOrderItems.map((item, index) => (
+                      <tr
+                        key={item.id ?? item.entry_id ?? index}
+                        className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                      >
+                        <td className="border-r border-t border-gray-200 px-2 py-1.5 text-center text-xs font-semibold text-gray-600">
+                          {index + 1}
+                        </td>
+                        <td className="border-r border-t border-gray-200 px-2 py-1.5 text-xs text-gray-800">
+                          {item.item_name || item.description || "—"}
+                          {(item.warehouse_name || item.warehouse) && (
+                            <span className="ml-2 text-xs text-slate-500">
+                              · {item.warehouse_name || item.warehouse}
+                            </span>
+                          )}
+                        </td>
+                        <td className="border-t border-gray-200 px-2 py-1.5 text-center text-xs text-gray-700">
+                          {formatNumber(getItemQuantity(item))}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-gradient-to-r from-blue-50 to-blue-100 border-t-2 border-blue-200">
+                      <td
+                        colSpan="2"
+                        className="border-r border-t border-gray-300 px-2 py-1.5 text-right text-xs font-bold text-gray-800"
+                      >
+                        Total:
+                      </td>
+                      <td className="border-t border-gray-300 px-2 py-1.5 text-center text-xs font-bold text-gray-900">
+                        {formatNumber(totalCylinders)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div
+                className={`invoice-page-half-fill min-h-0 ${isA5 ? "hidden" : "hidden print:block print:flex-1 print:min-h-[1rem]"}`}
+                aria-hidden="true"
+              />
+
+              <div
+                className={`grid grid-cols-2 gap-2 shrink-0 ${isA5 ? "mb-0.5 mt-1" : "mb-1"}`}
+              >
+                {!isGoodsIssueNote ? (
+                <div
+                  className={`bg-gray-50 border border-gray-200 ${isA5 ? "p-1" : "p-1.5"}`}
+                >
+                  <h3
+                    className={`font-bold text-gray-800 border-b border-gray-300 pb-1 ${isA5 ? "text-[10px] mb-1" : "text-xs mb-2"}`}
+                  >
+                    Delivery Information
+                  </h3>
+                  <p className="flex items-end gap-1 text-xs mb-1 text-gray-700">
+                    <span className="font-semibold shrink-0">
+                      Vehicle No:
+                    </span>
+                    <span className="flex-1 border-b border-gray-700 min-h-[1rem]" />
+                  </p>
+                  <div className="mt-3 p-2 bg-blue-50 border border-blue-200 ">
+                    <h6 className="font-semibold text-xs text-blue-900 mb-1">
+                      DELIVERED BY STORES OFFICER:
+                    </h6>
+                    <h6 className="italic text-xs text-blue-700">
+                      Received the above items in good condition
+                    </h6>
+                    <div className="mt-2 border-t border-blue-300 pt-2">
+                      <p className="flex items-end gap-1 text-xs text-gray-600">
+                        <span className="shrink-0">Signature:</span>
+                        <span className="flex-1 border-b border-gray-500 min-h-[1rem]" />
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-600 mb-1">Signature:</p>
-                    <div className="border-b border-gray-400 h-5"></div>
+                </div>
+                ) : null}
+                <div
+                  className={`bg-green-50 border border-green-200 p-1 overflow-hidden ${
+                    isGoodsIssueNote ? "col-span-2" : ""
+                  }`}
+                >
+                  <h3 className="text-xs font-bold text-gray-800 mb-2 border-b border-green-300 pb-1">
+                    {isGoodsIssueNote
+                      ? "Approval Details"
+                      : "Driver & Authorization"}
+                  </h3>
+                  {!isGoodsIssueNote ? (
+                    <p className="flex items-end gap-1 text-xs mb-1 text-gray-700 min-w-0">
+                      <span className="font-semibold shrink-0">
+                        Driver&apos;s Name:
+                      </span>
+                      <span className="flex-1 border-b border-gray-700 min-h-[1rem] min-w-0" />
+                    </p>
+                  ) : (
+                    <p className="text-xs mb-2 text-gray-700">
+                      <span className="font-semibold">Prepared:</span>{" "}
+                      <span className="text-gray-900">{preparedByName}</span>
+                    </p>
+                  )}
+                  <div className="mt-3 p-2 bg-white border border-gray-300 ">
+                    <p className="font-semibold text-xs text-gray-900 mb-2">
+                      {isGoodsIssueNote ? "SIGNATURE:" : "RECEIVED BY:"}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-xs text-gray-600 mb-1">
+                          {isGoodsIssueNote ? "Sign:" : "Name:"}
+                        </p>
+                        <div className="border-b border-gray-400 h-5"></div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600 mb-1">
+                          {isGoodsIssueNote ? "Date:" : "Signature:"}
+                        </p>
+                        <div className="border-b border-gray-400 h-5"></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Warning Notice for Delivery Order */}
-          <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border-l-4 border-r-4 border-amber-500 p-0.5 shadow-sm shrink-0 mt-auto">
-            <div className="flex items-start gap-1">
-              <div className="flex-shrink-0">
-                <svg
-                  className="h-5 w-5 text-amber-600"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <div className="ml-2">
-                <h6 className="text-xs font-semibold text-amber-900">
-                  IMPORTANT NOTE
-                </h6>
-                <h6 className="text-xs text-amber-800 mt-">
-                  The Company will not accept refund claims on Gases or any
-                  other goods once they are sold to customers.
-                </h6>
-              </div>
-            </div>
-          </div>
-        </section>
+              {/* Thank-you note on Goods Issue Note only */}
+              {isGoodsIssueNote && showImportantNote ? (
+                <div className="shrink-0 mt-auto px-1 py-1.5 border-t border-dashed border-gray-300">
+                  <p className="text-center italic text-xs text-gray-700 leading-snug">
+                    {importantNoteText}
+                  </p>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
         </div>
       </div>
 
@@ -1682,10 +2205,12 @@ export default function CreditSaleInvoice({
                     )}
                     {customerCopyTaxes.map((tax, index) => {
                       // Determine if this specific tax is inclusive or exclusive
-                      const isTaxInclusive = vatPolicy === "all"
-                        ? (tax.inclusive_type === "inclusive" ||
-                           (tax.inclusive_type === undefined && tax.tax_type === "inclusive"))
-                        : isInclusiveTax;
+                      const isTaxInclusive =
+                        vatPolicy === "all"
+                          ? tax.inclusive_type === "inclusive" ||
+                            (tax.inclusive_type === undefined &&
+                              tax.tax_type === "inclusive")
+                          : isInclusiveTax;
 
                       let taxAmount = 0;
                       if (isTaxInclusive) {
@@ -1693,10 +2218,12 @@ export default function CreditSaleInvoice({
                         // Formula: VAT = subtotal × rate / (100 + rate)
                         const totalTaxRate = customerCopyTaxes
                           .filter((t) => {
-                            const tIsInclusive = vatPolicy === "all"
-                              ? (t.inclusive_type === "inclusive" ||
-                                 (t.inclusive_type === undefined && t.tax_type === "inclusive"))
-                              : isInclusiveTax;
+                            const tIsInclusive =
+                              vatPolicy === "all"
+                                ? t.inclusive_type === "inclusive" ||
+                                  (t.inclusive_type === undefined &&
+                                    t.tax_type === "inclusive")
+                                : isInclusiveTax;
                             return tIsInclusive;
                           })
                           .reduce((sum, t) => {
@@ -1731,16 +2258,17 @@ export default function CreditSaleInvoice({
                           >
                             {tax.description} {tax.rate}% (
                             {vatPolicy === "all"
-                              ? (tax.inclusive_type === "inclusive"
-                                  ? "Inclusive"
-                                  : tax.inclusive_type === "exclusive"
+                              ? tax.inclusive_type === "inclusive"
+                                ? "Inclusive"
+                                : tax.inclusive_type === "exclusive"
                                   ? "Exclusive"
                                   : tax.tax_type === "inclusive"
-                                  ? "Inclusive"
-                                  : "Exclusive")
+                                    ? "Inclusive"
+                                    : "Exclusive"
                               : isInclusiveTax
-                              ? "inclusive"
-                              : "exclusive"}):
+                                ? "inclusive"
+                                : "exclusive"}
+                            ):
                           </td>
                           <td className="border border-gray-300 px-3 py-1.5 text-right text-xs font-semibold text-blue-600">
                             {formatNumber(taxAmount)}
@@ -1795,7 +2323,7 @@ export default function CreditSaleInvoice({
                     <p className="text-xs text-gray-700">
                       Difference: ₦
                       {formatNumber(
-                        Math.abs(customerCopyTotalAmount - totalAmount)
+                        Math.abs(customerCopyTotalAmount - totalAmount),
                       )}
                     </p>
                   </div>
@@ -1856,6 +2384,8 @@ CreditSaleInvoice.propTypes = {
   enableInlineCustomerCopyPreview: PropTypes.bool,
   showPrintButton: PropTypes.bool,
   warehouseDualSignature: PropTypes.bool,
+  paperSize: PropTypes.oneOf(["a4", "a5"]),
+  documentMode: PropTypes.oneOf(["invoice", "dispatch", "both"]),
   onConfirm: PropTypes.func,
   onCancel: PropTypes.func,
   onApplyCustomerCopy: PropTypes.func,

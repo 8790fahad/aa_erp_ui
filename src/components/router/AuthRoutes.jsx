@@ -84,12 +84,14 @@ export default function AuthRoutes() {
   const isSalesLineReportPage = location.pathname.includes(
     "/sales/sales-line-report",
   );
+  const isVatReportPage = location.pathname.includes("/sales/vat-report");
   const showViewSwitch =
     isSalePage &&
     !isInvoicesListPage &&
     !isMarkupPage &&
     !isSalesInvoicesReportPage &&
-    !isSalesLineReportPage;
+    !isSalesLineReportPage &&
+    !isVatReportPage;
 
   const dispatch = useDispatch();
   const { user, activeBusiness } = useSelector((state) => state.auth);

@@ -415,6 +415,25 @@ export const modules = [
         ],
       },
       {
+        title: "VAT Report",
+        url: "/app/sales/vat-report",
+        functionality: [
+          "VAT Report",
+          "Sales Report",
+          "Invoice List",
+          "Make sales",
+          "Invoices",
+          "Sales",
+        ],
+        access: [
+          "services",
+          "retailers",
+          "recycling",
+          "manufacturing",
+          "contractors",
+        ],
+      },
+      {
         title: "Sales Process",
         url: "/app/sales/process",
         functionality: ["Sales Process", "Make sales", "Invoices", "Sales"],
@@ -747,7 +766,7 @@ export const modules = [
       //   access: ["services", "retailers", "recycling", "manufacturing"],
       // },
       {
-        title: "Manage Staffs",
+        title: "Manage Users",
         url: "/app/admin/manage-staff",
         access: [
           "services",

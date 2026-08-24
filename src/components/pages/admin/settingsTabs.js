@@ -1,12 +1,12 @@
 /** Settings page tabs — privilege strings match Staff Management checkboxes. */
 export const SETTINGS_CATEGORIES = [
-  { id: "accounts", label: "Default accounts" },
-  { id: "inventory", label: "Inventory & costing" },
-  { id: "pricing", label: "Pricing & sales" },
-  { id: "banking", label: "Banking & tax" },
+  { id: "accounts", label: "Accounts" },
+  { id: "inventory", label: "Inventory" },
+  { id: "pricing", label: "Pricing" },
+  { id: "banking", label: "Bank" },
   { id: "organization", label: "Organization" },
-  { id: "store", label: "Online store & branding" },
-  { id: "corrections", label: "Corrections & history" },
+  { id: "store", label: "Store" },
+  { id: "corrections", label: "Corrections" },
 ];
 
 export const SETTINGS_TABS = [
@@ -287,6 +287,7 @@ export const SETTINGS_HASH_TO_TAB = {
   "rate-setup": "rate-setup",
   "discount-setup": "discount-setup",
   "bank-setup": "bank-setup",
+  "bank-opening-balances": "bank-setup",
   "tax-setup": "tax-setup",
   "paye-setup": "paye-setup",
   "header-settings": "header-settings",

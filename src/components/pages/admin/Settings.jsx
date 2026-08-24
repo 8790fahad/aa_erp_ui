@@ -125,6 +125,7 @@ export default function Settings() {
   const [linkUserChecking, setLinkUserChecking] = useState(false);
   const [linkUserAvailable, setLinkUserAvailable] = useState(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
+  const [deliveryOrderLoading, setDeliveryOrderLoading] = useState(false);
   const [imprestRows, setImprestRows] = useState([]);
   const [imprestLoading, setImprestLoading] = useState(false);
   const [deletingImprestId, setDeletingImprestId] = useState(null);
@@ -166,7 +167,9 @@ export default function Settings() {
 
   const updateDefaultReceiptType = (receiptType) => {
     if (!activeBusiness?.id || receiptLoading) return;
-    const normalized = receiptType === "terminal" ? "terminal" : "pdf";
+    const normalized = ["terminal", "a5", "pdf"].includes(receiptType)
+      ? receiptType
+      : "pdf";
     if ((activeBusiness.default_receipt_type || "pdf") === normalized) return;
 
     setReceiptLoading(true);
@@ -176,9 +179,13 @@ export default function Settings() {
       (resp) => {
         setReceiptLoading(false);
         if (resp?.success && resp.results) {
-          toast.success(
-            `Default receipt set to ${normalized === "terminal" ? "thermal (80mm)" : "PDF"}`
-          );
+          const label =
+            normalized === "terminal"
+              ? "thermal (80mm)"
+              : normalized === "a5"
+                ? "A5"
+                : "PDF (A4)";
+          toast.success(`Default receipt set to ${label}`);
           dispatch({
             type: "UPDATE_BUSINESS_SETTINGS",
             payload: { business: resp.results },
@@ -192,6 +199,124 @@ export default function Settings() {
         setReceiptLoading(false);
         toast.error("Network error. Could not update receipt type");
       }
+    );
+  };
+
+  const togglePrintDeliveryOrder = () => {
+    if (!activeBusiness?.id || deliveryOrderLoading) return;
+
+    const current =
+      activeBusiness.print_delivery_order === undefined ||
+      activeBusiness.print_delivery_order === null
+        ? true
+        : !!activeBusiness.print_delivery_order;
+    const next = !current;
+
+    setDeliveryOrderLoading(true);
+    _postApi(
+      `/account/update-print-delivery-order/${next}/${activeBusiness.id}/${activeBusiness.business_admin}`,
+      {},
+      (resp) => {
+        setDeliveryOrderLoading(false);
+        if (resp?.success && resp.results) {
+          toast.success(
+            `Delivery Order printing ${next ? "enabled" : "disabled"}`,
+          );
+          dispatch({
+            type: "UPDATE_BUSINESS_SETTINGS",
+            payload: { business: resp.results },
+          });
+        } else {
+          toast.error(resp?.message || "Failed to update Delivery Order setting");
+        }
+      },
+      (err) => {
+        console.error("Error updating print_delivery_order:", err);
+        setDeliveryOrderLoading(false);
+        toast.error("Network error. Could not update Delivery Order setting");
+      },
+    );
+  };
+
+  const updateDeliveryOrderFormat = (format) => {
+    if (!activeBusiness?.id || deliveryOrderLoading) return;
+    const normalized = format === "thermal" ? "thermal" : "match";
+    if (
+      (activeBusiness.delivery_order_format || "match") === normalized &&
+      activeBusiness.print_delivery_order !== false
+    ) {
+      return;
+    }
+
+    setDeliveryOrderLoading(true);
+    _postApi(
+      `/account/update-delivery-order-format/${normalized}/${activeBusiness.id}/${activeBusiness.business_admin}`,
+      {},
+      (resp) => {
+        setDeliveryOrderLoading(false);
+        if (resp?.success && resp.results) {
+          toast.success(
+            normalized === "thermal"
+              ? "Delivery Order set to thermal (80mm)"
+              : "Delivery Order set to match invoice",
+          );
+          dispatch({
+            type: "UPDATE_BUSINESS_SETTINGS",
+            payload: { business: resp.results },
+          });
+        } else {
+          toast.error(
+            resp?.message || "Failed to update Delivery Order format",
+          );
+        }
+      },
+      (err) => {
+        console.error("Error updating delivery_order_format:", err);
+        setDeliveryOrderLoading(false);
+        toast.error("Network error. Could not update Delivery Order format");
+      },
+    );
+  };
+
+  const updateDeliveryDocumentType = (docType) => {
+    if (!activeBusiness?.id || deliveryOrderLoading) return;
+    const normalized =
+      docType === "goods_issue_note" ? "goods_issue_note" : "delivery_order";
+    if (
+      (activeBusiness.delivery_document_type || "delivery_order") ===
+        normalized &&
+      activeBusiness.print_delivery_order !== false
+    ) {
+      return;
+    }
+
+    setDeliveryOrderLoading(true);
+    _postApi(
+      `/account/update-delivery-document-type/${normalized}/${activeBusiness.id}/${activeBusiness.business_admin}`,
+      {},
+      (resp) => {
+        setDeliveryOrderLoading(false);
+        if (resp?.success && resp.results) {
+          toast.success(
+            normalized === "goods_issue_note"
+              ? "Document type set to Goods Issue Note"
+              : "Document type set to Delivery Order",
+          );
+          dispatch({
+            type: "UPDATE_BUSINESS_SETTINGS",
+            payload: { business: resp.results },
+          });
+        } else {
+          toast.error(
+            resp?.message || "Failed to update delivery document type",
+          );
+        }
+      },
+      (err) => {
+        console.error("Error updating delivery_document_type:", err);
+        setDeliveryOrderLoading(false);
+        toast.error("Network error. Could not update document type");
+      },
     );
   };
 
@@ -443,20 +568,20 @@ export default function Settings() {
     "";
 
   return (
-    <div className="p-4 pt-0 max-w-[1600px]">
-      <div className="mb-5 flex items-start justify-between gap-4">
+    <div className="mx-auto max-w-[1600px] p-4 pt-2">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[22px] font-bold text-slate-800 mb-1">
-            Account Settings
+          <h2 className="mb-1 text-[22px] font-bold text-[var(--aa-navy)]">
+            Settings
           </h2>
-          <p className="text-slate-500 text-sm max-w-xl">
+          <p className="max-w-xl text-sm text-slate-500">
             Configure accounts, inventory, pricing, banking, and other business
             preferences.
           </p>
         </div>
         {activeBusiness?.business_name && (
-          <div className="hidden md:flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 flex-shrink-0">
-            <div className="w-2 h-2 rounded-full bg-emerald-400" />
+          <div className="hidden shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 md:flex">
+            <div className="h-2 w-2 rounded-full bg-emerald-400" />
             <span className="text-xs font-medium text-slate-700">
               {activeBusiness.business_name}
             </span>
@@ -475,28 +600,37 @@ export default function Settings() {
           onValueChange={handleTabChange}
           className="w-full"
         >
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,280px)_1fr] gap-4 lg:gap-6 items-start">
-            <SettingsNav
-              visibleTabs={visibleTabs}
-              activeTab={activeTab}
-              onSelect={handleTabChange}
-              search={navSearch}
-              onSearchChange={setNavSearch}
-            />
-            <div className="min-w-0">
+          <div className="space-y-4">
+            <div className="rounded-xl border border-slate-200/80 bg-[var(--aa-sidebar-bg)] px-3 py-3 sm:px-4">
+              <SettingsNav
+                visibleTabs={visibleTabs}
+                activeTab={activeTab}
+                onSelect={handleTabChange}
+                search={navSearch}
+                onSearchChange={setNavSearch}
+              />
+            </div>
+
+            <div className="min-w-0 rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
               <SettingsContentHeader
                 activeLabel={activeTabLabel}
                 categoryLabel={activeCategoryLabel}
                 categoryId={activeTabMeta?.category}
               />
               <SettingsTabPanels
-                tabVisible={(value) => visibleTabs.some((t) => t.value === value)}
+                tabVisible={(value) =>
+                  visibleTabs.some((t) => t.value === value)
+                }
                 activeBusiness={activeBusiness}
                 chartOfAccount={chartOfAccount}
                 onlineLoading={onlineLoading}
                 toggleOnlineOrdering={toggleOnlineOrdering}
                 receiptLoading={receiptLoading}
                 updateDefaultReceiptType={updateDefaultReceiptType}
+                deliveryOrderLoading={deliveryOrderLoading}
+                togglePrintDeliveryOrder={togglePrintDeliveryOrder}
+                updateDeliveryOrderFormat={updateDeliveryOrderFormat}
+                updateDeliveryDocumentType={updateDeliveryDocumentType}
                 getMarketplaceTinyLink={getMarketplaceTinyLink}
                 getMarketplaceStorefrontLink={getMarketplaceStorefrontLink}
                 openLinkUserModal={openLinkUserModal}

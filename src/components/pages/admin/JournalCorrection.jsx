@@ -351,7 +351,7 @@ export default function JournalCorrection() {
 
   return (
     <div className="card shadow-sm border-0">
-      <div className="card-header bg-[#2C5CC5] text-white border-0 d-flex align-items-center justify-content-between">
+      <div className="card-header bg-[var(--aa-navy)] text-white border-0 d-flex align-items-center justify-content-between">
         <div>
           <h5 className="mb-0 fw-bold text-white">Journal Correction</h5>
           <small className="text-blue-100">
@@ -388,7 +388,7 @@ export default function JournalCorrection() {
               type="button"
               onClick={loadEntries}
               disabled={listLoading}
-              className="bg-[#2C5CC5] hover:bg-[#1e4ba8] text-white"
+              className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
             >
               Search
             </Button>
@@ -401,7 +401,7 @@ export default function JournalCorrection() {
           }`}
         >
           <table className="table table-sm mb-0">
-            <thead className="sticky-top" style={{ backgroundColor: "#2C5CC5" }}>
+            <thead className="sticky-top" style={{ backgroundColor: "var(--aa-navy)" }}>
               <tr className="text-white">
                 <th className="text-white border-0">Date</th>
                 <th className="text-white border-0">Reference</th>
@@ -441,7 +441,7 @@ export default function JournalCorrection() {
                       type="button"
                       size="sm"
                       onClick={() => handlePick(r)}
-                      className="bg-[#2C5CC5] hover:bg-[#1e4ba8] text-white"
+                      className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
                     >
                       Edit
                     </Button>
@@ -462,7 +462,7 @@ export default function JournalCorrection() {
 
       <Dialog open={editModalOpen} onOpenChange={handleModalOpenChange}>
         <DialogContent className="max-w-5xl z-[1200] p-0 overflow-hidden max-h-[92vh] flex flex-col gap-0 [&>button]:text-white [&>button]:hover:bg-white/20 [&>button]:top-4">
-          <div className="bg-gradient-to-r from-[#2C5CC5] via-[#3470d4] to-[#1e4ba8] text-white px-6 py-5 pr-12 shrink-0">
+          <div className="bg-gradient-to-r from-[var(--aa-navy)] via-[var(--aa-navy)] to-[var(--aa-navy-hover)] text-white px-6 py-5 pr-12 shrink-0">
             <DialogHeader className="text-left space-y-1">
               <DialogTitle className="text-xl font-bold text-white">
                 Journal Correction
@@ -479,7 +479,7 @@ export default function JournalCorrection() {
               <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-4 text-sm space-y-2">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <span className="text-xs uppercase tracking-wide text-[#2C5CC5] font-semibold">
+                    <span className="text-xs uppercase tracking-wide text-[var(--aa-navy)] font-semibold">
                       Reference
                     </span>
                     <p className="font-semibold text-gray-900 mt-0.5">
@@ -487,7 +487,7 @@ export default function JournalCorrection() {
                     </p>
                   </div>
                   <div>
-                    <span className="text-xs uppercase tracking-wide text-[#2C5CC5] font-semibold">
+                    <span className="text-xs uppercase tracking-wide text-[var(--aa-navy)] font-semibold">
                       Transaction ref
                     </span>
                     <p className="font-mono text-gray-900 mt-0.5">
@@ -495,7 +495,7 @@ export default function JournalCorrection() {
                     </p>
                   </div>
                   <div>
-                    <span className="text-xs uppercase tracking-wide text-[#2C5CC5] font-semibold">
+                    <span className="text-xs uppercase tracking-wide text-[var(--aa-navy)] font-semibold">
                       Description
                     </span>
                     <p className="text-gray-800 mt-0.5">
@@ -525,7 +525,7 @@ export default function JournalCorrection() {
                   type="button"
                   onClick={() => setConfirmUpdateDateOpen(true)}
                   disabled={saving || !batchDate}
-                  className="bg-[#2C5CC5] hover:bg-[#1e4ba8] text-white w-full md:w-auto"
+                  className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white w-full md:w-auto"
                 >
                   <CalendarClock className="h-4 w-4" />
                   Apply date to all lines
@@ -552,7 +552,7 @@ export default function JournalCorrection() {
               <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
                 <div className="overflow-auto max-h-[min(50vh,420px)]">
                   <table className="table table-sm mb-0">
-                    <thead className="sticky-top" style={{ backgroundColor: "#2C5CC5" }}>
+                    <thead className="sticky-top" style={{ backgroundColor: "var(--aa-navy)" }}>
                       <tr>
                         <th className="text-white border-0">Account</th>
                         <th className="text-white border-0">Description</th>
@@ -626,7 +626,7 @@ export default function JournalCorrection() {
                                   size="sm"
                                   onClick={() => saveLine(line.transaction_id)}
                                   disabled={saving}
-                                  className="bg-[#2C5CC5] hover:bg-[#1e4ba8] text-white"
+                                  className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
                                   title="Save line"
                                 >
                                   <Save className="h-3 w-3" />
@@ -658,7 +658,7 @@ export default function JournalCorrection() {
                     </tbody>
                     {lines.length > 0 && (
                       <tfoot>
-                        <tr className="bg-slate-100 border-t-2 border-[#2C5CC5]">
+                        <tr className="bg-slate-100 border-t-2 border-[var(--aa-navy)]">
                           <td colSpan={3} className="fw-semibold text-gray-800">
                             Totals
                           </td>
@@ -763,7 +763,7 @@ export default function JournalCorrection() {
       >
         <DialogContent className="max-w-md z-[1200] border-blue-100">
           <DialogHeader>
-            <DialogTitle className="text-[#2C5CC5]">Delete ledger line?</DialogTitle>
+            <DialogTitle className="text-[var(--aa-navy)]">Delete ledger line?</DialogTitle>
             <DialogDescription asChild>
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>This removes one line from the journal entry. This cannot be undone.</p>
@@ -823,7 +823,7 @@ export default function JournalCorrection() {
       <Dialog open={confirmUpdateDateOpen} onOpenChange={setConfirmUpdateDateOpen}>
         <DialogContent className="max-w-md z-[1200] border-blue-100">
           <DialogHeader>
-            <DialogTitle className="text-[#2C5CC5]">Update journal date</DialogTitle>
+            <DialogTitle className="text-[var(--aa-navy)]">Update journal date</DialogTitle>
             <DialogDescription>
               Set all lines to{" "}
               <strong>
@@ -839,7 +839,7 @@ export default function JournalCorrection() {
             <Button
               onClick={doUpdateBatchDate}
               disabled={saving}
-              className="bg-[#2C5CC5] hover:bg-[#1e4ba8] text-white"
+              className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
             >
               Confirm
             </Button>

@@ -4492,7 +4492,7 @@ function MakeSale() {
                         Quantity
                       </th>
                       <th className="w-28 px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
-                        Rate
+                        Selling Price
                       </th>
                       <th className="w-40 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
                         Tax

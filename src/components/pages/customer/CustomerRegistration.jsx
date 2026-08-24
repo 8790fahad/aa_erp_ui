@@ -94,6 +94,7 @@ const CustomerRegistartion = ({
       currency: "NGN - Nigerian Naira",
       payment_terms: "Due on Receipt",
       enable_portal: false,
+      credit_limit: "",
       opening_balance: "",
       obdate: "",
       receivable_code: activeBusiness?.receivable_code || "",
@@ -199,6 +200,11 @@ const CustomerRegistartion = ({
         payment_terms: selectedCustomer.payment_terms || "Due on Receipt",
         enable_portal: Boolean(selectedCustomer.enable_portal),
         remarks: selectedCustomer.remarks || "",
+        credit_limit:
+          selectedCustomer.credit_limit != null &&
+          selectedCustomer.credit_limit !== ""
+            ? formatNumberWithCommas(String(selectedCustomer.credit_limit))
+            : "",
         opening_balance: openingBalance
           ? formatNumberWithCommas(String(openingBalance))
           : "",
@@ -238,7 +244,7 @@ const CustomerRegistartion = ({
   }, [visibleBranches, userBranchId, selectedCustomer]);
 
   const handleChange = ({ target: { name, value } }) => {
-    if (name === "opening_balance") {
+    if (name === "opening_balance" || name === "credit_limit") {
       setForm((prev) => ({
         ...prev,
         [name]: formatNumberWithCommas(value),
@@ -431,6 +437,10 @@ const CustomerRegistartion = ({
         language: form.language || "English",
         currency: form.currency || "NGN - Nigerian Naira",
         payment_terms: form.payment_terms || "Due on Receipt",
+        credit_limit:
+          form.credit_limit && form.credit_limit !== ""
+            ? parseFloat(parseNumberFromFormatted(form.credit_limit)) || 0
+            : 0,
         remarks: form.remarks || "",
         billing_address,
         shipping_address,
@@ -468,7 +478,19 @@ const CustomerRegistartion = ({
           (err) => {
             setLoading(false);
             console.error(err);
-            toast.error("An error occurred while updating customer!");
+            const msg =
+              err?.message || "An error occurred while updating customer!";
+            toast.error(msg);
+            const field =
+              err?.field ||
+              (String(msg).toLowerCase().includes("email")
+                ? "email"
+                : String(msg).toLowerCase().includes("phone")
+                  ? "work_phone"
+                  : null);
+            if (field) {
+              setErrors((prev) => ({ ...prev, [field]: msg }));
+            }
           },
         );
       } else {
@@ -512,7 +534,19 @@ const CustomerRegistartion = ({
           (err) => {
             setLoading(false);
             console.error(err);
-            toast.error("An error occurred while saving customer!");
+            const msg =
+              err?.message || "An error occurred while saving customer!";
+            toast.error(msg);
+            const field =
+              err?.field ||
+              (String(msg).toLowerCase().includes("email")
+                ? "email"
+                : String(msg).toLowerCase().includes("phone")
+                  ? "work_phone"
+                  : null);
+            if (field) {
+              setErrors((prev) => ({ ...prev, [field]: msg }));
+            }
           },
         );
       }
@@ -569,7 +603,7 @@ const CustomerRegistartion = ({
         >
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
             <div>
-              <ShadcnLabel className={labelClass}>Customer Type</ShadcnLabel>
+              {/* <ShadcnLabel className={labelClass}>Customer Type</ShadcnLabel> */}
               <div className="flex items-center gap-5 pt-1">
                 {[
                   ["business", "Business"],
@@ -627,19 +661,21 @@ const CustomerRegistartion = ({
               </div>
             </div>
 
-            <div>
-              <ShadcnLabel htmlFor="company_name" className={labelClass}>
-                Company Name
-              </ShadcnLabel>
-              <input
-                id="company_name"
-                name="company_name"
-                value={form.company_name}
-                onChange={handleChange}
-                placeholder="Company name"
-                className={inputClass}
-              />
-            </div>
+            {form.entity_type === "business" && (
+              <div>
+                <ShadcnLabel htmlFor="company_name" className={labelClass}>
+                  Company Name
+                </ShadcnLabel>
+                <input
+                  id="company_name"
+                  name="company_name"
+                  value={form.company_name}
+                  onChange={handleChange}
+                  placeholder="Company name"
+                  className={inputClass}
+                />
+              </div>
+            )}
 
             <div>
               <ShadcnLabel htmlFor="name" className={labelClass}>
@@ -685,7 +721,7 @@ const CustomerRegistartion = ({
 
             <div>
               <ShadcnLabel className={labelClass}>
-                Phone <span className="text-red-500">*</span>
+                Phone Number <span className="text-red-500">*</span>
               </ShadcnLabel>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div className="flex gap-1.5">
@@ -777,23 +813,6 @@ const CustomerRegistartion = ({
 
               <TabsContent value="other" className="mt-4 space-y-4">
                 <div>
-                  <ShadcnLabel htmlFor="tax_rate" className={labelClass}>
-                    Tax Rate
-                  </ShadcnLabel>
-                  <input
-                    id="tax_rate"
-                    name="tax_rate"
-                    value={form.tax_rate}
-                    onChange={handleChange}
-                    placeholder="Select or type tax rate"
-                    className={inputClass}
-                  />
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    To associate more than one tax, create a tax group in
-                    Settings.
-                  </p>
-                </div>
-                <div>
                   <ShadcnLabel htmlFor="company_id" className={labelClass}>
                     Company ID
                   </ShadcnLabel>
@@ -802,7 +821,7 @@ const CustomerRegistartion = ({
                     name="company_id"
                     value={form.company_id}
                     onChange={handleChange}
-                    placeholder="Company ID / TIN"
+                    placeholder="Company ID "
                     className={inputClass}
                   />
                 </div>
@@ -835,6 +854,20 @@ const CustomerRegistartion = ({
                     </option>
                     <option value="USD - US Dollar">USD - US Dollar</option>
                   </select>
+                </div>
+                <div>
+                  <ShadcnLabel htmlFor="credit_limit" className={labelClass}>
+                    Credit Limit (₦)
+                  </ShadcnLabel>
+                  <input
+                    id="credit_limit"
+                    name="credit_limit"
+                    value={form.credit_limit || ""}
+                    onChange={handleChange}
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    className={inputClass}
+                  />
                 </div>
                 <div>
                   <ShadcnLabel className={labelClass}>
@@ -918,21 +951,16 @@ const CustomerRegistartion = ({
                         htmlFor="opening_balance"
                         className={labelClass}
                       >
-                        Opening Balance
+                        Opening Balance (₦)
                       </ShadcnLabel>
-                      <div className="flex gap-1.5">
-                        <span className="flex h-9 shrink-0 items-center rounded-md border border-slate-300 bg-slate-50 px-2 text-xs text-slate-600">
-                          NGN
-                        </span>
-                        <input
-                          id="opening_balance"
-                          name="opening_balance"
-                          value={form.opening_balance || ""}
-                          onChange={handleChange}
-                          placeholder="0.00"
-                          className={inputClass}
-                        />
-                      </div>
+                      <input
+                        id="opening_balance"
+                        name="opening_balance"
+                        value={form.opening_balance || ""}
+                        onChange={handleChange}
+                        placeholder="0.00"
+                        className={inputClass}
+                      />
                     </div>
                     <div>
                       <ShadcnLabel htmlFor="obdate" className={labelClass}>
@@ -963,24 +991,6 @@ const CustomerRegistartion = ({
                     </div>
                   </div>
                 )}
-                <div>
-                  <ShadcnLabel htmlFor="payment_terms" className={labelClass}>
-                    Payment Terms
-                  </ShadcnLabel>
-                  <select
-                    id="payment_terms"
-                    name="payment_terms"
-                    value={form.payment_terms}
-                    onChange={handleChange}
-                    className={inputClass}
-                  >
-                    <option value="Due on Receipt">Due on Receipt</option>
-                    <option value="Net 15">Net 15</option>
-                    <option value="Net 30">Net 30</option>
-                    <option value="Net 45">Net 45</option>
-                    <option value="Net 60">Net 60</option>
-                  </select>
-                </div>
                 <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
@@ -1205,7 +1215,7 @@ const CustomerRegistartion = ({
                     />
                     <div className="grid grid-cols-2 gap-1.5">
                       <input
-                        placeholder="Work Phone"
+                        placeholder="Phone Number"
                         value={person.work_phone}
                         onChange={(e) => {
                           const v = e.target.value;

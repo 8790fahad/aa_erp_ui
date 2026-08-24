@@ -285,7 +285,7 @@ export default function InvoiceSeparation() {
           navigate(
             `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
               pack.sale_code,
-            )}&branch_id=${pack.branch_id}&pack_code=${encodeURIComponent(
+            )}&doc=gin&branch_id=${pack.branch_id}&pack_code=${encodeURIComponent(
               pack.pack_code,
             )}&branch_name=${encodeURIComponent(
               pack.branch_name || `Warehouse ${pack.branch_id}`,
@@ -317,10 +317,16 @@ export default function InvoiceSeparation() {
       if (failed) {
         toast.error("Some copies could not be marked printed");
       }
+      const receiptType = String(
+        activeBusiness?.default_receipt_type || "pdf",
+      )
+        .trim()
+        .toLowerCase();
+      const thermalQs = receiptType === "terminal" ? "&thermal=1" : "";
       navigate(
         `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
           selected.sale_code,
-        )}&print_all=1&auto_print=1&thermal=1`,
+        )}&doc=gin&print_all=1&auto_print=1${thermalQs}`,
       );
     };
 
@@ -399,6 +405,18 @@ export default function InvoiceSeparation() {
       ? "1 store copy"
       : `${packs.length} store copies`;
 
+  const dispatchDocLabel =
+    String(activeBusiness?.delivery_document_type || "")
+      .trim()
+      .toLowerCase()
+      .replace(/-/g, "_") === "goods_issue_note"
+      ? "Goods Issue Note"
+      : "Delivery Order";
+  const isThermalDispatch =
+    String(activeBusiness?.delivery_order_format || "")
+      .trim()
+      .toLowerCase() === "thermal";
+
   return (
     <div className="min-h-screen">
       <div className="max-w-7xl mx-auto">
@@ -410,9 +428,9 @@ export default function InvoiceSeparation() {
                 Invoice Separation
               </h1>
               <p className="text-gray-600 mt-1">
-                Print one copy per store involved, then send to collection.
-                Credit invoices appear here only after approval at Collection
-                Points.
+                Print the {dispatchDocLabel} per store (Sales Invoice is printed
+                at Collection Points), then mark separated. Credit invoices
+                appear here only after approval at Collection Points.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -583,10 +601,10 @@ export default function InvoiceSeparation() {
                     <Link
                       to={`/app/sales/invoice-preview?sale_code=${encodeURIComponent(
                         selected.sale_code,
-                      )}`}
+                      )}&doc=invoice`}
                       className="inline-flex items-center rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
                     >
-                      Full invoice
+                      Sales Invoice
                     </Link>
                     {needsCreditApproval && !isHistoryRecord ? (
                       <Link
@@ -607,7 +625,7 @@ export default function InvoiceSeparation() {
                         <Printer className="w-4 h-4" />
                         {printingAll
                           ? "Opening…"
-                          : `Print all (${packs.length})`}
+                          : `Print all ${dispatchDocLabel}s (${packs.length})`}
                       </Button>
                     ) : null}
                     {canSeparate ? (
@@ -631,7 +649,7 @@ export default function InvoiceSeparation() {
                         className="flex items-center gap-2"
                       >
                         <Printer className="w-4 h-4" />
-                        Reprint all ({packs.length})
+                        Reprint all {dispatchDocLabel}s ({packs.length})
                       </Button>
                     ) : null}
                   </div>
@@ -653,7 +671,14 @@ export default function InvoiceSeparation() {
                     {needsCreditApproval && !isHistoryRecord
                       ? "Store copies appear only after credit is approved at Collection Points."
                       : packs.length
-                        ? `One evidence copy per store (${packs.length}). Use Print all for a continuous 80mm thermal strip (cut marks between stores), then mark separated.`
+                        ? `One ${dispatchDocLabel} per store (${packs.length}). Sales Invoice is printed at Collection Points. Use Print all for ${
+                            isThermalDispatch
+                              ? "a continuous 80mm thermal strip (cut marks between stores)"
+                              : String(activeBusiness?.default_receipt_type || "")
+                                    .toLowerCase() === "a5"
+                                ? `one A5 ${dispatchDocLabel} per warehouse`
+                                : `one A4 ${dispatchDocLabel} per warehouse`
+                          }, then mark separated.`
                         : "One evidence copy is created for each store involved in this invoice."}
                   </p>
 
@@ -670,7 +695,7 @@ export default function InvoiceSeparation() {
                         <Printer className="w-3.5 h-3.5 mr-1" />
                         {printingAll
                           ? "Opening…"
-                          : `Print all ${packs.length} store invoices`}
+                          : `Print all ${packs.length} ${dispatchDocLabel}s`}
                       </Button>
                     </div>
                   ) : null}
@@ -752,8 +777,8 @@ export default function InvoiceSeparation() {
                               {printingId === pack.id
                                 ? "Opening…"
                                 : isHistoryRecord
-                                  ? "Reprint store invoice"
-                                  : "Print store invoice"}
+                                  ? `Reprint ${dispatchDocLabel}`
+                                  : `Print ${dispatchDocLabel}`}
                             </Button>
                           </li>
                         );

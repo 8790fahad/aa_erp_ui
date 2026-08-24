@@ -37,7 +37,7 @@ const TYPE_BADGE = {
 };
 
 const inputClass =
-  "h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-right text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20";
+  "h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-right text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-navy)]/20";
 
 const priceColClass = "ml-auto w-[140px]";
 const sellingColClass = "ml-auto w-[168px]";
@@ -334,7 +334,7 @@ export default function PriceSetup({ embedded = false }) {
     <div id="price-setup" className="space-y-4">
       <div>
         <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-          <Tag className="h-5 w-5 text-[#4267B2]" />
+          <Tag className="h-5 w-5 text-[var(--aa-navy)]" />
           Price Set-up
         </h1>
         <p className="mt-0.5 text-xs text-slate-500">
@@ -372,8 +372,8 @@ export default function PriceSetup({ embedded = false }) {
           aria-checked={enabled}
           disabled={priceSetupPurchaseLoading}
           onClick={togglePriceSetupOnSupplierBill}
-          className={`relative inline-flex h-7 w-[3.25rem] shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 disabled:opacity-60 ${
-            enabled ? "bg-[#4267B2]" : "bg-slate-300"
+          className={`relative inline-flex h-7 w-[3.25rem] shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--aa-navy)]/30 disabled:opacity-60 ${
+            enabled ? "bg-[var(--aa-navy)]" : "bg-slate-300"
           }`}
         >
           <span
@@ -399,7 +399,7 @@ export default function PriceSetup({ embedded = false }) {
             placeholder="Search by name, SKU, category…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20"
+            className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-navy)]/20"
             disabled={loading}
           />
         </div>
@@ -514,7 +514,7 @@ export default function PriceSetup({ embedded = false }) {
                           variant="outline"
                           title="Calculate from cost + markup"
                           onClick={() => openCalcModal(p)}
-                          className="h-8 w-8 shrink-0 border-slate-200 p-0 text-[#4267B2] hover:bg-sky-50"
+                          className="h-8 w-8 shrink-0 border-slate-200 p-0 text-[var(--aa-navy)] hover:bg-sky-50"
                         >
                           <Calculator className="h-3.5 w-3.5" />
                         </Button>
@@ -529,7 +529,7 @@ export default function PriceSetup({ embedded = false }) {
                         className={`h-8 gap-1.5 border-0 text-xs ${
                           dirty
                             ? "bg-[var(--aa-accent)] text-white hover:bg-[var(--aa-accent)]/90"
-                            : "bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
+                            : "bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90"
                         }`}
                       >
                         {savingId === p.id ? (
@@ -587,7 +587,7 @@ export default function PriceSetup({ embedded = false }) {
                   onClick={() => setCalcMode("percentage")}
                   className={`rounded-md border px-3 py-2 text-sm font-medium transition ${
                     calcMode === "percentage"
-                      ? "border-[#4267B2] bg-[#4267B2]/10 text-[#4267B2]"
+                      ? "border-[var(--aa-navy)] bg-[var(--aa-navy)]/10 text-[var(--aa-navy)]"
                       : "border-slate-200 text-slate-600 hover:bg-slate-50"
                   }`}
                 >
@@ -598,7 +598,7 @@ export default function PriceSetup({ embedded = false }) {
                   onClick={() => setCalcMode("fixed")}
                   className={`rounded-md border px-3 py-2 text-sm font-medium transition ${
                     calcMode === "fixed"
-                      ? "border-[#4267B2] bg-[#4267B2]/10 text-[#4267B2]"
+                      ? "border-[var(--aa-navy)] bg-[var(--aa-navy)]/10 text-[var(--aa-navy)]"
                       : "border-slate-200 text-slate-600 hover:bg-slate-50"
                   }`}
                 >
@@ -617,7 +617,7 @@ export default function PriceSetup({ embedded = false }) {
                 value={calcMarkup}
                 onChange={(e) => setCalcMarkup(formatAmountInput(e.target.value))}
                 placeholder={calcMode === "percentage" ? "e.g. 25" : "e.g. 800"}
-                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-right text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20"
+                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-right text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-navy)]/20"
               />
             </div>
 
@@ -657,7 +657,7 @@ export default function PriceSetup({ embedded = false }) {
             <Button
               type="button"
               onClick={applyCalc}
-              className="border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
+              className="border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90"
             >
               Apply to selling price
             </Button>

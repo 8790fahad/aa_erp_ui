@@ -81,7 +81,7 @@ export default function MaterialRequisitionSettings() {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness) || {};
   const user = useSelector((state) => state.auth.user) || {};
   const facilityId = activeBusiness?.id;
-  const primary = activeBusiness?.primary_color || "#4267B2";
+  const primary = activeBusiness?.primary_color || "var(--aa-navy)";
   const enabled = activeBusiness?.enable_material_requisition !== false;
 
   const [toggleLoading, setToggleLoading] = useState(false);
@@ -382,7 +382,7 @@ export default function MaterialRequisitionSettings() {
       <div
         className="card-header border-0 text-white"
         style={{
-          background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)`,
+          background: "var(--aa-navy)",
           padding: "1rem 1.25rem",
         }}
       >
@@ -539,7 +539,7 @@ export default function MaterialRequisitionSettings() {
             <div
               className="text-white p-5 flex-shrink-0"
               style={{
-                background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)`,
+                background: "var(--aa-navy)",
               }}
             >
               <div className="flex justify-between items-start gap-3">

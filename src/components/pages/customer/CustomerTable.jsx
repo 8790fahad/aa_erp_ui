@@ -39,15 +39,23 @@ export default function CustomerTable() {
   const branchMenuRef = useRef(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
 
-  const currencyCode =
-    activeBusiness?.currency ||
-    activeBusiness?.currency_code ||
-    activeBusiness?.base_currency ||
-    "NGN";
+  const formatMoney = (amount) => formatNumber1(parseFloat(amount) || 0);
 
-  const formatMoney = (amount) =>
-    `${currencyCode}${formatNumber1(parseFloat(amount) || 0)}`;
-
+  const formatDisplayPhone = (phone) => {
+    const raw = String(phone || "").trim();
+    if (!raw) return "";
+    const digits = raw.replace(/\D/g, "");
+    if (digits.startsWith("234") && digits.length >= 13) {
+      return `+${digits}`;
+    }
+    if (digits.startsWith("0") && digits.length === 11) {
+      return `+234${digits.slice(1)}`;
+    }
+    if (digits.length === 10) {
+      return `+234${digits}`;
+    }
+    return raw.startsWith("+") ? raw : `+${digits || raw}`;
+  };
   // Branch ids assigned to the logged-in user (multi-branch aware).
   const userBranchIds = useMemo(() => {
     if (Array.isArray(user?.branchIds) && user.branchIds.length > 0) {
@@ -264,7 +272,7 @@ export default function CustomerTable() {
     },
     {
       value: "company_name",
-      title: "COMPANY NAME",
+      title: "CUSTOMER NAME",
       custom: true,
       className: "text-left",
       component: (item) => (
@@ -286,11 +294,11 @@ export default function CustomerTable() {
     },
     {
       value: "phone",
-      title: "WORK PHONE",
+      title: "PHONE NUMBER",
       custom: true,
       className: "text-left",
       component: (item) => {
-        const phone = item.phone || item.mobile || "";
+        const phone = formatDisplayPhone(item.phone || item.mobile || "");
         return (
           <div className="text-left text-gray-700">
             {phone !== "" ? phone : "-"}
@@ -300,7 +308,12 @@ export default function CustomerTable() {
     },
     {
       value: "receivables",
-      title: "RECEIVABLES (BCY)",
+      title: (
+        <span className="inline-flex flex-col items-end leading-tight">
+          <span>RECEIVABLES</span>
+          <span className="text-[10px] font-normal text-slate-500">₦</span>
+        </span>
+      ),
       custom: true,
       className: "text-right",
       component: (item) => (
@@ -311,7 +324,12 @@ export default function CustomerTable() {
     },
     {
       value: "unused_credits",
-      title: "UNUSED CREDITS (BCY)",
+      title: (
+        <span className="inline-flex flex-col items-end leading-tight">
+          <span>UNUSED CREDITS</span>
+          <span className="text-[10px] font-normal text-slate-500">₦</span>
+        </span>
+      ),
       custom: true,
       className: "text-right",
       component: (item) => (
