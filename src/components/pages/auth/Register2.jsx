@@ -408,7 +408,7 @@ export default function Register2() {
                           isCompleted
                             ? "bg-green-500 text-white scale-110 shadow-lg"
                             : isCurrent
-                            ? "bg-[#4267B2] text-white scale-110 shadow-lg ring-4 ring-blue-200"
+                            ? "bg-[var(--aa-navy)] text-white scale-110 shadow-lg ring-4 ring-blue-200"
                             : "bg-gray-200 text-gray-500"
                         } ${isAccessible ? "hover:scale-105" : ""}`}
                       >
@@ -424,7 +424,7 @@ export default function Register2() {
                             isCompleted
                               ? "bg-green-500"
                               : step < currentStep
-                              ? "bg-[#4267B2]"
+                              ? "bg-[var(--aa-navy)]"
                               : "bg-gray-200"
                           }`}
                         />
@@ -435,12 +435,12 @@ export default function Register2() {
               })}
             </div>
             <div className="text-center">
-              <p className="text-sm font-semibold text-[#4267B2] mb-2">
+              <p className="text-sm font-semibold text-[var(--aa-navy)] mb-2">
                 Step {currentStep} of {totalSteps}: {getStepTitle(currentStep)}
               </p>
               <div className="mx-auto w-full max-w-md bg-gray-200 rounded-full h-2 overflow-hidden">
                 <div
-                  className="bg-gradient-to-r from-[#4267B2] to-blue-600 h-2 rounded-full transition-all duration-500 ease-out"
+                  className="bg-gradient-to-r from-[var(--aa-navy)] to-blue-600 h-2 rounded-full transition-all duration-500 ease-out"
                   style={{ width: `${(currentStep / totalSteps) * 100}%` }}
                 />
               </div>
@@ -454,7 +454,7 @@ export default function Register2() {
                 <div className="space-y-4 animate-fade-in">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                      <User className="w-5 h-5 text-[#4267B2]" />
+                      <User className="w-5 h-5 text-[var(--aa-navy)]" />
                     </div>
                     <div>
                       <h2 className="text-xl font-semibold text-gray-900">
@@ -475,7 +475,7 @@ export default function Register2() {
                         First Name <span className="text-red-500">*</span>
                       </Label>
                       <Input
-                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[#4267B2] focus:border-[#4267B2] transition-all"
+                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] transition-all"
                         id="firstname"
                         name="firstname"
                         placeholder="John"
@@ -492,7 +492,7 @@ export default function Register2() {
                         Last Name <span className="text-red-500">*</span>
                       </Label>
                       <Input
-                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[#4267B2] focus:border-[#4267B2] transition-all"
+                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] transition-all"
                         id="lastname"
                         name="lastname"
                         placeholder="Doe"
@@ -512,7 +512,7 @@ export default function Register2() {
                         Phone Number <span className="text-red-500">*</span>
                       </Label>
                       <Input
-                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[#4267B2] focus:border-[#4267B2] transition-all"
+                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] transition-all"
                         id="phone"
                         name="phone"
                         type="tel"
@@ -534,7 +534,7 @@ export default function Register2() {
                           className={`border-2 transition-all pr-10 ${
                             emailError
                               ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                              : "border-gray-300 focus:ring-2 focus:ring-[#4267B2] focus:border-[#4267B2]"
+                              : "border-gray-300 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
                           }`}
                           id="email"
                           name="email"
@@ -583,7 +583,7 @@ export default function Register2() {
                       Business Name <span className="text-red-500">*</span>
                     </Label>
                     <Input
-                      className="border-2 border-gray-300 focus:ring-2 focus:ring-[#4267B2] focus:border-[#4267B2] transition-all"
+                      className="border-2 border-gray-300 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] transition-all"
                       id="busName"
                       name="busName"
                       placeholder="e.g., United Gases Limited"
@@ -599,7 +599,7 @@ export default function Register2() {
                       <span className="text-red-500">*</span>
                     </Label>
                     <Input
-                      className="border-2 border-gray-300 focus:ring-2 focus:ring-[#4267B2] focus:border-[#4267B2] transition-all"
+                      className="border-2 border-gray-300 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] transition-all"
                       id="description"
                       name="description"
                       placeholder="e.g., Manufacturers of Industrial/Domestic Gases"
@@ -615,7 +615,7 @@ export default function Register2() {
                         Business Phone <span className="text-red-500">*</span>
                       </Label>
                       <Input
-                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[#4267B2] focus:border-[#4267B2] transition-all"
+                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] transition-all"
                         id="business_phone"
                         name="business_phone"
                         type="tel"
@@ -630,7 +630,7 @@ export default function Register2() {
                         Business Email <span className="text-red-500">*</span>
                       </Label>
                       <Input
-                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[#4267B2] focus:border-[#4267B2] transition-all"
+                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] transition-all"
                         id="business_email"
                         name="business_email"
                         type="email"
@@ -649,7 +649,7 @@ export default function Register2() {
                         Business Reg. No <span className="text-red-500">*</span>
                       </Label>
                       <Input
-                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[#4267B2] focus:border-[#4267B2] transition-all"
+                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] transition-all"
                         id="rc"
                         name="rc"
                         type="text"
@@ -662,7 +662,7 @@ export default function Register2() {
                     <div className="space-y-2">
                       <Label htmlFor="tin">TIN</Label>
                       <Input
-                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[#4267B2] focus:border-[#4267B2] transition-all"
+                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] transition-all"
                         id="tin"
                         name="tin"
                         type="text"
@@ -674,7 +674,7 @@ export default function Register2() {
                     <div className="space-y-2 md:col-span-2">
                       <Label htmlFor="fax">Business Fax</Label>
                       <Input
-                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[#4267B2] focus:border-[#4267B2] transition-all"
+                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] transition-all"
                         id="fax"
                         name="fax"
                         type="tel"
@@ -690,7 +690,7 @@ export default function Register2() {
                       Business Address <span className="text-red-500">*</span>
                     </Label>
                     <Textarea
-                      className="border-2 border-gray-300 focus:ring-2 focus:ring-[#4267B2] focus:border-[#4267B2] transition-all resize-none"
+                      className="border-2 border-gray-300 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] transition-all resize-none"
                       id="address"
                       name="address"
                       value={form.address}
@@ -738,7 +738,7 @@ export default function Register2() {
                             key={option.value}
                             className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all transform hover:scale-[1.02] ${
                               isSelected
-                                ? "border-[#4267B2] bg-blue-50 shadow-md ring-2 ring-blue-200"
+                                ? "border-[var(--aa-navy)] bg-blue-50 shadow-md ring-2 ring-blue-200"
                                 : "border-gray-200 hover:border-blue-300 bg-white"
                             }`}
                           >
@@ -751,7 +751,7 @@ export default function Register2() {
                                   e.target.checked
                                 )
                               }
-                              className="mt-1 w-5 h-5 text-[#4267B2] border-gray-300 rounded focus:ring-[#4267B2] focus:ring-2 cursor-pointer"
+                              className="mt-1 w-5 h-5 text-[var(--aa-navy)] border-gray-300 rounded focus:ring-[var(--aa-accent)] focus:ring-2 cursor-pointer"
                             />
                             <div className="flex-1">
                               <div className="font-semibold text-gray-900">
@@ -762,7 +762,7 @@ export default function Register2() {
                               </div>
                             </div>
                             {isSelected && (
-                              <div className="text-[#4267B2] animate-scale-in">
+                              <div className="text-[var(--aa-navy)] animate-scale-in">
                                 <CheckCircle2 className="w-5 h-5" />
                               </div>
                             )}
@@ -804,7 +804,7 @@ export default function Register2() {
                     </Label>
                     <div className="relative">
                       <Input
-                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[#4267B2] focus:border-[#4267B2] pr-10 transition-all"
+                        className="border-2 border-gray-300 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] pr-10 transition-all"
                         id="password"
                         name="password"
                         value={form.password}
@@ -860,7 +860,7 @@ export default function Register2() {
                             ? "border-green-500 focus:ring-green-500"
                             : form.confirmPassword && !dSame
                             ? "border-red-500 focus:ring-red-500"
-                            : "border-gray-300 focus:ring-[#4267B2] focus:border-[#4267B2]"
+                            : "border-gray-300 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
                         }`}
                         id="confirmPassword"
                         name="confirmPassword"
@@ -909,7 +909,7 @@ export default function Register2() {
                   onClick={handlePrevious}
                   disabled={currentStep === 1}
                   variant="outline"
-                  className="flex items-center gap-2 bg-white text-[#4267B2] border-2 border-[#4267B2] hover:bg-[#4267B2] hover:text-white font-semibold py-3 px-6 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 bg-white text-[var(--aa-navy)] border-2 border-[var(--aa-navy)] hover:bg-[var(--aa-navy)] hover:text-white font-semibold py-3 px-6 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   Previous
@@ -920,7 +920,7 @@ export default function Register2() {
                     type="button"
                     onClick={handleNext}
                     disabled={!validateStep(currentStep) || isCheckingEmail}
-                    className="flex items-center gap-2 bg-gradient-to-r from-[#4267B2] to-blue-600 hover:from-[#4267B2]/90 hover:to-blue-600/90 text-white font-semibold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+                    className="flex items-center gap-2 bg-gradient-to-r from-[var(--aa-navy)] to-blue-600 hover:from-[var(--aa-navy)]/90 hover:to-blue-600/90 text-white font-semibold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
                   >
                     Next Step
                     <ArrowRight className="w-4 h-4" />
@@ -955,7 +955,7 @@ export default function Register2() {
             <span className="text-gray-600">Already have an account? </span>
             <Link
               to="/login"
-              className="font-semibold text-[#4267B2] hover:text-blue-700 underline transition-colors"
+              className="font-semibold text-[var(--aa-navy)] hover:text-blue-700 underline transition-colors"
             >
               Sign in
             </Link>
@@ -969,7 +969,7 @@ export default function Register2() {
         role="img"
         aria-label="Background image of a desk with a laptop and coffee"
       >
-        <div className="absolute inset-0 bg-gradient-to-r from-[#4267B2]/85 to-blue-600/85"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-[var(--aa-navy)]/85 to-blue-600/85"></div>
         <div className="relative z-10 flex items-center justify-center h-full p-8">
           <div className="text-white space-y-6 max-w-md animate-fade-in">
             <h3 className="text-4xl font-bold animate-slide-right">

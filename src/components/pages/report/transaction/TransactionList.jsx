@@ -80,7 +80,7 @@ const TransactionList = () => {
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)]"
             >
               <option value="all">All Types</option>
               <option value="customer deposit">Customer Deposit</option>
@@ -92,7 +92,7 @@ const TransactionList = () => {
           </div>
           <button
             onClick={handleCreateNewTransaction}
-            className="bg-[#5C7FC1] hover:bg-[#4267B2] text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+            className="bg-[var(--aa-navy-hover)] hover:bg-[var(--aa-navy)] text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
           >
             <Plus className="w-4 h-4" />
             New Transaction
@@ -111,7 +111,7 @@ const TransactionList = () => {
           <p className="text-gray-500">No transactions created yet</p>
           <button
             onClick={handleCreateNewTransaction}
-            className="mt-4 text-blue-600 hover:text-blue-800"
+            className="mt-4 text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)]"
           >
             Create your first transaction
           </button>

@@ -249,7 +249,7 @@ const CustomerDepositReceiptHTML = ({ depositData, company, receiptRef }) => {
         </div>
 
         {/* Page Footer */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-r-4 border-l-4 border-blue-500 p-1 shadow-sm mt-4">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-r-4 border-l-4 border-[var(--aa-accent)] p-1 shadow-sm mt-4">
           <div className="flex items-start">
             <div className="flex-shrink-0">
               <svg
@@ -467,7 +467,7 @@ const CustomerDepositReceiptPdf = () => {
         <div className="flex gap-2 ml-auto">
           <button
             onClick={handlePrint}
-            className="px-3 py-0.5 text-sm bg-blue-600 text-white rounded flex items-center gap-1 hover:bg-blue-700 transition-colors"
+            className="px-3 py-0.5 text-sm bg-[var(--aa-navy)] text-white rounded flex items-center gap-1 hover:bg-blue-700 transition-colors"
           >
             <Printer size={14} /> Print
           </button>

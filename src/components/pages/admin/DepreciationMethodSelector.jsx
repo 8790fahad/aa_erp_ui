@@ -161,11 +161,11 @@ const DepreciationMethodSelector = ({
                     style={{
                       borderColor:
                         selectedMethod === method.value
-                          ? activeBusiness?.primary_color || "#007bff"
+                          ? activeBusiness?.primary_color || "#1a2d5e"
                           : "#dee2e6",
                       backgroundColor:
                         selectedMethod === method.value
-                          ? `${activeBusiness?.primary_color || "#007bff"}10`
+                          ? `${activeBusiness?.primary_color || "#1a2d5e"}10`
                           : "transparent",
                       cursor: "pointer",
                     }}
@@ -192,7 +192,7 @@ const DepreciationMethodSelector = ({
                             height: "18px",
                             cursor: "pointer",
                             accentColor:
-                              activeBusiness?.primary_color || "#007bff",
+                              activeBusiness?.primary_color || "#1a2d5e",
                           }}
                         />
                       </div>
@@ -202,7 +202,7 @@ const DepreciationMethodSelector = ({
                           style={{
                             color:
                               selectedMethod === method.value
-                                ? activeBusiness?.primary_color || "#007bff"
+                                ? activeBusiness?.primary_color || "#1a2d5e"
                                 : "#212529",
                           }}
                         >
@@ -216,7 +216,7 @@ const DepreciationMethodSelector = ({
                         <Check
                           size={18}
                           style={{
-                            color: activeBusiness?.primary_color || "#007bff",
+                            color: activeBusiness?.primary_color || "#1a2d5e",
                           }}
                         />
                       )}
@@ -250,7 +250,7 @@ const DepreciationMethodSelector = ({
                       width: "2.5rem",
                       height: "1.25rem",
                       cursor: "pointer",
-                      accentColor: activeBusiness?.primary_color || "#007bff",
+                      accentColor: activeBusiness?.primary_color || "#1a2d5e",
                     }}
                   />
                 </div>
@@ -336,7 +336,7 @@ const DepreciationMethodSelector = ({
                 </div>
                 <div
                   className="fw-bold"
-                  style={{ color: activeBusiness?.primary_color || "#007bff" }}
+                  style={{ color: activeBusiness?.primary_color || "#1a2d5e" }}
                 >
                   {currentMethod?.label || code}
                 </div>

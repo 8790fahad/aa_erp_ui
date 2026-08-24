@@ -225,7 +225,7 @@ export default function SpecialInvoiceTreatment({
               onClick={() => setFilterType(id)}
               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 filterType === id
-                  ? "border-[#4267B2] bg-[#4267B2] text-white"
+                  ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white"
                   : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               }`}
             >
@@ -321,7 +321,7 @@ export default function SpecialInvoiceTreatment({
                 onClick={() => setTargetType(t.id)}
                 className={`rounded-lg border px-3 py-2 text-left transition-colors ${
                   targetType === t.id
-                    ? "border-[#4267B2] bg-white ring-2 ring-[#4267B2]/30"
+                    ? "border-[var(--aa-navy)] bg-white ring-2 ring-[var(--aa-accent)]/30"
                     : "border-slate-200 bg-white hover:border-slate-300"
                 }`}
               >
@@ -342,7 +342,7 @@ export default function SpecialInvoiceTreatment({
             type="button"
             disabled={saving || selected.size === 0}
             onClick={applyTreatment}
-            style={{ backgroundColor: "#4267B2" }}
+            style={{ backgroundColor: "var(--aa-navy)" }}
           >
             {saving
               ? "Updating…"
@@ -366,7 +366,7 @@ export function InvoiceTreatmentFilter({ value = "all", onChange }) {
           onClick={() => onChange?.(id)}
           className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
             value === id
-              ? "border-[#4267B2] bg-[#4267B2] text-white"
+              ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white"
               : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           }`}
         >

@@ -175,7 +175,7 @@ export default function UnitOfMeasurement() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               {/* Modal Header */}
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-lg flex items-center justify-between">
+              <div className="bg-[var(--aa-navy)] text-white p-6 rounded-t-lg flex items-center justify-between">
                 <h2 className="text-2xl font-bold">Add Unit of Measurement</h2>
                 <button
                   onClick={() => {
@@ -352,7 +352,7 @@ export default function UnitOfMeasurement() {
                       !formData.category.trim() ||
                       !formData.unit.trim()
                     }
-                    style={{ backgroundColor: "#4267B2" }}
+                    style={{ backgroundColor: "var(--aa-navy)" }}
                   >
                     {submitting ? (
                       "Submitting..."

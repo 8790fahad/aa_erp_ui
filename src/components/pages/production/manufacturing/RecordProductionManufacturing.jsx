@@ -5756,7 +5756,7 @@ export default function RecordProductionManufacturing() {
             </button>
             <div
               className="p-2 rounded-lg"
-              style={{ backgroundColor: "#4267B2" }}
+              style={{ backgroundColor: "var(--aa-navy)" }}
             >
               <Factory className="text-white w-6 h-6" />
             </div>
@@ -5778,7 +5778,7 @@ export default function RecordProductionManufacturing() {
           <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100 bg-gray-50">
             <div
               className="p-1.5 rounded-lg"
-              style={{ backgroundColor: "#4267B2", color: "white" }}
+              style={{ backgroundColor: "var(--aa-navy)", color: "white" }}
             >
               <Settings className="w-4 h-4" />
             </div>
@@ -5804,7 +5804,7 @@ export default function RecordProductionManufacturing() {
                 className={`h-10 w-full px-3 border rounded-lg text-sm outline-none transition-colors ${
                   errors.productionDate
                     ? "border-red-400 bg-red-50"
-                    : "border-gray-300 bg-white focus:border-blue-500"
+                    : "border-gray-300 bg-white focus:border-[var(--aa-accent)]"
                 }`}
               />
               {errors.productionDate && (
@@ -5841,7 +5841,7 @@ export default function RecordProductionManufacturing() {
                 className={`w-full px-3 py-2 border rounded-lg text-sm outline-none resize-none transition-colors ${
                   errors.notes
                     ? "border-red-400 bg-red-50"
-                    : "border-gray-300 bg-white focus:border-blue-500"
+                    : "border-gray-300 bg-white focus:border-[var(--aa-accent)]"
                 }`}
                 required
               />
@@ -6730,7 +6730,7 @@ export default function RecordProductionManufacturing() {
             </div>
             <button
               onClick={addProductionItem}
-              className="flex items-center gap-2 px-4 py-2 bg-[#4267B2] text-white rounded-lg hover:bg-blue-600 transition-all font-semibold text-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-[var(--aa-navy)] text-white rounded-lg hover:bg-[var(--aa-navy-hover)] transition-all font-semibold text-sm"
             >
               <Plus size={14} />
               Add Production Item
@@ -6756,7 +6756,7 @@ export default function RecordProductionManufacturing() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-[#4267B2] rounded-lg flex items-center justify-center text-white font-bold">
+                    <div className="w-10 h-10 bg-[var(--aa-navy)] rounded-lg flex items-center justify-center text-white font-bold">
                       {index + 1}
                     </div>
                     <div>
@@ -7108,7 +7108,7 @@ export default function RecordProductionManufacturing() {
                                               : "",
                                           )
                                         }
-                                        className="h-10 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        className="h-10 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)]"
                                       />
                                     </div>
                                     <div>
@@ -7142,7 +7142,7 @@ export default function RecordProductionManufacturing() {
                                               : "",
                                           )
                                         }
-                                        className="h-10 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50 disabled:text-slate-400"
+                                        className="h-10 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] disabled:bg-slate-50 disabled:text-slate-400"
                                       />
                                     </div>
                                   </div>
@@ -7207,7 +7207,7 @@ export default function RecordProductionManufacturing() {
                                     disabled={
                                       !Number(finishedGood.expectedQty || 0)
                                     }
-                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-[#4267B2] text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-[var(--aa-navy)] text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                                   >
                                     <Plus className="h-3.5 w-3.5" />
                                     Add operator
@@ -7272,7 +7272,7 @@ export default function RecordProductionManufacturing() {
                                           ]
                                       ).map((entry, entryIdx) => {
                                         const opControlClass =
-                                          "!h-10 w-full min-w-0 box-border border border-gray-300 rounded-md px-2 py-0 text-sm bg-white leading-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-none disabled:bg-gray-100 disabled:text-gray-400";
+                                          "!h-10 w-full min-w-0 box-border border border-gray-300 rounded-md px-2 py-0 text-sm bg-white leading-10 focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] shadow-none disabled:bg-gray-100 disabled:text-gray-400";
                                         const expectedSet =
                                           Number(finishedGood.expectedQty || 0) >
                                           0;
@@ -7421,7 +7421,7 @@ export default function RecordProductionManufacturing() {
                                                       e.target.value,
                                                     )
                                                   }
-                                                  className={`appearance-none !h-9 w-full min-w-0 cursor-pointer rounded-full border px-3 text-center text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 ${wasteTypePillClass(entry.wasteType)}`}
+                                                  className={`appearance-none !h-9 w-full min-w-0 cursor-pointer rounded-full border px-3 text-center text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)] disabled:cursor-not-allowed disabled:opacity-50 ${wasteTypePillClass(entry.wasteType)}`}
                                                 >
                                                   <option value="">
                                                     {entryWaste > 0
@@ -7873,7 +7873,7 @@ export default function RecordProductionManufacturing() {
                                         return {
                                           ...base,
                                           backgroundColor: state.isSelected
-                                            ? "#4267B2"
+                                            ? "var(--aa-navy)"
                                             : state.isFocused
                                               ? isCreateOption
                                                 ? "#e0f2fe"
@@ -7882,13 +7882,13 @@ export default function RecordProductionManufacturing() {
                                           color: state.isSelected
                                             ? "white"
                                             : isCreateOption
-                                              ? "#4267B2"
+                                              ? "var(--aa-navy)"
                                               : "#1f2937",
                                           fontWeight: isCreateOption
                                             ? "600"
                                             : "normal",
                                           "&:active": {
-                                            backgroundColor: "#4267B2",
+                                            backgroundColor: "var(--aa-navy)",
                                             color: "white",
                                           },
                                         };
@@ -8339,7 +8339,7 @@ export default function RecordProductionManufacturing() {
                 onClick={handleSubmit}
                 disabled={isDisabled}
                 title={buttonTitle}
-                className="flex items-center gap-2 px-5 py-2 bg-[#4267B2] text-white rounded-lg hover:bg-[#365899] transition-colors font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-5 py-2 bg-[var(--aa-navy)] text-white rounded-lg hover:bg-[var(--aa-navy-hover)] transition-colors font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <CheckCircle size={18} />
                 {buttonLabel}
@@ -8530,7 +8530,7 @@ export default function RecordProductionManufacturing() {
                       }
                       placeholder="Enter multiplier name e.g A1"
                       required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent bg-white"
                     />
                   </div>
                   <div>
@@ -8555,7 +8555,7 @@ export default function RecordProductionManufacturing() {
                       }
                       placeholder="Enter multiplier value"
                       required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent bg-white"
                     />
                   </div>
                 </div>
@@ -8570,7 +8570,7 @@ export default function RecordProductionManufacturing() {
                     onChange={(e) =>
                       handleMultiplierInputChange("status", e.target.value)
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent bg-white"
                   >
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
@@ -8596,7 +8596,7 @@ export default function RecordProductionManufacturing() {
                       !multiplierForm.multiplier_value ||
                       !multiplierForm.product_id
                     }
-                    className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center justify-center gap-2 px-4 py-2 bg-[var(--aa-navy)] text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? (
                       <>

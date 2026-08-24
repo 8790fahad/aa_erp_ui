@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 // Custom Switch component with app colors
 const CustomSwitch = ({ checked, onCheckedChange, id, disabled = false }) => {
   const { activeBusiness } = useSelector((state) => state.auth);
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
 
   return (
     <button
@@ -70,7 +70,7 @@ const LeaveManagement = () => {
     reason: "",
   });
 
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
   const secondaryColor =
     activeBusiness?.secondary_color &&
     String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"

@@ -708,7 +708,7 @@ export default function CreateImprestDrawer({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 text-left">
               <DrawerTitle className="text-slate-900 text-xl flex items-center gap-2">
-                <Wallet className="h-5 w-5 text-[#4267B2] shrink-0" />
+                <Wallet className="h-5 w-5 text-[var(--aa-navy)] shrink-0" />
                 Create imprest
               </DrawerTitle>
               <DrawerDescription className="text-slate-600 mt-1">
@@ -763,12 +763,12 @@ export default function CreateImprestDrawer({
             </div>
 
             <div className="border-t border-slate-200 pt-4 space-y-3">
-              <div className="flex items-center justify-between rounded-lg border border-[#4267B2]/20 bg-[var(--aa-sidebar-active)] px-4 py-2.5">
+              <div className="flex items-center justify-between rounded-lg border border-[var(--aa-navy)]/20 bg-[var(--aa-sidebar-active)] px-4 py-2.5">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <Package className="h-4 w-4 shrink-0 text-[#4267B2]" />
+                  <Package className="h-4 w-4 shrink-0 text-[var(--aa-navy)]" />
                   Expense lines
                 </h2>
-                <span className="rounded border border-[#4267B2]/20 bg-white px-2 py-1 text-xs font-medium text-slate-600">
+                <span className="rounded border border-[var(--aa-navy)]/20 bg-white px-2 py-1 text-xs font-medium text-slate-600">
                   {lines.length} line{lines.length === 1 ? "" : "s"}
                 </span>
               </div>
@@ -851,7 +851,7 @@ export default function CreateImprestDrawer({
                             onChange={(e) =>
                               setLineTaxableCheckbox(ln.id, e.target.checked)
                             }
-                            className="mx-auto h-4 w-4 rounded border-slate-300 text-[#4267B2] accent-[#4267B2] focus:ring-[#4267B2]/30"
+                            className="mx-auto h-4 w-4 rounded border-slate-300 text-[var(--aa-navy)] accent-[var(--aa-navy)] focus:ring-[var(--aa-accent)]/30"
                             aria-label="Taxable"
                           />
                         </td>
@@ -982,7 +982,7 @@ export default function CreateImprestDrawer({
                               taxableLine: e.target.checked,
                             }))
                           }
-                          className="mx-auto h-4 w-4 rounded border-slate-300 text-[#4267B2] accent-[#4267B2] focus:ring-[#4267B2]/30"
+                          className="mx-auto h-4 w-4 rounded border-slate-300 text-[var(--aa-navy)] accent-[var(--aa-navy)] focus:ring-[var(--aa-accent)]/30"
                           aria-label="Mark as taxable"
                         />
                       </td>
@@ -1005,13 +1005,13 @@ export default function CreateImprestDrawer({
               </div>
 
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0 flex-1 rounded-lg border border-[#4267B2]/25 bg-[var(--aa-sidebar-active)] px-3 py-3">
+                <div className="min-w-0 flex-1 rounded-lg border border-[var(--aa-navy)]/25 bg-[var(--aa-sidebar-active)] px-3 py-3">
                 <div className="mb-2">
                   <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
                     <button
                       type="button"
                       onClick={() => setShowTaxSelection(!showTaxSelection)}
-                      className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-[#4267B2] transition-colors"
+                      className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-[var(--aa-navy)] transition-colors"
                     >
                       <span>Apply Taxes</span>
                       {showTaxSelection ? (
@@ -1021,7 +1021,7 @@ export default function CreateImprestDrawer({
                       )}
                     </button>
                     {activeBusiness?.vat_policy && (
-                      <span className="text-xs px-2 py-0.5 bg-[var(--aa-sidebar-active)] text-[#4267B2] rounded font-medium">
+                      <span className="text-xs px-2 py-0.5 bg-[var(--aa-sidebar-active)] text-[var(--aa-navy)] rounded font-medium">
                         VAT:{" "}
                         {activeBusiness.vat_policy === "vat_inclusive"
                           ? "Inclusive"
@@ -1032,7 +1032,7 @@ export default function CreateImprestDrawer({
                     )}
                   </div>
                   {showTaxSelection && filteredTaxes.length > 0 && (
-                    <p className="text-xs text-[#4267B2] mb-2">
+                    <p className="text-xs text-[var(--aa-navy)] mb-2">
                       Both inclusive and exclusive taxes are available. Select one
                       for the next line you add (toggle off to clear).
                     </p>
@@ -1056,7 +1056,7 @@ export default function CreateImprestDrawer({
                             return (
                               <div
                                 key={tax.id}
-                                className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-slate-200 hover:border-[#4267B2]/40 transition-colors"
+                                className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-slate-200 hover:border-[var(--aa-navy)]/40 transition-colors"
                               >
                                 <div className="relative">
                                   <input
@@ -1074,7 +1074,7 @@ export default function CreateImprestDrawer({
                                         toggleDraftTax(tax);
                                     }}
                                     className={`w-10 h-5 rounded-full transition-colors cursor-pointer ${
-                                      isSelected ? "bg-[#4267B2]" : "bg-slate-300"
+                                      isSelected ? "bg-[var(--aa-navy)]" : "bg-slate-300"
                                     }`}
                                   >
                                     <div
@@ -1092,8 +1092,8 @@ export default function CreateImprestDrawer({
                                     <span
                                       className={`ml-1.5 px-1.5 py-0.5 rounded text-xs font-medium ${
                                         isInclusive
-                                          ? "bg-[var(--aa-sidebar-active)] text-[#4267B2]"
-                                          : "bg-[var(--aa-sidebar-active)] text-[#4267B2]"
+                                          ? "bg-[var(--aa-sidebar-active)] text-[var(--aa-navy)]"
+                                          : "bg-[var(--aa-sidebar-active)] text-[var(--aa-navy)]"
                                       }`}
                                     >
                                       {isInclusive ? "Inc" : "Exc"}
@@ -1120,7 +1120,7 @@ export default function CreateImprestDrawer({
                 </div>
               </div>
 
-                <div className="w-full shrink-0 space-y-2 rounded-lg border border-[#4267B2]/25 bg-[var(--aa-sidebar-active)] px-3 py-3 text-sm lg:w-72">
+                <div className="w-full shrink-0 space-y-2 rounded-lg border border-[var(--aa-navy)]/25 bg-[var(--aa-sidebar-active)] px-3 py-3 text-sm lg:w-72">
                 <div className="flex items-baseline justify-between gap-4 text-slate-800">
                   <span>Subtotal (net)</span>
                   <span className="tabular-nums">
@@ -1137,9 +1137,9 @@ export default function CreateImprestDrawer({
                     </span>
                   </div>
                 )}
-                <div className="flex items-baseline justify-between gap-4 border-t border-[#4267B2]/25 pt-2 font-semibold text-slate-900">
+                <div className="flex items-baseline justify-between gap-4 border-t border-[var(--aa-navy)]/25 pt-2 font-semibold text-slate-900">
                   <span>Grand total</span>
-                  <span className="text-base font-bold tabular-nums text-[#4267B2]">
+                  <span className="text-base font-bold tabular-nums text-[var(--aa-navy)]">
                     ₦{formatNumber1(grandTotal)}
                   </span>
                 </div>
@@ -1171,7 +1171,7 @@ export default function CreateImprestDrawer({
             <Button
               type="submit"
               disabled={submitting || lines.length === 0}
-              className="m-0 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
+              className="m-0 border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90"
             >
               {submitting ? (
                 <>
@@ -1194,7 +1194,7 @@ export default function CreateImprestDrawer({
         >
           <DrawerHeader className="border-b border-slate-200 shrink-0">
             <DrawerTitle className="text-slate-900 text-lg flex items-center gap-2">
-              <ListOrdered className="h-5 w-5 text-[#4267B2] shrink-0" />
+              <ListOrdered className="h-5 w-5 text-[var(--aa-navy)] shrink-0" />
               Imprest history
             </DrawerTitle>
             <DrawerDescription className="text-slate-600 text-sm">

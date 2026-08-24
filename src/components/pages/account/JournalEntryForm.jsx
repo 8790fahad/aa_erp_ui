@@ -33,21 +33,22 @@ import {
   getPostingDateMax,
   validatePostingDateClient,
 } from "@/utilities";
+import { formatNumber1 } from "@/components/router/utilities";
 
-// React Select styles aligned with CoA / Journal list (#4267B2, slate borders)
+// React Select styles aligned with CoA / Journal list (var(--aa-navy), slate borders)
 const customSelectStyles = {
   control: (provided, state) => ({
     ...provided,
     minHeight: "36px",
     height: "36px",
-    borderColor: state.isFocused ? "#4267B2" : "#e2e8f0",
+    borderColor: state.isFocused ? "var(--aa-navy)" : "#e2e8f0",
     borderWidth: "1px",
     borderRadius: "0.375rem",
     boxShadow: state.isFocused ? "0 0 0 2px rgb(66 103 178 / 0.2)" : "none",
     backgroundColor: "white",
     fontSize: "13px",
     "&:hover": {
-      borderColor: state.isFocused ? "#4267B2" : "#cbd5e1",
+      borderColor: state.isFocused ? "var(--aa-navy)" : "#cbd5e1",
     },
   }),
   valueContainer: (provided) => ({
@@ -92,7 +93,7 @@ const customSelectStyles = {
       : state.isFocused
         ? "#f8fafc"
         : "white",
-    color: state.isSelected ? "#4267B2" : "#334155",
+    color: state.isSelected ? "var(--aa-navy)" : "#334155",
     fontSize: "13px",
     padding: "8px 10px",
     cursor: "pointer",
@@ -519,9 +520,9 @@ const JournalEntryForm = () => {
     });
 
     return {
-      totalDebit: totalDebit.toFixed(2),
-      totalCredit: totalCredit.toFixed(2),
-      difference: (totalDebit - totalCredit).toFixed(2),
+      totalDebit,
+      totalCredit,
+      difference: totalDebit - totalCredit,
       balanced: Math.abs(totalDebit - totalCredit) < 0.01,
     };
   };
@@ -752,8 +753,12 @@ const JournalEntryForm = () => {
         (resp) => {
           setLoading(false);
           if (resp.success) {
-            toast.success("Journal entry updated successfully");
-            navigate("/app/account/journal-entries");
+            toast.success(
+              "Journal entry updated — still pending approval before it enters the ledger.",
+            );
+            const ref =
+              resp.data?.transaction_ref || transaction_ref;
+            navigate(`/app/account/journal-entries/${ref}`);
           } else {
             toast.error(resp.message || "Failed to update journal entry");
           }
@@ -783,8 +788,15 @@ const JournalEntryForm = () => {
           setLoading(false);
           console.log("Create response:", resp);
           if (resp.success) {
-            toast.success("Journal entry created successfully");
-            navigate("/app/account/journal-entries");
+            toast.success(
+              "Saved as pending approval. Approve it to post to the ledger.",
+            );
+            const ref = resp.data?.transaction_ref;
+            if (ref) {
+              navigate(`/app/account/journal-entries/${ref}`);
+            } else {
+              navigate("/app/account/journal-entries");
+            }
           } else {
             toast.error(resp.message || "Failed to create journal entry");
           }
@@ -810,9 +822,9 @@ const JournalEntryForm = () => {
 
   const totals = calculateTotals();
   const displayBalanced = isOpeningBalance ? true : totals.balanced;
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
   const fieldClass =
-    "h-9 border-slate-200 bg-white text-sm focus-visible:border-[#4267B2] focus-visible:ring-[#4267B2]/20";
+    "h-9 border-slate-200 bg-white text-sm focus-visible:border-[var(--aa-navy)] focus-visible:ring-[var(--aa-accent)]/20";
   const labelClass = "mb-1.5 text-xs font-medium text-slate-600";
 
   return (
@@ -824,7 +836,8 @@ const JournalEntryForm = () => {
             {isEdit ? "Edit Journal Entry" : "New Journal Entry"}
           </h1>
           <p className="mt-0.5 text-xs text-slate-500">
-            Post balanced debit and credit lines from your Chart of Accounts
+            Save a balanced entry for approval — it enters the ledger only after
+            Approve
           </p>
         </div>
         <Button
@@ -921,12 +934,12 @@ const JournalEntryForm = () => {
                 }
                 placeholder="Additional notes / narration…"
                 rows={3}
-                className="border-slate-200 bg-white text-sm focus-visible:border-[#4267B2] focus-visible:ring-[#4267B2]/20"
+                className="border-slate-200 bg-white text-sm focus-visible:border-[var(--aa-navy)] focus-visible:ring-[var(--aa-accent)]/20"
               />
             </div>
 
             {isEdit && formData.reference_number && (
-              <div className="rounded-lg border border-[#4267B2]/20 bg-[var(--aa-sidebar-active,#eff4fb)] p-3">
+              <div className="rounded-lg border border-[var(--aa-navy)]/20 bg-[var(--aa-sidebar-active,#eff4fb)] p-3">
                 <p
                   className="mb-2 text-xs font-semibold"
                   style={{ color: primaryColor }}
@@ -942,20 +955,24 @@ const JournalEntryForm = () => {
                   </div>
                   <div>
                     <span className="text-xs text-slate-500">Status</span>
-                    <p className="font-medium capitalize text-slate-800">
-                      {formData.status || "Draft"}
+                    <p className="font-medium text-slate-800">
+                      {formData.status === "posted"
+                        ? "Approved"
+                        : formData.status === "reversed"
+                          ? "Reversed"
+                          : "Pending Approval"}
                     </p>
                   </div>
                   <div>
                     <span className="text-xs text-slate-500">Total debit</span>
                     <p className="font-medium tabular-nums text-slate-800">
-                      ₦{totals.totalDebit}
+                      ₦{formatNumber1(totals.totalDebit)}
                     </p>
                   </div>
                   <div>
                     <span className="text-xs text-slate-500">Total credit</span>
                     <p className="font-medium tabular-nums text-slate-800">
-                      ₦{totals.totalCredit}
+                      ₦{formatNumber1(totals.totalCredit)}
                     </p>
                   </div>
                 </div>
@@ -1256,7 +1273,7 @@ const JournalEntryForm = () => {
           <div
             className={`mx-3 mb-3 rounded-lg border px-4 py-3 ${
               displayBalanced
-                ? "border-[#4267B2]/20 bg-[var(--aa-sidebar-active,#eff4fb)]"
+                ? "border-[var(--aa-navy)]/20 bg-[var(--aa-sidebar-active,#eff4fb)]"
                 : "border-red-200 bg-red-50"
             }`}
           >
@@ -1264,27 +1281,27 @@ const JournalEntryForm = () => {
               <div className="text-center md:text-left">
                 <div className="text-xs text-slate-500">Total debit</div>
                 <div className="text-lg font-semibold tabular-nums text-slate-900">
-                  ₦{totals.totalDebit}
+                  ₦{formatNumber1(totals.totalDebit)}
                 </div>
               </div>
               <div className="text-center md:text-left">
                 <div className="text-xs text-slate-500">Total credit</div>
                 <div className="text-lg font-semibold tabular-nums text-slate-900">
-                  ₦{totals.totalCredit}
+                  ₦{formatNumber1(totals.totalCredit)}
                 </div>
               </div>
               <div className="text-center md:text-left">
                 <div className="text-xs text-slate-500">Difference</div>
                 <div
                   className={`text-lg font-semibold tabular-nums ${
-                    displayBalanced ? "text-[#4267B2]" : "text-red-600"
+                    displayBalanced ? "text-[var(--aa-navy)]" : "text-red-600"
                   }`}
                 >
-                  ₦{totals.difference}
+                  ₦{formatNumber1(Math.abs(totals.difference))}
                 </div>
                 <div
                   className={`mt-0.5 text-xs font-medium ${
-                    displayBalanced ? "text-[#4267B2]" : "text-red-600"
+                    displayBalanced ? "text-[var(--aa-navy)]" : "text-red-600"
                   }`}
                 >
                   {displayBalanced ? "Balanced" : "Not balanced"}
@@ -1342,7 +1359,11 @@ const JournalEntryForm = () => {
             className="h-8 gap-2 border-0 bg-[var(--aa-navy,#0f2744)] text-white shadow-none hover:opacity-90 disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
-            {loading ? "Saving…" : isEdit ? "Update" : "Save"}
+            {loading
+              ? "Saving…"
+              : isEdit
+                ? "Update (pending)"
+                : "Save for approval"}
           </Button>
         </div>
       </form>

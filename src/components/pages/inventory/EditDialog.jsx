@@ -354,7 +354,7 @@ export function EditItemDialog({ isOpen, onOpenChange, selectedItem, onSave }) {
           </Button>
           <Button
             onClick={handleSave}
-            className="flex-1 bg-[#4267B2] hover:bg-[#4267B2]/90 shadow-none"
+            className="flex-1 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy)]/90 shadow-none"
           >
             Save Changes
           </Button>

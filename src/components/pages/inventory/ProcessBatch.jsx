@@ -342,7 +342,7 @@ export default function ProcessBatch({ params }) {
           <CardFooter className="flex justify-end">
             <Button
               type="submit"
-              className="shadow-none bg-[#4267B2] hover:bg-[#4267B2]"
+              className="shadow-none bg-[var(--aa-navy)] hover:bg-[var(--aa-navy)]"
             >
               {actionText} Batch
             </Button>

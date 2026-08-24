@@ -466,7 +466,7 @@ const parseManufacturingData = (record) => {
 
 export default function ManufacturingProduction() {
   const { activeBusiness } = useSelector((state) => state.auth);
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -915,7 +915,7 @@ export default function ManufacturingProduction() {
                 variant="ghost"
                 size="sm"
                 onClick={() => viewItemDetails(item)}
-                className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                className="text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:bg-blue-50"
                 title="View Details"
               >
                 <Eye className="h-4 w-4" />
@@ -1071,7 +1071,7 @@ export default function ManufacturingProduction() {
               <DropdownMenuTrigger asChild>
                 <UIButton
                   size="sm"
-                  className="gap-1 bg-blue-600 hover:bg-blue-700 text-white"
+                  className="gap-1 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
                 >
                   <Plus size={12} />
                   Record Production
@@ -1176,7 +1176,7 @@ export default function ManufacturingProduction() {
             <center>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <UIButton className="gap-1 bg-blue-600 hover:bg-blue-700 text-white">
+                  <UIButton className="gap-1 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white">
                     <Plus size={16} />
                     Record New Production
                     <ChevronDown size={16} />

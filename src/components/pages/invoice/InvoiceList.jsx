@@ -263,7 +263,7 @@ export default function InvoiceList() {
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
             <div>
               <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-                <FileText className="h-5 w-5 text-[#4267B2]" />
+                <FileText className="h-5 w-5 text-[var(--aa-navy)]" />
                 Sales Invoices
               </h1>
               <p className="mt-0.5 text-xs text-slate-500">
@@ -311,7 +311,7 @@ export default function InvoiceList() {
                 <button
                   type="button"
                   onClick={() => handleStatusFilter("")}
-                  className="ml-1 text-[11px] text-[#4267B2] hover:underline"
+                  className="ml-1 text-[11px] text-[var(--aa-navy)] hover:underline"
                 >
                   Clear
                 </button>
@@ -327,7 +327,7 @@ export default function InvoiceList() {
                 placeholder="Search invoice, customer…"
                 value={searchInput}
                 onChange={handleSearchChange}
-                className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20"
+                className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20"
                 disabled={loading}
               />
             </div>
@@ -340,7 +340,7 @@ export default function InvoiceList() {
                 }
                 title="From date"
                 aria-label="From date"
-                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20"
+                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20"
                 disabled={loading}
               />
               <span className="text-xs text-slate-400">to</span>
@@ -353,7 +353,7 @@ export default function InvoiceList() {
                 }
                 title="To date"
                 aria-label="To date"
-                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20"
+                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20"
                 disabled={loading}
               />
               {(fromDateFromUrl !== todayDate() ||
@@ -361,7 +361,7 @@ export default function InvoiceList() {
                 <button
                   type="button"
                   onClick={resetToToday}
-                  className="text-[11px] text-[#4267B2] hover:underline"
+                  className="text-[11px] text-[var(--aa-navy)] hover:underline"
                 >
                   Today
                 </button>
@@ -474,7 +474,7 @@ export default function InvoiceList() {
                           <td className={`px-3 py-2 align-middle ${bg}`}>
                             <Link
                               to={`/app/sales/invoice-preview?sale_code=${item.invoice_ref || ""}`}
-                              className="whitespace-nowrap font-mono text-[13px] font-semibold text-[#4267B2] hover:underline"
+                              className="whitespace-nowrap font-mono text-[13px] font-semibold text-[var(--aa-navy)] hover:underline"
                             >
                               {item.invoice_ref || "—"}
                             </Link>
@@ -561,7 +561,7 @@ export default function InvoiceList() {
                                     `/app/sales/invoice-preview?sale_code=${item.invoice_ref || ""}`,
                                   )
                                 }
-                                className="h-7 w-7 p-0 text-slate-500 hover:bg-white/70 hover:text-[#4267B2]"
+                                className="h-7 w-7 p-0 text-slate-500 hover:bg-white/70 hover:text-[var(--aa-navy)]"
                                 title="View invoice"
                               >
                                 <Eye className="h-4 w-4" />
@@ -577,7 +577,7 @@ export default function InvoiceList() {
                                       )}`,
                                     )
                                   }
-                                  className="h-7 w-7 p-0 text-slate-500 hover:bg-white/70 hover:text-[#4267B2]"
+                                  className="h-7 w-7 p-0 text-slate-500 hover:bg-white/70 hover:text-[var(--aa-navy)]"
                                   title="Open sales process"
                                 >
                                   <GitBranch className="h-4 w-4" />

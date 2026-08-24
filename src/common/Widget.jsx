@@ -6,7 +6,7 @@ const Widget = ({ icon, title, content }) => {
 
   return (
     <Card
-      className="bg-[#4267B2] text-white"
+      className="bg-[var(--aa-navy)] text-white"
     //   onClick={
     //     navigate(link)
     //   }

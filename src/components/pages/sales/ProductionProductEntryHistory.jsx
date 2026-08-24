@@ -94,11 +94,11 @@ const ProductionProductEntryHistory = ({ refreshKey = 0 }) => {
           >
             <CardTitle className="flex items-center gap-2 text-base">
               {sectionOpen ? (
-                <ChevronDown className="h-5 w-5 text-[#4267B2] shrink-0" />
+                <ChevronDown className="h-5 w-5 text-[var(--aa-navy)] shrink-0" />
               ) : (
                 <ChevronRight className="h-5 w-5 text-gray-400 shrink-0" />
               )}
-              <Package className="h-5 w-5 text-[#4267B2]" />
+              <Package className="h-5 w-5 text-[var(--aa-navy)]" />
               Production Entry History
               {entries.length > 0 && (
                 <Badge variant="secondary" className="ml-1">
@@ -125,7 +125,7 @@ const ProductionProductEntryHistory = ({ refreshKey = 0 }) => {
                     onClick={() => setFilterType(opt.value)}
                     className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                       filterType === opt.value
-                        ? "bg-white text-[#4267B2] shadow-sm"
+                        ? "bg-white text-[var(--aa-navy)] shadow-sm"
                         : "text-gray-600 hover:text-gray-900"
                     }`}
                   >
@@ -164,34 +164,34 @@ const ProductionProductEntryHistory = ({ refreshKey = 0 }) => {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-[#4267B2]/5 border-b border-[#4267B2]/15">
+              <thead className="bg-[var(--aa-navy)]/5 border-b border-[var(--aa-navy)]/15">
                 <tr>
                   <th className="w-8 px-2 py-2.5"></th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Reference
                   </th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Date
                   </th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Type
                   </th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Product
                   </th>
-                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Qty
                   </th>
-                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Unit Cost
                   </th>
-                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Selling Price
                   </th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Branch
                   </th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     By
                   </th>
                 </tr>
@@ -211,12 +211,12 @@ const ProductionProductEntryHistory = ({ refreshKey = 0 }) => {
                       >
                         <td className="px-2 py-2.5 text-center">
                           {isOpen ? (
-                            <ChevronDown className="h-4 w-4 text-[#4267B2]" />
+                            <ChevronDown className="h-4 w-4 text-[var(--aa-navy)]" />
                           ) : (
                             <ChevronRight className="h-4 w-4 text-gray-400" />
                           )}
                         </td>
-                        <td className="px-3 py-2.5 font-mono text-xs font-semibold text-[#4267B2]">
+                        <td className="px-3 py-2.5 font-mono text-xs font-semibold text-[var(--aa-navy)]">
                           {entry.reference_number}
                         </td>
                         <td className="px-3 py-2.5 text-xs text-gray-700">
@@ -248,7 +248,7 @@ const ProductionProductEntryHistory = ({ refreshKey = 0 }) => {
                             {entry.unit_of_measure || ""}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-right text-[#4267B2] font-semibold">
+                        <td className="px-3 py-2.5 text-right text-[var(--aa-navy)] font-semibold">
                           ₦{fmt(entry.cost_price)}
                         </td>
                         <td className="px-3 py-2.5 text-right font-semibold">
@@ -263,7 +263,7 @@ const ProductionProductEntryHistory = ({ refreshKey = 0 }) => {
                       </tr>
 
                       {isOpen && (
-                        <tr className="bg-[#4267B2]/[0.04]">
+                        <tr className="bg-[var(--aa-navy)]/[0.04]">
                           <td colSpan={10} className="px-6 py-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
                               <div>

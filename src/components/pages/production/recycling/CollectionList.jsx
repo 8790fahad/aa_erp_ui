@@ -143,7 +143,7 @@ export default function CollectionList() {
                   `/app/production/collection/collection-invoice?customerName=${item.customer_name}&receiptNo=${item.collection_id}&pass=${item.pass}`
                 );
               }}
-              className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+              className="text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:bg-blue-50"
               title="View Details"
             >
               <Eye className="h-4 w-4" />

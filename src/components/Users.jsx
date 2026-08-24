@@ -144,7 +144,7 @@ export default function Users() {
               Cancel
             </Button>
             <Button
-              style={{ backgroundColor: "#4267B2" }}
+              style={{ backgroundColor: "var(--aa-navy)" }}
               onClick={handleSubmit}
               className="px-4 py-2"
             >
@@ -268,7 +268,7 @@ export default function Users() {
               Cancel
             </Button>
             <Button
-              style={{ backgroundColor: "#4267B2" }}
+              style={{ backgroundColor: "var(--aa-navy)" }}
               onClick={handleSubmit}
               className="px-4 py-2"
             >
@@ -418,7 +418,7 @@ export default function Users() {
           footer={
             <>
               <Button
-                style={{ backgroundColor: "#4267B2" }}
+                style={{ backgroundColor: "var(--aa-navy)" }}
                 onClick={() => setDeleteModalOpen(false)}
                 className="mr-2"
                 size="sm"
@@ -539,7 +539,7 @@ export default function Users() {
               Cancel
             </Button>
             <Button
-              style={{ backgroundColor: "#4267B2" }}
+              style={{ backgroundColor: "var(--aa-navy)" }}
               onClick={handleSubmit}
               className="px-4 py-2"
             >
@@ -730,7 +730,7 @@ export default function Users() {
           <div className="flex gap-3">
             <CustomButton
               onClick={() => setShowCreateModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center transition-colors"
+              className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white px-4 py-2 rounded-lg flex items-center transition-colors"
             >
               <FaPlus className="mr-2" size={14} />
               Create New User
@@ -785,7 +785,7 @@ const TableRow = ({ id, index, fullname, phone, role, handleDelete }) => {
         <td className="d-flex align-items-center justify-center">
           <div className="d-flex flex-column flex-md-row justify-center">
             <Button
-              style={{ backgroundColor: "#4267B2" }}
+              style={{ backgroundColor: "var(--aa-navy)" }}
               size="sm"
               onClick={() => navigate(`/app/admin/manage-user?user=${id}`)}
               className="mr-2 d-flex align-items-center mb-1 mb-md-0"
@@ -814,7 +814,7 @@ const TableRow = ({ id, index, fullname, phone, role, handleDelete }) => {
         footer={
           <>
             <Button
-              style={{ backgroundColor: "#4267B2" }}
+              style={{ backgroundColor: "var(--aa-navy)" }}
               onClick={toggleModal}
               className="mr-2"
               size="sm"

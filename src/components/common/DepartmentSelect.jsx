@@ -87,7 +87,7 @@ export default function DepartmentSelect({
       }}
       disabled={disabled || loading || isRestricted}
       required={required}
-      className={`w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white ${sizeClass} ${className} ${
+      className={`w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] bg-white ${sizeClass} ${className} ${
         isRestricted ? "bg-gray-50 cursor-not-allowed" : ""
       }`}
     >

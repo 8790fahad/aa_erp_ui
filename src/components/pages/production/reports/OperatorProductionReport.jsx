@@ -526,7 +526,7 @@ export default function OperatorProductionReport() {
                               return (
                                 <tr
                                   key={row.id ?? `${date}-${n}`}
-                                  className={`border-b border-gray-100 transition-colors ${row.status === "cancelled" ? "opacity-60" : "hover:bg-[#4267B2]/5"}`}
+                                  className={`border-b border-gray-100 transition-colors ${row.status === "cancelled" ? "opacity-60" : "hover:bg-[var(--aa-navy)]/5"}`}
                                 >
                                   <td className="px-3 py-2 text-gray-400 text-xs border-r border-gray-100">{n}</td>
                                   <td className="px-3 py-2 border-r border-gray-100 text-gray-700 whitespace-nowrap text-xs">

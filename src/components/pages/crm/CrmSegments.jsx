@@ -144,7 +144,7 @@ export default function CrmSegments() {
                       ? `/app/crm/customers?status=${encodeURIComponent(filters.crm_status)}`
                       : `/app/crm/customers?segment=${encodeURIComponent(s.segment_key)}`;
                   })()}
-                  className="mt-3 inline-block text-sm text-[#4267B2] hover:underline"
+                  className="mt-3 inline-block text-sm text-[var(--aa-navy)] hover:underline"
                 >
                   View customers
                 </Link>

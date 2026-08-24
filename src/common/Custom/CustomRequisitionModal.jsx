@@ -19,9 +19,9 @@ import {
 } from "@/components/ui/sheet";
 
 const inputClass =
-  "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20";
+  "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20";
 const textareaClass =
-  "min-h-[88px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20";
+  "min-h-[88px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20";
 const labelClass = "mb-1.5 block text-xs font-medium text-slate-600";
 const thClass =
   "px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500";
@@ -210,7 +210,7 @@ const CustomRequisitionModal = ({
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
         <div className="min-w-0">
           <p className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
-            <Building2 className="h-3.5 w-3.5 text-[#4267B2]" />
+            <Building2 className="h-3.5 w-3.5 text-[var(--aa-navy)]" />
             {activeBusiness?.business_name || "Business"}
           </p>
           <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">
@@ -428,7 +428,7 @@ const CustomRequisitionModal = ({
                   />
                 </td>
                 <td
-                  className={`${tdClass} text-right font-mono font-medium text-[#4267B2]`}
+                  className={`${tdClass} text-right font-mono font-medium text-[var(--aa-navy)]`}
                 >
                   {formatNumber1(item.averageCostPerUom || 0)}
                 </td>
@@ -695,7 +695,7 @@ const CustomRequisitionModal = ({
                   size="sm"
                   onClick={handleFormSubmit}
                   disabled={loading2}
-                  className="gap-1.5 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
+                  className="gap-1.5 border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Submit
@@ -718,7 +718,7 @@ const CustomRequisitionModal = ({
                   size="sm"
                   onClick={handleFormSubmit}
                   disabled={remark === ""}
-                  className="gap-1.5 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90 disabled:opacity-50"
+                  className="gap-1.5 border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90 disabled:opacity-50"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Approve
@@ -742,7 +742,7 @@ const CustomRequisitionModal = ({
                   size="sm"
                   onClick={approveMemo}
                   disabled={amount === ""}
-                  className="gap-1.5 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90 disabled:opacity-50"
+                  className="gap-1.5 border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90 disabled:opacity-50"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Submit
@@ -755,7 +755,7 @@ const CustomRequisitionModal = ({
                 size="sm"
                 onClick={handleEdit}
                 disabled={loading2}
-                className="border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
+                className="border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90"
               >
                 {loading2 ? "Submitting…" : "Submit"}
               </Button>

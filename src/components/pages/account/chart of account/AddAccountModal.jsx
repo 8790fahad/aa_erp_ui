@@ -572,7 +572,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
   })();
 
   const selectClass =
-    "w-full px-3 py-2 border border-slate-200 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]";
+    "w-full px-3 py-2 border border-slate-200 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]/30 focus:border-[var(--aa-navy)]";
 
   return (
     <Sheet
@@ -585,7 +585,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
         side="right"
         className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-xl md:!max-w-2xl [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100"
       >
-        <SheetHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-navy,#4267B2)] px-5 py-4 pr-12 text-left">
+        <SheetHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-navy)] px-5 py-4 pr-12 text-left">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 rounded-md bg-white/10 p-2">
               <BookOpen className="h-4 w-4 text-[var(--aa-accent,#93c5fd)]" />
@@ -914,7 +914,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                   setForm((f) => ({ ...f, description: e.target.value }))
                 }
                 placeholder="Enter account description"
-                className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
+                className="w-full px-3 py-2 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]/30 focus:border-[var(--aa-navy)]"
                 required
               />
             </div>
@@ -938,7 +938,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                     setForm((f) => ({ ...f, accountNumber: next }));
                   }}
                   placeholder="e.g. 200001"
-                  className="h-11 rounded-lg border border-[#4267B2]/25 bg-[var(--aa-sidebar-active,#eff4fb)] px-4 font-mono text-base font-medium text-slate-900 shadow-none placeholder:text-slate-400 focus-visible:border-[#4267B2] focus-visible:ring-2 focus-visible:ring-[#4267B2]/25"
+                  className="h-11 rounded-lg border border-[var(--aa-navy)]/25 bg-[var(--aa-sidebar-active,#eff4fb)] px-4 font-mono text-base font-medium text-slate-900 shadow-none placeholder:text-slate-400 focus-visible:border-[var(--aa-navy)] focus-visible:ring-2 focus-visible:ring-[var(--aa-accent)]/25"
                 />
                 <p className="text-xs text-muted-foreground">
                   You can keep the suggested code or type your own. It must be
@@ -986,7 +986,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                             fsSection === "profit_and_loss" ? f.plLine : "",
                         }));
                       }}
-                      className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
+                      className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]/30 focus:border-[var(--aa-navy)]"
                     >
                       <option value="balance_sheet">Balance sheet</option>
                       <option value="profit_and_loss">Profit &amp; loss</option>
@@ -1003,7 +1003,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                           normalBalance: e.target.value,
                         }))
                       }
-                      className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
+                      className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]/30 focus:border-[var(--aa-navy)]"
                     >
                       <option value="debit">Debit</option>
                       <option value="credit">Credit</option>
@@ -1017,7 +1017,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                         onChange={(e) =>
                           setForm((f) => ({ ...f, plLine: e.target.value }))
                         }
-                        className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
+                        className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]/30 focus:border-[var(--aa-navy)]"
                       >
                         <option value="">Derive from account type</option>
                         {PL_LINE_OPTIONS.map((o) => (
@@ -1064,7 +1064,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                             : "",
                       }));
                     }}
-                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
+                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]/30 focus:border-[var(--aa-navy)]"
                   >
                     <option value="fixed">Fixed (primary nature)</option>
                     <option value="balance_switch">
@@ -1073,7 +1073,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                   </select>
                 </div>
                 {form.reportingBehavior === "balance_switch" && (
-                  <div className="rounded-md border border-[#4267B2]/25 bg-[var(--aa-sidebar-active,#eff4fb)] p-3 space-y-3">
+                  <div className="rounded-md border border-[var(--aa-navy)]/25 bg-[var(--aa-sidebar-active,#eff4fb)] p-3 space-y-3">
                     <p className="text-xs text-slate-600 leading-relaxed">
                       Closing{" "}
                       <span className="font-medium text-slate-800">
@@ -1102,7 +1102,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                             alternateNature: e.target.value,
                           }))
                         }
-                        className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
+                        className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]/30 focus:border-[var(--aa-navy)]"
                       >
                         <option value="">Select…</option>
                         {NATURE_ENUM_OPTIONS.filter(
@@ -1123,7 +1123,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, accountRole: e.target.value }))
                     }
-                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2]"
+                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]/30 focus:border-[var(--aa-navy)]"
                   >
                     {ACCOUNT_ROLE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
@@ -1261,7 +1261,7 @@ export default function AddAccountModal({ open, onClose, onSuccess }) {
                 codeCheck.status === "invalid" ||
                 codeCheck.status === "checking"
               }
-              className="gap-1.5 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90 disabled:opacity-50"
+              className="gap-1.5 border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90 disabled:opacity-50"
             >
               {loading ? (
                 <>

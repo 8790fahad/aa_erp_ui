@@ -1,8 +1,8 @@
 export const colors = {
-  primary: '#4267B2',
+  primary: '#1a2d5e', // var(--aa-navy)
   secondary: '#f5e4e4',
   white: '#fff',
-  // primary: '#008B35',
+  accent: '#2c7be5', // var(--aa-accent)
 }
 
 export const STORE = 'STORE'

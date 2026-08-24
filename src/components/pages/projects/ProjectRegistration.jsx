@@ -218,7 +218,7 @@ const ProjectRegistration = ({
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                     <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                         {/* Modal Header */}
-                        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
+                        <div className="bg-[var(--aa-navy)] text-white p-4">
                             <div className="flex justify-between items-center">
                                 <div>
                                     <h3 className="text-xl font-bold">
@@ -260,7 +260,7 @@ const ProjectRegistration = ({
                                         value={form.project_name}
                                         placeholder="What's the project?"
                                         onChange={handleChange}
-                                        className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.project_name ? "border-red-500" : ""
+                                        className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent ${errors.project_name ? "border-red-500" : ""
                                             }`}
                                     />
                                     {errors.project_name && (
@@ -326,7 +326,7 @@ const ProjectRegistration = ({
                                             type="date"
                                             value={form.start_date}
                                             onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                                         />
                                     </div>
 
@@ -344,7 +344,7 @@ const ProjectRegistration = ({
                                             type="date"
                                             value={form.end_date}
                                             onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                                         />
                                     </div>
                                 </div>
@@ -362,7 +362,7 @@ const ProjectRegistration = ({
                                         name="progress_status"
                                         value={form.progress_status}
                                         onChange={handleChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                                     >
                                         <option value="">Select status</option>
                                         <option value="not-started">Not Started</option>
@@ -388,7 +388,7 @@ const ProjectRegistration = ({
                                         placeholder="Add any additional notes..."
                                         onChange={handleChange}
                                         rows={3}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                                     />
                                 </div>
                             </div>

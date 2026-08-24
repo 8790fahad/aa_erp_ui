@@ -37,6 +37,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import logo from "@/assets/aa_erp_icon.png";
 import GlobalSearchBar from "@/components/GlobalSearchBar";
+import { NetworkStatusIndicator } from "@/components/NetworkStatusBanner";
 
 function parseAccess(accessStr) {
   if (!accessStr || typeof accessStr !== "string") return [];
@@ -166,6 +167,7 @@ export function AppTopBar() {
       </div>
 
       <div className="ml-auto flex items-center gap-1.5 shrink-0">
+        <NetworkStatusIndicator />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

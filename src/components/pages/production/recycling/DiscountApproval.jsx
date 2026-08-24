@@ -146,7 +146,7 @@ export default function DiscountApproval() {
             variant="ghost"
             size="sm"
             onClick={() => viewList(item)}
-            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+            className="text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:bg-blue-50"
             title="View Details"
           >
             <Eye className="h-4 w-4" />
@@ -314,7 +314,7 @@ export default function DiscountApproval() {
 
                   <button
                     onClick={handleApprove}
-                    className="px-6 py-2 rounded-xl bg-blue-600 text-white font-semibold 
+                    className="px-6 py-2 rounded-xl bg-[var(--aa-navy)] text-white font-semibold 
                hover:bg-blue-700 active:scale-95 transition-all"
                   >
                     Approve

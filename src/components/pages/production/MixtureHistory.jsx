@@ -62,7 +62,7 @@ const MixtureHistory = () => {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
-          <FlaskConical className="h-5 w-5 text-[#4267B2]" />
+          <FlaskConical className="h-5 w-5 text-[var(--aa-navy)]" />
           Mixture History
           {mixtures.length > 0 && (
             <Badge variant="secondary" className="ml-1">
@@ -101,28 +101,28 @@ const MixtureHistory = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-[#4267B2]/5 border-b border-[#4267B2]/15">
+              <thead className="bg-[var(--aa-navy)]/5 border-b border-[var(--aa-navy)]/15">
                 <tr>
                   <th className="w-8 px-2 py-2.5"></th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Reference
                   </th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Date
                   </th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Semi-finished
                   </th>
-                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Qty Produced
                   </th>
-                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Unit Cost
                   </th>
-                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     Total Cost
                   </th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[#4267B2] uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider">
                     By
                   </th>
                 </tr>
@@ -140,12 +140,12 @@ const MixtureHistory = () => {
                       >
                         <td className="px-2 py-2.5 text-center">
                           {isOpen ? (
-                            <ChevronDown className="h-4 w-4 text-[#4267B2]" />
+                            <ChevronDown className="h-4 w-4 text-[var(--aa-navy)]" />
                           ) : (
                             <ChevronRight className="h-4 w-4 text-gray-400" />
                           )}
                         </td>
-                        <td className="px-3 py-2.5 font-mono text-xs font-semibold text-[#4267B2]">
+                        <td className="px-3 py-2.5 font-mono text-xs font-semibold text-[var(--aa-navy)]">
                           {m.reference_number}
                         </td>
                         <td className="px-3 py-2.5 text-xs text-gray-700">
@@ -167,7 +167,7 @@ const MixtureHistory = () => {
                             {m.unit_of_measure}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-right text-[#4267B2] font-semibold">
+                        <td className="px-3 py-2.5 text-right text-[var(--aa-navy)] font-semibold">
                           ₦{fmt(m.unit_cost)}
                         </td>
                         <td className="px-3 py-2.5 text-right font-bold">
@@ -179,7 +179,7 @@ const MixtureHistory = () => {
                       </tr>
 
                       {isOpen && (
-                        <tr className="bg-[#4267B2]/[0.04]">
+                        <tr className="bg-[var(--aa-navy)]/[0.04]">
                           <td colSpan={8} className="px-6 py-4">
                             <div className="grid grid-cols-2 gap-4 mb-3 text-xs">
                               <div>

@@ -35,7 +35,7 @@ const resolveFacilityId = (activeBusiness, user) => {
 const AttendanceClock = ({ employee, isSecurityGate = false }) => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = resolveFacilityId(activeBusiness, user);
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
   const secondaryColor = activeBusiness?.secondary_color;
   const gradientEnd =
     secondaryColor && String(secondaryColor).toLowerCase() !== "#ffffff"

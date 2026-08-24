@@ -146,6 +146,14 @@ export const SALE_WORKFLOW_STATUS_META = {
     dot: "bg-orange-500",
     row: "bg-orange-50",
   },
+  awaiting_payment_mode_approval: {
+    label: "Payment mode approval",
+    short: "Mode switch",
+    color: "indigo",
+    badge: "bg-indigo-100 text-indigo-800 border-indigo-200",
+    dot: "bg-indigo-500",
+    row: "bg-indigo-50",
+  },
   payment_confirmed: {
     label: "Separation",
     short: "Separation",

@@ -90,7 +90,7 @@ const TransactionTypeSelection = () => {
             >
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 bg-[#AAC7EF] rounded-lg flex items-center justify-center group-hover:bg-[#AAC7EF] transition-colors">
-                  <IconComponent className="w-6 h-6 text-[#4267B2]" />
+                  <IconComponent className="w-6 h-6 text-[var(--aa-navy)]" />
                 </div>
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-800 mb-2">
@@ -99,7 +99,7 @@ const TransactionTypeSelection = () => {
                   <p className="text-sm text-gray-600 mb-3">
                     {type.description}
                   </p>
-                  <div className="text-xs text-[#4267B2] font-medium">
+                  <div className="text-xs text-[var(--aa-navy)] font-medium">
                     Document: {type.documentPrefix}-XXXXXX
                   </div>
                 </div>

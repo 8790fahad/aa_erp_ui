@@ -954,7 +954,7 @@ const DiscrepancyReport = ({ selectedAccount }) => {
                     Description <span className="text-red-500">*</span>
                   </label>
                   <textarea
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     rows={3}
                     value={discrepancyForm.description}
                     onChange={(e) => setDiscrepancyForm(prev => ({ ...prev, description: e.target.value }))}
@@ -1006,7 +1006,7 @@ const DiscrepancyReport = ({ selectedAccount }) => {
                     Notes (Optional)
                   </label>
                   <textarea
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     rows={2}
                     value={discrepancyForm.notes}
                     onChange={(e) => setDiscrepancyForm(prev => ({ ...prev, notes: e.target.value }))}

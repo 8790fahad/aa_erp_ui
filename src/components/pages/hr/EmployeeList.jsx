@@ -43,7 +43,7 @@ const EmployeeList = ({
 }) => {
   const navigate = useNavigate();
   const { user, activeBusiness } = useSelector((state) => state.auth);
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
   const primarySoft = `${primaryColor}18`;
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -467,7 +467,7 @@ const EmployeeList = ({
         payloadKey="employees"
         facilityId={activeBusiness?.id || user?.facilityId}
         createdBy={user?.id || user?.userId}
-        primaryColor={activeBusiness?.primary_color || "#4267B2"}
+        primaryColor={activeBusiness?.primary_color || "#1a2d5e"}
         templateCols={[
           { key: "employeeId", label: "Employee ID", example: "EMP-0001" },
           { key: "firstName", label: "First Name", example: "John" },

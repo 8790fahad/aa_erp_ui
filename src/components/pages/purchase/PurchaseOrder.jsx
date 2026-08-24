@@ -378,7 +378,7 @@ export default function PurchaseOrder() {
             onClick={() => {
               toggle(item);
             }}
-            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+            className="text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:bg-blue-50"
             title="View Details"
           >
             <Eye className="h-4 w-4" />
@@ -467,7 +467,7 @@ export default function PurchaseOrder() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
+            <div className="bg-[var(--aa-navy)] text-white p-4">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-bold">View Purchase Order</h3>
@@ -610,7 +610,7 @@ export default function PurchaseOrder() {
                     );
                   }}
                   className="px-4 py-2 flex items-center gap-2"
-                  style={{ backgroundColor: "#4267B2" }}
+                  style={{ backgroundColor: "var(--aa-navy)" }}
                 >
                   <PrinterIcon className="w-4 h-4" />
                   Print PO

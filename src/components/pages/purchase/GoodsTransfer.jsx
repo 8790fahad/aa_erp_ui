@@ -10,9 +10,26 @@ import {
   History,
   AlertCircle,
   Package,
+  AlertTriangle,
+  MoreHorizontal,
+  Search,
+  X,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { getStoresList } from "@/redux/actions/stores";
 import { toast } from "sonner";
@@ -56,6 +73,9 @@ const normalizeReadyForSalesItem = (item) => {
     sku: item.sku || item.product_id || "",
     qty: balance,
     balance,
+    branch_name: item.branch_name || "for sales",
+    branch_id: item.branch_id ?? item.branchId ?? null,
+    branchId: item.branchId ?? item.branch_id ?? null,
     unit_of_measure: item.unit_of_measure || item.uom || "Pcs",
     cost:
       parseFloat(item.cost ?? item.cost_price ?? item.selling_price ?? 0) || 0,
@@ -159,6 +179,23 @@ export default function GoodsTransfer() {
   const [goodsListItems, setGoodsListItems] = useState([]);
   const [goodsListSearch, setGoodsListSearch] = useState("");
   const [loadingGoodsList, setLoadingGoodsList] = useState(false);
+
+  // Write-off (Scrap/Loss) from Goods tab
+  const [writeOffItem, setWriteOffItem] = useState(null);
+  const [writeOffOpen, setWriteOffOpen] = useState(false);
+  const [writeOffQty, setWriteOffQty] = useState("");
+  const [writeOffNotes, setWriteOffNotes] = useState("");
+  const [writeOffLoading, setWriteOffLoading] = useState(false);
+  const [accounts, setAccounts] = useState([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountSearch, setAccountSearch] = useState("");
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [selectedAccountOption, setSelectedAccountOption] = useState(null);
+  const [writeOffHistory, setWriteOffHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
+
   // Transfer History date range filter (defaults to the current month).
   const [historyFrom, setHistoryFrom] = useState(() =>
     moment().startOf("month").format("YYYY-MM-DD"),
@@ -323,6 +360,116 @@ export default function GoodsTransfer() {
       },
     );
   }, [activeBusiness?.id, goodsListBranchId]);
+
+  const fetchAccounts = useCallback(() => {
+    if (!activeBusiness?.id) return;
+    setAccountsLoading(true);
+    _fetchApi(
+      `/account/account-categories?facilityId=${activeBusiness.id}`,
+      (resp) => {
+        setAccountsLoading(false);
+        setAccounts(Array.isArray(resp?.flat) ? resp.flat : []);
+      },
+      () => setAccountsLoading(false),
+    );
+  }, [activeBusiness?.id]);
+
+  const fetchWriteOffHistory = useCallback(() => {
+    if (!activeBusiness?.id) return;
+    setHistoryLoading(true);
+    _fetchApi(
+      `/inventory/wip/action-history?facilityId=${activeBusiness.id}&actionType=write_off`,
+      (resp) => {
+        setHistoryLoading(false);
+        setWriteOffHistory(resp?.data || []);
+      },
+      () => {
+        setHistoryLoading(false);
+        setWriteOffHistory([]);
+      },
+    );
+  }, [activeBusiness?.id]);
+
+  const openWriteOffHistory = () => {
+    setHistorySearch("");
+    setTimeout(() => {
+      setHistoryOpen(true);
+      fetchWriteOffHistory();
+    }, 0);
+  };
+
+  const openWriteOff = (item) => {
+    setWriteOffItem(item);
+    setWriteOffQty(String(item.qty ?? item.balance ?? ""));
+    setWriteOffNotes("");
+    setSelectedAccountOption(null);
+    setAccountSearch("");
+    if (!accounts.length) fetchAccounts();
+    setTimeout(() => setWriteOffOpen(true), 0);
+  };
+
+  const handleWriteOffSubmit = () => {
+    if (!writeOffItem || !selectedAccountOption) {
+      toast.error("Please select a Chart of Account Head");
+      return;
+    }
+    const qty = Number(writeOffQty);
+    const available = Number(writeOffItem.qty ?? writeOffItem.balance ?? 0);
+    if (!qty || qty <= 0) {
+      toast.error("Enter a valid quantity");
+      return;
+    }
+    if (qty > available) {
+      toast.error(`Quantity exceeds available stock (${available})`);
+      return;
+    }
+    setWriteOffLoading(true);
+    _postApi(
+      "/inventory/write-off",
+      {
+        facilityId: activeBusiness.id,
+        product_id: writeOffItem.product_id,
+        branch_name: writeOffItem.branch_name || "for sales",
+        branchId:
+          writeOffItem.branch_id ??
+          writeOffItem.branchId ??
+          goodsListBranchId ??
+          null,
+        quantity: qty,
+        notes: writeOffNotes,
+        account_head_code: selectedAccountOption.head,
+        account_head_name: selectedAccountOption.description,
+        inserted_by: activeBusiness?.user_name || user?.name || "",
+      },
+      (resp) => {
+        setWriteOffLoading(false);
+        if (resp?.success) {
+          toast.success(`Write-off completed. Ref: ${resp.data?.reference}`);
+          setWriteOffOpen(false);
+          fetchGoodsList();
+          if (historyOpen) fetchWriteOffHistory();
+        } else {
+          toast.error(resp?.message || "Write-off failed");
+        }
+      },
+      (err) => {
+        setWriteOffLoading(false);
+        toast.error(err?.message || "Write-off failed");
+      },
+    );
+  };
+
+  const filteredWriteOffHistory = useMemo(() => {
+    if (!historySearch) return writeOffHistory;
+    const q = historySearch.toLowerCase();
+    return writeOffHistory.filter(
+      (r) =>
+        r.product_name?.toLowerCase().includes(q) ||
+        r.product_id?.toLowerCase().includes(q) ||
+        r.reference_number?.toLowerCase().includes(q) ||
+        r.notes?.toLowerCase().includes(q),
+    );
+  }, [writeOffHistory, historySearch]);
 
   const fetchPending = useCallback(() => {
     if (!activeBusiness?.id) return;
@@ -813,7 +960,7 @@ export default function GoodsTransfer() {
   };
 
   const fieldClass =
-    "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20";
+    "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20";
   const labelClass = "mb-1 block text-xs font-medium text-slate-600";
   const readonlyClass =
     "flex h-9 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-800";
@@ -858,7 +1005,7 @@ export default function GoodsTransfer() {
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
-                className="gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-3 py-2.5 text-sm font-medium text-slate-500 shadow-none data-[state=active]:border-[#4267B2] data-[state=active]:bg-transparent data-[state=active]:text-[#4267B2] data-[state=active]:shadow-none"
+                className="gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-3 py-2.5 text-sm font-medium text-slate-500 shadow-none data-[state=active]:border-[var(--aa-navy)] data-[state=active]:bg-transparent data-[state=active]:text-[var(--aa-navy)] data-[state=active]:shadow-none"
               >
                 {tab.value === "new" && <Plus className="h-3.5 w-3.5" />}
                 {tab.value === "goods-list" && (
@@ -984,7 +1131,7 @@ export default function GoodsTransfer() {
                           placeholder="Search items..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          className="h-8 w-60 rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20"
+                          className="h-8 w-60 rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20"
                         />
                       )}
                     </div>
@@ -1095,7 +1242,7 @@ export default function GoodsTransfer() {
                                           ...provided,
                                           minHeight: "36px",
                                           borderColor: state.isFocused
-                                            ? "#4267B2"
+                                            ? "var(--aa-navy)"
                                             : "#e2e8f0",
                                           borderWidth: "1px",
                                           borderRadius: "0.375rem",
@@ -1105,7 +1252,7 @@ export default function GoodsTransfer() {
                                           fontSize: "14px",
                                           "&:hover": {
                                             borderColor: state.isFocused
-                                              ? "#4267B2"
+                                              ? "var(--aa-navy)"
                                               : "#cbd5e1",
                                           },
                                         }),
@@ -1212,7 +1359,7 @@ export default function GoodsTransfer() {
                           !storeToId ||
                           hasInvalidQty
                         }
-                        className="border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
+                        className="border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90"
                       >
                         {submitting ? "Submitting..." : "Submit Request"}
                       </Button>
@@ -1222,13 +1369,13 @@ export default function GoodsTransfer() {
                 <div className="lg:col-span-1">
                   <div className="sticky top-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
                     <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-                      <AlertCircle className="h-4 w-4 text-[#4267B2]" />
+                      <AlertCircle className="h-4 w-4 text-[var(--aa-navy)]" />
                       How Goods Transfer Works
                     </h3>
                     <div className="space-y-4">
                       {WORKFLOW_STEPS.map((s) => (
                         <div key={s.step} className="flex gap-3">
-                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--aa-sidebar-active)] text-[#4267B2] flex items-center justify-center text-sm font-bold">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--aa-sidebar-active)] text-[var(--aa-navy)] flex items-center justify-center text-sm font-bold">
                             {s.step}
                           </div>
                           <div>
@@ -1301,6 +1448,14 @@ export default function GoodsTransfer() {
                     >
                       {loadingGoodsList ? "Refreshing…" : "Refresh"}
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={openWriteOffHistory}
+                    >
+                      <History className="mr-1 h-4 w-4" />
+                      Write-off History
+                    </Button>
                   </div>
                 </div>
 
@@ -1326,12 +1481,13 @@ export default function GoodsTransfer() {
                           <th className="px-3 py-2.5 text-left">Item Type</th>
                           <th className="px-3 py-2.5 text-right">Available Stock</th>
                           <th className="px-3 py-2.5 text-left">UoM</th>
+                          <th className="px-3 py-2.5 text-center">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredGoodsList.map((item) => (
                           <tr
-                            key={`${item.product_id}-${item.sku || ""}`}
+                            key={`${item.product_id}-${item.sku || ""}-${item.branch_id || item.branchId || ""}`}
                             className="border-b border-slate-200 bg-white hover:bg-slate-50/50"
                           >
                             <td className="px-3 py-2.5 font-medium text-slate-900">
@@ -1352,6 +1508,31 @@ export default function GoodsTransfer() {
                             </td>
                             <td className="px-3 py-2.5 text-slate-600">
                               {item.unit_of_measure || item.uom || "Pcs"}
+                            </td>
+                            <td className="px-3 py-2.5 text-center">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      setTimeout(() => openWriteOff(item), 0);
+                                    }}
+                                    className="text-red-600 focus:text-red-600 cursor-pointer"
+                                  >
+                                    <AlertTriangle className="mr-2 h-4 w-4" />
+                                    Write-off (Scrap/Loss)
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </td>
                           </tr>
                         ))}
@@ -1671,7 +1852,7 @@ export default function GoodsTransfer() {
                                             e.target.value,
                                           )
                                         }
-                                        className={`w-24 rounded-md border px-2 py-1 text-right text-sm focus:outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20 ${
+                                        className={`w-24 rounded-md border px-2 py-1 text-right text-sm focus:outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20 ${
                                           exceeds
                                             ? "border-red-400 bg-red-50"
                                             : "border-slate-200"
@@ -1723,6 +1904,343 @@ export default function GoodsTransfer() {
           )}
         </Tabs>
       )}
+
+      {/* Write-off History Modal */}
+      <Dialog
+        open={historyOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setHistoryOpen(false);
+            setHistorySearch("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-5xl max-h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <History className="h-5 w-5 text-orange-500" />
+                <DialogTitle className="text-base">Write-off History</DialogTitle>
+                {writeOffHistory.length > 0 && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                    {writeOffHistory.length}
+                  </span>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchWriteOffHistory}
+                disabled={historyLoading}
+                className="text-xs shrink-0"
+              >
+                {historyLoading ? "Refreshing..." : "Refresh"}
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="px-6 py-4 flex-1 overflow-hidden flex flex-col min-h-0">
+            <div className="relative mb-4 shrink-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search by item name, SKU, reference, notes..."
+                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+              />
+              {historySearch && (
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  onClick={() => setHistorySearch("")}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-16 flex-1">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-400" />
+              </div>
+            ) : filteredWriteOffHistory.length === 0 ? (
+              <div className="text-center py-16 text-gray-400 text-sm flex-1">
+                <History className="mx-auto h-10 w-10 mb-2 opacity-30" />
+                {writeOffHistory.length === 0
+                  ? "No write-off records found."
+                  : "No records match your search."}
+              </div>
+            ) : (
+              <div className="overflow-auto flex-1 min-h-0 border rounded-lg">
+                <table className="w-full text-sm border-collapse">
+                  <thead className="sticky top-0 z-10 bg-gray-50">
+                    <tr className="border-b border-gray-200">
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                        Reference
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                        Date
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                        Item
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                        From
+                      </th>
+                      <th className="py-2 px-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                        Qty Written Off
+                      </th>
+                      <th className="py-2 px-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                        Unit Cost
+                      </th>
+                      <th className="py-2 px-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                        Total Cost
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                        Notes
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                        By
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredWriteOffHistory.map((row, i) => (
+                      <tr
+                        key={row.id || i}
+                        className="hover:bg-orange-50/40 transition-colors"
+                      >
+                        <td className="py-2 px-3">
+                          <span className="font-mono text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
+                            {row.reference_number || "—"}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-gray-600 text-xs whitespace-nowrap">
+                          {row.created_at
+                            ? moment(row.created_at).format("DD MMM YYYY, HH:mm")
+                            : "—"}
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className="font-medium text-gray-900 text-xs">
+                            {row.product_name || "—"}
+                          </div>
+                          <div className="text-gray-400 text-xs">
+                            {row.product_id}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 text-xs text-gray-600">
+                          {row.source_location || "—"}
+                        </td>
+                        <td className="py-2 px-3 text-right font-semibold text-red-600">
+                          {formatNumber1(Number(row.quantity || 0))}
+                        </td>
+                        <td className="py-2 px-3 text-right text-gray-700">
+                          ₦{formatNumber1(Number(row.unit_cost || 0))}
+                        </td>
+                        <td className="py-2 px-3 text-right font-semibold text-gray-900">
+                          ₦{formatNumber1(Number(row.total_cost || 0))}
+                        </td>
+                        <td className="py-2 px-3 text-xs text-gray-500 max-w-[160px] truncate">
+                          {row.notes || "—"}
+                        </td>
+                        <td className="py-2 px-3 text-xs text-gray-500">
+                          {row.created_by || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <div className="px-6 py-3 border-t flex justify-end shrink-0">
+            <Button variant="outline" onClick={() => setHistoryOpen(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Write-off Modal */}
+      <Dialog
+        open={writeOffOpen}
+        onOpenChange={(open) => {
+          if (!open) setWriteOffOpen(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Write-off (Scrap/Loss)</DialogTitle>
+          </DialogHeader>
+          {writeOffItem && (
+            <div className="space-y-3">
+              <div className="text-sm text-gray-700">
+                <span className="font-semibold">Item:</span>{" "}
+                {writeOffItem.item_name || writeOffItem.name} (
+                {writeOffItem.product_id})
+              </div>
+              <div className="text-sm text-gray-700">
+                <span className="font-semibold">Available Stock:</span>{" "}
+                {formatNumber1(
+                  Number(writeOffItem.qty ?? writeOffItem.balance ?? 0),
+                )}{" "}
+                {writeOffItem.unit_of_measure || writeOffItem.uom || ""}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Quantity</label>
+                <Input
+                  type="number"
+                  min="0.0001"
+                  step="0.0001"
+                  value={writeOffQty}
+                  onChange={(e) => setWriteOffQty(e.target.value)}
+                  placeholder="Enter quantity"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Notes (optional)</label>
+                <Input
+                  type="text"
+                  value={writeOffNotes}
+                  onChange={(e) => setWriteOffNotes(e.target.value)}
+                  placeholder="Reason / remark"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">
+                  Chart of Account Head (Loss / Expense)
+                </label>
+                <div className="mt-1 relative">
+                  {selectedAccountOption ? (
+                    <div className="flex items-center gap-2 rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-sm">
+                      <span className="font-mono text-xs text-gray-500 shrink-0">
+                        {selectedAccountOption.head}
+                      </span>
+                      <span className="flex-1 text-gray-800 truncate">
+                        {selectedAccountOption.description}
+                      </span>
+                      {selectedAccountOption.type && (
+                        <span className="text-xs text-gray-400 shrink-0">
+                          {selectedAccountOption.type}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedAccountOption(null);
+                          setAccountSearch("");
+                        }}
+                        className="ml-1 text-gray-400 hover:text-red-500 font-bold shrink-0"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Input
+                        value={accountSearch}
+                        onChange={(e) => {
+                          setAccountSearch(e.target.value);
+                          setAccountOpen(true);
+                        }}
+                        onFocus={() => setAccountOpen(true)}
+                        onBlur={() => setTimeout(() => setAccountOpen(false), 150)}
+                        placeholder={
+                          accountsLoading
+                            ? "Loading accounts..."
+                            : "Type code or name to search..."
+                        }
+                        disabled={accountsLoading || writeOffLoading}
+                        autoComplete="off"
+                      />
+                      {accountOpen && (
+                        <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg max-h-56 overflow-y-auto">
+                          {accounts
+                            .filter((acc) => {
+                              if (!accountSearch) return true;
+                              const term = accountSearch.toLowerCase();
+                              return (
+                                String(acc.head || "")
+                                  .toLowerCase()
+                                  .includes(term) ||
+                                String(acc.description || "")
+                                  .toLowerCase()
+                                  .includes(term)
+                              );
+                            })
+                            .slice(0, 60)
+                            .map((acc, idx) => (
+                              <div
+                                key={`${acc.head}-${idx}`}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setSelectedAccountOption(acc);
+                                  setAccountSearch("");
+                                  setAccountOpen(false);
+                                }}
+                                className="flex items-center justify-between gap-3 cursor-pointer px-3 py-2 text-sm hover:bg-blue-50"
+                              >
+                                <span className="font-mono text-xs text-gray-400 shrink-0 w-20">
+                                  {acc.head}
+                                </span>
+                                <span className="flex-1 text-gray-800">
+                                  {acc.description}
+                                </span>
+                                {acc.type && (
+                                  <span className="text-xs text-gray-400 shrink-0">
+                                    {acc.type}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          {accounts.filter((acc) => {
+                            if (!accountSearch) return true;
+                            const term = accountSearch.toLowerCase();
+                            return (
+                              String(acc.head || "")
+                                .toLowerCase()
+                                .includes(term) ||
+                              String(acc.description || "")
+                                .toLowerCase()
+                                .includes(term)
+                            );
+                          }).length === 0 && (
+                            <div className="px-3 py-3 text-sm text-gray-400 italic text-center">
+                              No accounts found
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setWriteOffOpen(false)}
+                  disabled={writeOffLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleWriteOffSubmit}
+                  disabled={writeOffLoading}
+                >
+                  {writeOffLoading ? "Processing..." : "Confirm"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

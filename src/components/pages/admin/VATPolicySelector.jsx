@@ -228,11 +228,11 @@ const VATPolicySelector = ({
                     style={{
                       borderColor:
                         selectedPolicy === policy.value
-                          ? activeBusiness?.primary_color || "#007bff"
+                          ? activeBusiness?.primary_color || "#1a2d5e"
                           : "#dee2e6",
                       backgroundColor:
                         selectedPolicy === policy.value
-                          ? `${activeBusiness?.primary_color || "#007bff"}10`
+                          ? `${activeBusiness?.primary_color || "#1a2d5e"}10`
                           : "transparent",
                       cursor: "pointer",
                     }}
@@ -252,7 +252,7 @@ const VATPolicySelector = ({
                             height: "18px",
                             cursor: "pointer",
                             accentColor:
-                              activeBusiness?.primary_color || "#007bff",
+                              activeBusiness?.primary_color || "#1a2d5e",
                           }}
                         />
                       </div>
@@ -262,7 +262,7 @@ const VATPolicySelector = ({
                           style={{
                             color:
                               selectedPolicy === policy.value
-                                ? activeBusiness?.primary_color || "#007bff"
+                                ? activeBusiness?.primary_color || "#1a2d5e"
                                 : "#212529",
                           }}
                         >
@@ -276,7 +276,7 @@ const VATPolicySelector = ({
                         <Check
                           size={20}
                           style={{
-                            color: activeBusiness?.primary_color || "#007bff",
+                            color: activeBusiness?.primary_color || "#1a2d5e",
                           }}
                         />
                       )}
@@ -318,7 +318,7 @@ const VATPolicySelector = ({
                       height: "1.5rem",
                       cursor: "pointer",
                       accentColor:
-                        activeBusiness?.primary_color || "#007bff",
+                        activeBusiness?.primary_color || "#1a2d5e",
                     }}
                   />
                 </div>
@@ -420,7 +420,7 @@ const VATPolicySelector = ({
                       height: "1.5rem",
                       cursor: loadingStockSetting ? "not-allowed" : "pointer",
                       accentColor:
-                        activeBusiness?.primary_color || "#007bff",
+                        activeBusiness?.primary_color || "#1a2d5e",
                     }}
                   />
                 </div>

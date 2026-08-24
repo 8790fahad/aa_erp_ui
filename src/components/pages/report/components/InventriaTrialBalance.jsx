@@ -672,7 +672,7 @@ const InventriaTrialBalance = () => {
                               <button
                                 type="button"
                                 onClick={() => openAccountLedger(account)}
-                                className="text-blue-600 hover:underline font-medium cursor-pointer bg-transparent border-0 p-0"
+                                className="text-[var(--aa-accent)] hover:underline font-medium cursor-pointer bg-transparent border-0 p-0"
                                 title="Open account ledger"
                               >
                                 {account.account_code || "-"}

@@ -25,7 +25,7 @@ import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
 const Allowances = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
   const secondaryColor =
     activeBusiness?.secondary_color &&
     String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"
@@ -453,7 +453,7 @@ const Allowances = () => {
         payloadKey="allowances"
         facilityId={facilityId}
         createdBy={user?.id || user?.userId}
-        primaryColor={activeBusiness?.primary_color || "#4267B2"}
+        primaryColor={activeBusiness?.primary_color || "#1a2d5e"}
         templateCols={[
           {
             key: "name",

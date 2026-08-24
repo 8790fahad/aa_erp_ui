@@ -1132,7 +1132,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
                 onClick={() => setReportView(view.key)}
                 className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
                   reportView === view.key
-                    ? "bg-[#4267B2] text-white shadow-sm"
+                    ? "bg-[var(--aa-navy)] text-white shadow-sm"
                     : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
                 }`}
               >
@@ -1219,7 +1219,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
             <Button
               onClick={runFetch}
               disabled={loading || !activeBusiness?.id}
-              className="bg-[#4267B2] hover:bg-[#365899] text-white"
+              className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
             >
               {loading ? "Loading..." : "Run Report"}
             </Button>

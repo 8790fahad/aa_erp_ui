@@ -32,7 +32,7 @@ import { formatNumber1 } from "@/components/router/utilities";
 
 const SuppliersUpload = ({ open, onClose, onUploadSuccess }) => {
   const { activeBusiness, user } = useSelector((state) => state.auth);
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -700,7 +700,7 @@ const SuppliersUpload = ({ open, onClose, onUploadSuccess }) => {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
             <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
+            <div className="bg-[var(--aa-navy)] text-white p-4">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-bold flex items-center gap-2">
@@ -738,7 +738,7 @@ const SuppliersUpload = ({ open, onClose, onUploadSuccess }) => {
                   <div
                     className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                       isDragging
-                        ? "border-blue-500 bg-blue-50"
+                        ? "border-[var(--aa-accent)] bg-blue-50"
                         : "border-gray-300 hover:border-gray-400"
                     }`}
                     onDragOver={handleDragOver}

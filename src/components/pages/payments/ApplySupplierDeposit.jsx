@@ -33,7 +33,7 @@ import {
   validatePostingDateClient,
 } from "@/utilities";
 
-const APP_BLUE = "#4267B2";
+const APP_BLUE = "var(--aa-navy)";
 const APP_NAVY = "var(--aa-navy, #1a2d5e)";
 
 function parseNumberFromFormatted(value) {
@@ -61,7 +61,7 @@ function billKey(bill) {
 }
 
 const fieldClass =
-  "w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2] transition-all hover:border-slate-400 disabled:opacity-60 disabled:bg-slate-50";
+  "w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)]/30 focus:border-[var(--aa-navy)] transition-all hover:border-slate-400 disabled:opacity-60 disabled:bg-slate-50";
 
 /**
  * Apply vendor deposit / goods-in-transit to unpaid bills.
@@ -939,7 +939,7 @@ export default function ApplySupplierDeposit({
                               onChange={(e) => setAmount(bill, e.target.value)}
                               disabled={applying}
                               placeholder="0.00"
-                              className="ml-auto w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-right text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/25"
+                              className="ml-auto w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-right text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/25"
                             />
                           </td>
                           <td className="px-3 py-2.5 text-right">

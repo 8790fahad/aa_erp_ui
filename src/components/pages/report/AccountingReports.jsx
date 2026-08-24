@@ -138,7 +138,7 @@ const AccountingReports = ({ defaultTab }) => {
               <Button
                 onClick={() => setLoading(true)}
                 disabled={!facilityId || !toDate || loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                className="w-full bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
               >
                 {loading ? (
                   <>

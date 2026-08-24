@@ -136,7 +136,7 @@ const FollowUpModal = ({
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                     <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                         {/* Modal Header */}
-                        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
+                        <div className="bg-[var(--aa-navy)] text-white p-4">
                             <div className="flex justify-between items-center">
                                 <div>
                                     <h3 className="text-xl font-bold">
@@ -174,7 +174,7 @@ const FollowUpModal = ({
                                         name="follow_up_status"
                                         value={form.follow_up_status}
                                         onChange={handleChange}
-                                        className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.follow_up_status ? "border-red-500" : ""
+                                        className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent ${errors.follow_up_status ? "border-red-500" : ""
                                             }`}
                                     >
                                         <option value="">Select follow up status</option>

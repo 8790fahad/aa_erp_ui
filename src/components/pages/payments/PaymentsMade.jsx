@@ -174,7 +174,7 @@ export default function PaymentsMade() {
       component: (item) => (
         <button
           type="button"
-          className="text-sm font-medium text-blue-600 hover:underline"
+          className="text-sm font-medium text-[var(--aa-accent)] hover:underline"
           onClick={() => openReceipt(item)}
         >
           {item.receipt_no || "-"}
@@ -269,7 +269,7 @@ export default function PaymentsMade() {
             <select
               value={modeFilter || "all"}
               onChange={handleModeFilter}
-              className="h-9 min-w-[9rem] rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[#4267B2] focus:ring-1 focus:ring-[#4267B2]"
+              className="h-9 min-w-[9rem] rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-1 focus:ring-[var(--aa-accent)]"
               aria-label="Filter by payment mode"
             >
               <option value="all">All</option>
@@ -299,7 +299,7 @@ export default function PaymentsMade() {
             <Button
               variant="default"
               size="sm"
-              className="flex h-9 items-center gap-2 bg-[#4267B2] shadow-none hover:bg-[#5A7EC1]"
+              className="flex h-9 items-center gap-2 bg-[var(--aa-navy)] shadow-none hover:bg-[var(--aa-navy-hover)]"
               onClick={() => navigate("/app/payments/pay-bills/new")}
             >
               <HandCoins className="h-4 w-4" />
@@ -351,7 +351,7 @@ export default function PaymentsMade() {
                         <Button
                           variant="default"
                           size="sm"
-                          className="flex items-center gap-2 bg-[#4267B2] shadow-none hover:bg-[#5A7EC1]"
+                          className="flex items-center gap-2 bg-[var(--aa-navy)] shadow-none hover:bg-[var(--aa-navy-hover)]"
                           onClick={() => navigate("/app/payments/pay-bills/new")}
                         >
                           <HandCoins className="h-4 w-4" />

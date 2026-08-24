@@ -36,7 +36,7 @@ import BulkUploadModal from "./BulkUploadModal";
 const Bonus = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
   const secondaryColor =
     activeBusiness?.secondary_color &&
     String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"
@@ -755,7 +755,7 @@ const Bonus = () => {
         payloadKey="bonuses"
         facilityId={facilityId}
         createdBy={user?.id || user?.userId}
-        primaryColor={activeBusiness?.primary_color || "#4267B2"}
+        primaryColor={activeBusiness?.primary_color || "#1a2d5e"}
         templateCols={[
           {
             key: "employeeId",
@@ -1153,7 +1153,7 @@ const Bonus = () => {
                           formData.isTaxable === opt.value
                             ? {
                                 backgroundColor:
-                                  activeBusiness?.primary_color || "#4267B2",
+                                  activeBusiness?.primary_color || "#1a2d5e",
                               }
                             : undefined
                         }

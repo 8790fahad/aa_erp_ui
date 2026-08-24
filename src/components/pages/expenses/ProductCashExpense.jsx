@@ -544,7 +544,7 @@ export default function ProductCashExpense() {
                   name="date"
                   value={form.date}
                   onChange={handleFormChange}
-                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-slate-400"
+                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all hover:border-slate-400"
                 />
               </div>
 
@@ -577,7 +577,7 @@ export default function ProductCashExpense() {
                       }));
                     }
                   }}
-                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white hover:border-slate-400"
+                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all bg-white hover:border-slate-400"
                 >
                   <option value="">Select supplier...</option>
                   {/* Show requisition's supplier when added but not yet in supplierList */}
@@ -608,7 +608,7 @@ export default function ProductCashExpense() {
                   name="mode_of_payment"
                   value={form.mode_of_payment}
                   onChange={handleFormChange}
-                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white hover:border-slate-400"
+                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all bg-white hover:border-slate-400"
                 >
                   <option value="">Select Mode of Payment</option>
                   <option value="cash">Cash</option>
@@ -639,7 +639,7 @@ export default function ProductCashExpense() {
                             setBankAccount({});
                           }
                         }}
-                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white hover:border-slate-400"
+                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all bg-white hover:border-slate-400"
                       >
                         <option value="">Select account...</option>
                         {accountList.map((account) => (
@@ -743,7 +743,7 @@ export default function ProductCashExpense() {
                   name="cheque_number"
                   value={form.cheque_number}
                   onChange={handleFormChange}
-                  className="w-full md:w-1/3 px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-slate-400"
+                  className="w-full md:w-1/3 px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all hover:border-slate-400"
                   placeholder="Enter cheque number..."
                 />
               </div>
@@ -760,7 +760,7 @@ export default function ProductCashExpense() {
                 onChange={handleFormChange}
                 rows="2"
                 placeholder="Enter transaction description..."
-                className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none hover:border-slate-400"
+                className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all resize-none hover:border-slate-400"
               />
             </div>
           </div>
@@ -773,7 +773,7 @@ export default function ProductCashExpense() {
             </h2>
             <button
               onClick={handleOpenRequisitionsDrawer}
-              className="text-blue-600 hover:text-blue-800 hover:underline font-medium cursor-pointer text-left"
+              className="text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:underline font-medium cursor-pointer text-left"
             >
               View Purchase Orders
             </button>
@@ -918,7 +918,7 @@ export default function ProductCashExpense() {
                   <div className="flex gap-1">
                     <button
                       onClick={saveEditedItem}
-                      className="flex-1 px-2 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center justify-center gap-1 font-medium shadow-md hover:shadow-lg"
+                      className="flex-1 px-2 py-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white rounded-lg transition-all flex items-center justify-center gap-1 font-medium shadow-md hover:shadow-lg"
                       title="Save changes"
                     >
                       <Check className="w-4 h-4" />
@@ -1105,7 +1105,7 @@ export default function ProductCashExpense() {
                 <button
                   onClick={() => handleDirectPurchase(true)}
                   disabled={loading}
-                  className="px-3 py-2.5 text-sm bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-2.5 text-sm bg-[var(--aa-navy)] hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Printer className="w-4 h-4" />
                   {loading ? (
@@ -1119,7 +1119,7 @@ export default function ProductCashExpense() {
                 <button
                   onClick={() => handleDirectPurchase(false)}
                   disabled={loading}
-                  className="px-3 py-2.5 text-sm bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-2.5 text-sm bg-[var(--aa-navy)] hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Save className="w-4 h-4" />
                   {loading ? (
@@ -1285,7 +1285,7 @@ export default function ProductCashExpense() {
                           addRequisitionItems(requisition);
                           setIsRequisitionsDrawerOpen(false);
                         }}
-                        className="w-full px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full px-3 py-1 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white rounded-lg transition-colors font-medium text-sm flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={selectedRequisitionIds.includes(
                           requisition.pr_no
                         )}

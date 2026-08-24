@@ -12,7 +12,9 @@ import {
   AlertCircle,
   Shield,
   Building2,
+  Upload,
 } from "lucide-react";
+import BulkUploadModal from "@/components/pages/hr/BulkUploadModal";
 import {
   resizeSignature,
   validateImageFile,
@@ -24,7 +26,6 @@ import { mergeReportPermissionsIntoSidebar } from "@/components/pages/report/uti
 import { useSelector, useDispatch } from "react-redux";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
-import CustomButton from "@/common/Custom/CustomButton";
 import { Input } from "reactstrap";
 import {
   DropdownMenu,
@@ -75,6 +76,7 @@ const StaffManagementDashboard = () => {
   const [signatureInfo, setSignatureInfo] = useState(null);
   const [branches, setBranches] = useState([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
   const [loading2, setLoading2] = useState(false);
   const [errors, setErrors] = useState({});
   const [formData, setFormData] = useState({
@@ -86,13 +88,8 @@ const StaffManagementDashboard = () => {
     role: "admin",
     status: "verified",
     branchIds: [],
-    cashier_type: "",
   });
 
-  const isCashierRoleSelected = useMemo(() => {
-    const text = `${roleInputValue || ""} ${formData.role || ""}`.toLowerCase();
-    return text.includes("cashier") || text.includes("casheir");
-  }, [roleInputValue, formData.role]);
 
   // Fetch roles from API
   const fetchRoles = useCallback(() => {
@@ -309,7 +306,7 @@ const StaffManagementDashboard = () => {
             title={tooltip}
           >
             {primary && (
-              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded text-xs font-medium inline-flex items-center gap-1">
+              <span className="px-2 py-0.5 bg-[var(--aa-sidebar-active)] text-[var(--aa-navy)] rounded text-xs font-medium inline-flex items-center gap-1">
                 <Building2 className="w-3 h-3" />
                 {primary.branch_name}
                 <span className="text-[10px] opacity-70">· primary</span>
@@ -356,9 +353,9 @@ const StaffManagementDashboard = () => {
           item.role?.toLowerCase() === "admin";
         return (
           <div className="text-center">
-            <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-sm font-medium inline-flex items-center gap-1">
+            <span className="px-2 py-1 bg-[var(--aa-sidebar-active)] text-[var(--aa-navy)] rounded-md text-sm font-medium inline-flex items-center gap-1">
               {roleLabel}
-              {isAdmin && <Shield className="w-4 h-4" />}
+              {isAdmin && <Shield className="w-4 h-4 text-[var(--aa-accent)]" />}
             </span>
           </div>
         );
@@ -380,7 +377,7 @@ const StaffManagementDashboard = () => {
                 });
                 handleEditUser(item);
               }}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              className="p-2 text-[var(--aa-accent)] hover:bg-[var(--aa-sidebar-active)] rounded-lg transition-colors"
               title="Edit User"
             >
               <Edit className="w-4 h-4" />
@@ -518,7 +515,6 @@ const StaffManagementDashboard = () => {
       role: "",
       status: "verified",
       branchIds: [],
-      cashier_type: "",
     });
     setRoleInputValue("");
     setShowRoleDropdown(false);
@@ -540,7 +536,6 @@ const StaffManagementDashboard = () => {
       businessType: user.businessType,
       role: user.role,
       status: user.status,
-      cashier_type: user.cashier_type || "",
       branchIds: (() => {
         if (Array.isArray(user.branchIds) && user.branchIds.length > 0) {
           return user.branchIds.map(Number).filter(Boolean);
@@ -716,18 +711,6 @@ const StaffManagementDashboard = () => {
       return;
     }
 
-    const roleLower = String(roleValue || roleText || "").toLowerCase();
-    const needsCashierType =
-      roleLower.includes("cashier") || roleLower.includes("casheir");
-    if (
-      needsCashierType &&
-      formData.cashier_type !== "cash" &&
-      formData.cashier_type !== "transfer"
-    ) {
-      toast.error("Select Cashier payment type: Cash or Bank Transfer.");
-      setLoading2(false);
-      return;
-    }
 
     const newUser = {
       firstname: formData.firstname,
@@ -740,7 +723,6 @@ const StaffManagementDashboard = () => {
       facilityId: activeBusiness.id,
       branchIds: branchIdsToUse,
       branchId: branchIdsToUse[0],
-      cashier_type: needsCashierType ? formData.cashier_type : null,
     };
 
     console.log("Submitting user:", newUser);
@@ -762,7 +744,6 @@ const StaffManagementDashboard = () => {
             role: "",
             status: "verified",
             branchIds: [],
-            cashier_type: "",
           });
           setRoleInputValue("");
           setShowRoleDropdown(false);
@@ -800,18 +781,6 @@ const StaffManagementDashboard = () => {
       return;
     }
 
-    const roleLower = String(roleValue || roleText || "").toLowerCase();
-    const needsCashierType =
-      roleLower.includes("cashier") || roleLower.includes("casheir");
-    if (
-      needsCashierType &&
-      formData.cashier_type !== "cash" &&
-      formData.cashier_type !== "transfer"
-    ) {
-      toast.error("Select Cashier payment type: Cash or Bank Transfer.");
-      setLoading2(false);
-      return;
-    }
 
     const updateUser = {
       id: formData.id,
@@ -826,7 +795,6 @@ const StaffManagementDashboard = () => {
       facilityId: activeBusiness.id,
       branchIds: branchIdsToUse,
       branchId: branchIdsToUse[0],
-      cashier_type: needsCashierType ? formData.cashier_type : null,
     };
 
     console.log("Submitting user:", updateUser);
@@ -849,7 +817,6 @@ const StaffManagementDashboard = () => {
             role: "",
             status: "verified",
             branchIds: [],
-            cashier_type: "",
           });
           setRoleInputValue("");
           setShowRoleDropdown(false);
@@ -1251,7 +1218,7 @@ const StaffManagementDashboard = () => {
           <div className="p-">
             <div className="flex justify-between items-center mb-6">
               <h1 className="text-2xl font-bold text-gray-900">
-                Staff Management
+                Manage Users
               </h1>
               <div className="flex items-center gap-4">
                 <span className="text-sm text-gray-600">
@@ -1287,22 +1254,35 @@ const StaffManagementDashboard = () => {
                 <input
                   type="text"
                   placeholder="Search users by name, email, phone, or role..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <CustomButton
+              <Button
+                type="button"
+                className="aa-btn-primary h-10 px-5 text-white"
                 onClick={handleAddUser}
-                // className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors font-medium"
               >
                 <Plus className="w-5 h-5" />
                 Add New Staff
-              </CustomButton>
-              <CustomButton onClick={() => setShowInviteModal(true)}>
+              </Button>
+              <Button
+                type="button"
+                className="aa-btn-primary h-10 px-5 text-white"
+                onClick={() => setBulkUploadOpen(true)}
+              >
+                <Upload className="w-5 h-5" />
+                Upload
+              </Button>
+              <Button
+                type="button"
+                className="aa-btn-primary h-10 px-5 text-white"
+                onClick={() => setShowInviteModal(true)}
+              >
                 <FcInvite className="w-5 h-5" />
                 Invite
-              </CustomButton>
+              </Button>
             </div>
             {/* {JSON.stringify(usersList)} */}
             <div className="overflow-x-auto">
@@ -1472,21 +1452,9 @@ const StaffManagementDashboard = () => {
                             onClick={() => {
                               setRoleInputValue(role.label);
                               setFormData({
-                                ...formData,
-                                role: role.value,
-                                cashier_type: (() => {
-                                  const l = String(
-                                    role.label || role.value || "",
-                                  ).toLowerCase();
-                                  if (
-                                    l.includes("cashier") ||
-                                    l.includes("casheir")
-                                  ) {
-                                    return formData.cashier_type || "";
-                                  }
-                                  return "";
-                                })(),
-                              });
+                              ...formData,
+                              role: role.value,
+                            });
                               setShowRoleDropdown(false);
                             }}
                           >
@@ -1533,42 +1501,6 @@ const StaffManagementDashboard = () => {
                   )}
                 </div>
 
-                {isCashierRoleSelected && (
-                  <div className="mb-4">
-                    <ShadcnLabel
-                      htmlFor="cashier_type"
-                      className="text-sm font-semibold text-gray-700 mb-1 block"
-                    >
-                      Cashier payment type{" "}
-                      <span className="text-red-500">*</span>
-                    </ShadcnLabel>
-                    <select
-                      id="cashier_type"
-                      required
-                      value={formData.cashier_type || ""}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          cashier_type: e.target.value,
-                        })
-                      }
-                      className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                    >
-                      <option value="">Select cash or transfer</option>
-                      <option value="cash">Cash</option>
-                      <option value="transfer">Bank Transfer</option>
-                    </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      This cashier will only confirm invoices marked for{" "}
-                      {formData.cashier_type === "transfer"
-                        ? "bank transfer"
-                        : formData.cashier_type === "cash"
-                          ? "cash"
-                          : "this payment type"}
-                      .
-                    </p>
-                  </div>
-                )}
 
                 <div className="mb-4">
                   <ShadcnLabel
@@ -1687,7 +1619,7 @@ const StaffManagementDashboard = () => {
                 <button
                   type="submit"
                   disabled={loading2}
-                  className="px-4 py-2 text-sm bg-[var(--aa-accent)] text-white rounded-md hover:bg-[var(--aa-accent-hover)] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="aa-btn-primary px-4 py-2 text-sm text-white rounded-md transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {loading2 ? (
                     <>
@@ -1741,17 +1673,18 @@ const StaffManagementDashboard = () => {
                   </div>
                 </div>
                 <div className="flex gap-2 pt-4">
-                  <CustomButton
+                  <Button
                     type="submit"
-                    className="flex-1"
+                    className="aa-btn-primary flex-1 text-white"
                     disabled={loading2}
                   >
                     {loading2 ? "Sending..." : "Invite Staff"}
-                  </CustomButton>
+                  </Button>
                   <Button
                     type="button"
                     onClick={handleCancel}
-                    className=" bg-gray-200 hover:bg-gray-300 text-gray-800 shadow-none rounded-md transition-colors font-medium"
+                    variant="secondary"
+                    className="rounded-md font-medium"
                   >
                     Cancel
                   </Button>
@@ -1779,8 +1712,8 @@ const StaffManagementDashboard = () => {
 
               <div className="mb-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-blue-600 font-medium">
+                  <div className="w-12 h-12 bg-[var(--aa-sidebar-active)] rounded-full flex items-center justify-center">
+                    <span className="text-[var(--aa-navy)] font-medium">
                       {selectedUser?.firstname?.charAt(0)}
                       {selectedUser?.lastname?.charAt(0)}
                     </span>
@@ -1893,8 +1826,8 @@ const StaffManagementDashboard = () => {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-                <p className="text-blue-800 text-sm">
+              <div className="mb-4 p-4 bg-[var(--aa-sidebar-active)] rounded-lg">
+                <p className="text-[var(--aa-navy)] text-sm">
                   <strong>Role:</strong> {getRoleLabel(selectedUser?.role)} |
                   <strong> Status:</strong> {selectedUser?.status} |
                   <strong> Phone Number:</strong> {selectedUser?.phone}
@@ -1910,7 +1843,7 @@ const StaffManagementDashboard = () => {
                       <input
                         type={showPassword ? "text" : "password"}
                         placeholder="Enter new password"
-                        className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                         value={formData.password || ""}
                         onChange={(e) =>
                           setFormData({ ...formData, password: e.target.value })
@@ -1940,7 +1873,7 @@ const StaffManagementDashboard = () => {
                       <input
                         type={showConfirmPassword ? "text" : "password"}
                         placeholder="Confirm new password"
-                        className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                         value={formData.confirmPassword || ""}
                         onChange={(e) =>
                           setFormData({
@@ -1977,26 +1910,24 @@ const StaffManagementDashboard = () => {
                 >
                   Cancel
                 </button>
-                <CustomButton
+                <Button
+                  type="button"
                   onClick={() => {
                     setFormData((prev) => ({
                       ...prev,
                       email: selectedUser.email,
                     }));
-                    // alert(selectedUser.email)
                     handlePasswordChange(new Event("submit"));
                   }}
                   disabled={loading2}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="aa-btn-primary px-6 py-2 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading2 ? (
-                    <>
-                      <Loader className="animate-spin w-4 h-4 mx-auto" />
-                    </>
+                    <Loader className="animate-spin w-4 h-4 mx-auto" />
                   ) : (
                     "Save Changes"
                   )}
-                </CustomButton>
+                </Button>
               </div>
             </div>
           </div>
@@ -2007,7 +1938,7 @@ const StaffManagementDashboard = () => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 z-50 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[95vh] flex flex-col transform transition-all animate-in zoom-in-95 duration-200">
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-600 text-white p-5 rounded-t-2xl">
+            <div className="bg-[var(--aa-navy)] text-white p-5 rounded-t-2xl">
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
@@ -2018,7 +1949,7 @@ const StaffManagementDashboard = () => {
                       User Permissions - {selectedUser?.firstname}{" "}
                       {selectedUser?.lastname}
                     </h3>
-                    <p className="text-sm text-blue-100 mt-1">
+                    <p className="text-sm text-white/80 mt-1">
                       Manage access and functionalities for this user
                     </p>
                   </div>
@@ -2034,8 +1965,8 @@ const StaffManagementDashboard = () => {
 
             {/* User Info Banner */}
             <div className="px-6 pt-4 pb-2">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-blue-800 text-sm">
+              <div className="bg-[var(--aa-sidebar-active)] border border-[var(--aa-accent)]/30 rounded-lg p-3">
+                <p className="text-[var(--aa-navy)] text-sm">
                   <strong>Role:</strong> {getRoleLabel(selectedUser?.role)} |
                   <strong> Status:</strong> {selectedUser?.status} |
                   <strong> Phone Number:</strong> {selectedUser?.phone}
@@ -2172,7 +2103,7 @@ const StaffManagementDashboard = () => {
                   handlePermissions();
                 }}
                 disabled={loading2}
-                className="px-6 py-2.5 text-sm bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-6 py-2.5 text-sm bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white rounded-lg transition-all font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {loading2 ? (
                   <>
@@ -2210,8 +2141,8 @@ const StaffManagementDashboard = () => {
               <div className="mb-6">
                 {/* Staff Info */}
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-blue-600 font-medium">
+                  <div className="w-12 h-12 bg-[var(--aa-sidebar-active)] rounded-full flex items-center justify-center">
+                    <span className="text-[var(--aa-navy)] font-medium">
                       {selectedUser?.firstname?.charAt(0)}
                       {selectedUser?.lastname?.charAt(0)}
                     </span>
@@ -2235,10 +2166,10 @@ const StaffManagementDashboard = () => {
                   </label>
 
                   {/* Upload Guidelines */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                  <div className="bg-[var(--aa-sidebar-active)] border border-[var(--aa-accent)]/30 rounded-md p-3">
                     <div className="flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                      <div className="text-xs text-blue-800">
+                      <AlertCircle className="w-4 h-4 text-[var(--aa-accent)] mt-0.5 flex-shrink-0" />
+                      <div className="text-xs text-[var(--aa-navy)]">
                         <p className="font-medium mb-1">
                           Signature Guidelines:
                         </p>
@@ -2262,15 +2193,15 @@ const StaffManagementDashboard = () => {
                     file:mr-4 file:py-2 file:px-4
                     file:rounded-md file:border-0
                     file:text-sm file:font-medium
-                    file:bg-blue-50 file:text-blue-700
-                    hover:file:bg-blue-100
+                    file:bg-[var(--aa-sidebar-active)] file:text-[var(--aa-navy)]
+                    hover:file:bg-[var(--aa-sidebar-active)]
                     disabled:opacity-50 disabled:cursor-not-allowed"
                   />
 
                   {/* Processing Indicator */}
                   {processingSignature && (
-                    <div className="flex items-center gap-2 text-sm text-blue-600">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <div className="flex items-center gap-2 text-sm text-[var(--aa-accent)]">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[var(--aa-accent)]"></div>
                       Processing signature...
                     </div>
                   )}
@@ -2336,7 +2267,7 @@ const StaffManagementDashboard = () => {
                 </button>
                 <button
                   onClick={() => handleSignature()}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors font-medium"
+                  className="flex-1 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white py-2 px-4 rounded-md transition-colors font-medium"
                 >
                   {selectedUser?.signature ? "Update" : "Add"} Signature
                 </button>
@@ -2345,6 +2276,73 @@ const StaffManagementDashboard = () => {
           </div>
         </div>
       )}
+
+      <BulkUploadModal
+        open={bulkUploadOpen}
+        onClose={() => setBulkUploadOpen(false)}
+        onSuccess={() => {
+          getUsers();
+          setBulkUploadOpen(false);
+        }}
+        title="Bulk Upload Users"
+        apiEndpoint="/api/auth/bulk-staff"
+        payloadKey="users"
+        facilityId={activeBusiness?.id}
+        createdBy={user?.id}
+        primaryColor="#1a2d5e"
+        templateCols={[
+          { key: "firstname", label: "First Name", example: "Amina" },
+          { key: "lastname", label: "Last Name", example: "Bello" },
+          {
+            key: "email",
+            label: "Email",
+            example: "amina.bello@example.com",
+          },
+          { key: "phone", label: "Phone", example: "08012345678" },
+          { key: "role", label: "Role", example: "Accountant", hint: "If the role name is not found it will be created automatically; if found, that role is used." },
+          {
+            key: "branch",
+            label: "Branch",
+            example: branches[0]?.branch_name || "YAMUSA STORE",
+          },
+          { key: "status", label: "Status", example: "verified" },
+        ]}
+        exampleRows={[
+          {
+            firstname: "Amina",
+            lastname: "Bello",
+            email: "amina.bello@example.com",
+            phone: "08012345678",
+            role: "Accountant",
+            branch: branches[0]?.branch_name || "YAMUSA STORE",
+            status: "verified",
+          },
+          {
+            firstname: "Ibrahim",
+            lastname: "Sani",
+            email: "ibrahim.sani@example.com",
+            phone: "08098765432",
+            role: "Cashier",
+            branch: branches[0]?.branch_name || "YAMUSA STORE",
+            status: "verified",
+          },
+        ]}
+        mapRow={(r) => ({
+          firstname: r["First Name"] || r.firstname || r.firstName || "",
+          lastname: r["Last Name"] || r.lastname || r.lastName || "",
+          email: r["Email"] || r.email || "",
+          phone: r["Phone"] || r.phone || "",
+          role: r["Role"] || r.role || "",
+          branch:
+            r["Branch"] ||
+            r["Warehouse"] ||
+            r.branch ||
+            r.branch_name ||
+            r.warehouse ||
+            "",
+          status: r["Status"] || r.status || "verified",
+        })}
+      />
     </div>
   );
 };

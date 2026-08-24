@@ -36,6 +36,34 @@
   background-color: var(--aa-sidebar-bg);
 }
 
+/* Shared ERP form / modal chrome — prefer these over hardcoded blues */
+.aa-modal-header {
+  background-color: var(--aa-navy);
+  color: #fff;
+}
+.aa-btn-primary {
+  background-color: var(--aa-navy);
+  border-color: var(--aa-navy);
+  color: #fff;
+}
+.aa-btn-primary:hover {
+  background-color: var(--aa-navy-hover);
+  border-color: var(--aa-navy-hover);
+  color: #fff;
+}
+.aa-link {
+  color: var(--aa-accent);
+}
+.aa-link:hover {
+  color: var(--aa-accent-hover);
+}
+.aa-focus-ring:focus,
+.aa-focus-ring:focus-visible {
+  outline: none;
+  border-color: var(--aa-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--aa-accent) 25%, transparent);
+}
+
 /* Sidebar sits below the navy top bar and stays visible */
 .aa-shell .group.peer > div.relative {
   height: calc(100svh - var(--aa-topbar-height)) !important;
@@ -77,13 +105,13 @@ h1 {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #4267B2;
+  background-color: var(--aa-navy);
   color: #fff;
   cursor: pointer;
   transition: border 0.25s;
 }
 /* button:hover {
-  color: #4267B2;
+  color: var(--aa-navy);
 } */
 button:focus,
 button:focus-visible {
@@ -367,9 +395,9 @@ code {
 }
 
 .drag-upload-btn:hover {
-  background: #007bff; /* Assuming $primary = #007bff */
-  border-color: #007bff; /* Assuming $primary = #007bff */
-  color: #fff; /* Assuming $white = #fff */
+  background: var(--aa-navy);
+  border-color: var(--aa-navy);
+  color: #fff;
   transition: all 0.5s;
 }
 

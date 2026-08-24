@@ -891,7 +891,7 @@ const BankSetup = ({ embedded = false }) => {
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                          className="text-sm font-medium text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:underline"
                           onClick={() => setShowBankQuickAdd((v) => !v)}
                         >
                           {showBankQuickAdd

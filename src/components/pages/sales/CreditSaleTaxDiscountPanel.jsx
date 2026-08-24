@@ -70,7 +70,7 @@ export default function CreditSaleTaxDiscountPanel({
   const taxesMainTitle =
     filteredOutputVATTaxes.length > 0 && regularTaxesForUi.length === 0
       ? "Output VAT"
-      : "Taxes";
+      : "VAT";
 
   const discountEmptyOnly = activeDiscounts.length === 0;
 

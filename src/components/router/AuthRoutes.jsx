@@ -137,7 +137,7 @@ export default function AuthRoutes() {
             </SidebarGroupLabel>
             <SidebarMenu>
               {dash ? (
-                <Button className="flex w-full items-center justify-start gap-2 overflow-hidden p-2 transition-[width,height,padding] ring-sidebar-ring outline-none text-sm text-left leading-none rounded-md h-8 bg-[#4267B2] hover:bg-white hover:text-[#4267B2] shadow-none [&>svg]:size-4 [&>svg]:shrink-0">
+                <Button className="flex w-full items-center justify-start gap-2 overflow-hidden p-2 transition-[width,height,padding] ring-sidebar-ring outline-none text-sm text-left leading-none rounded-md h-8 bg-[var(--aa-navy)] hover:bg-white hover:text-[var(--aa-navy)] shadow-none [&>svg]:size-4 [&>svg]:shrink-0">
                   <LayoutDashboard />
                   <span className="leading-snug">Dashboard</span>
                 </Button>
@@ -200,7 +200,7 @@ export default function AuthRoutes() {
                   >
                     <Avatar className="h-8 w-8 rounded-lg">
                       <AvatarImage src={data.user.avatar} alt={user.fullname} />
-                      <AvatarFallback className="rounded-lg text-[#4267B2]">
+                      <AvatarFallback className="rounded-lg text-[var(--aa-navy)]">
                         PM
                       </AvatarFallback>
                     </Avatar>
@@ -226,7 +226,7 @@ export default function AuthRoutes() {
                           src={data.user.avatar}
                           alt={user.fullname}
                         />
-                        <AvatarFallback className="rounded-lg text-[#4267B2]">
+                        <AvatarFallback className="rounded-lg text-[var(--aa-navy)]">
                           PM
                         </AvatarFallback>
                       </Avatar>

@@ -59,7 +59,7 @@ export default function CrmLayout() {
       <div className="border-b border-[#1a2d5e]/10 bg-white/80 backdrop-blur-sm">
         <div className="px-4 pt-5 pb-3 md:px-6">
           <div className="flex flex-col gap-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#4267B2]">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--aa-navy)]">
               Customer Retention
             </p>
             <h1 className="text-2xl font-semibold text-[#1a2d5e]">CRM</h1>

@@ -143,7 +143,7 @@ export default function Register() {
               <div className="space-y-2">
                 <Label htmlFor="firstName">Firstname</Label>
                 <Input
-                  className="border-2 border-[#4267B2] focus:ring-[#4267B2] focus:border-[#4267B2]"
+                  className="border-2 border-[var(--aa-navy)] focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
                   id="firstName"
                   name="firstName"
                   placeholder="John"
@@ -154,7 +154,7 @@ export default function Register() {
               <div className="space-y-2">
                 <Label htmlFor="lastName">Lastname</Label>
                 <Input
-                  className="border-2 border-[#4267B2] focus:ring-[#4267B2] focus:border-[#4267B2]"
+                  className="border-2 border-[var(--aa-navy)] focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
                   id="lastname"
                   name="lastname"
                   placeholder="Doe"
@@ -165,7 +165,7 @@ export default function Register() {
               <div className="space-y-2">
                 <Label htmlFor="userName">Username</Label>
                 <Input
-                  className="border-2 border-[#4267B2] focus:ring-[#4267B2] focus:border-[#4267B2]"
+                  className="border-2 border-[var(--aa-navy)] focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
                   id="username"
                   name="username"
                   // placeholder="Doe"
@@ -176,7 +176,7 @@ export default function Register() {
               <div className="space-y-2">
                 <Label htmlFor="busName">Business Name</Label>
                 <Input
-                  className="border-2 border-[#4267B2] focus:ring-[#4267B2] focus:border-[#4267B2]"
+                  className="border-2 border-[var(--aa-navy)] focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
                   id="busName"
                   name="busName"
                   // placeholder="Doe"
@@ -187,7 +187,7 @@ export default function Register() {
               <div className="space-y-2">
                 <Label htmlFor="busName">Business Type</Label>
                 <select
-                  className="form-select border-2 border-[#4267B2] focus:ring-[#4267B2] focus:border-[#4267B2] bg-transparent"
+                  className="form-select border-2 border-[var(--aa-navy)] focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] bg-transparent"
                   id="busType"
                   type="select"
                   name="busType"
@@ -205,7 +205,7 @@ export default function Register() {
             <div className="space-y-2">
               <Label htmlFor="address">Business address</Label>
               <Textarea
-                className="border-2 border-[#4267B2] focus:ring-[#4267B2] focus:border-[#4267B2]"
+                className="border-2 border-[var(--aa-navy)] focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
                 id="address"
                 name="address"
                 onChange={handleChange}
@@ -217,7 +217,7 @@ export default function Register() {
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone Number</Label>
                 <Input
-                  className="border-2 border-[#4267B2] focus:ring-[#4267B2] focus:border-[#4267B2]"
+                  className="border-2 border-[var(--aa-navy)] focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
                   id="phone"
                   name="phone"
                   type="tel"
@@ -228,7 +228,7 @@ export default function Register() {
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
-                  className="border-2 border-[#4267B2] focus:ring-[#4267B2] focus:border-[#4267B2]"
+                  className="border-2 border-[var(--aa-navy)] focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
                   id="email"
                   name="email"
                   onChange={handleChange}
@@ -242,7 +242,7 @@ export default function Register() {
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
                   <Input
-                    className="border-2 border-[#4267B2] focus:ring-[#4267B2] focus:border-[#4267B2] pr-10"
+                    className="border-2 border-[var(--aa-navy)] focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] pr-10"
                     id="password"
                     name="password"
                     onChange={handleChange}
@@ -266,7 +266,7 @@ export default function Register() {
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
                 <div className="relative">
                   <Input
-                    className="border-2 border-[#4267B2] focus:ring-[#4267B2] focus:border-[#4267B2] pr-10"
+                    className="border-2 border-[var(--aa-navy)] focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)] pr-10"
                     id="confirmPassword"
                     name="confirmPassword"
                     onChange={handleChange}
@@ -301,7 +301,7 @@ export default function Register() {
               </Label>
             </div> */}
             <Button
-              className="w-full bg-[#4267B2] hover:bg-[#4267B2]/80 border-0"
+              className="w-full bg-[var(--aa-navy)] hover:bg-[var(--aa-navy)]/80 border-0"
               type="submit"
               disabled={isLoading}
             >

@@ -422,7 +422,7 @@ const CustomerSecurityDepositForm = () => {
                 onChange={handleFormChange}
                 required
                 disabled={loading}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
               />,
               "date"
             )}
@@ -471,7 +471,7 @@ const CustomerSecurityDepositForm = () => {
                 value={form.quantity}
                 onChange={(e) => handleQuantityChange(e.target.value)}
                 min="1"
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                 disabled={loading}
               />,
               "quantity"
@@ -507,7 +507,7 @@ const CustomerSecurityDepositForm = () => {
                   }))
                 }
                 disabled={loading}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
               >
                 <option value="">Select Mode of Payment</option>
                 {methods_of_payment.map((method) => (
@@ -532,7 +532,7 @@ const CustomerSecurityDepositForm = () => {
                   value={form.bank_account_id}
                   onChange={handleFormChange}
                   disabled={loading}
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                 >
                   <option value="">Select account...</option>
                   {accountList.map((account) => (
@@ -561,7 +561,7 @@ const CustomerSecurityDepositForm = () => {
                   value={form.bank_account_id}
                   onChange={handleFormChange}
                   disabled={loading}
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                 >
                   <option value="">Select account...</option>
                   {accountList.map((account) => (
@@ -591,7 +591,7 @@ const CustomerSecurityDepositForm = () => {
                   }
                   disabled={loading}
                   placeholder="Enter cheque number"
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                 />
               </div>
             )}
@@ -642,7 +642,7 @@ const CustomerSecurityDepositForm = () => {
           <Button
             onClick={handleSubmit}
             disabled={loading}
-            className="bg-[#5C7FC1] shadow-none hover:bg-[#4267B2] text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+            className="bg-[var(--aa-navy-hover)] shadow-none hover:bg-[var(--aa-navy)] text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
           >
             {loading ? (
               <>

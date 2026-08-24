@@ -227,7 +227,7 @@ const DirectPostModal = ({
           <Button
             onClick={handleSubmit}
             disabled={submitting || !formData.accountCode}
-            className="bg-[#4267B2] hover:bg-[#365899]"
+            className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]"
           >
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Post & Match

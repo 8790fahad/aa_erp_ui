@@ -529,7 +529,7 @@ export default function ProductionCorrectionSettings() {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness) || {};
   const user = useSelector((state) => state.auth.user) || {};
   const facilityId = activeBusiness?.id;
-  const primary = activeBusiness?.primary_color || "var(--aa-navy)";
+  const primary = activeBusiness?.primary_color || "#1a2d5e";
   const enabled = !!activeBusiness?.enable_production_correction;
 
   const [toggleLoading, setToggleLoading] = useState(false);

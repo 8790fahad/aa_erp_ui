@@ -1036,7 +1036,7 @@ const Transaction = () => {
             >
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 bg-[#AAC7EF] rounded-lg flex items-center justify-center group-hover:bg-[#AAC7EF] transition-colors">
-                  <IconComponent className="w-6 h-6 text-[#4267B2]" />
+                  <IconComponent className="w-6 h-6 text-[var(--aa-navy)]" />
                 </div>
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-800 mb-2">
@@ -1045,7 +1045,7 @@ const Transaction = () => {
                   {/* <p className="text-sm text-gray-600 mb-3">
                     {type.description}
                   </p> */}
-                  <div className="text-xs text-[#4267B2] font-medium">
+                  <div className="text-xs text-[var(--aa-navy)] font-medium">
                     Document: {type.documentPrefix}-XXXXXX
                   </div>
                 </div>
@@ -1073,7 +1073,7 @@ const Transaction = () => {
           <div className="w-10 h-10 bg-[#AAC7EF] rounded-lg flex items-center justify-center">
             {selectedTransactionType &&
               React.createElement(selectedTransactionType.icon, {
-                className: "w-5 h-5 text-[#4267B2]",
+                className: "w-5 h-5 text-[var(--aa-navy)]",
               })}
           </div>
           <div>
@@ -1477,7 +1477,7 @@ const Transaction = () => {
               onDrop={onDrop}
               className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 ${
                 isDragActive
-                  ? "border-blue-500 bg-blue-50"
+                  ? "border-[var(--aa-accent)] bg-blue-50"
                   : "border-gray-300 bg-gray-50"
               }`}
               style={{ minHeight: "120px" }}
@@ -1520,7 +1520,7 @@ const Transaction = () => {
                     {/* File name (clickable preview for images) */}
                     {file.type && file.type.startsWith("image/") ? (
                       <div
-                        className="truncate text-sm cursor-pointer text-blue-600 hover:text-blue-800"
+                        className="truncate text-sm cursor-pointer text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)]"
                         title={file.name}
                         onClick={() => {
                           // Create a preview URL and open in new tab
@@ -1532,7 +1532,7 @@ const Transaction = () => {
                       </div>
                     ) : (
                       <div
-                        className="truncate text-sm cursor-pointer text-blue-600 hover:text-blue-800"
+                        className="truncate text-sm cursor-pointer text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)]"
                         title={file.name}
                         onClick={() => {
                           // Open file in new tab
@@ -1600,7 +1600,7 @@ const Transaction = () => {
         </button>
         <button
           onClick={handleSubmit}
-          className="bg-[#5C7FC1] hover:bg-[#4267B2] text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors"
+          className="bg-[var(--aa-navy-hover)] hover:bg-[var(--aa-navy)] text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors"
         >
           {loading ? (
             <Loader className="w-4 h-4" />
@@ -1620,7 +1620,7 @@ const Transaction = () => {
         <h2 className="text-2xl font-bold text-gray-800">Transaction List</h2>
         <button
           onClick={handleCreateNewTransaction}
-          className="bg-[#5C7FC1] hover:bg-[#4267B2] text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+          className="bg-[var(--aa-navy-hover)] hover:bg-[var(--aa-navy)] text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
         >
           <Plus className="w-4 h-4" />
           New Transaction

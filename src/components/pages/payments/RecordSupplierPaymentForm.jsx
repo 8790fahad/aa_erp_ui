@@ -52,7 +52,7 @@ function invoiceRowKey(inv) {
 }
 
 const inputClass =
-  "w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-500";
+  "w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)] disabled:bg-gray-50 disabled:text-gray-500";
 
 /** Label-left / field-right row, Zoho-style. */
 function Row({ label, required, children, error }) {
@@ -567,7 +567,7 @@ export default function RecordSupplierPaymentForm() {
         </div>
 
         <Row label="Payment Made" required error={errors.amount}>
-          <div className="flex overflow-hidden rounded border border-gray-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+          <div className="flex overflow-hidden rounded border border-gray-300 focus-within:border-[var(--aa-accent)] focus-within:ring-1 focus-within:ring-[var(--aa-accent)]">
             <span className="flex items-center border-r border-gray-300 bg-gray-50 px-3 text-sm font-medium text-gray-600">
               {currency}
             </span>
@@ -838,7 +838,7 @@ export default function RecordSupplierPaymentForm() {
                           }
                           disabled={saving}
                           placeholder="0.00"
-                          className="ml-auto w-28 rounded border border-gray-300 px-2 py-1 text-right text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                          className="ml-auto w-28 rounded border border-gray-300 px-2 py-1 text-right text-sm outline-none focus:ring-1 focus:ring-[var(--aa-accent)]"
                         />
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -885,7 +885,7 @@ export default function RecordSupplierPaymentForm() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:divide-x sm:divide-gray-200">
             <div className="flex min-w-0 flex-col gap-1 px-2">
               <span className="text-[12px] text-gray-600">Amount Paid :</span>
-              <div className="flex overflow-hidden rounded border border-gray-300 bg-white focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+              <div className="flex overflow-hidden rounded border border-gray-300 bg-white focus-within:border-[var(--aa-accent)] focus-within:ring-1 focus-within:ring-[var(--aa-accent)]">
                 <span className="flex items-center border-r border-gray-200 bg-gray-50 px-2 text-xs font-medium text-gray-600">
                   {currency}
                 </span>
@@ -950,7 +950,7 @@ export default function RecordSupplierPaymentForm() {
               onChange={(e) => setNotes(e.target.value)}
               disabled={saving}
               rows={3}
-              className="w-full resize-y rounded border border-gray-300 px-2.5 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full resize-y rounded border border-gray-300 px-2.5 py-1.5 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
             />
           </div>
 

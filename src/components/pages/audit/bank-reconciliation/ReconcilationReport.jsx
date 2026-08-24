@@ -121,7 +121,7 @@ const ReconciliationReports = ({ selectedAccount }) => {
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button className="flex items-center gap-2 bg-[#4267B2] hover:bg-[#365899]" onClick={() => {
+          <Button className="flex items-center gap-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]" onClick={() => {
             const wb = XLSX.utils.book_new();
             
             // Summary Sheet

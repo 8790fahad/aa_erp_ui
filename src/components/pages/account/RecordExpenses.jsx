@@ -1472,7 +1472,7 @@ export default function RecordExpenses() {
                   style={{
                     minHeight: "120px",
                     backgroundColor: isDragActive ? "#f8f9fa" : "#f8f9fa",
-                    borderColor: isDragActive ? "#007bff" : "#6c757d",
+                    borderColor: isDragActive ? "var(--aa-navy)" : "#6c757d",
                     transition: "all 0.3s ease",
                   }}
                 >

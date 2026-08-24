@@ -158,7 +158,7 @@ export default function BranchMgm() {
         </div>
         <Button
           onClick={() => { resetForm(); setShowModal(true); }}
-          className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+          className="gap-2 bg-[var(--aa-navy)] hover:from-blue-700 hover:to-indigo-700 text-white"
         >
           <Plus className="w-4 h-4" /> Add Warehouse
         </Button>
@@ -170,7 +170,7 @@ export default function BranchMgm() {
           <input
             type="text"
             placeholder="Search warehouses..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] outline-none"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -273,7 +273,7 @@ export default function BranchMgm() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
+            <div className="bg-[var(--aa-navy)] text-white p-4">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-bold flex items-center gap-2">
@@ -311,7 +311,7 @@ export default function BranchMgm() {
                       required
                       value={formData.branch_name}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent outline-none"
                       placeholder="Main Warehouse"
                     />
                   </div>
@@ -324,7 +324,7 @@ export default function BranchMgm() {
                       required
                       value={formData.state}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent outline-none"
                     />
                   </div>
                   <div>
@@ -335,7 +335,7 @@ export default function BranchMgm() {
                       name="crm"
                       value={formData.crm}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent outline-none"
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -347,7 +347,7 @@ export default function BranchMgm() {
                       required
                       value={formData.address}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent outline-none"
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -358,7 +358,7 @@ export default function BranchMgm() {
                         checked={formData.is_default}
                         onChange={handleInputChange}
                         disabled={!!editingDefaultBranch}
-                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-[var(--aa-accent)] disabled:cursor-not-allowed disabled:opacity-60"
                       />
                       <span>
                         <span className="block text-sm font-medium text-gray-700">
@@ -388,7 +388,7 @@ export default function BranchMgm() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-4 py-2 text-sm bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white rounded transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                   {submitting

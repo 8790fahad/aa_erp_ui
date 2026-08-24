@@ -124,7 +124,7 @@ const PaymentInput = memo(
         placeholder="0.00"
         onChange={handleChange}
         onBlur={handleBlur}
-        className="w-full px-3 py-2 text-right border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+        className="w-full px-3 py-2 text-right border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] outline-none transition-all"
       />
     );
   }
@@ -938,7 +938,7 @@ const CustomerDepositForm = () => {
                 disabled={
                   loading || (hasAssignedBranches && userBranchIds.length === 1)
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] outline-none transition-all bg-white"
               >
                 {!hasAssignedBranches && (
                   <option value="all">All Warehouses</option>
@@ -969,7 +969,7 @@ const CustomerDepositForm = () => {
                 onChange={handleFormChange}
                 required
                 disabled={loading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] outline-none transition-all"
               />
               {errors.date && (
                 <div className="flex items-center gap-1 text-red-600 text-sm mt-1">
@@ -1013,7 +1013,7 @@ const CustomerDepositForm = () => {
                 onChange={handleAmountPaidChange}
                 disabled={loading}
                 placeholder="0.00"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-right font-semibold"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] outline-none transition-all text-right font-semibold"
               />
               {errors.amount_paid && (
                 <div className="flex items-center gap-1 text-red-600 text-sm mt-1">
@@ -1039,7 +1039,7 @@ const CustomerDepositForm = () => {
                   }))
                 }
                 disabled={loading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] outline-none transition-all bg-white"
               >
                 <option value="">Select Mode of Payment</option>
                 {methods_of_payment.map((method) => (
@@ -1102,7 +1102,7 @@ const CustomerDepositForm = () => {
                     }}
                     disabled={loading}
                   >
-                    <SelectTrigger className="w-full h-10 bg-white border border-gray-300 text-gray-900 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500">
+                    <SelectTrigger className="w-full h-10 bg-white border border-gray-300 text-gray-900 hover:bg-gray-50 focus:ring-2 focus:ring-[var(--aa-accent)]">
                       <SelectValue placeholder="Select account..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -1232,7 +1232,7 @@ const CustomerDepositForm = () => {
                   onChange={handleFormChange}
                   disabled={loading}
                   placeholder="Enter cheque number"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] outline-none transition-all"
                 />
               </div>
             )}
@@ -1250,7 +1250,7 @@ const CustomerDepositForm = () => {
               disabled={loading}
               placeholder="Enter narration/remark/notes about this deposit"
               rows={3}
-              className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none ${
+              className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] outline-none transition-all resize-none ${
                 errors.narration ? "border-red-500" : "border-gray-300"
               }`}
             />
@@ -1369,7 +1369,7 @@ const CustomerDepositForm = () => {
                               onClick={() =>
                                 handleInvoiceRefClick(item.invoice_ref)
                               }
-                              className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                              className="text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:underline font-medium"
                             >
                               {item.invoice_ref || "N/A"}
                             </button>
@@ -1506,7 +1506,7 @@ const CustomerDepositForm = () => {
           <button
             onClick={handleDeposit}
             disabled={loading}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed relative"
+            className="px-6 py-2.5 bg-[var(--aa-navy)] text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed relative"
           >
             {loading ? (
               <>
@@ -1528,7 +1528,7 @@ const CustomerDepositForm = () => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
+            <div className="bg-[var(--aa-navy)] text-white p-4">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-bold">

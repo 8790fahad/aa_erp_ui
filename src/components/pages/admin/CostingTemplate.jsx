@@ -3191,7 +3191,7 @@ const CostingTemplate = () => {
               </div>
               <div className="table-responsive">
                 <table className="table table-hover mb-0">
-                  <thead style={{ backgroundColor: "#4267B2" + "18" }}>
+                  <thead style={{ backgroundColor: "var(--aa-navy)" + "18" }}>
                     <tr>
                       <th style={{ width: "30px" }}></th>
                       <th>Product</th>
@@ -3211,12 +3211,12 @@ const CostingTemplate = () => {
                     ) : (
                       semiGroupedTemplates.map((group) => (
                         <Fragment key={group.rowKey}>
-                          <tr style={{ backgroundColor: "#4267B2" + "0a" }}>
+                          <tr style={{ backgroundColor: "var(--aa-navy)" + "0a" }}>
                             <td></td>
                             <td>
                               <div className="fw-bold d-flex align-items-center gap-2 flex-wrap">
                                 {group.productName}
-                                <span className="badge" style={{ backgroundColor: "#4267B2", fontSize: "0.7rem" }}>
+                                <span className="badge" style={{ backgroundColor: "var(--aa-navy)", fontSize: "0.7rem" }}>
                                   Semi-finished
                                 </span>
                                 {group.isDefaultRecipe && (
@@ -3424,7 +3424,7 @@ const CostingTemplate = () => {
             } w-full max-h-[90vh] overflow-hidden flex flex-col`}
           >
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
+            <div className="bg-[var(--aa-navy)] text-white p-4">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-bold">
@@ -3526,14 +3526,14 @@ const CostingTemplate = () => {
                         }}
                         className={`relative p-4 rounded-lg border-2 transition-all text-left ${
                           active
-                            ? "border-blue-500 bg-blue-50 shadow-sm"
+                            ? "border-[var(--aa-accent)] bg-blue-50 shadow-sm"
                             : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
                         }`}
                       >
                         <div className="flex items-start gap-3">
                           <div
                             className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0 ${
-                              active ? "border-blue-500" : "border-gray-300"
+                              active ? "border-[var(--aa-accent)]" : "border-gray-300"
                             }`}
                           >
                             {active && (
@@ -3594,7 +3594,7 @@ const CostingTemplate = () => {
                               }}
                               className={`px-2.5 py-1 font-medium transition-colors ${
                                 templateProductType === "finished_good"
-                                  ? "bg-blue-600 text-white"
+                                  ? "bg-[var(--aa-navy)] text-white"
                                   : "bg-white text-gray-600 hover:bg-gray-50"
                               }`}
                             >
@@ -3610,7 +3610,7 @@ const CostingTemplate = () => {
                               }}
                               className={`px-2.5 py-1 font-medium border-l border-gray-300 transition-colors ${
                                 templateProductType === "semi_finished"
-                                  ? "bg-[#4267B2] text-white"
+                                  ? "bg-[var(--aa-navy)] text-white"
                                   : "bg-white text-gray-600 hover:bg-gray-50"
                               }`}
                             >
@@ -3780,7 +3780,7 @@ const CostingTemplate = () => {
                             handleInputChange("rate", numericValue);
                           }}
                           placeholder="0.00"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                         />
                         <small className="text-muted">
                           {valuationCostHint ||
@@ -3905,7 +3905,7 @@ const CostingTemplate = () => {
                             handleInputChange("description", e.target.value)
                           }
                           placeholder="Enter description..."
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                           required
                         />
                       </div>
@@ -4003,7 +4003,7 @@ const CostingTemplate = () => {
                               handleInputChange("rate", numericValue);
                             }}
                             placeholder="0.00"
-                            className=" w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent "
+                            className=" w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent "
                             required
                           />
                         </div>
@@ -4059,7 +4059,7 @@ const CostingTemplate = () => {
                             handleInputChange("quantity", val);
                           }}
                           placeholder="0.0000"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                           required
                         />
                       </div>
@@ -4109,7 +4109,7 @@ const CostingTemplate = () => {
                         !form.quantity) ||
                       (form.type === "raw_material" && !form.raw_material_id)
                     }
-                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="px-4 py-2 text-sm bg-[var(--aa-navy)] text-white rounded hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {loading ? (
                       <>
@@ -4409,7 +4409,7 @@ const CostingTemplate = () => {
                             handleInputChange("rate", numericValue);
                           }}
                           placeholder="0.00"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                         />
                         <small className="text-muted">
                           {valuationCostHint ||
@@ -4535,7 +4535,7 @@ const CostingTemplate = () => {
                             handleInputChange("description", e.target.value)
                           }
                           placeholder="Enter description..."
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                           required
                         />
                       </div>
@@ -4633,7 +4633,7 @@ const CostingTemplate = () => {
                               handleInputChange("rate", numericValue);
                             }}
                             placeholder="0.00"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent text-"
                             required
                           />
                         </div>
@@ -4689,7 +4689,7 @@ const CostingTemplate = () => {
                             handleInputChange("quantity", val);
                           }}
                           placeholder="0.0000"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                           required
                         />
                       </div>
@@ -5004,7 +5004,7 @@ const CostingTemplate = () => {
                         : handleSubmitList
                     }
                     disabled={loading || itemList.length === 0}
-                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="px-4 py-2 text-sm bg-[var(--aa-navy)] text-white rounded hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {loading ? (
                       <>
@@ -5649,7 +5649,7 @@ const CostingTemplate = () => {
                                 onChange={(e) =>
                                   setTemplateByProductQty(e.target.value)
                                 }
-                                className="h-8 w-32 px-2 border-2 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                className="h-8 w-32 px-2 border-2 border-gray-300 rounded focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] text-sm"
                                 placeholder="1"
                               />
                             </div>
@@ -5671,7 +5671,7 @@ const CostingTemplate = () => {
                                     setTemplateByProductUnitCost(val);
                                   }
                                 }}
-                                className="h-8 w-32 px-2 border-2 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                className="h-8 w-32 px-2 border-2 border-gray-300 rounded focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] text-sm"
                                 placeholder="0.00"
                               />
                             </div>
@@ -6009,7 +6009,7 @@ const CostingTemplate = () => {
                                     )
                                   );
                                 }}
-                                className="h-8 w-32 px-2 border-2 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                className="h-8 w-32 px-2 border-2 border-gray-300 rounded focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] text-sm"
                                 placeholder="Enter value"
                               />
                             </div>
@@ -6302,7 +6302,7 @@ const CostingTemplate = () => {
                       !sharedCostingName.trim() ||
                       sharedProducts.length === 0
                     }
-                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="px-4 py-2 text-sm bg-[var(--aa-navy)] text-white rounded hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {loading ? (
                       <>

@@ -1,13 +1,9 @@
 /* eslint-disable react/prop-types */
 /* eslint-disable no-unused-vars */
 import React from "react";
-import { useSelector } from "react-redux";
 import { Button } from "reactstrap";
-// import { primaryColor } from '../../theme';
 
 function CustomButton(props) {
-  const activeBusiness = useSelector((state) => state.auth.activeBusiness);
-  const primary = activeBusiness?.primary_color || "var(--aa-navy)";
   const {
     className,
     handleSubmit,
@@ -24,12 +20,12 @@ function CustomButton(props) {
     <Button
       color={color}
       style={{
-        backgroundColor: primary,
-        borderColor: primary,
+        backgroundColor: "var(--aa-navy)",
+        borderColor: "var(--aa-navy)",
         color: "#fff",
         ...style,
       }}
-      className={`d-inline-flex align-items-center justify-content-center gap-2 whitespace-nowrap [&_svg]:shrink-0 ${mb ? `mb-${mb}` : "mb-2"} ${className || ""}`}
+      className={`aa-btn-primary d-inline-flex align-items-center justify-content-center gap-2 whitespace-nowrap [&_svg]:shrink-0 ${mb ? `mb-${mb}` : "mb-2"} ${className || ""}`}
       onClick={handleSubmit}
       size={size}
       {...rest}
@@ -50,13 +46,12 @@ function CustomButton(props) {
 export default CustomButton;
 
 function CustomEyeButton(props) {
-  const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   return (
     <button
       color={props.color}
       style={{
-        backgroundColor: activeBusiness?.primary_color,
-        borderColor: activeBusiness?.primary_color,
+        backgroundColor: "var(--aa-navy)",
+        borderColor: "var(--aa-navy)",
       }}
       className={`${props.className} d-flex align-items-center rounded-r-lg bg-[var(--aa-navy)] text-white px-2.5 py-2.5`}
       onClick={props.handleSubmit}

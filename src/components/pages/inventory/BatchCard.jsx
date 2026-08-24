@@ -57,7 +57,7 @@ export function BatchCard({ id, name, quantity, date, status, grnNumber, po_no, 
           <Link to={`process/${encodeURIComponent(pr_no)}`}>
             <Button
               size="sm"
-              className="text-xs h-7 px-2 shadow-none bg-[#4267B2] hover:bg-[#4267B2] text-white"
+              className="text-xs h-7 px-2 shadow-none bg-[var(--aa-navy)] hover:bg-[var(--aa-navy)] text-white"
             >
               Process
             </Button>

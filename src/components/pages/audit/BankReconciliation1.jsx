@@ -543,7 +543,7 @@ const BankReconciliation1 = () => {
                     <Button
                       onClick={handleInterestSubmit}
                       disabled={loadingInterest}
-                      className="flex-[2] flex items-center justify-center gap-2 bg-[#4267B2] hover:bg-[#365899]"
+                      className="flex-[2] flex items-center justify-center gap-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]"
                     >
                       {loadingInterest ? (
                         <Loader className="animate-spin w-4 h-4" />
@@ -685,7 +685,7 @@ const BankReconciliation1 = () => {
                     <Button
                       onClick={handleChargesSubmit}
                       disabled={loadingCharges}
-                      className="flex-[2] flex items-center justify-center gap-2 bg-[#4267B2] hover:bg-[#365899]"
+                      className="flex-[2] flex items-center justify-center gap-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]"
                     >
                       {loadingCharges ? (
                         <Loader className="animate-spin w-4 h-4" />

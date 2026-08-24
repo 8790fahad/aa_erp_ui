@@ -382,10 +382,10 @@ export default function CreditorsReport() {
                   title="Open ledger"
                 >
                   <td className="px-3 py-2 text-sm">{row.id}</td>
-                  <td className="px-3 py-2 text-sm text-blue-600 hover:underline">
+                  <td className="px-3 py-2 text-sm text-[var(--aa-accent)] hover:underline">
                     {row.partyId}
                   </td>
-                  <td className="px-3 py-2 text-sm text-blue-600 hover:underline">
+                  <td className="px-3 py-2 text-sm text-[var(--aa-accent)] hover:underline">
                     {row.partyName}
                   </td>
                   <td className="px-3 py-2 text-sm capitalize text-gray-600">

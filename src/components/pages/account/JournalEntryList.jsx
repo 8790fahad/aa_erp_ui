@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { BookOpen, Search, Plus, Eye, Edit } from "lucide-react";
+import { BookOpen, Search, Plus, CheckCircle } from "lucide-react";
 import { _postApi } from "@/redux/actions/api";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
@@ -23,19 +23,52 @@ const getYearToDateDefaults = () => {
   return { yearStart, today };
 };
 
+const normalizeStatus = (status) => {
+  if (status === "saved" || status === "draft") return "pending";
+  if (status === "posted") return "approved";
+  if (status === "reversed") return "reversed";
+  return status || "pending";
+};
+
+const statusLabel = (status) => {
+  const s = normalizeStatus(status);
+  if (s === "pending") return "Pending Approval";
+  if (s === "approved") return "Approved";
+  if (s === "reversed") return "Reversed";
+  return s;
+};
+
+const statusBadgeClass = (status) => {
+  const s = normalizeStatus(status);
+  if (s === "pending")
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  if (s === "approved")
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (s === "reversed") return "border-red-200 bg-red-50 text-red-700";
+  return "border-slate-200 bg-slate-50 text-slate-600";
+};
+
 const JournalEntryList = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id;
-  const userRole =
-    user?.role || user?.user_role || activeBusiness?.user_role || "admin";
+  const userId = user?.id || user?.email;
+  const userRole = String(
+    user?.role || user?.user_role || activeBusiness?.user_role || "admin",
+  )
+    .toLowerCase()
+    .trim();
 
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [approvingRef, setApprovingRef] = useState(null);
   const [autoRangeAdjusted, setAutoRangeAdjusted] = useState(false);
   const defaultDates = getYearToDateDefaults();
   const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "");
+  const [statusFilter, setStatusFilter] = useState(
+    searchParams.get("status") || "all",
+  );
   const [startDate, setStartDate] = useState(
     searchParams.get("startDate") || defaultDates.yearStart,
   );
@@ -57,8 +90,10 @@ const JournalEntryList = () => {
     else next.delete("startDate");
     if (endDate) next.set("endDate", endDate);
     else next.delete("endDate");
+    if (statusFilter && statusFilter !== "all") next.set("status", statusFilter);
+    else next.delete("status");
     setSearchParams(next, { replace: true });
-  }, [searchTerm, startDate, endDate, setSearchParams]);
+  }, [searchTerm, startDate, endDate, statusFilter, setSearchParams]);
 
   const fetchEntries = async () => {
     setLoading(true);
@@ -100,7 +135,58 @@ const JournalEntryList = () => {
     );
   };
 
-  const canEdit = userRole === "admin" || userRole === "accountant";
+  const handleApprove = (item) => {
+    if (
+      !window.confirm(
+        `Approve ${item.reference_number || item.transaction_ref}? It will enter the ledger and cannot be edited.`,
+      )
+    ) {
+      return;
+    }
+
+    setApprovingRef(item.transaction_ref);
+    _postApi(
+      `/api/journals/${item.transaction_ref}/post`,
+      {
+        facility_id: facilityId,
+        user_id: userId,
+        user_role: userRole,
+      },
+      (resp) => {
+        setApprovingRef(null);
+        if (resp.success) {
+          toast.success("Journal entry approved — now in the ledger.");
+          fetchEntries();
+        } else {
+          toast.error(resp.message || "Failed to approve journal entry");
+        }
+      },
+      (err) => {
+        setApprovingRef(null);
+        toast.error(err.message || "Failed to approve journal entry");
+      },
+      "POST",
+    );
+  };
+
+  const filteredEntries = useMemo(() => {
+    if (statusFilter === "all") return entries;
+    return entries.filter(
+      (item) => normalizeStatus(item.status) === statusFilter,
+    );
+  }, [entries, statusFilter]);
+
+  const counts = useMemo(() => {
+    const c = { all: entries.length, pending: 0, approved: 0, reversed: 0 };
+    entries.forEach((e) => {
+      const s = normalizeStatus(e.status);
+      if (c[s] !== undefined) c[s] += 1;
+    });
+    return c;
+  }, [entries]);
+
+  // API allows any authenticated user to approve; keep UI aligned.
+  const canManage = true;
   const fields = [
     { title: "Reference", value: "reference_number" },
     { title: "Date", value: "entry_date" },
@@ -125,40 +211,77 @@ const JournalEntryList = () => {
         </div>
       ),
     },
+    {
+      title: "Status",
+      custom: true,
+      component: (item) => (
+        <span
+          className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(
+            item.status,
+          )}`}
+        >
+          {statusLabel(item.status)}
+        </span>
+      ),
+    },
     { title: "Created By", value: "created_by" },
     {
       title: "Actions",
       className: "text-right",
       custom: true,
-      component: (item) => (
-        <div className="flex items-center justify-end gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 w-8 p-0 text-slate-600 hover:bg-[var(--aa-sidebar-active,#eff4fb)] hover:text-[#4267B2]"
-            onClick={() =>
-              navigate(`/app/account/journal-entries/${item.transaction_ref}`)
-            }
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-          {item.status === "draft" && canEdit && (
+      component: (item) => {
+        const pending = normalizeStatus(item.status) === "pending";
+        return (
+          <div className="flex items-center justify-end gap-1">
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 w-8 p-0 text-slate-600 hover:bg-[var(--aa-sidebar-active,#eff4fb)] hover:text-[#4267B2]"
+              className="h-8 px-2 text-sm font-medium capitalize text-[var(--aa-accent)] hover:bg-slate-100 hover:text-[var(--aa-navy)]"
               onClick={() =>
-                navigate(
-                  `/app/account/journal-entries/${item.transaction_ref}/edit`,
-                )
+                navigate(`/app/account/journal-entries/${item.transaction_ref}`)
               }
             >
-              <Edit className="h-4 w-4" />
+              View
             </Button>
-          )}
-        </div>
-      ),
+            {pending && canManage && (
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-[var(--aa-navy)]"
+                  onClick={() =>
+                    navigate(
+                      `/app/account/journal-entries/${item.transaction_ref}/edit`,
+                    )
+                  }
+                >
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 gap-1 px-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+                  disabled={approvingRef === item.transaction_ref}
+                  onClick={() => handleApprove(item)}
+                >
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {approvingRef === item.transaction_ref
+                    ? "Approving…"
+                    : "Approve"}
+                </Button>
+              </>
+            )}
+          </div>
+        );
+      },
     },
+  ];
+
+  const filterTabs = [
+    { key: "all", label: "All" },
+    { key: "pending", label: "Pending" },
+    { key: "approved", label: "Approved" },
+    { key: "reversed", label: "Reversed" },
   ];
 
   return (
@@ -170,7 +293,7 @@ const JournalEntryList = () => {
             Journal Entries
           </h1>
           <p className="mt-0.5 text-xs text-slate-500">
-            Create and manage accounting journal entries
+            Save for approval — approved entries post to the ledger
           </p>
         </div>
         <Button
@@ -186,11 +309,29 @@ const JournalEntryList = () => {
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
-          <p className="text-sm font-medium text-slate-800">Journal entries</p>
+          <div className="flex flex-wrap items-center gap-1">
+            {filterTabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setStatusFilter(tab.key)}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  statusFilter === tab.key
+                    ? "bg-[var(--aa-navy)] text-white"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {tab.label}
+                <span className="ml-1 opacity-70">({counts[tab.key] || 0})</span>
+              </button>
+            ))}
+          </div>
           <p className="text-xs text-slate-500">
             {loading
               ? "Loading…"
-              : `${entries.length} entr${entries.length === 1 ? "y" : "ies"}`}
+              : `${filteredEntries.length} entr${
+                  filteredEntries.length === 1 ? "y" : "ies"
+                }`}
           </p>
         </div>
 
@@ -200,18 +341,16 @@ const JournalEntryList = () => {
               htmlFor="journal-search"
               className="mb-1.5 text-xs font-medium text-slate-600"
             >
-              Search reference
+              Search
             </Label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 id="journal-search"
-                type="search"
-                placeholder="Search by reference…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && fetchEntries()}
-                className="h-9 border-slate-200 bg-white pl-9 text-sm focus-visible:border-[#4267B2] focus-visible:ring-[#4267B2]/20"
+                placeholder="Reference or description…"
+                className="h-9 border-slate-200 bg-white pl-9 text-sm"
               />
             </div>
           </div>
@@ -220,14 +359,14 @@ const JournalEntryList = () => {
               htmlFor="journal-start"
               className="mb-1.5 text-xs font-medium text-slate-600"
             >
-              Start date
+              From
             </Label>
             <Input
               id="journal-start"
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="h-9 border-slate-200 bg-white text-sm focus-visible:border-[#4267B2] focus-visible:ring-[#4267B2]/20"
+              className="h-9 border-slate-200 bg-white text-sm"
             />
           </div>
           <div>
@@ -235,26 +374,24 @@ const JournalEntryList = () => {
               htmlFor="journal-end"
               className="mb-1.5 text-xs font-medium text-slate-600"
             >
-              End date
+              To
             </Label>
             <Input
               id="journal-end"
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="h-9 border-slate-200 bg-white text-sm focus-visible:border-[#4267B2] focus-visible:ring-[#4267B2]/20"
+              className="h-9 border-slate-200 bg-white text-sm"
             />
           </div>
         </div>
 
         <div className="p-0">
           <CustomTable1
-            data={entries}
             fields={fields}
+            data={filteredEntries}
             loading={loading}
-            pageSize={20}
-            message="No journal entries found matching your criteria."
-            emptyHint="Try a wider date range or clear the search."
+            message="No journal entries found for this filter."
           />
         </div>
       </div>

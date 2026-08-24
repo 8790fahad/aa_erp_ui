@@ -391,7 +391,7 @@ export default function BankBalancesReport() {
                         <button
                           type="button"
                           onClick={() => openAccountLedger(row)}
-                          className="text-blue-600 hover:underline font-medium cursor-pointer bg-transparent border-0 p-0"
+                          className="text-[var(--aa-accent)] hover:underline font-medium cursor-pointer bg-transparent border-0 p-0"
                           title="Open account ledger"
                         >
                           {row.accountCode}

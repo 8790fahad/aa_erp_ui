@@ -43,29 +43,26 @@ const TripleSelectSettings = ({
 
 
   return (
-    <Card className="h-100 shadow-sm border-0">
+    <Card className="mb-0 overflow-hidden rounded-xl border border-slate-200 shadow-none">
       {/* Header */}
       <div
-        className="card-header border-0 text-white position-relative overflow-hidden"
-        style={{
-          background: "var(--aa-navy)",
-          padding: "1rem",
-        }}
+        className="border-0 px-5 py-3.5 text-white"
+        style={{ background: "var(--aa-navy)" }}
       >
         <div className="d-flex align-items-center justify-content-between">
           <div className="d-flex align-items-center gap-2">
-            <span style={{ fontSize: "1.5rem" }}>{icon}</span>
+            <span style={{ fontSize: "1.25rem" }}>{icon}</span>
             <div>
-              <h5 className="mb-0 fw-bold">{title}</h5>
+              <h5 className="mb-0 fw-bold text-base">{title}</h5>
               <small className="opacity-75">{description}</small>
             </div>
           </div>
-          <Settings size={20} className="opacity-75" />
+          <Settings size={18} className="opacity-75" />
         </div>
       </div>
 
       {/* Body */}
-      <div className="card-body">
+      <div className="divide-y divide-slate-100 px-0 py-0">
         <SingleSelectSetting
           label={primaryLabel}
           code={primaryCode}

@@ -26,7 +26,7 @@ export default function CustomCard(props) {
             <h1 className="text-2xl sm:text-3xl md:ml-0 font-bold text-slate-900 tracking-tight">
               {header}
             </h1>
-            <div className="mt-2 h-1 w-50 bg-gradient-to-r from-[#4267B2] to-purple-300 rounded-full mx-auto"></div>
+            <div className="mt-2 h-1 w-50 bg-gradient-to-r from-[var(--aa-navy)] to-purple-300 rounded-full mx-auto"></div>
           </div>
         ) : null}
       </CardHeader>

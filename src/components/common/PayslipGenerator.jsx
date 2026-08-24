@@ -117,7 +117,7 @@ const PayslipGenerator = ({
           {({ blob, url, loading, error }) => (
             <Button
               disabled={loading || isGenerating}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
             >
               {loading || isGenerating ? "Generating..." : "Download Payslip"}
             </Button>
@@ -170,7 +170,7 @@ const PayslipGenerator = ({
                   {({ blob, url, loading, error }) => (
                     <Button
                       disabled={loading || isGenerating}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
                     >
                       {loading || isGenerating ? "Generating..." : "Download"}
                     </Button>

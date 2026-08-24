@@ -215,7 +215,7 @@ export default function RecyclingDashboard({ range }) {
             {widget.data.map((item, index) => (
               <div
                 key={index}
-                className="p-4 bg-gradient-to-r from-[#4267B2] to-[#4267B3] backdrop-blur-sm rounded-xl border border-gray-700/50 hover:border-green-500/50 transition-all duration-300"
+                className="p-4 bg-gradient-to-r from-[var(--aa-navy)] to-[#4267B3] backdrop-blur-sm rounded-xl border border-gray-700/50 hover:border-green-500/50 transition-all duration-300"
               >
                 <div className="flex items-center justify-between mb-3">
                   <p className="font-semibold text-white">{item.stage}</p>
@@ -252,7 +252,7 @@ export default function RecyclingDashboard({ range }) {
               return (
                 <div
                   key={index}
-                  className={`p-4 bg-gradient-to-br from-[#4267B2] to-[#4267B3] backdrop-blur-sm rounded-xl border border-gray-700/50 hover:border-${item.color}-500/50 transition-all duration-300 text-center group`}
+                  className={`p-4 bg-gradient-to-br from-[var(--aa-navy)] to-[#4267B3] backdrop-blur-sm rounded-xl border border-gray-700/50 hover:border-${item.color}-500/50 transition-all duration-300 text-center group`}
                 >
                   <Icon
                     className={` absolute w-6 h-6 mx-auto mb-3 text-${item.color} group-hover:scale-110 transition-transform`}
@@ -298,7 +298,7 @@ export default function RecyclingDashboard({ range }) {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <Card className=" backdrop-blur-sm border-gray-700/50 shadow-2xl">
               <CardHeader>
-                <CardTitle className="text-[#4267B2] flex items-center gap-2">
+                <CardTitle className="text-[var(--aa-navy)] flex items-center gap-2">
                   <Recycle className="w-5 h-5 text-green-400" />
                   Material Intake
                 </CardTitle>
@@ -365,7 +365,7 @@ export default function RecyclingDashboard({ range }) {
 
             <Card className=" backdrop-blur-sm border-gray-700/50 shadow-2xl">
               <CardHeader>
-                <CardTitle className="text-[#4267B2] flex items-center gap-2">
+                <CardTitle className="text-[var(--aa-navy)] flex items-center gap-2">
                   <Leaf className="w-5 h-5 text-emerald-400" />
                   Material Distribution
                 </CardTitle>
@@ -402,7 +402,7 @@ export default function RecyclingDashboard({ range }) {
                 className=" border-gray-700/50 shadow-2xl hover:shadow-3xl transition-all duration-300"
               >
                 <CardHeader className=" border-gray-700/50">
-                  <CardTitle className="text-[#4267B2] flex items-center gap-2">
+                  <CardTitle className="text-[var(--aa-navy)] flex items-center gap-2">
                     <div
                       className={`w-2 h-2 rounded-full bg-gradient-to-r ${data.gradient} animate-pulse`}
                     ></div>

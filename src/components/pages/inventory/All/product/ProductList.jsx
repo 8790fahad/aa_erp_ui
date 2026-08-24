@@ -12,6 +12,7 @@ import {
   DollarSign,
   ImageIcon,
   FileText,
+  Target,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -29,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -38,6 +40,17 @@ import {
 } from "@/components/ui/select";
 import { apiURL } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
+
+const salesTargetFromProduct = (item) => {
+  if (!item) return { period: "none", quantity: "" };
+  if (item.daily_sales_limit)
+    return { period: "daily", quantity: String(item.daily_sales_limit) };
+  if (item.weekly_sales_limit)
+    return { period: "weekly", quantity: String(item.weekly_sales_limit) };
+  if (item.monthly_sales_limit)
+    return { period: "monthly", quantity: String(item.monthly_sales_limit) };
+  return { period: "none", quantity: "" };
+};
 
 const ONLINE_ELIGIBLE_ITEM_TYPES = [
   "Resalable",
@@ -156,6 +169,15 @@ export default function ProductList() {
     description: "",
   });
   const [savingDescription, setSavingDescription] = useState(false);
+  const [salesTargetModal, setSalesTargetModal] = useState({
+    open: false,
+    productId: null,
+    productName: "",
+    period: "none",
+    quantity: "",
+  });
+  const [savingSalesTarget, setSavingSalesTarget] = useState(false);
+  const [togglingStopSalesId, setTogglingStopSalesId] = useState(null);
 
   const handlePageChange = useCallback(
     (page) => {
@@ -379,6 +401,120 @@ export default function ProductList() {
           ? String(item.selling_price)
           : "",
     });
+  };
+
+  const openSalesTargetModal = (item) => {
+    const target = salesTargetFromProduct(item);
+    setSalesTargetModal({
+      open: true,
+      productId: item.id,
+      productName: item.name,
+      period: target.period,
+      quantity: target.quantity,
+    });
+  };
+
+  const saveSalesTarget = async () => {
+    const { productId, period, quantity } = salesTargetModal;
+    if (!activeBusiness?.id || !productId) return;
+
+    if (period !== "none") {
+      const qty = parseInt(String(quantity).replace(/,/g, ""), 10);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        toast.error("Enter a valid sales target quantity");
+        return;
+      }
+    }
+
+    setSavingSalesTarget(true);
+    try {
+      const response = await fetch(
+        `${apiURL}/api/products/${productId}/sales-target`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            facilityId: activeBusiness.id,
+            period,
+            quantity: period === "none" ? null : quantity,
+          }),
+        },
+      );
+      const resp = await response.json();
+      if (resp.success) {
+        setData((prev) =>
+          prev.map((row) =>
+            row.id === productId
+              ? {
+                  ...row,
+                  daily_sales_limit: resp.data.daily_sales_limit,
+                  weekly_sales_limit: resp.data.weekly_sales_limit,
+                  monthly_sales_limit: resp.data.monthly_sales_limit,
+                }
+              : row,
+          ),
+        );
+        setSalesTargetModal({
+          open: false,
+          productId: null,
+          productName: "",
+          period: "none",
+          quantity: "",
+        });
+        toast.success(
+          period === "none"
+            ? "Sales target cleared"
+            : `Sales target set (${period})`,
+        );
+      } else {
+        toast.error(resp.message || "Failed to update sales target");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Something went wrong while updating sales target");
+    } finally {
+      setSavingSalesTarget(false);
+    }
+  };
+
+  const toggleStopSales = async (productId, salesStopped) => {
+    if (!activeBusiness?.id || !productId) return;
+    setTogglingStopSalesId(productId);
+    try {
+      const response = await fetch(
+        `${apiURL}/api/products/${productId}/stop-sales`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            facilityId: activeBusiness.id,
+            sales_stopped: salesStopped,
+          }),
+        },
+      );
+      const resp = await response.json();
+      if (resp.success) {
+        setData((prev) =>
+          prev.map((row) =>
+            row.id === productId
+              ? { ...row, sales_stopped: salesStopped }
+              : row,
+          ),
+        );
+        toast.success(
+          salesStopped
+            ? "Sales stopped for this product"
+            : "Sales resumed for this product",
+        );
+      } else {
+        toast.error(resp.message || "Failed to update stop sales");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Something went wrong while updating stop sales");
+    } finally {
+      setTogglingStopSalesId(null);
+    }
   };
 
   const saveProductPrice = async () => {
@@ -764,13 +900,20 @@ export default function ProductList() {
             <span className="sr-only">Open menu</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem
             onClick={() => openPriceModal(item)}
             className="flex items-center gap-2"
           >
             <DollarSign className="h-4 w-4" />
             Set Price
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => openSalesTargetModal(item)}
+            className="flex items-center gap-2"
+          >
+            <Target className="h-4 w-4" />
+            Set Sales Target
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => openImagesModal(item)}
@@ -786,6 +929,20 @@ export default function ProductList() {
             <FileText className="h-4 w-4" />
             Add Description
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <div
+            className="flex items-center justify-between gap-3 px-2 py-2 text-sm"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <span className="text-slate-700 font-medium">Stop Sales</span>
+            <Switch
+              checked={!!item.sales_stopped}
+              disabled={togglingStopSalesId === item.id}
+              onCheckedChange={(checked) => toggleStopSales(item.id, checked)}
+              className="data-[state=checked]:bg-red-600"
+            />
+          </div>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => toggleProductStatus(item.id, item.status)}
@@ -1028,20 +1185,27 @@ export default function ProductList() {
                             : "—"}
                         </td>
                         <td className="px-4 py-3 align-middle">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              toggleProductStatus(item.id, item.status)
-                            }
-                            title="Click to toggle status"
-                            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
-                              item.status === "Active"
-                                ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            }`}
-                          >
-                            {item.status || "Active"}
-                          </button>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                toggleProductStatus(item.id, item.status)
+                              }
+                              title="Click to toggle status"
+                              className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                                item.status === "Active"
+                                  ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                              }`}
+                            >
+                              {item.status || "Active"}
+                            </button>
+                            {!!item.sales_stopped && (
+                              <span className="inline-flex rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700">
+                                Sales Stopped
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 align-middle">
                           <button
@@ -1230,6 +1394,82 @@ export default function ProductList() {
           />
         </Modal>
 
+        {/* Set Sales Target Modal */}
+        <Modal
+          title={
+            <div className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-[var(--aa-accent)]" />
+              <span>Set Sales Target</span>
+            </div>
+          }
+          open={salesTargetModal.open}
+          onCancel={() =>
+            setSalesTargetModal({
+              open: false,
+              productId: null,
+              productName: "",
+              period: "none",
+              quantity: "",
+            })
+          }
+          onOk={saveSalesTarget}
+          okText="Save Target"
+          cancelText="Cancel"
+          confirmLoading={savingSalesTarget}
+          centered
+        >
+          <p className="text-gray-600 mb-4">
+            Limit how many units of{" "}
+            <strong>{salesTargetModal.productName}</strong> can be sold per
+            period. When the target is reached, further sales are blocked even
+            if stock remains.
+          </p>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Period
+          </label>
+          <Select
+            value={salesTargetModal.period}
+            onValueChange={(value) =>
+              setSalesTargetModal((prev) => ({
+                ...prev,
+                period: value,
+                quantity: value === "none" ? "" : prev.quantity,
+              }))
+            }
+          >
+            <SelectTrigger className="w-full mb-4">
+              <SelectValue placeholder="Select period" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No limit (unlimited)</SelectItem>
+              <SelectItem value="daily">Daily</SelectItem>
+              <SelectItem value="weekly">Weekly</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
+            </SelectContent>
+          </Select>
+          {salesTargetModal.period !== "none" && (
+            <>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Max quantity ({salesTargetModal.period})
+              </label>
+              <Input
+                type="number"
+                min={1}
+                step="1"
+                value={salesTargetModal.quantity}
+                onChange={(e) =>
+                  setSalesTargetModal((prev) => ({
+                    ...prev,
+                    quantity: e.target.value,
+                  }))
+                }
+                placeholder="e.g. 100"
+                size="large"
+              />
+            </>
+          )}
+        </Modal>
+
         {/* Product Images Modal */}
         <Modal
           title={
@@ -1296,7 +1536,7 @@ export default function ProductList() {
                     className="w-full aspect-square object-cover rounded-lg border bg-gray-50"
                   />
                   {index === 0 && (
-                    <span className="absolute top-1 left-1 bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded">
+                    <span className="absolute top-1 left-1 bg-[var(--aa-navy)] text-white text-[10px] px-1.5 py-0.5 rounded">
                       Primary
                     </span>
                   )}

@@ -831,7 +831,7 @@ const ManageDepartments = ({ embedded = false }) => {
                       onChange={(e) =>
                         setMemberFormData({ userId: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-blue-500 outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] outline-none"
                     >
                       <option value="">Select staff member</option>
                       {staffMembers

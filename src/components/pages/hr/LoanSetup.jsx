@@ -32,7 +32,7 @@ import { Label } from "@/components/ui/label";
 const LoanSetup = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId;
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
   const secondaryColor = activeBusiness?.secondary_color;
   const gradientEnd = secondaryColor || primaryColor;
   const headerGradient = `linear-gradient(to right, ${primaryColor}, ${gradientEnd})`;

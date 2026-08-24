@@ -117,7 +117,7 @@ export default function ResetPassword() {
             </p>
             <Button
               onClick={() => navigate("/login")}
-              className="w-full bg-gradient-to-r from-[#4267B2] to-blue-600 text-white font-semibold py-3 rounded-lg"
+              className="w-full bg-gradient-to-r from-[var(--aa-navy)] to-blue-600 text-white font-semibold py-3 rounded-lg"
             >
               <ArrowLeft className="mr-2 h-4 w-4 inline" />
               Back to Log In
@@ -165,7 +165,7 @@ export default function ResetPassword() {
               <div className="pt-4">
                 <Button
                   onClick={() => navigate("/login")}
-                  className="w-full bg-gradient-to-r from-[#4267B2] to-blue-600 hover:from-[#4267B2]/90 hover:to-blue-600/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
+                  className="w-full bg-gradient-to-r from-[var(--aa-navy)] to-blue-600 hover:from-[var(--aa-navy)]/90 hover:to-blue-600/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
                 >
                   Continue to Log In
                 </Button>
@@ -261,7 +261,7 @@ export default function ResetPassword() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Enter your new password"
-                  className="border-2 pr-12 transition-all border-gray-300 focus:ring-[#4267B2] focus:border-[#4267B2]"
+                  className="border-2 pr-12 transition-all border-gray-300 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
                   required
                 />
                 <button
@@ -331,7 +331,7 @@ export default function ResetPassword() {
                       ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                       : confirmPassword && passwordsMatch
                       ? "border-green-500 focus:ring-green-500 focus:border-green-500"
-                      : "border-gray-300 focus:ring-[#4267B2] focus:border-[#4267B2]"
+                      : "border-gray-300 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
                   }`}
                   required
                 />
@@ -364,7 +364,7 @@ export default function ResetPassword() {
             {/* Submit Button */}
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-[#4267B2] to-blue-600 hover:from-[#4267B2]/90 hover:to-blue-600/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02]"
+              className="w-full bg-gradient-to-r from-[var(--aa-navy)] to-blue-600 hover:from-[var(--aa-navy)]/90 hover:to-blue-600/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02]"
               disabled={!isPasswordValid || !passwordsMatch || isSubmitting}
             >
               {isSubmitting ? (

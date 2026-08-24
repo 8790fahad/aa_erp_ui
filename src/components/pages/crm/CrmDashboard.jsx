@@ -23,7 +23,7 @@ function StatCard({ icon: Icon, label, value, hint }) {
           <p className="mt-1 text-2xl font-semibold text-[#1a2d5e]">{value}</p>
           {hint ? <p className="mt-1 text-xs text-slate-400">{hint}</p> : null}
         </div>
-        <div className="rounded-lg bg-[#4267B2]/10 p-2 text-[#4267B2]">
+        <div className="rounded-lg bg-[var(--aa-navy)]/10 p-2 text-[var(--aa-navy)]">
           <Icon className="h-5 w-5" />
         </div>
       </div>
@@ -145,7 +145,7 @@ export default function CrmDashboard() {
           <h3 className="font-semibold text-[#1a2d5e]">Status mix</h3>
           <Link
             to="/app/crm/customers"
-            className="text-sm text-[#4267B2] hover:underline"
+            className="text-sm text-[var(--aa-navy)] hover:underline"
           >
             View customers
           </Link>

@@ -476,7 +476,7 @@ export default function WarehouseRequests() {
                     </Button>
                     <Link
                       to={branchInvoiceUrl}
-                      className="inline-flex items-center gap-1.5 text-sm font-medium text-[#4267B2] hover:underline"
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--aa-navy)] hover:underline"
                     >
                       Open branch invoice
                       <FileText className="w-3.5 h-3.5" />

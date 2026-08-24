@@ -772,7 +772,7 @@ export default function AccountChart() {
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-            <BookOpen className="h-5 w-5 text-[#4267B2]" />
+            <BookOpen className="h-5 w-5 text-[var(--aa-navy)]" />
             Chart of Accounts
           </h1>
           <p className="mt-0.5 text-xs text-slate-500">
@@ -783,13 +783,13 @@ export default function AccountChart() {
       </div>
 
       {selectedAccounts.size > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-[#4267B2]/20 bg-[var(--aa-sidebar-active,#eff4fb)] p-3">
-          <Badge className="border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]">
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--aa-navy)]/20 bg-[var(--aa-sidebar-active,#eff4fb)] p-3">
+          <Badge className="border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]">
             {selectedAccounts.size} selected
           </Badge>
           <Button
             size="sm"
-            className="gap-2 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
+            className="gap-2 border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90"
             onClick={handleRunReportForSelected}
           >
             <FileBarChart className="h-4 w-4" />
@@ -849,7 +849,7 @@ export default function AccountChart() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by code, description, account type, subcategory, or nature"
-            className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20"
+            className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20"
           />
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
@@ -865,7 +865,7 @@ export default function AccountChart() {
                 onClick={() => setViewMode(id)}
                 className={`inline-flex h-8 items-center gap-1.5 rounded px-2.5 text-xs font-medium transition ${
                   viewMode === id
-                    ? "bg-[#4267B2] text-white shadow-sm"
+                    ? "bg-[var(--aa-navy)] text-white shadow-sm"
                     : "text-slate-600 hover:bg-slate-50"
                 }`}
               >
@@ -878,7 +878,7 @@ export default function AccountChart() {
             type="button"
             variant="outline"
             size="sm"
-            className="h-9 gap-2 border-slate-200 text-[#4267B2] hover:bg-[var(--aa-sidebar-active)]"
+            className="h-9 gap-2 border-slate-200 text-[var(--aa-navy)] hover:bg-[var(--aa-sidebar-active)]"
             onClick={() => setUploadOpen(true)}
           >
             <Upload className="h-4 w-4 shrink-0" />
@@ -887,7 +887,7 @@ export default function AccountChart() {
           <Button
             type="button"
             size="sm"
-            className="h-9 gap-2 border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90 shadow-none"
+            className="h-9 gap-2 border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90 shadow-none"
             onClick={() => setAddModalOpen(true)}
           >
             <Plus className="h-4 w-4 shrink-0" />
@@ -1055,7 +1055,7 @@ const AccountList = ({
   const getNatureTone = (natureLabel) => {
     const n = String(natureLabel || "").toLowerCase();
     if (n.includes("asset"))
-      return "bg-[#4267B2]/10 text-[#4267B2] border-[#4267B2]/25";
+      return "bg-[var(--aa-navy)]/10 text-[var(--aa-navy)] border-[var(--aa-navy)]/25";
     if (n.includes("liabil"))
       return "bg-slate-100 text-slate-700 border-slate-200";
     if (n.includes("equity"))
@@ -1265,7 +1265,7 @@ const AccountList = ({
               a.reportingBehavior === "balance_switch") && (
               <Badge
                 variant="outline"
-                className="bg-[#4267B2]/10 text-[#4267B2] border-[#4267B2]/30 text-[10px] font-medium tracking-wide"
+                className="bg-[var(--aa-navy)]/10 text-[var(--aa-navy)] border-[var(--aa-navy)]/30 text-[10px] font-medium tracking-wide"
                 title="Balance switch: debit → asset, credit → liability"
               >
                 Switch
@@ -1676,7 +1676,7 @@ export const EditAccountForm = ({ account, onSave, onCancel }) => {
   };
 
   const selectClass =
-    "mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#4267B2]/30 focus:border-[#4267B2] text-sm";
+    "mt-1 w-full px-3 py-2 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]/30 focus:border-[var(--aa-navy)] text-sm";
 
   return (
     <Sheet
@@ -1689,7 +1689,7 @@ export const EditAccountForm = ({ account, onSave, onCancel }) => {
         side="right"
         className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-xl md:!max-w-2xl [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100"
       >
-        <SheetHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-navy,#4267B2)] px-5 py-4 pr-12 text-left">
+        <SheetHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-navy)] px-5 py-4 pr-12 text-left">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 rounded-md bg-white/10 p-2">
               <BookOpen className="h-4 w-4 text-[var(--aa-accent,#93c5fd)]" />
@@ -1862,7 +1862,7 @@ export const EditAccountForm = ({ account, onSave, onCancel }) => {
                 </select>
               </div>
               {form.reportingBehavior === "balance_switch" && (
-                <div className="rounded-md border border-[#4267B2]/25 bg-[var(--aa-sidebar-active,#eff4fb)] p-3 space-y-2">
+                <div className="rounded-md border border-[var(--aa-navy)]/25 bg-[var(--aa-sidebar-active,#eff4fb)] p-3 space-y-2">
                   <p className="text-xs text-slate-600">
                     Closing debit → Assets; closing credit → Liabilities. Works
                     for VAT, WHT, clearing, suspense, or any dual-nature
@@ -1940,7 +1940,7 @@ export const EditAccountForm = ({ account, onSave, onCancel }) => {
             <Button
               type="submit"
               size="sm"
-              className="border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90"
+              className="border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90"
             >
               Update
             </Button>

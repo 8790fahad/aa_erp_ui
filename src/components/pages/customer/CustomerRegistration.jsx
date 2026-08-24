@@ -25,7 +25,26 @@ import {
   NIGERIAN_PHONE_HINT,
 } from "@/lib/nigerianPhone";
 
-const SALUTATIONS = ["Mr.", "Mrs.", "Ms.", "Dr.", "Miss"];
+const SALUTATIONS = [
+  "Mr.",
+  "Mrs.",
+  "Ms.",
+  "Miss",
+  "Dr.",
+  "Prof.",
+  "Engr.",
+  "Barr.",
+  "Chief",
+  "Alhaji",
+  "Alhaja",
+  "Malan",
+  "Mallam",
+  "Hajiya",
+  "Malama",
+  "Imam",
+  "Pastor",
+  "Rev.",
+];
 const emptyContactPerson = () => ({
   salutation: "",
   first_name: "",

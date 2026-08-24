@@ -368,12 +368,12 @@ const DebtorsReport = () => {
                 >
                   <td className="px-3 py-2 text-sm">{idx + 1}</td>
                   <td className="px-3 py-2 text-sm">
-                    <span className="text-blue-600 hover:text-blue-800 hover:underline">
+                    <span className="text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:underline">
                       {row.partyId}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-sm">
-                    <span className="text-blue-600 hover:text-blue-800 hover:underline">
+                    <span className="text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:underline">
                       {row.partyName}
                     </span>
                   </td>

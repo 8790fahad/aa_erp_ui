@@ -1162,7 +1162,7 @@ export default function CreditSaleInvoice({
                   onClick={() => setCustomerPrintMode("amount")}
                   className={`px-3 py-0.5 text-sm transition-colors ${
                     customerPrintMode === "amount"
-                      ? "bg-blue-600 text-white"
+                      ? "bg-[var(--aa-navy)] text-white"
                       : "bg-white text-slate-700 hover:bg-slate-50"
                   }`}
                 >
@@ -1175,7 +1175,7 @@ export default function CreditSaleInvoice({
                   onClick={() => setCustomerPrintMode("vat")}
                   className={`px-3 py-0.5 text-sm border-l border-slate-300 transition-colors ${
                     customerPrintMode === "vat"
-                      ? "bg-blue-600 text-white"
+                      ? "bg-[var(--aa-navy)] text-white"
                       : "bg-white text-slate-700 hover:bg-slate-50"
                   }`}
                 >
@@ -1195,7 +1195,7 @@ export default function CreditSaleInvoice({
             {showPrintButton && (
               <button
                 onClick={handlePrint}
-                className="px-3 py-0.5 text-sm bg-blue-600 text-white rounded flex items-center gap-1 hover:bg-blue-700 transition-colors"
+                className="px-3 py-0.5 text-sm bg-[var(--aa-navy)] text-white rounded flex items-center gap-1 hover:bg-blue-700 transition-colors"
               >
                 <Printer size={14} /> Print
                 {showInvoiceSection &&
@@ -1302,22 +1302,22 @@ export default function CreditSaleInvoice({
                 <thead>
                   <tr className="bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white">
                     <th
-                      className={`border-r border-blue-500 text-center font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
+                      className={`border-r border-[var(--aa-accent)] text-center font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
                     >
                       #
                     </th>
                     <th
-                      className={`border-r border-blue-500 text-left font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
+                      className={`border-r border-[var(--aa-accent)] text-left font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
                     >
                       Description / Size
                     </th>
                     <th
-                      className={`border-r border-blue-500 text-center font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
+                      className={`border-r border-[var(--aa-accent)] text-center font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
                     >
                       Quantity
                     </th>
                     <th
-                      className={`border-r border-blue-500 text-right font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
+                      className={`border-r border-[var(--aa-accent)] text-right font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
                     >
                       Unit Price(₦)
                     </th>
@@ -2074,7 +2074,7 @@ export default function CreditSaleInvoice({
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 no-print">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3">
+            <div className="bg-[var(--aa-navy)] text-white p-3">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Copy size={20} />
@@ -2341,7 +2341,7 @@ export default function CreditSaleInvoice({
                 </button>
                 <button
                   onClick={handleApplyCustomerCopy}
-                  className="px-3 py-0.5 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded hover:from-blue-700 hover:to-indigo-700 transition-all font-medium flex items-center gap-1 shadow-lg hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="px-3 py-0.5 text-sm bg-[var(--aa-navy)] text-white rounded hover:from-blue-700 hover:to-indigo-700 transition-all font-medium flex items-center gap-1 shadow-lg hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed"
                   disabled={isSavingCustomerCopy}
                 >
                   {isSavingCustomerCopy ? (

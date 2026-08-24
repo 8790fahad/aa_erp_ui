@@ -28,7 +28,7 @@ import { toast } from "sonner";
 const AttendanceReport = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
   const secondaryColor =
     activeBusiness?.secondary_color &&
     String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"

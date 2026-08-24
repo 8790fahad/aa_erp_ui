@@ -24,7 +24,7 @@ import { Switch } from "@/components/ui/switch";
 const SalaryStructure = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
   const secondaryColor = activeBusiness?.secondary_color;
   const shadeColor = (hex, percent) => {
     const h = String(hex || "").replace("#", "").trim();

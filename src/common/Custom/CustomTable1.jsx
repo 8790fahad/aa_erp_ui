@@ -228,7 +228,7 @@ export default function CustomTable1({
                 className="text-center py-8"
               >
                 <div className="flex justify-center">
-                  <Loader2 className="h-7 w-7 animate-spin text-[#4267B2]" />
+                  <Loader2 className="h-7 w-7 animate-spin text-[var(--aa-navy)]" />
                 </div>
               </TableCell>
             </TableRow>

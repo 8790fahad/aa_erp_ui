@@ -427,7 +427,7 @@ const ProductionReports = () => {
                   <Button
                     onClick={generateReport}
                     disabled={!selectedReport || loading}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    className="w-full bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
                   >
                     {loading ? (
                       <>
@@ -469,7 +469,7 @@ const ProductionReports = () => {
               <Button
                 onClick={generateReport}
                 disabled={!selectedReport || loading}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
               >
                 {loading ? (
                   <>

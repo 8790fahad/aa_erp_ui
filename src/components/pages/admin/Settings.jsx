@@ -611,12 +611,15 @@ export default function Settings() {
               />
             </div>
 
-            <div className="min-w-0 rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
-              <SettingsContentHeader
-                activeLabel={activeTabLabel}
-                categoryLabel={activeCategoryLabel}
-                categoryId={activeTabMeta?.category}
-              />
+            <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
+              <div className="border-b border-slate-100 px-4 py-3 sm:px-5 sm:py-4">
+                <SettingsContentHeader
+                  activeLabel={activeTabLabel}
+                  categoryLabel={activeCategoryLabel}
+                  categoryId={activeTabMeta?.category}
+                />
+              </div>
+              <div className="p-4 sm:p-5">
               <SettingsTabPanels
                 tabVisible={(value) =>
                   visibleTabs.some((t) => t.value === value)
@@ -656,6 +659,7 @@ export default function Settings() {
                 updatingImprestId={updatingImprestId}
                 deletingImprestId={deletingImprestId}
               />
+              </div>
             </div>
           </div>
         </Tabs>

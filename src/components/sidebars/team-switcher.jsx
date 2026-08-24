@@ -46,7 +46,7 @@ export function TeamSwitcher() {
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src={user?.image} alt={user?.firstname} />
-                <AvatarFallback className="rounded-lg text-[#4267B2]">
+                <AvatarFallback className="rounded-lg text-[var(--aa-navy)]">
                   {user?.firstname?.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
@@ -69,7 +69,7 @@ export function TeamSwitcher() {
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user?.image} alt={user?.username} />
-                  <AvatarFallback className="rounded-lg text-[#4267B2]">
+                  <AvatarFallback className="rounded-lg text-[var(--aa-navy)]">
                     {user?.firstname?.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>

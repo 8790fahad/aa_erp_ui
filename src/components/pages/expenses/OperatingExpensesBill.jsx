@@ -1,21 +1,12 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
-  Save,
   Plus,
   Trash2,
-  Package,
   Calendar,
   FileText,
   X,
   Loader,
-  Edit2,
-  Check,
-  AlertCircle,
-  Info,
-  DollarSign,
-  Banknote,
-  Printer,
   Users,
 } from "lucide-react";
 import {
@@ -112,11 +103,6 @@ export default function OperatingExpenses() {
   const [memoToClose, setMemoToClose] = useState(null);
   const [memosToClose, setMemosToClose] = useState([]);
 
-  // Advance modal state
-  const [showPrepaymentModal, setShowPrepaymentModal] = useState(false);
-  const [supplierBalance, setSupplierBalance] = useState(0);
-  const [applyPrepayment, setApplyPrepayment] = useState(false);
-  const [shouldPrint, setShouldPrint] = useState(false);
   const [imprestOpen, setImprestOpen] = useState(false);
   const termOptions = [
     { value: "15", label: "15 days" },
@@ -482,27 +468,6 @@ export default function OperatingExpenses() {
     return subtotal + exclusiveVAT;
   };
 
-  // Check supplier balance from general ledger
-  const checkSupplierBalance = (supplierNo, callback) => {
-    _fetchApi(
-      `/api/v1/get-supplier-balance/${supplierNo}/${
-        activeBusiness.id || activeBusiness._id
-      }`,
-      (data) => {
-        if (data.success) {
-          const balance = parseFloat(data.balance || 0);
-          callback(balance);
-        } else {
-          callback(0);
-        }
-      },
-      (err) => {
-        console.error("Error checking supplier balance:", err);
-        callback(0);
-      },
-    );
-  };
-
   // Actual save function
   const savePurchase = (
     usePrepayment = false,
@@ -766,56 +731,14 @@ export default function OperatingExpenses() {
     isSavingRef.current = true;
     setLoading(true);
 
-    // Cash bills are paid immediately — skip supplier-advance prepayment flow.
+    // Cash bills are paid immediately — no advance flow.
     if (isCashPayment) {
       savePurchase(false, printAfterSave);
       return;
     }
 
-    // Check supplier balance before saving
-    checkSupplierBalance(form.supplier_number, (balance) => {
-      // Negative balance means we have advance with supplier (they owe us)
-      if (balance < 0 && Math.abs(balance) > 0.01) {
-        // There is advance with supplier; show confirmation modal.
-        // Since we are not actually saving yet, re-enable buttons so
-        // user can interact with the modal actions instead.
-        setLoading(false);
-        isSavingRef.current = false;
-        setSupplierBalance(balance);
-        setApplyPrepayment(true); // Automatically check advance
-        setShouldPrint(printAfterSave); // Store print flag for modal confirmation
-        setShowPrepaymentModal(true);
-      } else {
-        // No advance, proceed with normal save (loading already true)
-        savePurchase(false, printAfterSave);
-      }
-    });
-  };
-
-  const handlePrepaymentConfirm = () => {
-    if (isSavingRef.current || loading) {
-      return;
-    }
-
-    setShowPrepaymentModal(false);
-    const printFlag = shouldPrint; // Get the stored print flag
-    setShouldPrint(false); // Reset it
-    isSavingRef.current = true;
-    setLoading(true); // Prevent duplicate clicks while saving
-    savePurchase(applyPrepayment, printFlag);
-  };
-
-  const handlePrepaymentCancel = () => {
-    if (isSavingRef.current || loading) {
-      return;
-    }
-
-    setShowPrepaymentModal(false);
-    setApplyPrepayment(false);
-    setShouldPrint(false); // Reset print flag on cancel
-    isSavingRef.current = true;
-    setLoading(true); // Prevent duplicate clicks while saving
-    savePurchase(false, false);
+    // Do not auto-apply supplier advance here — apply manually via Pay Bills.
+    savePurchase(false, printAfterSave);
   };
 
   const getProducts = () => {
@@ -2137,169 +2060,6 @@ export default function OperatingExpenses() {
           </div>
         </DrawerContent>
       </Drawer>
-
-      {/* Advance Confirmation Modal */}
-      {showPrepaymentModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full transform transition-all animate-in zoom-in-95 duration-200">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white p-5 rounded-t-2xl">
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                    <AlertCircle className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold">
-                      Supplier Advance Available
-                    </h3>
-                    <p className="text-sm text-amber-100 mt-1">
-                      You must apply this advance to the transaction
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowPrepaymentModal(false)}
-                  className="p-1.5 hover:bg-white/20 rounded-lg transition-all"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-6 space-y-4">
-              {/* Warning Banner */}
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 rounded-r-lg p-2">
-                <div className="flex items-start gap-3">
-                  <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-semibold text-amber-900 mb-1">
-                      Mandatory Advance Application
-                    </p>
-                    <p className="text-sm text-amber-800">
-                      You have an available advance balance with this supplier.
-                      This advance{" "}
-                      <strong className="font-bold">must be applied</strong> to
-                      this transaction.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Amount Cards */}
-              <div className="grid grid-cols-1 gap-3">
-                {/* Available Advance */}
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-2 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-green-100 rounded-lg">
-                        <DollarSign className="w-5 h-5 text-green-700" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">
-                          Available Advance
-                        </p>
-                        <p className="text-2xl font-bold text-green-700 mt-1">
-                          ₦{formatNumber(Math.abs(supplierBalance))}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Transaction Amount */}
-                <div className="bg-gradient-to-br from-slate-50 to-gray-50 border-2 border-slate-200 rounded-xl p-2 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-slate-100 rounded-lg">
-                        <Package className="w-5 h-5 text-slate-700" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">
-                          Transaction Amount
-                        </p>
-                        <p className="text-2xl font-bold text-gray-900 mt-1">
-                          ₦{formatNumber(calculateTotal())}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Advance Status */}
-              <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-2">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Check className="w-5 h-5 text-blue-700" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-blue-900">
-                      Advance Application Status
-                    </p>
-                    <p className="text-sm text-blue-700 mt-1">
-                      Advance will be automatically applied to this transaction
-                    </p>
-                  </div>
-                  <div className="px-3 py-1 bg-blue-200 rounded-full">
-                    <span className="text-xs font-bold text-blue-800">
-                      REQUIRED
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Remaining Payable */}
-              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-300 rounded-xl p-2 shadow-md">
-                <div className="text-center">
-                  <p className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">
-                    Remaining Payable After Advance
-                  </p>
-                  <p className="text-3xl font-bold text-emerald-700">
-                    ₦
-                    {formatNumber(
-                      Math.max(0, calculateTotal() - Math.abs(supplierBalance)),
-                    )}
-                  </p>
-                  {Math.abs(supplierBalance) >= calculateTotal() && (
-                    <p className="text-sm text-emerald-600 mt-2 font-medium">
-                      ✓ Fully covered by advance
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-6 py-4 flex justify-end gap-3 rounded-b-2xl border-t border-gray-200">
-              <button
-                onClick={handlePrepaymentCancel}
-                className="px-5 py-2.5 text-sm bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-300 rounded-lg transition-all font-semibold shadow-sm hover:shadow"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handlePrepaymentConfirm}
-                disabled={loading}
-                className="px-6 py-2.5 text-sm bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <Loader className="w-4 h-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Continue with Advance
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* Memo Close Confirmation Modal */}
       {showCloseMemoModal && memoToClose && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

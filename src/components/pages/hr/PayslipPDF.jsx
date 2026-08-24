@@ -18,7 +18,7 @@ const PayslipPDF = forwardRef(
   const { activeBusiness } = useSelector((state) => state.auth);
   const business = businessProp || activeBusiness;
   const primaryColor =
-    primaryColorProp || business?.primary_color || "#4267B2";
+    primaryColorProp || business?.primary_color || "#1a2d5e";
   const payeEnabled =
     showPaye &&
     business?.paye_auto_calculation !== false &&

@@ -321,7 +321,7 @@ const MatchingRulesManager = ({ rules, onRulesChange, onRuleSelected, selectedRu
               onChange={importRules}
             />
           </label>
-          <Button onClick={() => setIsAddingRule(true)} className="flex items-center gap-2 bg-[#4267B2] hover:bg-[#365899] h-9">
+          <Button onClick={() => setIsAddingRule(true)} className="flex items-center gap-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] h-9">
             <Plus className="h-4 w-4" />
             Add Custom Rule
           </Button>
@@ -351,7 +351,7 @@ const MatchingRulesManager = ({ rules, onRulesChange, onRuleSelected, selectedRu
               key={rule.id} 
               className={`cursor-pointer transition-all hover:shadow-md ${
                 selectedRule?.id === rule.id 
-                  ? "border-2 border-blue-500 bg-blue-50/50 shadow-sm ring-1 ring-blue-200" 
+                  ? "border-2 border-[var(--aa-accent)] bg-blue-50/50 shadow-sm ring-1 ring-blue-200" 
                   : "hover:border-slate-300 border-slate-200"
               }`}
               onClick={() => onRuleSelected && onRuleSelected(rule)}
@@ -360,10 +360,10 @@ const MatchingRulesManager = ({ rules, onRulesChange, onRuleSelected, selectedRu
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <CardTitle className="text-sm font-bold flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${selectedRule?.id === rule.id ? 'bg-blue-600' : 'bg-slate-300'}`} />
+                      <div className={`h-2 w-2 rounded-full ${selectedRule?.id === rule.id ? 'bg-[var(--aa-navy)]' : 'bg-slate-300'}`} />
                       {rule.name}
                       {rule.autoApprove && <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200 text-[10px] px-1.5 h-4 uppercase">Auto</Badge>}
-                      {selectedRule?.id === rule.id && <Badge className="bg-blue-600 text-white text-[10px] px-1.5 h-4 uppercase ml-auto">Selected</Badge>}
+                      {selectedRule?.id === rule.id && <Badge className="bg-[var(--aa-navy)] text-white text-[10px] px-1.5 h-4 uppercase ml-auto">Selected</Badge>}
                     </CardTitle>
                     <div className="flex gap-2 mt-1 ml-4">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Priority: {rule.priority}</span>
@@ -432,7 +432,7 @@ const MatchingRulesManager = ({ rules, onRulesChange, onRuleSelected, selectedRu
                     </label>
                     <input
                       type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       value={newRule.name || ''}
                       onChange={(e) => setNewRule(prev => ({ ...prev, name: e.target.value }))}
                       placeholder="e.g., Payroll Matching"
@@ -444,7 +444,7 @@ const MatchingRulesManager = ({ rules, onRulesChange, onRuleSelected, selectedRu
                     </label>
                     <input
                       type="number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       value={newRule.priority || 1}
                       onChange={(e) => setNewRule(prev => ({ ...prev, priority: parseInt(e.target.value) }))}
                     />
@@ -460,7 +460,7 @@ const MatchingRulesManager = ({ rules, onRulesChange, onRuleSelected, selectedRu
                       type="number"
                       min="0"
                       max="100"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       value={(newRule.threshold || 0.7) * 100}
                       onChange={(e) => setNewRule(prev => ({ ...prev, threshold: parseInt(e.target.value) / 100 }))}
                     />
@@ -471,7 +471,7 @@ const MatchingRulesManager = ({ rules, onRulesChange, onRuleSelected, selectedRu
                       id="autoApprove"
                       checked={newRule.autoApprove || false}
                       onChange={(e) => setNewRule(prev => ({ ...prev, autoApprove: e.target.checked }))}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-[var(--aa-accent)]"
                     />
                     <label htmlFor="autoApprove" className="text-sm font-medium text-gray-700">
                       Auto-approve matches
@@ -532,7 +532,7 @@ const MatchingRulesManager = ({ rules, onRulesChange, onRuleSelected, selectedRu
 
                           <input
                             type="text"
-                            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent bg-white"
                             value={condition.value.toString()}
                             onChange={(e) => updateCondition(index, { value: e.target.value })}
                             placeholder="Value"
@@ -540,7 +540,7 @@ const MatchingRulesManager = ({ rules, onRulesChange, onRuleSelected, selectedRu
 
                           <input
                             type="number"
-                            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent bg-white"
                             value={condition.weight}
                             onChange={(e) => updateCondition(index, { weight: parseFloat(e.target.value) })}
                             placeholder="Weight"
@@ -565,7 +565,7 @@ const MatchingRulesManager = ({ rules, onRulesChange, onRuleSelected, selectedRu
                   <Button
                     onClick={saveRule}
                     disabled={isLoading}
-                    className="flex-[2] flex items-center justify-center gap-2 bg-[#4267B2] hover:bg-[#365899]"
+                    className="flex-[2] flex items-center justify-center gap-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]"
                   >
                     {isLoading ? "Saving..." : "Save Rule"}
                   </Button>

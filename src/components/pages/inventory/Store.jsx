@@ -242,7 +242,7 @@ export default function Store() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="bg-[#4267B2] hover:bg-[#4267B2] border-none"
+                                className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy)] border-none"
                                 onClick={() => handleOpenDialog(item)}
                               >
                                 <Edit className="h-4 w-4" />
@@ -260,7 +260,7 @@ export default function Store() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="bg-[#4267B2] hover:bg-[#4267B2] border-none"
+                                className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy)] border-none"
                                 onClick={() => toggleSendModal(item)}
                               >
                                 <Send className="h-4 w-4" />

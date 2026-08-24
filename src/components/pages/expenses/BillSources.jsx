@@ -40,13 +40,13 @@ const STATUS_UNPAID = "unpaid";
 const STATUS_PARTIALLY_PAID = "partially_paid";
 
 const primaryBtn =
-  "border-0 bg-[#4267B2] text-white hover:bg-[#4267B2]/90 shadow-none";
+  "border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90 shadow-none";
 const searchClass =
-  "h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20";
+  "h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20";
 const tableHeadClass =
   "border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500";
 const selectTriggerClass =
-  "h-9 w-full min-w-[11rem] border-slate-200 bg-white text-sm focus:border-[#4267B2] focus:ring-2 focus:ring-[#4267B2]/20";
+  "h-9 w-full min-w-[11rem] border-slate-200 bg-white text-sm focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20";
 
 export default function BillSources() {
   const navigate = useNavigate();
@@ -235,7 +235,7 @@ export default function BillSources() {
                 : `/app/expenses/billing/product-supplier-bill-pdf?invoice_ref=${item.invoice_ref}`,
             );
           }}
-          className="font-medium text-[#4267B2] hover:underline"
+          className="font-medium text-[var(--aa-navy)] hover:underline"
         >
           {item.invoice_ref || "N/A"}
         </button>
@@ -348,7 +348,7 @@ export default function BillSources() {
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-            <Receipt className="h-5 w-5 text-[#4267B2]" />
+            <Receipt className="h-5 w-5 text-[var(--aa-navy)]" />
             Bill
           </h1>
           <p className="mt-0.5 text-xs text-slate-500">
@@ -393,7 +393,7 @@ export default function BillSources() {
             type="button"
             variant="outline"
             size="sm"
-            className="h-9 gap-2 border-slate-200 text-[#4267B2] hover:bg-[var(--aa-sidebar-active)]"
+            className="h-9 gap-2 border-slate-200 text-[var(--aa-navy)] hover:bg-[var(--aa-sidebar-active)]"
             onClick={() => setImprestOpen(true)}
           >
             <Wallet className="h-4 w-4 shrink-0" />
@@ -430,7 +430,7 @@ export default function BillSources() {
                 <tr>
                   <td colSpan={fields.length} className="px-4 py-12 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--aa-sidebar-active)] text-[#4267B2]">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--aa-sidebar-active)] text-[var(--aa-navy)]">
                         <Receipt className="h-5 w-5" />
                       </div>
                       <p className="text-sm font-medium text-slate-700">
@@ -565,7 +565,7 @@ export default function BillSources() {
               onClick={() =>
                 openBillType("/app/expenses/billing/product-supplier-bill")
               }
-              className="w-full rounded-md border-0 bg-[#4267B2] px-4 py-3 text-left text-white transition-colors hover:bg-[#4267B2]/90"
+              className="w-full rounded-md border-0 bg-[var(--aa-navy)] px-4 py-3 text-left text-white transition-colors hover:bg-[var(--aa-navy)]/90"
             >
               <span className="block text-sm font-semibold">
                 Inventory Bill
@@ -591,7 +591,7 @@ export default function BillSources() {
             <button
               type="button"
               onClick={() => setCreateBillOpen(false)}
-              className="text-sm font-medium text-[#4267B2] hover:underline"
+              className="text-sm font-medium text-[var(--aa-navy)] hover:underline"
             >
               Cancel
             </button>

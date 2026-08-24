@@ -130,7 +130,7 @@ export default function SaleWorkflowSearchBar({
           }
         }}
         placeholder={placeholder}
-        className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-10 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-10 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
         autoComplete="off"
       />
       <button

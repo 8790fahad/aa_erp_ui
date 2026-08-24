@@ -68,7 +68,7 @@
                     <button
                       type="button"
                       onClick={addMember}
-                      className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                      className="flex items-center gap-2 px-3 py-2 bg-[var(--aa-navy)] text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
                     >
                       <UserPlus className="h-4 w-4" />
                       Add Member
@@ -108,7 +108,7 @@
                               size="sm"
                             />
                             <select
-                              className="px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                              className="px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent text-sm"
                               value={member.team_position || "Member"}
                               onChange={(e) =>
                                 updateMember(
@@ -122,7 +122,7 @@
                               <option value="leader">Team leader</option>
                             </select>
                             <select
-                              className="px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                              className="px-3 py-2 bg-transparent border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent text-sm"
                               value={member.status || "active"}
                               onChange={(e) =>
                                 updateMember(index, "status", e.target.value)
@@ -162,7 +162,7 @@
                     type="button"
                     onClick={handleSubmit}
                     disabled={loading2}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white py-2 px-4 rounded-md transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading2 ? (
                       <Loader className="animate-spin w-4 h-4 mx-auto" />

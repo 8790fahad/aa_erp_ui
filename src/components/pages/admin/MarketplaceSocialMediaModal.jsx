@@ -204,7 +204,7 @@ export default function MarketplaceSocialMediaModal({ isOpen, onClose, business 
 
   if (!isOpen || !business?.id) return null;
 
-  const primaryColor = business?.primary_color || "#4267B2";
+  const primaryColor = business?.primary_color || "#1a2d5e";
   const SelectedPlatformIcon = selectedPlatformConfig?.Icon;
 
   const addHandle = () => {

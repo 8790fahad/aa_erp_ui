@@ -395,7 +395,7 @@ export default function ImprestReceipt() {
           type="button"
           onClick={handlePrint}
           disabled={!row || loading}
-          className="gap-1 bg-blue-600 hover:bg-blue-700"
+          className="gap-1 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]"
         >
           <Printer className="h-4 w-4" />
           Print
@@ -456,16 +456,16 @@ export default function ImprestReceipt() {
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr className="bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white">
-                      <th className="w-10 border-r border-blue-500 px-1.5 py-1.5 text-center text-xs font-semibold">
+                      <th className="w-10 border-r border-[var(--aa-accent)] px-1.5 py-1.5 text-center text-xs font-semibold">
                         #
                       </th>
-                      <th className="border-r border-blue-500 px-1.5 py-1.5 text-left text-xs font-semibold">
+                      <th className="border-r border-[var(--aa-accent)] px-1.5 py-1.5 text-left text-xs font-semibold">
                         Account / description
                       </th>
-                      <th className="w-24 border-r border-blue-500 px-1.5 py-1.5 text-center text-xs font-semibold">
+                      <th className="w-24 border-r border-[var(--aa-accent)] px-1.5 py-1.5 text-center text-xs font-semibold">
                         Qty
                       </th>
-                      <th className="w-28 border-r border-blue-500 px-1.5 py-1.5 text-right text-xs font-semibold">
+                      <th className="w-28 border-r border-[var(--aa-accent)] px-1.5 py-1.5 text-right text-xs font-semibold">
                         Unit
                       </th>
                       <th className="w-32 px-1.5 py-1.5 text-right text-xs font-semibold">

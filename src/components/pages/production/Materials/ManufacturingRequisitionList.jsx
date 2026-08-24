@@ -596,7 +596,7 @@ export default function ManufacturingRequisitionList() {
             onClick={() => {
               viewList(item);
             }}
-            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+            className="text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:bg-blue-50"
             title="View Details"
           >
             <Eye className="h-4 w-4" />
@@ -842,7 +842,7 @@ export default function ManufacturingRequisitionList() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[92vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
+            <div className="bg-[var(--aa-navy)] text-white p-4">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-bold">
@@ -868,7 +868,7 @@ export default function ManufacturingRequisitionList() {
                 {/* Requisition Information */}
                 <div className="mb-4 bg-white rounded-lg border border-gray-200 shadow-sm p-4">
                   <div className="flex items-center mb-3 pb-2 border-b border-gray-200">
-                    <div className="w-1 h-5 bg-blue-600 rounded-full mr-2"></div>
+                    <div className="w-1 h-5 bg-[var(--aa-navy)] rounded-full mr-2"></div>
                     <h4 className="text-base font-bold text-gray-800">
                       Requisition Details
                     </h4>
@@ -921,7 +921,7 @@ export default function ManufacturingRequisitionList() {
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
                   <div className="px-2 py-2 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center mb-1">
-                      <div className="w-1 h-5 bg-blue-600 rounded-full mr-2"></div>
+                      <div className="w-1 h-5 bg-[var(--aa-navy)] rounded-full mr-2"></div>
                       <h4 className="text-lg font-bold text-gray-800">
                         Requisition Details
                       </h4>
@@ -1100,7 +1100,7 @@ export default function ManufacturingRequisitionList() {
                                             editMaterial.initiated_qty || "",
                                           )
                                     }
-                                    className="form-control text-center w-24 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-md px-3 py-2 font-semibold"
+                                    className="form-control text-center w-24 border-2 border-gray-300 focus:border-[var(--aa-accent)] focus:ring-2 focus:ring-blue-200 rounded-md px-3 py-2 font-semibold"
                                     onChange={(e) => {
                                       const value = e.target.value;
                                       // Format with commas as user types

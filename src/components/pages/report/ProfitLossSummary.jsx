@@ -55,7 +55,7 @@ const SectionRows = ({ title, lines = [] }) => {
 };
 
 const TotalRow = ({ label, cum, cur, accent }) => (
-  <tr className={accent ? "bg-[#4267B2]/10 font-bold" : "bg-gray-100 font-semibold"}>
+  <tr className={accent ? "bg-[var(--aa-navy)]/10 font-bold" : "bg-gray-100 font-semibold"}>
     <td className="px-4 py-2 text-sm">{label}</td>
     <td className="px-4 py-2 text-sm text-right">{fmtSigned(cum)}</td>
     <td className="px-4 py-2 text-sm text-right">{fmtSigned(cur)}</td>
@@ -119,7 +119,7 @@ export default function ProfitLossSummary() {
       <div className="flex items-center justify-between print:mb-2">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <TrendingUp className="h-7 w-7 text-[#4267B2]" />
+            <TrendingUp className="h-7 w-7 text-[var(--aa-navy)]" />
             Profit &amp; Loss Summary
           </h1>
           <p className="text-gray-600 mt-1">
@@ -168,7 +168,7 @@ export default function ProfitLossSummary() {
               <Button
                 onClick={fetchReport}
                 disabled={loading}
-                className="bg-[#4267B2] hover:bg-[#365899] text-white flex items-center gap-1.5"
+                className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white flex items-center gap-1.5"
               >
                 <RefreshCw
                   className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
@@ -206,18 +206,18 @@ export default function ProfitLossSummary() {
           <CardContent>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm border border-gray-200">
-                <thead className="bg-[#4267B2]/8">
+                <thead className="bg-[var(--aa-navy)]/8">
                   <tr>
-                    <th className="px-4 py-2.5 text-left text-xs font-bold text-[#4267B2] uppercase tracking-wider">
+                    <th className="px-4 py-2.5 text-left text-xs font-bold text-[var(--aa-navy)] uppercase tracking-wider">
                       Description
                     </th>
-                    <th className="px-4 py-2.5 text-right text-xs font-bold text-[#4267B2] uppercase tracking-wider w-[20%]">
+                    <th className="px-4 py-2.5 text-right text-xs font-bold text-[var(--aa-navy)] uppercase tracking-wider w-[20%]">
                       Cumulative
                       <div className="text-[9px] font-normal text-gray-500 normal-case mt-0.5">
                         {report.period.date_from} → {report.period.date_to}
                       </div>
                     </th>
-                    <th className="px-4 py-2.5 text-right text-xs font-bold text-[#4267B2] uppercase tracking-wider w-[20%]">
+                    <th className="px-4 py-2.5 text-right text-xs font-bold text-[var(--aa-navy)] uppercase tracking-wider w-[20%]">
                       Current Month
                       <div className="text-[9px] font-normal text-gray-500 normal-case mt-0.5">
                         {cmStart} → {cmEnd}
@@ -361,7 +361,7 @@ export default function ProfitLossSummary() {
                   />
 
                   {/* Net Margin */}
-                  <tr className="bg-[#4267B2] text-white font-bold">
+                  <tr className="bg-[var(--aa-navy)] text-white font-bold">
                     <td className="px-4 py-3 text-sm">Total Net Margin</td>
                     <td className="px-4 py-3 text-right text-sm">
                       {fmtSigned(report.net_margin?.cumulative)}

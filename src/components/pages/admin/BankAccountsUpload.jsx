@@ -77,7 +77,7 @@ const BankAccountsUpload = ({ open, onClose, onUploadSuccess }) => {
   const [previewData, setPreviewData] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const inputRef = useRef(null);
-  const primaryColor = activeBusiness?.primary_color || "var(--aa-navy)";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
 
   const convertExcelDate = (value) => {
     if (!value && value !== 0) return "";
@@ -686,7 +686,7 @@ const BankAccountsUpload = ({ open, onClose, onUploadSuccess }) => {
                 <div
                   className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                     isDragging
-                      ? "border-blue-500 bg-[var(--aa-sidebar-active)]"
+                      ? "border-[var(--aa-accent)] bg-[var(--aa-sidebar-active)]"
                       : "border-gray-300 hover:border-gray-400"
                   }`}
                   onDragOver={handleDragOver}

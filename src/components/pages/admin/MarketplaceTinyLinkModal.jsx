@@ -40,7 +40,7 @@ export default function MarketplaceTinyLinkModal({
 
   if (!isOpen || !business?.id) return null;
 
-  const primaryColor = business?.primary_color || "#4267B2";
+  const primaryColor = business?.primary_color || "#1a2d5e";
 
   const handleSubmit = () => {
     if (!longUrl) {

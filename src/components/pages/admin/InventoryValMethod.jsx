@@ -2,8 +2,8 @@
 /* eslint-disable no-unused-vars */
 import React, { useCallback, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Button } from "reactstrap";
-import { Card, Label } from "reactstrap/lib";
+import { Button, Label } from "reactstrap";
+import { Card } from "@/components/ui/card";
 import { Settings, Check, X, Save } from "lucide-react";
 import { toast } from "sonner";
 
@@ -127,41 +127,38 @@ const InventoryValMethod = ({
     ) || { value: "All", label: "All" };
 
   return (
-    <Card className="h-100 shadow-sm border-0">
-      {/* Card Header */}
-      {/* {JSON.stringify(code)} */}
+    <Card className="mb-0 overflow-hidden rounded-xl border border-slate-200 shadow-none">
       <div
-        className="card-header border-0 text-white position-relative overflow-hidden"
-        style={{
-          background: "var(--aa-navy)",
-          padding: "1rem",
-        }}
+        className="border-0 px-5 py-3.5 text-white"
+        style={{ background: "var(--aa-navy)" }}
       >
         <div className="d-flex align-items-center justify-content-between">
           <div className="d-flex align-items-center gap-2">
-            <span style={{ fontSize: "1.5rem" }}>{icon}</span>
+            <span style={{ fontSize: "1.25rem" }}>{icon}</span>
             <div>
               <h5 className="mb-0 fw-bold">{title}</h5>
               <small className="opacity-75">{description}</small>
             </div>
           </div>
-          <GiMetalHand size={20} className="opacity-75" />
+          <GiMetalHand size={18} className="opacity-75" />
         </div>
       </div>
 
-      {/* Card Body */}
-      <div className="card-body p-4">
+      <div className="px-5 py-4">
         {!code && !isEditing ? (
-          <div className="text-center py-2">
-            <div className="text-muted mb-3">
-              <GiMetalHand size={32} className="opacity-25" />
-            </div>
-            <p className="text-muted mb-3">No valuation method configured</p>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="mb-0 text-sm text-slate-500">
+              No valuation method configured
+            </p>
             <Button
               size="sm"
               color="primary"
               onClick={() => setIsEditing(true)}
-              className="d-flex align-items-center gap-2 mx-auto"
+              className="d-flex align-items-center gap-2"
+              style={{
+                backgroundColor: "var(--aa-navy)",
+                borderColor: "var(--aa-navy)",
+              }}
             >
               <Settings size={16} />
               Configure Method
@@ -229,6 +226,10 @@ const InventoryValMethod = ({
                 onClick={handleSubmit}
                 disabled={loading || !form.method}
                 className="d-flex align-items-center gap-2"
+                style={{
+                  backgroundColor: "var(--aa-navy)",
+                  borderColor: "var(--aa-navy)",
+                }}
               >
                 {loading ? (
                   <>
@@ -248,22 +249,23 @@ const InventoryValMethod = ({
             </div>
           </div>
         ) : (
-          <div>
-            <div className="d-flex justify-content-between align-items-center mb-2">
+          <div className="space-y-3">
+            <div className="d-flex justify-content-between align-items-center">
               <span className="text-muted small">Current Method:</span>
               <Button
                 size="sm"
                 color="link"
                 className="text-decoration-none p-0 d-flex align-items-center gap-1"
                 onClick={() => setIsEditing(true)}
+                style={{ color: "var(--aa-accent)" }}
               >
                 <Settings size={14} />
                 Change
               </Button>
             </div>
 
-            <div className="bg-light rounded p-3 mb-3">
-              <div className="fw-semibold text-primary">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="fw-semibold" style={{ color: "var(--aa-navy)" }}>
                 {currentMethod?.label}
               </div>
               <div className="text-muted small">
@@ -271,13 +273,14 @@ const InventoryValMethod = ({
               </div>
             </div>
 
-            <div className="d-flex justify-content-between align-items-center mb-2">
+            <div className="d-flex justify-content-between align-items-center">
               <span className="text-muted small">Valuation Date:</span>
               <Button
                 size="sm"
                 color="link"
                 className="text-decoration-none p-0 d-flex align-items-center gap-1"
                 onClick={() => setIsEditingDate(true)}
+                style={{ color: "var(--aa-accent)" }}
               >
                 <Settings size={14} />
                 Change
@@ -322,10 +325,17 @@ const InventoryValMethod = ({
                     onClick={handleSubmit}
                     disabled={loading}
                     className="d-flex align-items-center gap-2"
+                    style={{
+                      backgroundColor: "var(--aa-navy)",
+                      borderColor: "var(--aa-navy)",
+                    }}
                   >
                     {loading ? (
                       <>
-                        <div className="spinner-border spinner-border-sm" role="status"></div>
+                        <div
+                          className="spinner-border spinner-border-sm"
+                          role="status"
+                        ></div>
                         Saving...
                       </>
                     ) : (
@@ -338,8 +348,8 @@ const InventoryValMethod = ({
                 </div>
               </div>
             ) : (
-              <div className="bg-light rounded p-3">
-                <div className="fw-semibold text-primary">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="fw-semibold" style={{ color: "var(--aa-navy)" }}>
                   {currentValuationDate.label}
                 </div>
                 <div className="text-muted small">

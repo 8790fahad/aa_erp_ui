@@ -1410,7 +1410,7 @@ const ProductServiceForm = () => {
                               ? "e.g. Consulting, Delivery"
                               : "e.g. Rice 50kg, Soft drink"
                           }
-                          className={`h-10 w-full rounded-lg border px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500 ${
+                          className={`h-10 w-full rounded-lg border px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-[var(--aa-accent)] ${
                             errors.name ? "border-red-500" : "border-gray-300"
                           }`}
                         />
@@ -1430,7 +1430,7 @@ const ProductServiceForm = () => {
                             type="text"
                             {...register("sku")}
                             placeholder="Auto-generated if empty"
-                            className="h-full min-w-0 flex-1 rounded-lg border border-gray-300 px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                            className="h-full min-w-0 flex-1 rounded-lg border border-gray-300 px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-[var(--aa-accent)]"
                           />
                           <Button
                             type="button"
@@ -1500,7 +1500,7 @@ const ProductServiceForm = () => {
                         {...register("sales.description")}
                         placeholder="Describe this item for sales documents and invoices"
                         rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y min-h-[80px]"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent resize-y min-h-[80px]"
                       />
                     </div>
 
@@ -1560,7 +1560,7 @@ const ProductServiceForm = () => {
                               }}
                               onBlur={field.onBlur}
                               placeholder="0.00"
-                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent  ${
+                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent  ${
                                 errors.sales?.price
                                   ? "border-red-500"
                                   : "border-gray-300"
@@ -1801,7 +1801,7 @@ const ProductServiceForm = () => {
                                             ? "e.g. 2,900"
                                             : "e.g. 10,000"
                                       }
-                                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent ${
                                         errors.sales?.limitQuantity
                                           ? "border-red-500"
                                           : "border-gray-300"
@@ -1903,7 +1903,7 @@ const ProductServiceForm = () => {
                               },
                             })}
                             placeholder="0"
-                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent ${
                               errors.inventory?.quantity
                                 ? "border-red-500"
                                 : "border-gray-300"
@@ -1992,7 +1992,7 @@ const ProductServiceForm = () => {
                           {...register("purchase.description")}
                           placeholder="Describe this item for purchase orders and bills"
                           rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y min-h-[80px]"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent resize-y min-h-[80px]"
                         />
                       </div>
 
@@ -2048,7 +2048,7 @@ const ProductServiceForm = () => {
                                 }}
                                 onBlur={field.onBlur}
                                 placeholder="0.00"
-                                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent  ${
+                                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent  ${
                                   errors.purchase?.costPrice
                                     ? "border-red-500"
                                     : "border-gray-300"
@@ -2210,7 +2210,7 @@ const ProductServiceForm = () => {
                             type="checkbox"
                             checked={field.value || false}
                             onChange={(e) => field.onChange(e.target.checked)}
-                            className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-[var(--aa-accent)]"
                           />
                         )}
                       />
@@ -2229,7 +2229,7 @@ const ProductServiceForm = () => {
                             {...register("purchase.description")}
                             placeholder="Describe this service for purchase documents and bills"
                             rows={3}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y min-h-[80px]"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent resize-y min-h-[80px]"
                           />
                         </div>
                         <div>
@@ -2285,7 +2285,7 @@ const ProductServiceForm = () => {
                                   }}
                                   onBlur={field.onBlur}
                                   placeholder="0.00"
-                                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent  ${
+                                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent  ${
                                     errors.purchase?.costPrice
                                       ? "border-red-500"
                                       : "border-gray-300"
@@ -2459,7 +2459,7 @@ const ProductServiceForm = () => {
                               }}
                               onBlur={field.onBlur}
                         placeholder="0.00"
-                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent  ${
+                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent  ${
                           errors.returnableAssets?.depositAmount
                             ? "border-red-500"
                             : "border-gray-300"
@@ -2624,7 +2624,7 @@ const ProductServiceForm = () => {
                               disabled={isEditMode}
                               readOnly={isEditMode}
                               placeholder="0"
-                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent ${
                                 isEditMode
                                   ? "cursor-not-allowed bg-gray-100 text-gray-500"
                                   : ""
@@ -2665,7 +2665,7 @@ const ProductServiceForm = () => {
                         disabled={isEditMode}
                         readOnly={isEditMode}
                         placeholder="Select opening balance date"
-                        className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent ${
                           isEditMode
                             ? "cursor-not-allowed bg-gray-100 text-gray-500"
                             : ""
@@ -2729,7 +2729,7 @@ const ProductServiceForm = () => {
                               }}
                               onBlur={field.onBlur}
                               placeholder="0"
-                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right ${
+                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent text-right ${
                                 errors.inventory?.reorderLevel
                                   ? "border-red-500"
                                   : "border-gray-300"
@@ -2752,7 +2752,7 @@ const ProductServiceForm = () => {
                       <input
                         type="date"
                         {...register("inventory.expiryDate")}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         Optional: Set expiry date for perishable items
@@ -2865,7 +2865,7 @@ const ProductServiceForm = () => {
                             <select
                               value={field.value}
                               onChange={field.onChange}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent bg-white"
                             >
                               <option value="">Select warehouse...</option>
                               {visibleBranches.map((b) => (
@@ -2902,7 +2902,7 @@ const ProductServiceForm = () => {
                           <select
                             value={field.value}
                             onChange={field.onChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent bg-white"
                           >
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
@@ -2923,7 +2923,7 @@ const ProductServiceForm = () => {
                           <select
                             value={field.value}
                             onChange={field.onChange}
-                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white ${
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent bg-white ${
                               errors.settings?.taxable
                                 ? "border-red-500"
                                 : "border-gray-300"
@@ -2954,7 +2954,7 @@ const ProductServiceForm = () => {
                             <select
                               value={field.value}
                               onChange={field.onChange}
-                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent bg-white"
                             >
                               <option value="">Select supplier</option>
                               {suppliers?.map((supplier) => (
@@ -3044,7 +3044,7 @@ const ProductServiceForm = () => {
                           //   : [];
                           setValue("settings.tags", value);
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       />
                     </div>
 
@@ -3056,7 +3056,7 @@ const ProductServiceForm = () => {
                         {...register("settings.notes")}
                         placeholder="Additional notes about this product/service"
                         rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       />
                     </div>
                   </div>
@@ -3263,7 +3263,7 @@ const NewAccountForm = ({ onSubmit }) => {
           onChange={(e) => setFormData({ ...formData, code: e.target.value })}
           placeholder="e.g., 4003"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
         />
       </div>
       <div>
@@ -3276,7 +3276,7 @@ const NewAccountForm = ({ onSubmit }) => {
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           placeholder="e.g., New Revenue Account"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
         />
       </div>
       <Button type="submit" className="w-full shadow-none">

@@ -65,6 +65,8 @@ const FILTERS = [
 
 function paymentTypeLabel(type) {
   if (type === "credit") return "Credit";
+  if (type === "deposit") return "Apply Deposit";
+  if (type === "credit_split") return "Credit + Cash + Transfer";
   if (type === "transfer" || type === "bank") return "Transfer";
   if (type === "split") return "Cash + Transfer";
   return "Cash";
@@ -119,11 +121,30 @@ export default function SalesManagement() {
             );
           }
 
-          const roleLower = String(user?.role || "").toLowerCase();
-          const isCashier =
-            roleLower.includes("cashier") || roleLower.includes("casheir");
-          const cashierType = String(user?.cashier_type || "").toLowerCase();
-          if (isCashier && (cashierType === "cash" || cashierType === "transfer")) {
+          const parsePriv = (raw) => {
+            if (Array.isArray(raw)) return raw.filter(Boolean);
+            if (typeof raw === "string" && raw.trim()) {
+              return raw
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean);
+            }
+            return [];
+          };
+          const privs = [
+            ...new Set([
+              ...parsePriv(user?.functionalities),
+              ...parsePriv(activeBusiness?.functionalities),
+            ]),
+          ];
+          const hasCash = privs.includes("Cash Collection");
+          const hasTransfer = privs.includes("Transfer Collection");
+          const hasAnyCollectionTab =
+            hasCash ||
+            hasTransfer ||
+            privs.includes("Credit Collection");
+          // Only restrict when user has an explicit Cash/Transfer collection privilege
+          if (hasAnyCollectionTab && (hasCash || hasTransfer) && !(hasCash && hasTransfer)) {
             list = list.filter((r) => {
               if (
                 r.status !== "awaiting_cashier_confirm" &&
@@ -132,10 +153,13 @@ export default function SalesManagement() {
                 return true;
               }
               const pt = String(r.payment_type || "").toLowerCase();
-              if (cashierType === "cash") {
+              if (hasCash && !hasTransfer) {
                 return pt === "cash" || pt === "split";
               }
-              return pt === "transfer" || pt === "bank" || pt === "split";
+              if (hasTransfer && !hasCash) {
+                return pt === "transfer" || pt === "bank" || pt === "split";
+              }
+              return true;
             });
           }
 
@@ -158,7 +182,7 @@ export default function SalesManagement() {
         setRows([]);
       },
     );
-  }, [activeBusiness?.id, filter, saleFromUrl, user?.role, user?.cashier_type]);
+  }, [activeBusiness?.id, activeBusiness?.functionalities, filter, saleFromUrl, user?.functionalities]);
 
   useEffect(() => {
     fetchList();
@@ -400,7 +424,7 @@ export default function SalesManagement() {
               <Button
                 onClick={() => navigate("/app/sales/sale?view=lines")}
                 className="flex items-center gap-2"
-                style={{ backgroundColor: "#4267B2" }}
+                style={{ backgroundColor: "var(--aa-navy)" }}
               >
                 Create Invoice
               </Button>
@@ -415,7 +439,7 @@ export default function SalesManagement() {
                 onClick={() => setFilter(f.id)}
                 className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                   filter === f.id
-                    ? "bg-blue-600 text-white border-blue-600"
+                    ? "bg-[var(--aa-navy)] text-white border-blue-600"
                     : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
                 }`}
               >
@@ -540,7 +564,7 @@ export default function SalesManagement() {
                   </div>
                   <Link
                     to={`/app/sales/invoice-preview?sale_code=${selected.sale_code}`}
-                    className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                    className="inline-flex items-center gap-1 text-sm text-[var(--aa-accent)] hover:underline"
                   >
                     <Eye className="w-4 h-4" />
                     View full invoice
@@ -696,7 +720,7 @@ export default function SalesManagement() {
                     <Button
                       type="button"
                       className="mt-3"
-                      style={{ backgroundColor: "#4267B2" }}
+                      style={{ backgroundColor: "var(--aa-navy)" }}
                       onClick={() => navigate(nextActionHub.to)}
                     >
                       {nextActionHub.label}

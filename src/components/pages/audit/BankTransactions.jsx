@@ -193,7 +193,7 @@ const CustomTablePagination = ({ data, fields }) => {
                       onClick={() => setCurrentPage(page)}
                       className={`relative inline-flex items-center px-3 py-2 border text-sm font-medium ${
                         currentPage === page
-                          ? "z-10 bg-blue-50 border-blue-500 text-blue-600"
+                          ? "z-10 bg-blue-50 border-[var(--aa-accent)] text-blue-600"
                           : "bg-white border-gray-300 text-gray-500 hover:bg-gray-50"
                       }`}
                     >
@@ -213,7 +213,7 @@ const CustomTablePagination = ({ data, fields }) => {
                       onClick={() => setCurrentPage(page)}
                       className={`relative inline-flex items-center px-3 py-2 border text-sm font-medium ${
                         currentPage === page
-                          ? "z-10 bg-blue-50 border-blue-500 text-blue-600"
+                          ? "z-10 bg-blue-50 border-[var(--aa-accent)] text-blue-600"
                           : "bg-white border-gray-300 text-gray-500 hover:bg-gray-50"
                       }`}
                     >
@@ -227,7 +227,7 @@ const CustomTablePagination = ({ data, fields }) => {
                         onClick={() => setCurrentPage(page)}
                         className={`relative inline-flex items-center px-3 py-2 border text-sm font-medium ${
                           currentPage === page
-                            ? "z-10 bg-blue-50 border-blue-500 text-blue-600"
+                            ? "z-10 bg-blue-50 border-[var(--aa-accent)] text-blue-600"
                             : "bg-white border-gray-300 text-gray-500 hover:bg-gray-50"
                         }`}
                       >

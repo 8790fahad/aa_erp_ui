@@ -415,7 +415,7 @@ export default function CreateInvoice() {
                       type="text"
                       value={invoiceNumber}
                       onChange={(e) => setInvoiceNumber(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       required
                     />
                   </div>
@@ -428,7 +428,7 @@ export default function CreateInvoice() {
                       value={terms}
                       onChange={(e) => setTerms(e.target.value)}
                       placeholder="e.g., Net 30"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     />
                   </div>
                   <div>
@@ -439,7 +439,7 @@ export default function CreateInvoice() {
                       type="date"
                       value={invoiceDate}
                       onChange={(e) => setInvoiceDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       required
                     />
                   </div>
@@ -451,7 +451,7 @@ export default function CreateInvoice() {
                       type="date"
                       value={dueDate}
                       onChange={(e) => setDueDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       required
                     />
                   </div>
@@ -522,7 +522,7 @@ export default function CreateInvoice() {
                                 parseFloat(e.target.value) || 0
                               )
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                             required
                           />
                         </div>
@@ -542,7 +542,7 @@ export default function CreateInvoice() {
                                 parseFloat(e.target.value) || 0
                               )
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                             required
                           />
                         </div>
@@ -581,7 +581,7 @@ export default function CreateInvoice() {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                   placeholder="Note to customer..."
                 />
               </div>
@@ -704,7 +704,7 @@ export default function CreateInvoice() {
                     type="submit"
                     disabled={loading}
                     className="w-full"
-                    style={{ backgroundColor: "#4267B2" }}
+                    style={{ backgroundColor: "var(--aa-navy)" }}
                   >
                     {loading ? (
                       "Saving..."

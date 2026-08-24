@@ -191,7 +191,7 @@ export default function ManufacturingDashboard({range}) {
             {widget.data.map((item, index) => (
               <div
                 key={index}
-                className="p-4 bg-[#4267B2] backdrop-blur-sm rounded-xl border border-gray-700/50 hover:border-orange-500/50 transition-all duration-300"
+                className="p-4 bg-[var(--aa-navy)] backdrop-blur-sm rounded-xl border border-gray-700/50 hover:border-orange-500/50 transition-all duration-300"
               >
                 <div className="flex items-center justify-between mb-3">
                   <p className="font-semibold text-white">{item.line}</p>
@@ -225,7 +225,7 @@ export default function ManufacturingDashboard({range}) {
             {widget.data.map((item, index) => (
               <div
                 key={index}
-                className="p-4 bg-[#4267B2] backdrop-blur-sm rounded-xl border border-gray-700/50 hover:border-orange-500/50 transition-all duration-300"
+                className="p-4 bg-[var(--aa-navy)] backdrop-blur-sm rounded-xl border border-gray-700/50 hover:border-orange-500/50 transition-all duration-300"
               >
                 <div className="flex items-center justify-between mb-2">
                   <p className="font-semibold text-white">{item.material}</p>
@@ -337,7 +337,7 @@ export default function ManufacturingDashboard({range}) {
                 className=" border-gray-700/50 shadow-2xl hover:shadow-3xl transition-all duration-300"
               >
                 <CardHeader className=" border-gray-700/50">
-                  <CardTitle className="text-[#4267B2] flex items-center gap-2">
+                  <CardTitle className="text-[var(--aa-navy)] flex items-center gap-2">
                     <div
                       className={`w-2 h-2 rounded-full bg-gradient-to-r ${data.gradient} animate-pulse`}
                     ></div>

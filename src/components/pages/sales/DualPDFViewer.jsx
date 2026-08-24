@@ -99,7 +99,7 @@ const DualPDFViewer = ({ invoiceData, business, customer, date, isCustomerCopy, 
             </button>
             <button
               onClick={handlePrint}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              className="px-4 py-2 bg-[var(--aa-navy)] text-white rounded-lg hover:bg-[var(--aa-navy-hover)] transition-colors"
             >
               Print PDF
             </button>
@@ -117,7 +117,7 @@ const DualPDFViewer = ({ invoiceData, business, customer, date, isCustomerCopy, 
       <div className={`grid grid-cols-1 ${customerCopyEnabled ? 'lg:grid-cols-2' : 'lg:grid-cols-1'} gap-4`}>
         {/* Original Invoice */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="bg-blue-600 text-white p-3">
+          <div className="bg-[var(--aa-navy)] text-white p-3">
             <h3 className="text-lg font-semibold">Original Invoice</h3>
             <p className="text-blue-100 text-sm">Full pricing details</p>
           </div>

@@ -149,7 +149,7 @@ const AuditTrail = ({ selectedAccount }) => {
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button className="flex items-center gap-2 bg-[#4267B2] hover:bg-[#365899]">
+          <Button className="flex items-center gap-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]">
             <FileText className="h-4 w-4" />
             Export Audit Log
           </Button>

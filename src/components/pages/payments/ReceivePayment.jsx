@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
+  ArrowRightLeft,
   Banknote,
   Building2,
   CheckCircle2,
@@ -27,6 +28,24 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -73,9 +92,18 @@ const METHOD_TABS = [
     icon: CreditCard,
     privilege: "Credit Collection",
   },
+  {
+    id: "mode",
+    label: "Mode",
+    icon: ArrowRightLeft,
+    privilege: "Approve Payment Mode Switch",
+  },
 ];
 
 const COLLECTION_TAB_PRIVILEGES = METHOD_TABS.map((t) => t.privilege);
+
+const SWITCH_PAYMENT_MODE_PRIVILEGE = "Switch Payment Mode";
+const APPROVE_PAYMENT_MODE_PRIVILEGE = "Approve Payment Mode Switch";
 
 const LEGACY_COLLECTION_PRIVILEGES = [
   "Collection Points",
@@ -108,32 +136,53 @@ function isSplitPaymentType(type) {
   );
 }
 
+/** Normalize DB / legacy payment_type to a switch value. */
+function normalizePaymentMode(type) {
+  const t = String(type || "")
+    .toLowerCase()
+    .trim();
+  if (t === "bank") return "transfer";
+  if (isSplitPaymentType(t)) return "split";
+  if (t === "credit_split") return "credit_split";
+  if (t === "credit") return "credit";
+  if (t === "transfer") return "transfer";
+  if (t === "cash") return "cash";
+  return t || "cash";
+}
+
+const PAYMENT_MODE_OPTIONS = [
+  { value: "cash", label: "Cash", icon: Banknote },
+  { value: "transfer", label: "Transfer", icon: Building2 },
+  { value: "split", label: "Cash + Transfer", icon: Split },
+  { value: "credit", label: "Credit", icon: CreditCard },
+  { value: "credit_split", label: "Credit + Cash + Transfer", icon: Wallet },
+];
+
 function paymentTypeLabel(type) {
-  const t = String(type || "").toLowerCase();
-  if (isSplitPaymentType(t)) return "Cash + Transfer";
-  if (t === "transfer" || t === "bank") return "Transfer";
-  if (t === "cash") return "Cash";
-  if (t === "credit") return "Credit";
-  if (t === "customer_advance") return "Deposit";
+  const t = normalizePaymentMode(type);
+  const opt = PAYMENT_MODE_OPTIONS.find((o) => o.value === t);
+  if (opt) return opt.label;
+  if (t === "customer_advance" || t === "deposit") return "Deposit";
+  if (t === "warehouse") return "Warehouse";
   return type || "—";
 }
 
 function paymentTypeBadgeClass(type) {
-  const t = String(type || "").toLowerCase();
-  if (isSplitPaymentType(t))
+  const t = normalizePaymentMode(type);
+  if (t === "split" || t === "credit_split")
     return "bg-violet-50 text-violet-700 ring-violet-200";
-  if (t === "transfer" || t === "bank")
-    return "bg-sky-50 text-sky-700 ring-sky-200";
+  if (t === "transfer") return "bg-sky-50 text-sky-700 ring-sky-200";
   if (t === "credit") return "bg-amber-50 text-amber-700 ring-amber-200";
   return "bg-emerald-50 text-emerald-700 ring-emerald-200";
 }
 
 /** Cash + Transfer invoices appear on both Cash and Transfer tabs. */
 function matchesMethod(paymentType, method) {
-  const pt = String(paymentType || "").toLowerCase();
-  if (method === "cash") return pt === "cash" || isSplitPaymentType(pt);
+  const pt = normalizePaymentMode(paymentType);
+  if (method === "cash")
+    return pt === "cash" || pt === "split" || pt === "credit_split";
   if (method === "transfer")
-    return pt === "transfer" || pt === "bank" || isSplitPaymentType(pt);
+    return pt === "transfer" || pt === "split" || pt === "credit_split";
   if (method === "credit") return pt === "credit";
   return true;
 }
@@ -164,26 +213,37 @@ export default function ReceivePayment() {
     ];
   }, [activeBusiness?.functionalities, user?.functionalities]);
 
-  const cashierType = useMemo(() => {
-    const role = String(user?.role || "").toLowerCase();
-    const isCashier =
-      role.includes("cashier") || role.includes("casheir");
-    const ct = String(user?.cashier_type || "").toLowerCase();
-    if (isCashier && (ct === "cash" || ct === "transfer")) return ct;
-    return "";
-  }, [user?.role, user?.cashier_type]);
+  const hasCashCollection = functionalities.includes("Cash Collection");
+  const hasTransferCollection = functionalities.includes(
+    "Transfer Collection",
+  );
+  const canSwitchPaymentMode =
+    !functionalities.length ||
+    functionalities.includes(SWITCH_PAYMENT_MODE_PRIVILEGE) ||
+    LEGACY_COLLECTION_PRIVILEGES.some((p) => functionalities.includes(p));
+  const canApprovePaymentMode =
+    !functionalities.length ||
+    functionalities.includes(APPROVE_PAYMENT_MODE_PRIVILEGE) ||
+    LEGACY_COLLECTION_PRIVILEGES.some((p) => functionalities.includes(p));
 
   const canViewCollectionTab = useCallback(
     (privilege) => {
-      // Role-based cashier lock still wins
-      if (cashierType === "cash") return privilege === "Cash Collection";
-      if (cashierType === "transfer")
-        return privilege === "Transfer Collection";
-
       // No privilege list configured → full access (admin / legacy)
       if (!functionalities.length) return true;
 
       if (functionalities.includes(privilege)) return true;
+
+      // Switch Payment Mode holders can open Cash / Transfer / Credit queues to request a switch
+      if (
+        functionalities.includes(SWITCH_PAYMENT_MODE_PRIVILEGE) &&
+        [
+          "Cash Collection",
+          "Transfer Collection",
+          "Credit Collection",
+        ].includes(privilege)
+      ) {
+        return true;
+      }
 
       const hasAnyTabPriv = COLLECTION_TAB_PRIVILEGES.some((p) =>
         functionalities.includes(p),
@@ -196,7 +256,7 @@ export default function ReceivePayment() {
       }
       return false;
     },
-    [cashierType, functionalities],
+    [functionalities],
   );
 
   const visibleMethodTabs = useMemo(
@@ -210,12 +270,15 @@ export default function ReceivePayment() {
   const [pending, setPending] = useState([]);
   const [creditPending, setCreditPending] = useState([]);
   const [discountPending, setDiscountPending] = useState([]);
+  const [modePending, setModePending] = useState([]);
   const [history, setHistory] = useState([]);
   const [summary, setSummary] = useState({
     pending_cash: 0,
     pending_transfer: 0,
     pending_split: 0,
     pending_credit: 0,
+    pending_discount: 0,
+    pending_mode: 0,
     pending_count: 0,
     pending_total: 0,
     collected_cash_today: 0,
@@ -228,6 +291,11 @@ export default function ReceivePayment() {
   const [collectOpen, setCollectOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [switchingModeCode, setSwitchingModeCode] = useState(null);
+  const [modeChangeRow, setModeChangeRow] = useState(null);
+  const [modeChangeNext, setModeChangeNext] = useState("");
+  const [modeApproveRow, setModeApproveRow] = useState(null);
+  const [modeRejectRow, setModeRejectRow] = useState(null);
   const [cashAmount, setCashAmount] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
 
@@ -310,6 +378,7 @@ export default function ReceivePayment() {
           setPending(res.results?.pending || []);
           setCreditPending(res.results?.credit_pending || []);
           setDiscountPending(res.results?.discount_pending || []);
+          setModePending(res.results?.mode_pending || []);
           setHistory(res.results?.history || []);
           setSummary(
             res.results?.summary || {
@@ -318,6 +387,7 @@ export default function ReceivePayment() {
               pending_split: 0,
               pending_credit: 0,
               pending_discount: 0,
+              pending_mode: 0,
               pending_count: 0,
               pending_total: 0,
               collected_cash_today: 0,
@@ -413,11 +483,13 @@ export default function ReceivePayment() {
         showSplit: false,
         showCredit: false,
         showDiscount: false,
+        showMode: false,
         pending_cash: sumAmounts(cashQueue),
         pending_transfer: 0,
         pending_split: 0,
         pending_credit: 0,
         pending_discount: 0,
+        pending_mode: 0,
         collected_cash_today: summary.collected_cash_today,
         collected_transfer_today: 0,
         pending_count: cashQueue.length,
@@ -430,11 +502,13 @@ export default function ReceivePayment() {
         showSplit: false,
         showCredit: false,
         showDiscount: false,
+        showMode: false,
         pending_cash: 0,
         pending_transfer: sumAmounts(transferQueue),
         pending_split: 0,
         pending_credit: 0,
         pending_discount: 0,
+        pending_mode: 0,
         collected_cash_today: 0,
         collected_transfer_today: summary.collected_transfer_today,
         pending_count: transferQueue.length,
@@ -447,12 +521,14 @@ export default function ReceivePayment() {
         showSplit: false,
         showCredit: true,
         showDiscount: false,
+        showMode: false,
         pending_cash: 0,
         pending_transfer: 0,
         pending_split: 0,
         pending_credit:
           Number(summary.pending_credit) || sumAmounts(creditPending),
         pending_discount: 0,
+        pending_mode: 0,
         collected_cash_today: 0,
         collected_transfer_today: 0,
         pending_count: creditPending.length,
@@ -465,15 +541,37 @@ export default function ReceivePayment() {
         showSplit: false,
         showCredit: false,
         showDiscount: true,
+        showMode: false,
         pending_cash: 0,
         pending_transfer: 0,
         pending_split: 0,
         pending_credit: 0,
         pending_discount:
           Number(summary.pending_discount) || sumAmounts(discountPending),
+        pending_mode: 0,
         collected_cash_today: 0,
         collected_transfer_today: 0,
         pending_count: discountPending.length,
+      };
+    }
+    if (methodTab === "mode") {
+      return {
+        showCash: false,
+        showTransfer: false,
+        showSplit: false,
+        showCredit: false,
+        showDiscount: false,
+        showMode: true,
+        pending_cash: 0,
+        pending_transfer: 0,
+        pending_split: 0,
+        pending_credit: 0,
+        pending_discount: 0,
+        pending_mode:
+          Number(summary.pending_mode) || sumAmounts(modePending),
+        collected_cash_today: 0,
+        collected_transfer_today: 0,
+        pending_count: modePending.length,
       };
     }
     return {
@@ -482,16 +580,18 @@ export default function ReceivePayment() {
       showSplit: false,
       showCredit: false,
       showDiscount: false,
+      showMode: false,
       pending_cash: summary.pending_cash,
       pending_transfer: summary.pending_transfer,
       pending_split: summary.pending_split,
       pending_credit: summary.pending_credit || 0,
       pending_discount: summary.pending_discount || 0,
+      pending_mode: summary.pending_mode || 0,
       collected_cash_today: summary.collected_cash_today,
       collected_transfer_today: summary.collected_transfer_today,
       pending_count: summary.pending_count,
     };
-  }, [methodTab, pending, creditPending, discountPending, summary]);
+  }, [methodTab, pending, creditPending, discountPending, modePending, summary]);
 
   const methodPendingCounts = useMemo(() => {
     const counts = {
@@ -499,6 +599,7 @@ export default function ReceivePayment() {
       transfer: 0,
       credit: creditPending.length,
       discount: discountPending.length,
+      mode: modePending.length,
     };
     for (const r of pending) {
       if (matchesMethod(r.payment_type, "cash") && needsCollectionSide(r, "cash")) {
@@ -512,7 +613,7 @@ export default function ReceivePayment() {
       }
     }
     return counts;
-  }, [pending, creditPending, discountPending]);
+  }, [pending, creditPending, discountPending, modePending]);
 
   const filteredPending = useMemo(() => {
     let list =
@@ -520,11 +621,13 @@ export default function ReceivePayment() {
         ? creditPending
         : methodTab === "discount"
           ? discountPending
-          : pending.filter(
-              (r) =>
-                matchesMethod(r.payment_type, methodTab) &&
-                needsCollectionSide(r, methodTab),
-            );
+          : methodTab === "mode"
+            ? modePending
+            : pending.filter(
+                (r) =>
+                  matchesMethod(r.payment_type, methodTab) &&
+                  needsCollectionSide(r, methodTab),
+              );
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((r) =>
@@ -532,7 +635,7 @@ export default function ReceivePayment() {
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q)),
     );
-  }, [pending, creditPending, discountPending, methodTab, search]);
+  }, [pending, creditPending, discountPending, modePending, methodTab, search]);
 
   const filteredHistory = useMemo(() => {
     let list = history.filter((r) => {
@@ -793,14 +896,23 @@ export default function ReceivePayment() {
         if (pt === "credit" || creditPending.includes(pendingMatch)) {
           setMethodTab("credit");
         } else if (pt === "transfer" || pt === "bank") {
-          if (cashierType !== "cash") setMethodTab("transfer");
+          if (canViewCollectionTab("Transfer Collection")) {
+            setMethodTab("transfer");
+          }
         } else if (pt === "cash") {
-          if (cashierType !== "transfer") setMethodTab("cash");
+          if (canViewCollectionTab("Cash Collection")) {
+            setMethodTab("cash");
+          }
         } else if (isSplitPaymentType(pt)) {
-          // Prefer the side this cashier can collect; else keep current cash/transfer tab
-          if (cashierType === "transfer") setMethodTab("transfer");
-          else if (cashierType === "cash") setMethodTab("cash");
-          else if (methodTab !== "cash" && methodTab !== "transfer") {
+          // Prefer a side this user can collect via privileges
+          if (
+            canViewCollectionTab("Transfer Collection") &&
+            !canViewCollectionTab("Cash Collection")
+          ) {
+            setMethodTab("transfer");
+          } else if (canViewCollectionTab("Cash Collection")) {
+            setMethodTab("cash");
+          } else if (methodTab !== "cash" && methodTab !== "transfer") {
             setMethodTab("cash");
           }
         }
@@ -828,7 +940,7 @@ export default function ReceivePayment() {
     },
     // openCollect only uses setters + row data; safe across renders
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [history, pending, creditPending, cashierType],
+    [history, pending, creditPending, canViewCollectionTab, methodTab],
   );
 
   const handleBarcodeScan = useCallback(
@@ -851,6 +963,149 @@ export default function ReceivePayment() {
     setSelected(null);
     setCashAmount("");
     setTransferAmount("");
+  };
+
+  const openModeChange = (row) => {
+    if (!canSwitchPaymentMode) {
+      toast.error("You do not have permission to switch payment mode");
+      return;
+    }
+    const current = normalizePaymentMode(
+      row.payment_type || (methodTab === "credit" ? "credit" : "cash"),
+    );
+    setModeChangeRow(row);
+    setModeChangeNext(current);
+  };
+
+  const closeModeChange = () => {
+    if (switchingModeCode) return;
+    setModeChangeRow(null);
+    setModeChangeNext("");
+  };
+
+  const confirmModeChange = () => {
+    if (!modeChangeRow?.sale_code || !activeBusiness?.id || !modeChangeNext) {
+      return;
+    }
+    const current = normalizePaymentMode(
+      modeChangeRow.payment_type ||
+        (methodTab === "credit" ? "credit" : "cash"),
+    );
+    if (current === modeChangeNext) {
+      toast.message("Same payment mode selected");
+      return;
+    }
+
+    // Approvers apply immediately; switch-only users submit for Mode tab approval
+    const requireApproval = !canApprovePaymentMode;
+
+    setSwitchingModeCode(modeChangeRow.sale_code);
+    _postApi(
+      "/api/v1/sale-workflows/special-treatment",
+      {
+        facilityId: activeBusiness.id,
+        saleCodes: [modeChangeRow.sale_code],
+        paymentType: modeChangeNext,
+        updated_by: user?.id,
+        requireApproval,
+        note: `Collection Points: payment mode ${current} → ${modeChangeNext}`,
+      },
+      (res) => {
+        setSwitchingModeCode(null);
+        if (res?.success) {
+          const skipped = Array.isArray(res.results)
+            ? res.results.find((r) => r.skipped)
+            : null;
+          if (skipped) {
+            toast.error(skipped.reason || "Cannot change payment mode");
+          } else {
+            toast.success(
+              res.message ||
+                (requireApproval
+                  ? `Submitted switch to ${paymentTypeLabel(modeChangeNext)} for approval`
+                  : `Switched to ${paymentTypeLabel(modeChangeNext)}`),
+            );
+            setModeChangeRow(null);
+            setModeChangeNext("");
+          }
+          fetchDashboard();
+        } else {
+          toast.error(res?.message || "Could not switch payment mode");
+        }
+      },
+      (err) => {
+        setSwitchingModeCode(null);
+        toast.error(err?.message || "Could not switch payment mode");
+      },
+    );
+  };
+
+  const confirmApprovePaymentMode = () => {
+    const row = modeApproveRow;
+    if (!row || !activeBusiness?.id) return;
+    if (!canApprovePaymentMode) {
+      toast.error("You do not have permission to approve payment mode switches");
+      return;
+    }
+    setSubmitting(true);
+    _postApi(
+      "/api/v1/sale-workflows/advance",
+      {
+        facilityId: activeBusiness.id,
+        saleCode: row.sale_code,
+        action: "advance",
+        updated_by: user?.id,
+        note: "Payment mode switch approved",
+      },
+      (res) => {
+        setSubmitting(false);
+        setModeApproveRow(null);
+        if (res?.success) {
+          toast.success(res.message || "Payment mode switch approved");
+          fetchDashboard();
+        } else {
+          toast.error(res?.message || "Could not approve payment mode switch");
+        }
+      },
+      (err) => {
+        setSubmitting(false);
+        toast.error(err?.message || "Could not approve payment mode switch");
+      },
+    );
+  };
+
+  const confirmRejectPaymentMode = () => {
+    const row = modeRejectRow;
+    if (!row || !activeBusiness?.id) return;
+    if (!canApprovePaymentMode) {
+      toast.error("You do not have permission to reject payment mode switches");
+      return;
+    }
+    setSubmitting(true);
+    _postApi(
+      "/api/v1/sale-workflows/advance",
+      {
+        facilityId: activeBusiness.id,
+        saleCode: row.sale_code,
+        action: "reject_payment_mode",
+        updated_by: user?.id,
+        note: "Payment mode switch rejected",
+      },
+      (res) => {
+        setSubmitting(false);
+        setModeRejectRow(null);
+        if (res?.success) {
+          toast.success(res.message || "Payment mode switch rejected");
+          fetchDashboard();
+        } else {
+          toast.error(res?.message || "Could not reject payment mode switch");
+        }
+      },
+      (err) => {
+        setSubmitting(false);
+        toast.error(err?.message || "Could not reject payment mode switch");
+      },
+    );
   };
 
   const approveCredit = (row) => {
@@ -987,7 +1242,12 @@ export default function ReceivePayment() {
           user?.name ||
           user?.username ||
           undefined,
-        cashier_type: cashierType || undefined,
+        cashier_type:
+          methodTab === "transfer"
+            ? "transfer"
+            : methodTab === "cash"
+              ? "cash"
+              : undefined,
         collection_side:
           methodTab === "transfer"
             ? "transfer"
@@ -1040,7 +1300,9 @@ export default function ReceivePayment() {
     (parseFloat(String(transferAmount).replace(/,/g, "")) || 0);
 
   const summaryGridCols =
-    methodTab === "credit" || methodTab === "discount"
+    methodTab === "credit" ||
+    methodTab === "discount" ||
+    methodTab === "mode"
       ? "xl:grid-cols-1 sm:grid-cols-1"
       : "xl:grid-cols-2";
 
@@ -1075,10 +1337,16 @@ export default function ReceivePayment() {
               Customer collection hub: Collect Payment on pending invoices, Make
               Deposit for prepaid funds, and Apply Deposit to open invoices.
               Supplier payments are handled under Purchase → Pay Bills.
-              {cashierType ? (
+              {hasCashCollection || hasTransferCollection ? (
                 <span className="ml-1 font-medium text-[var(--aa-navy)]">
-                  You are a {cashierType === "transfer" ? "Transfer" : "Cash"}{" "}
-                  cashier.
+                  Access:{" "}
+                  {[
+                    hasCashCollection ? "Cash Collection" : null,
+                    hasTransferCollection ? "Transfer Collection" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  .
                 </span>
               ) : null}
             </p>
@@ -1212,6 +1480,23 @@ export default function ReceivePayment() {
             </div>
           ) : null}
 
+          {viewSummary.showMode ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <ArrowRightLeft className="h-4 w-4 text-indigo-600" />
+                Mode switches awaiting approval
+              </div>
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">
+                ₦{formatNumber1(viewSummary.pending_mode)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {viewSummary.pending_count} invoice
+                {viewSummary.pending_count === 1 ? "" : "s"} — approve or reject
+                the requested payment mode
+              </p>
+            </div>
+          ) : null}
+
           {viewSummary.showCash ? (
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -1312,9 +1597,11 @@ export default function ReceivePayment() {
                   ? "credit approval"
                   : methodTab === "discount"
                     ? "discount approval"
-                    : methodTab === "transfer"
-                      ? "transfer payment"
-                      : "cash payment"}
+                    : methodTab === "mode"
+                      ? "payment mode approval"
+                      : methodTab === "transfer"
+                        ? "transfer payment"
+                        : "cash payment"}
                 .
               </div>
             ) : (
@@ -1359,24 +1646,70 @@ export default function ReceivePayment() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
-                              row.payment_type || (methodTab === "credit" ? "credit" : ""),
-                            )}`}
-                          >
-                            {isSplitPaymentType(row.payment_type) ? (
-                              <Split className="h-3 w-3" />
-                            ) : methodTab === "credit" ||
-                              String(row.payment_type || "").toLowerCase() ===
-                                "credit" ? (
-                              <CreditCard className="h-3 w-3" />
-                            ) : null}
-                            {paymentTypeLabel(
-                              row.payment_type ||
-                                (methodTab === "credit" ? "credit" : ""),
-                            )}
-                          </span>
-                          {isSplitPaymentType(row.payment_type) ? (
+                          {methodTab === "mode" ? (
+                            <div className="space-y-1 text-xs">
+                              <div>
+                                <span className="text-slate-500">Current: </span>
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
+                                    row.payment_type,
+                                  )}`}
+                                >
+                                  {paymentTypeLabel(row.payment_type)}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500">Requested: </span>
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
+                                    row.proposed_payment_type ||
+                                      row.pending_payment_mode?.to,
+                                  )}`}
+                                >
+                                  {paymentTypeLabel(
+                                    row.proposed_payment_type ||
+                                      row.pending_payment_mode?.to,
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
+                                  row.payment_type ||
+                                    (methodTab === "credit" ? "credit" : ""),
+                                )}`}
+                              >
+                                {paymentTypeLabel(
+                                  row.payment_type ||
+                                    (methodTab === "credit" ? "credit" : ""),
+                                )}
+                              </span>
+                              {canSwitchPaymentMode ? (
+                                <button
+                                  type="button"
+                                  disabled={
+                                    switchingModeCode === row.sale_code ||
+                                    submitting
+                                  }
+                                  onClick={() => openModeChange(row)}
+                                  className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                >
+                                  {switchingModeCode === row.sale_code ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <ArrowRightLeft className="h-3 w-3" />
+                                  )}
+                                  Change
+                                </button>
+                              ) : null}
+                            </div>
+                          )}
+                          {methodTab !== "mode" &&
+                          (isSplitPaymentType(row.payment_type) ||
+                            normalizePaymentMode(row.payment_type) ===
+                              "credit_split") ? (
                             <div className="mt-1.5 space-y-0.5 text-[11px] text-slate-500">
                               <div>
                                 Cash:{" "}
@@ -1464,6 +1797,25 @@ export default function ReceivePayment() {
                             >
                               Approve Discount
                             </button>
+                          ) : methodTab === "mode" ? (
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => setModeRejectRow(row)}
+                                className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                              >
+                                Reject
+                              </button>
+                              <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => setModeApproveRow(row)}
+                                className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                              >
+                                Approve Mode
+                              </button>
+                            </div>
                           ) : (
                             <button
                               type="button"
@@ -2070,6 +2422,196 @@ export default function ReceivePayment() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Change payment mode — button picker + confirm */}
+      <Dialog
+        open={Boolean(modeChangeRow)}
+        onOpenChange={(open) => {
+          if (!open) closeModeChange();
+        }}
+      >
+        <DialogContent className="z-[200] max-w-lg border border-slate-200 bg-white text-slate-900 shadow-2xl sm:rounded-xl">
+          <DialogHeader>
+            <DialogTitle>Change payment mode</DialogTitle>
+            <DialogDescription>
+              {modeChangeRow ? (
+                <>
+                  Invoice{" "}
+                  <span className="font-mono font-medium text-slate-800">
+                    {modeChangeRow.sale_code}
+                  </span>
+                  {" · "}
+                  Current:{" "}
+                  <span className="font-medium text-slate-800">
+                    {paymentTypeLabel(modeChangeRow.payment_type)}
+                  </span>
+                </>
+              ) : (
+                "Select the new payment mode, then confirm."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-wrap gap-2 py-1">
+            {PAYMENT_MODE_OPTIONS.map((opt) => {
+              const Icon = opt.icon;
+              const active = modeChangeNext === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setModeChangeNext(opt.value)}
+                  className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${
+                    active
+                      ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white shadow-sm"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {modeChangeRow &&
+          modeChangeNext &&
+          normalizePaymentMode(modeChangeRow.payment_type) !==
+            modeChangeNext ? (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              Switch from{" "}
+              <span className="font-semibold text-slate-900">
+                {paymentTypeLabel(modeChangeRow.payment_type)}
+              </span>{" "}
+              to{" "}
+              <span className="font-semibold text-slate-900">
+                {paymentTypeLabel(modeChangeNext)}
+              </span>
+              {canApprovePaymentMode
+                ? ". This will apply immediately."
+                : ". This will be sent for approval on the Mode tab."}
+            </p>
+          ) : null}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <button
+              type="button"
+              onClick={closeModeChange}
+              disabled={Boolean(switchingModeCode)}
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmModeChange}
+              disabled={
+                Boolean(switchingModeCode) ||
+                !modeChangeNext ||
+                normalizePaymentMode(modeChangeRow?.payment_type) ===
+                  modeChangeNext
+              }
+              className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:opacity-50"
+            >
+              {switchingModeCode ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" />
+              )}
+              Confirm change
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(modeApproveRow)}
+        onOpenChange={(open) => {
+          if (!open && !submitting) setModeApproveRow(null);
+        }}
+      >
+        <AlertDialogContent className="z-[200] border border-slate-200 bg-white text-slate-900 shadow-2xl sm:rounded-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Approve payment mode switch?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {modeApproveRow ? (
+                <>
+                  Apply{" "}
+                  <span className="font-semibold text-slate-800">
+                    {paymentTypeLabel(
+                      modeApproveRow.proposed_payment_type ||
+                        modeApproveRow.pending_payment_mode?.to,
+                    )}
+                  </span>{" "}
+                  on invoice{" "}
+                  <span className="font-mono font-medium text-slate-800">
+                    {modeApproveRow.sale_code}
+                  </span>
+                  ?
+                </>
+              ) : (
+                "Confirm approving this payment mode switch."
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={submitting}
+              onClick={(e) => {
+                e.preventDefault();
+                confirmApprovePaymentMode();
+              }}
+              className="bg-indigo-600 text-white hover:bg-indigo-700"
+            >
+              {submitting ? "Approving…" : "Approve"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(modeRejectRow)}
+        onOpenChange={(open) => {
+          if (!open && !submitting) setModeRejectRow(null);
+        }}
+      >
+        <AlertDialogContent className="z-[200] border border-slate-200 bg-white text-slate-900 shadow-2xl sm:rounded-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject payment mode switch?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {modeRejectRow ? (
+                <>
+                  Keep current mode{" "}
+                  <span className="font-semibold text-slate-800">
+                    {paymentTypeLabel(modeRejectRow.payment_type)}
+                  </span>{" "}
+                  on invoice{" "}
+                  <span className="font-mono font-medium text-slate-800">
+                    {modeRejectRow.sale_code}
+                  </span>
+                  ?
+                </>
+              ) : (
+                "Confirm rejecting this payment mode switch."
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={submitting}
+              onClick={(e) => {
+                e.preventDefault();
+                confirmRejectPaymentMode();
+              }}
+              className="bg-slate-800 text-white hover:bg-slate-900"
+            >
+              {submitting ? "Rejecting…" : "Reject"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

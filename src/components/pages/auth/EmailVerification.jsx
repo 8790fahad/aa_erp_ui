@@ -124,7 +124,7 @@ const EmailVerification = () => {
               key={index}
               ref={(el) => (inputRefs.current[index] = el)}
               type="text"
-              className="w-12 h-12 text-center text-xl font-semibold text-black border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#4267B2]"
+              className="w-12 h-12 text-center text-xl font-semibold text-black border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]"
               maxLength={1}
               value={digit}
               onChange={(e) => handleChange(index, e.target.value)}
@@ -135,7 +135,7 @@ const EmailVerification = () => {
         </div>
         <div className="flex justify-center">
           <button
-            className=" bg-[#4267B2] hover:bg-[#4267B2] text-white py-3 px-4 rounded-md mb-4 cursor-pointer"
+            className=" bg-[var(--aa-navy)] hover:bg-[var(--aa-navy)] text-white py-3 px-4 rounded-md mb-4 cursor-pointer"
             onClick={handleVerify}
           >
             Verify and Continue
@@ -145,7 +145,7 @@ const EmailVerification = () => {
         <div className="text-center text-sm text-gray-600">
           Didn't get the code?
           <button
-            className={`text-[#4267B2] ml-1 ${
+            className={`text-[var(--aa-navy)] ml-1 ${
               timer === 0 ? "" : "opacity-50 cursor-not-allowed"
             }`}
             disabled={timer > 0}

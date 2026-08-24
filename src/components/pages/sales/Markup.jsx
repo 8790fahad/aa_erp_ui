@@ -8797,7 +8797,7 @@ export default function Markup() {
               className={
                 item.type === "job_specific"
                   ? "bg-gray-500 text-white border-green-600"
-                  : "bg-blue-500 text-white border-green-600"
+                  : "bg-[var(--aa-navy)] text-white border-green-600"
               }
             >
               {costingType === "joint_shared"
@@ -8887,7 +8887,7 @@ export default function Markup() {
                       .includes("manufacturing") && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <UIButton className="bg-blue-600 hover:bg-blue-700 text-white">
+                          <UIButton className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white">
                             <Plus className="h-4 w-4 mr-2" />
                             Add Item
                             <ChevronDown className="h-4 w-4 ml-2" />
@@ -8944,7 +8944,7 @@ export default function Markup() {
                   <input
                     type="text"
                     placeholder="Search items by name..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -9122,7 +9122,7 @@ export default function Markup() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-5 flex-shrink-0">
+            <div className="bg-[var(--aa-navy)] text-white p-5 flex-shrink-0">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-bold flex items-center gap-2">
@@ -9186,7 +9186,7 @@ export default function Markup() {
                   className="rounded-lg"
                   inputProps={{
                     className:
-                      "w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+                      "w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)]",
                   }}
                 />
                 {selectedByProduct && (
@@ -9231,7 +9231,7 @@ export default function Markup() {
                       e.target.value ? parseInt(e.target.value, 10) : 0,
                     )
                   }
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] bg-white"
                 >
                   <option value="">Select warehouse</option>
                   {branches.map((b) => (
@@ -9412,7 +9412,7 @@ export default function Markup() {
                         markup_mode: e.target.value,
                       }))
                     }
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)]"
                   >
                     <option value="percentage">Percentage (%)</option>
                     <option value="fixed">Fixed Amount (₦)</option>
@@ -9656,7 +9656,7 @@ export default function Markup() {
                     (!byProductForm.vat_rate ||
                       parseFloat(byProductForm.vat_rate) <= 0))
                 }
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
               >
                 {byProductSubmitting ? (
                   <>
@@ -9684,7 +9684,7 @@ export default function Markup() {
       )}
       {isCostingDetailPage && selectedRecord && (
         <div className="bg-gray-50 pb-6 min-w-0 w-full max-w-full overflow-x-hidden">
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-4 shadow-md shrink-0">
+          <div className="bg-[var(--aa-navy)] text-white px-4 py-4 shadow-md shrink-0">
             <div className="max-w-[1600px] mx-auto flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-3 min-w-0">
                 <SidebarTrigger className="text-white hover:bg-white/20 shrink-0 mt-0.5" />
@@ -10948,7 +10948,7 @@ export default function Markup() {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-[#4267B2] rounded-lg flex items-center justify-center text-white font-bold">
+                          <div className="w-10 h-10 bg-[var(--aa-navy)] rounded-lg flex items-center justify-center text-white font-bold">
                             {index + 1}
                           </div>
                           <div>
@@ -11557,7 +11557,7 @@ export default function Markup() {
                                                     )
                                                   }
                                                   placeholder="0.0000"
-                                                  className="w-full text-left border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                  className="w-full text-left border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)]"
                                                 />
                                               </div>
                                             </div>
@@ -11588,7 +11588,7 @@ export default function Markup() {
                                                       e.target.value,
                                                     )
                                                   }
-                                                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)]"
                                                 >
                                                   <option value="percentage">
                                                     Percentage (%)
@@ -11620,7 +11620,7 @@ export default function Markup() {
                                                     )
                                                   }
                                                   placeholder="0"
-                                                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)]"
                                                 />
                                               </div>
 
@@ -11673,7 +11673,7 @@ export default function Markup() {
                                                         false
                                                       }
                                                       placeholder="7.5"
-                                                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] disabled:bg-gray-100 disabled:cursor-not-allowed"
                                                     />
                                                   </div>
                                                 </div>
@@ -11991,7 +11991,7 @@ export default function Markup() {
                                                       )
                                                     }
                                                     placeholder="0.0000"
-                                                    className="w-full text-left border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    className="w-full text-left border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)]"
                                                   />
                                                 </div>
                                                 {(parseFloat(
@@ -12017,7 +12017,7 @@ export default function Markup() {
                                                           e.target.value,
                                                         )
                                                       }
-                                                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)]"
                                                     >
                                                       <option value="">
                                                         Select waste type
@@ -12060,7 +12060,7 @@ export default function Markup() {
                                                     )
                                                   }
                                                   placeholder="Enter waste reason"
-                                                  className="w-full min-h-0 max-h-24 resize-y border border-gray-300 rounded-md px-3 py-1.5 text-sm leading-snug focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                  className="w-full min-h-0 max-h-24 resize-y border border-gray-300 rounded-md px-3 py-1.5 text-sm leading-snug focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)]"
                                                 />
                                               </div>
 
@@ -12849,7 +12849,7 @@ export default function Markup() {
                                 <DropdownMenuTrigger asChild>
                                   <UIButton
                                     size="sm"
-                                    className="text-xs bg-[#4267B2] text-white hover:bg-blue-700"
+                                    className="text-xs bg-[var(--aa-navy)] text-white hover:bg-blue-700"
                                   >
                                     <Plus className="h-3 w-3 mr-1" />
                                     Add Line
@@ -15178,7 +15178,7 @@ export default function Markup() {
                 <div className="flex justify-center mt-4">
                   <UIButton
                     onClick={handleAddProductionItem}
-                    className="bg-[#4267B2] hover:bg-blue-700 text-white"
+                    className="bg-[var(--aa-navy)] hover:bg-blue-700 text-white"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add Production Item

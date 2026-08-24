@@ -1926,7 +1926,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Goods (Resalable) */}
                       <Card
-                        className="cursor-pointer hover:border-blue-500 hover:shadow-md transition-all"
+                        className="cursor-pointer hover:border-[var(--aa-accent)] hover:shadow-md transition-all"
                         onClick={() =>
                           handleProductTypeSelect(PRODUCT_TYPES.RESALABLE)
                         }
@@ -1946,7 +1946,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
 
                       {/* Service */}
                       <Card
-                        className="cursor-pointer hover:border-blue-500 hover:shadow-md transition-all"
+                        className="cursor-pointer hover:border-[var(--aa-accent)] hover:shadow-md transition-all"
                         onClick={() =>
                           handleProductTypeSelect(PRODUCT_TYPES.SERVICE)
                         }
@@ -1991,7 +1991,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
                     <div className="flex justify-center">
                       <Button
                         onClick={() => generateTemplate(selectedProductType)}
-                        className="flex items-center gap-2 bg-[#4267B2] hover:bg-[#36549B]"
+                        className="flex items-center gap-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]"
                       >
                         <Download className="h-4 w-4" />
                         Download Template
@@ -2023,7 +2023,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
                     <div
                       className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                         isDragging
-                          ? "border-blue-500 bg-blue-50"
+                          ? "border-[var(--aa-accent)] bg-blue-50"
                           : "border-gray-300 hover:border-gray-400"
                       }`}
                       onDragOver={handleDragOver}
@@ -2051,7 +2051,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
                         <div className="flex justify-center">
                           <label className="cursor-pointer">
                             <Button
-                              className="flex items-center gap-2 bg-[#4267B2] hover:bg-[#36549B]"
+                              className="flex items-center gap-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]"
                               onClick={() => inputRef.current.click()}
                             >
                               <Upload className="h-4 w-4" />

@@ -132,7 +132,7 @@ export default function SharedCostingJournalPreview({ preview }) {
       {open && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-5 flex-shrink-0">
+            <div className="bg-[var(--aa-navy)] text-white p-5 flex-shrink-0">
               <div className="flex justify-between items-start gap-4">
                 <div className="min-w-0">
                   <h3 className="text-xl font-bold flex items-center gap-2">

@@ -108,7 +108,7 @@ export default function ForgotPasswordForm() {
               {/* Icon */}
               <div className="flex justify-center">
                 <div className="p-4 bg-blue-50 rounded-full">
-                  <UnlockIcon className="w-12 h-12 text-[#4267B2]" />
+                  <UnlockIcon className="w-12 h-12 text-[var(--aa-navy)]" />
                 </div>
               </div>
 
@@ -126,7 +126,7 @@ export default function ForgotPasswordForm() {
                   className={`border-2 transition-all ${
                     emailError
                       ? "border-red-500 focus:ring-red-500"
-                      : "border-gray-300 focus:ring-[#4267B2] focus:border-[#4267B2]"
+                      : "border-gray-300 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
                   }`}
                   name="user_id"
                   onChange={handleEmailChange}
@@ -143,7 +143,7 @@ export default function ForgotPasswordForm() {
               {/* Submit Button */}
               <Button
                 type="submit"
-                className="w-full bg-gradient-to-r from-[#4267B2] to-blue-600 hover:from-[#4267B2]/90 hover:to-blue-600/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02]"
+                className="w-full bg-gradient-to-r from-[var(--aa-navy)] to-blue-600 hover:from-[var(--aa-navy)]/90 hover:to-blue-600/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02]"
                 disabled={loading || !email || emailError}
               >
                 {loading ? (
@@ -160,7 +160,7 @@ export default function ForgotPasswordForm() {
               <div className="text-center">
                 <Link
                   to="/app"
-                  className="text-sm font-medium text-[#4267B2] hover:text-blue-700 underline transition-colors"
+                  className="text-sm font-medium text-[var(--aa-navy)] hover:text-blue-700 underline transition-colors"
                 >
                   Back to Log In
                 </Link>
@@ -175,7 +175,7 @@ export default function ForgotPasswordForm() {
         role="img"
         aria-label="Background image"
       >
-        <div className="absolute inset-0 bg-gradient-to-r from-[#4267B2]/85 to-blue-600/85"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-[var(--aa-navy)]/85 to-blue-600/85"></div>
         <div className="relative z-10 flex items-center justify-center h-full p-8">
           <div className="text-white space-y-6 max-w-md animate-fade-in">
             <h3 className="text-4xl font-bold animate-slide-right">

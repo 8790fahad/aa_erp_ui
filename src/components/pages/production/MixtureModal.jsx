@@ -449,7 +449,7 @@ const MixtureModal = ({ isOpen, onClose }) => {
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[950px] max-h-[90vh] overflow-y-auto p-0 [&>button]:text-white [&>button]:opacity-90 [&>button:hover]:opacity-100 [&>button]:top-5 [&>button]:right-5">
         {/* ── Header ── */}
-        <div className="bg-gradient-to-r from-[#4267B2] to-[#365899] px-6 pt-5 pb-4 rounded-t-lg">
+        <div className="bg-gradient-to-r from-[var(--aa-navy)] to-[#365899] px-6 pt-5 pb-4 rounded-t-lg">
           <div className="flex items-center gap-3 mb-1">
             <div className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center">
               <FlaskConical className="h-5 w-5 text-white" />
@@ -593,7 +593,7 @@ const MixtureModal = ({ isOpen, onClose }) => {
                   <span className="text-xs text-gray-500">Cost Price:</span>
                   {semiFGUnitCost > 0 ? (
                     <>
-                      <span className="text-xs font-bold text-white bg-[#4267B2] px-2.5 py-0.5 rounded-full">
+                      <span className="text-xs font-bold text-white bg-[var(--aa-navy)] px-2.5 py-0.5 rounded-full">
                         ₦{fmt(semiFGUnitCost)} / {mixtureUnit || "unit"}
                       </span>
                     </>
@@ -619,9 +619,9 @@ const MixtureModal = ({ isOpen, onClose }) => {
                   setMixtureQuantity(normalizeQuantityInput(e.target.value))
                 }
                 placeholder="0.0000"
-                className="h-10 text-sm bg-blue-50 border-[#4267B2]/40 font-semibold"
+                className="h-10 text-sm bg-blue-50 border-[var(--aa-navy)]/40 font-semibold"
               />
-              <p className="text-[10px] text-[#4267B2] font-medium">
+              <p className="text-[10px] text-[var(--aa-navy)] font-medium">
                 Auto-filled from total ingredients
               </p>
             </div>
@@ -638,24 +638,24 @@ const MixtureModal = ({ isOpen, onClose }) => {
                 placeholder="e.g. KG"
                 className="h-10 text-sm"
               />
-              <p className="text-[10px] text-[#4267B2] font-medium">
+              <p className="text-[10px] text-[var(--aa-navy)] font-medium">
                 unit of measure from semi-finished good
               </p>
             </div>
           </div>
 
           {/* ── Ingredients Card ── */}
-          <div className="rounded-xl border border-[#4267B2]/20 overflow-hidden">
+          <div className="rounded-xl border border-[var(--aa-navy)]/20 overflow-hidden">
             {/* Card header */}
-            <div className="flex items-center justify-between px-5 py-3 bg-[#4267B2]/8 border-b border-[#4267B2]/20">
+            <div className="flex items-center justify-between px-5 py-3 bg-[var(--aa-navy)]/8 border-b border-[var(--aa-navy)]/20">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-[#4267B2]/15 flex items-center justify-center flex-shrink-0">
-                  <Settings className="h-4 w-4 text-[#4267B2]" />
+                <div className="w-8 h-8 rounded-full bg-[var(--aa-navy)]/15 flex items-center justify-center flex-shrink-0">
+                  <Settings className="h-4 w-4 text-[var(--aa-navy)]" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-gray-900">
                     Ingredients{" "}
-                    <span className="text-[#4267B2]">(Product Specific)</span>
+                    <span className="text-[var(--aa-navy)]">(Product Specific)</span>
                   </h3>
                   <p className="text-xs text-gray-500">
                     WIP items specific to this product
@@ -664,7 +664,7 @@ const MixtureModal = ({ isOpen, onClose }) => {
               </div>
               <div className="flex items-center gap-2">
                 {totalItems > 0 && (
-                  <span className="text-xs font-semibold text-[#4267B2] bg-[#4267B2]/10 border border-[#4267B2]/20 rounded-full px-3 py-1">
+                  <span className="text-xs font-semibold text-[var(--aa-navy)] bg-[var(--aa-navy)]/10 border border-[var(--aa-navy)]/20 rounded-full px-3 py-1">
                     {totalItems} WIP item{totalItems !== 1 ? "s" : ""}
                   </span>
                 )}
@@ -674,7 +674,7 @@ const MixtureModal = ({ isOpen, onClose }) => {
             {/* Table */}
             <div className="bg-white overflow-x-auto">
               <table className="min-w-full">
-                <thead className="bg-[#4267B2]/5 border-b border-[#4267B2]/15">
+                <thead className="bg-[var(--aa-navy)]/5 border-b border-[var(--aa-navy)]/15">
                   <tr>
                     {[
                       { label: "PRODUCT", w: "w-[38%]" },
@@ -685,7 +685,7 @@ const MixtureModal = ({ isOpen, onClose }) => {
                     ].map((col) => (
                       <th
                         key={col.label}
-                        className={`px-4 py-2.5 text-left text-xs font-semibold text-[#4267B2] uppercase tracking-wider ${col.w}`}
+                        className={`px-4 py-2.5 text-left text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wider ${col.w}`}
                       >
                         {col.label}
                       </th>
@@ -717,11 +717,11 @@ const MixtureModal = ({ isOpen, onClose }) => {
                       return (
                         <tr
                           key={item.id}
-                          className={`hover:bg-blue-50/40 transition-colors border-b border-[#4267B2]/10 ${
+                          className={`hover:bg-blue-50/40 transition-colors border-b border-[var(--aa-navy)]/10 ${
                             item.notInWip
                               ? "bg-red-50"
                               : idx % 2 === 0
-                              ? "bg-[#4267B2]/[0.04]"
+                              ? "bg-[var(--aa-navy)]/[0.04]"
                               : "bg-white"
                           }`}
                         >
@@ -767,7 +767,7 @@ const MixtureModal = ({ isOpen, onClose }) => {
                                           {option.name}
                                           {option.sku ? ` (${option.sku})` : ""}
                                         </span>
-                                        <span className="text-xs text-[#4267B2] font-semibold ml-2 shrink-0">
+                                        <span className="text-xs text-[var(--aa-navy)] font-semibold ml-2 shrink-0">
                                           Avl: {option.available ?? 0}
                                         </span>
                                       </div>
@@ -847,7 +847,7 @@ const MixtureModal = ({ isOpen, onClose }) => {
                             {item.isNew ? (
                               <span className="text-gray-300 text-xs">—</span>
                             ) : (
-                              <span className="text-xs font-bold text-[#4267B2] bg-blue-50 border border-blue-100 px-2 py-1 rounded-md">
+                              <span className="text-xs font-bold text-[var(--aa-navy)] bg-blue-50 border border-blue-100 px-2 py-1 rounded-md">
                                 ₦{fmt(rowCost)}
                               </span>
                             )}
@@ -887,7 +887,7 @@ const MixtureModal = ({ isOpen, onClose }) => {
                 {/*
                 {totalItems > 0 && (
                   <tfoot>
-                    <tr className="bg-[#4267B2]/8 border-t-2 border-[#4267B2]/20">
+                    <tr className="bg-[var(--aa-navy)]/8 border-t-2 border-[var(--aa-navy)]/20">
                       <td
                         colSpan={3}
                         className="px-4 py-2.5 text-right text-xs font-bold text-gray-600"
@@ -895,7 +895,7 @@ const MixtureModal = ({ isOpen, onClose }) => {
                         Total Ingredients Cost
                       </td>
                       <td className="px-4 py-2.5">
-                        <span className="text-sm font-bold text-[#4267B2]">
+                        <span className="text-sm font-bold text-[var(--aa-navy)]">
                           ₦{fmt(totalIngredientsCost)}
                         </span>
                       </td>
@@ -911,8 +911,8 @@ const MixtureModal = ({ isOpen, onClose }) => {
           {/* Cost summary card (hidden) */}
           {/*
           {selectedMixtureProduct && totalItems > 0 && (
-            <div className="bg-[#4267B2]/5 border border-[#4267B2]/20 rounded-xl px-5 py-4">
-              <p className="text-xs font-semibold text-[#4267B2] uppercase tracking-wide mb-3">
+            <div className="bg-[var(--aa-navy)]/5 border border-[var(--aa-navy)]/20 rounded-xl px-5 py-4">
+              <p className="text-xs font-semibold text-[var(--aa-navy)] uppercase tracking-wide mb-3">
                 Cost Summary
               </p>
               <div className="grid grid-cols-3 gap-3">
@@ -930,7 +930,7 @@ const MixtureModal = ({ isOpen, onClose }) => {
                     {qtyProduced} {mixtureUnit || "units"}
                   </p>
                 </div>
-                <div className="bg-[#4267B2] rounded-lg px-4 py-3 text-center">
+                <div className="bg-[var(--aa-navy)] rounded-lg px-4 py-3 text-center">
                   <p className="text-xs text-blue-200 mb-1">
                     Semi-finished Cost Price
                   </p>
@@ -962,7 +962,7 @@ const MixtureModal = ({ isOpen, onClose }) => {
               !mixtureQuantity ||
               selectedItems.length === 0
             }
-            className="bg-[#4267B2] hover:bg-[#365899] text-white"
+            className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
           >
             {submitting ? "Creating..." : "Create Mixture"}
           </Button>

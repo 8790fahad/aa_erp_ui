@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ReportHeaderBand } from "./productionReportUi";
 
-const APP = "#4267B2";
+const APP = "var(--aa-navy)";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function fmt(v, dp = 2) {
@@ -246,7 +246,7 @@ function CostBreakdown({ item, isByProduct, hasShared, allocatedLines, allShared
       {/* Unit cost + total summary (like costing page) */}
       <div className="border border-gray-200 rounded bg-white divide-y divide-gray-100 text-xs mt-1">
         {unitCost > 0 && (
-          <div className="flex justify-between items-center px-3 py-1.5 text-[#4267B2] font-semibold">
+          <div className="flex justify-between items-center px-3 py-1.5 text-[var(--aa-navy)] font-semibold">
             <span>+ Unit cost ({item.name}) × {fmt(qty)}</span>
             <span className="tabular-nums">{fmtMoney(unitCost * qty)}</span>
           </div>
@@ -292,7 +292,7 @@ function ProductRow({ item, proportion, sharedLines }) {
   return (
     <>
       <tr
-        className={`border-b border-gray-100 ${hasDetail ? "cursor-pointer hover:bg-[#4267B2]/5" : ""} transition-colors ${isByProduct ? "bg-purple-50/40" : ""}`}
+        className={`border-b border-gray-100 ${hasDetail ? "cursor-pointer hover:bg-[var(--aa-navy)]/5" : ""} transition-colors ${isByProduct ? "bg-purple-50/40" : ""}`}
         onClick={() => hasDetail && setOpen((o) => !o)}
       >
         <Td>

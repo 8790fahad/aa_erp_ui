@@ -292,7 +292,7 @@ function RequisitionApproval() {
             onClick={() => {
               viewList(item);
             }}
-            className="h-8 border-[#4267B2]/30 px-3 text-xs font-medium text-[#4267B2] hover:bg-[var(--aa-sidebar-active)]"
+            className="h-8 border-[var(--aa-navy)]/30 px-3 text-xs font-medium text-[var(--aa-navy)] hover:bg-[var(--aa-sidebar-active)]"
           >
             View details
           </UIButton>

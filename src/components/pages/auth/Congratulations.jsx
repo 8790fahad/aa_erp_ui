@@ -22,7 +22,7 @@ export default function Congratulations() {
       <div className="text-center max-w-md px-6">
         <div className="mb-8">
           <div
-            className={`inline-flex items-center justify-center w-32 h-32 rounded-full bg-[#4267B2] transition-all duration-700 transform ${
+            className={`inline-flex items-center justify-center w-32 h-32 rounded-full bg-[var(--aa-navy)] transition-all duration-700 transform ${
               showCheck ? "scale-100 opacity-100" : "scale-0 opacity-0"
             }`}
           >
@@ -69,7 +69,7 @@ export default function Congratulations() {
         >
           <Link
             to="/login"
-            className="text-[#4267B2] font-semibold hover:underline transition-colors"
+            className="text-[var(--aa-navy)] font-semibold hover:underline transition-colors"
           >
             Click here
           </Link> to go back to Log In

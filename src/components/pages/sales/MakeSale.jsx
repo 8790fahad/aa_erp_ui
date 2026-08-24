@@ -22,6 +22,15 @@ function getSalesLimitRemaining(product) {
   return Number.isFinite(n) ? n : null;
 }
 
+function isSalesStopped(product) {
+  if (!product) return false;
+  return (
+    product.sales_stopped === true ||
+    product.sales_stopped === 1 ||
+    product.sales_stopped === "1"
+  );
+}
+
 function salesLimitPeriodLabel(period) {
   if (period === "daily") return "daily";
   if (period === "weekly") return "weekly";
@@ -428,7 +437,7 @@ function InvoicePreviewComponent({
                     ))}
                     <tr>
                       <td className="text-right">
-                        <strong>Total Tax:</strong>
+                        <strong>Total VAT:</strong>
                       </td>
                       <td className="text-right">₦{formatNumber1(totalTax)}</td>
                     </tr>
@@ -773,11 +782,27 @@ function MakeSale() {
   const [payWithTransfer, setPayWithTransfer] = useState(false);
   const [cashPayAmount, setCashPayAmount] = useState("");
   const [transferPayAmount, setTransferPayAmount] = useState("");
-  /** Mode of payment: cash | transfer | both | credit */
+  /** Mode of payment: cash | transfer | both | credit | credit_split | deposit */
   const [modeOfPayment, setModeOfPayment] = useState("cash");
   const [chequeNumber, setChequeNumber] = useState("");
 
   const applyPaymentMode = useCallback((mode) => {
+    // Apply Deposit is a separate flow — take the user to that page.
+    if (mode === "deposit") {
+      const params = new URLSearchParams();
+      if (selectedCustomer?.customerNo) {
+        params.set("customerNo", selectedCustomer.customerNo);
+        const name =
+          selectedCustomer.name ||
+          selectedCustomer.fullname ||
+          selectedCustomer.company_name ||
+          "";
+        if (name) params.set("customerName", name);
+      }
+      const qs = params.toString() ? `?${params.toString()}` : "";
+      navigate(`/app/payments/apply-advance${qs}`);
+      return;
+    }
     setModeOfPayment(mode);
     if (mode === "credit") {
       setSaleType("credit");
@@ -793,10 +818,11 @@ function MakeSale() {
       setPayWithCash(false);
       setPayWithTransfer(true);
     } else {
+      // both | credit_split → cash + transfer at cashier
       setPayWithCash(true);
       setPayWithTransfer(true);
     }
-  }, []);
+  }, [navigate, selectedCustomer]);
   const [invoiceNumberDisplay] = useState(
     () => `INV-${moment().format("YYMMDD")}-DRAFT`,
   );
@@ -999,12 +1025,6 @@ function MakeSale() {
     }
     return formattedInteger;
   };
-
-  // Prepayment modal state
-  const [showPrepaymentModal, setShowPrepaymentModal] = useState(false);
-  const [showDepositAccounting, setShowDepositAccounting] = useState(false);
-  const [customerBalance, setCustomerBalance] = useState(0);
-  const [applyPrepayment, setApplyPrepayment] = useState(false);
 
   // Debug: Log cart data whenever it changes
   useEffect(() => {
@@ -1581,6 +1601,13 @@ function MakeSale() {
       }
     }
 
+    if (isSalesStopped(selectedItem)) {
+      toast.error(
+        `Sales are stopped for ${selectedItem.item_name}. This product cannot be sold.`,
+      );
+      return;
+    }
+
     const amount = sellingPrice * quantity;
 
     const cartItem = {
@@ -1684,27 +1711,6 @@ function MakeSale() {
     if (zohoDiscountMode === "%") return (subtotal * n) / 100;
     return n;
   }, [subtotal, zohoDiscountPercent, zohoDiscountMode]);
-
-  // Check customer balance from general ledger
-  const checkCustomerBalance = (customerNo, callback) => {
-    _fetchApi(
-      `/api/v1/get-customer-balance/${customerNo}/${
-        activeBusiness.id || activeBusiness._id
-      }`,
-      (data) => {
-        if (data.success) {
-          const balance = parseFloat(data.balance || 0);
-          callback(balance);
-        } else {
-          callback(0);
-        }
-      },
-      (err) => {
-        console.error("Error checking customer balance:", err);
-        callback(0);
-      },
-    );
-  };
 
   // Actual save function
   const saveSale = useCallback(
@@ -1907,12 +1913,8 @@ function MakeSale() {
             ? totalAfterDiscount
             : totalAfterDiscount + taxAmount + outputVATToAdd;
 
-        // Calculate prepayment amount if applicable
-        let prepaymentAmount = 0;
-        if (usePrepayment && customerBalance > 0) {
-          // Positive balance means customer has deposit/advance (SUM(cr) - SUM(dr) > 0)
-          prepaymentAmount = Math.min(customerBalance, totalWithTax);
-        }
+        // Advance is applied manually (Pay Bills / Apply Advance) — never auto here.
+        const prepaymentAmount = 0;
 
         const transactionId = UUIDV4();
         const transactionEntry = {
@@ -1945,6 +1947,7 @@ function MakeSale() {
           total_amount: totalWithTax,
           amountPaid: prepaymentAmount, // Apply prepayment if available
           modeOfPayment: (() => {
+            if (modeOfPayment === "credit_split") return "credit_split";
             if (saleType !== "paid") return "CREDIT";
             if (payWithCash && payWithTransfer) return "split";
             if (payWithTransfer) return "bank";
@@ -1956,7 +1959,7 @@ function MakeSale() {
           facilityId: activeBusiness.id,
           created_by: user_id.id,
           customer_id: selectedCustomer.customerNo,
-          apply_prepayment: saleType === "paid" ? false : usePrepayment,
+          apply_prepayment: saleType !== "paid" && usePrepayment,
           transaction_date: transactionDate, // Add transaction date
           sale_branch_id: branchId,
           // Payment is collected by Cashier (cash or transfer), not on create.
@@ -2156,7 +2159,6 @@ function MakeSale() {
       activeBusiness,
       user_id.id,
       navigate,
-      customerBalance,
       selectedOutputVAT,
       outputVATTaxes,
       processingCheckout,
@@ -2167,6 +2169,7 @@ function MakeSale() {
       saleType,
       payWithCash,
       payWithTransfer,
+      modeOfPayment,
       cashPayAmount,
       transferPayAmount,
       accountHead,
@@ -2205,7 +2208,7 @@ function MakeSale() {
 
     if (saleType === "paid") {
       if (!payWithCash && !payWithTransfer) {
-        toast.error("Select Cash, Transfer, or Cash + Transfer");
+        toast.error("Select Cash, Transfer, Cash + Transfer, or Credit + Cash + Transfer");
         return;
       }
       // Payment is collected by the Cashier — invoice only records the mode.
@@ -2213,7 +2216,7 @@ function MakeSale() {
       return;
     }
 
-    // Advance is applied from Sales → Apply Advance (not during Make Sale).
+    // Credit sales — deposit application is handled on Apply Deposit page.
     saveSale(false);
   }, [
     cart,
@@ -2223,6 +2226,7 @@ function MakeSale() {
     saleType,
     payWithCash,
     payWithTransfer,
+    modeOfPayment,
     cashPayAmount,
     transferPayAmount,
     accountHead,
@@ -2282,23 +2286,6 @@ function MakeSale() {
     setShowPDFPreview(false);
     setShowInvoicePreview(true);
   }, []);
-
-  const handlePrepaymentConfirm = useCallback(() => {
-    // Guard: ignore if already processing
-    if (isSavingRef.current || processingCheckout) {
-      return;
-    }
-    setShowPrepaymentModal(false);
-    setShowDepositAccounting(false);
-    saveSale(applyPrepayment);
-  }, [applyPrepayment, saveSale, processingCheckout]);
-
-  const handlePrepaymentCancel = useCallback(() => {
-    setShowPrepaymentModal(false);
-    setShowDepositAccounting(false);
-    setApplyPrepayment(false);
-    saveSale(false);
-  }, [saveSale]);
 
   const handleSubmit = useCallback(() => {
     // Guard: ignore if already processing
@@ -2891,7 +2878,7 @@ function MakeSale() {
         : (taxableAmount * rate) / 100;
       return {
         id: taxItem.id,
-        code: taxItem.description || `Tax ${rate}%`,
+        code: taxItem.description || `VAT ${rate}%`,
         goodsValue: taxableAmount,
         rate,
         vat,
@@ -3036,6 +3023,16 @@ function MakeSale() {
             );
           }
         }
+      }
+
+      // Sales stopped — block even when stock remains
+      if (isSalesStopped(product)) {
+        toast.error(
+          `Sales are stopped for ${
+            product.name || product.item_name
+          }. This product cannot be sold.`,
+        );
+        return;
       }
 
       // Sales target / limit — block even when stock remains (facility-wide by SKU)
@@ -3368,6 +3365,12 @@ function MakeSale() {
       }
 
       const limitRemaining = getSalesLimitRemaining(itemToUpdate);
+      if (isSalesStopped(itemToUpdate)) {
+        toast.error(
+          `Sales are stopped for ${itemToUpdate.item_name}. This product cannot be sold.`,
+        );
+        return prev;
+      }
       if (limitRemaining != null) {
         const qtyInCartForSku = cartQtyForSku(
           prev,
@@ -3478,7 +3481,7 @@ function MakeSale() {
           <div className="flex gap-2">
             <button
               onClick={() => window.print()}
-              className="px-3 py-0.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+              className="px-3 py-0.5 text-sm bg-[var(--aa-navy)] text-white rounded hover:bg-[var(--aa-navy-hover)] transition-colors"
             >
               <PrinterIcon className="inline mr-1" size={14} />
               Print PDF
@@ -3574,12 +3577,14 @@ function MakeSale() {
                     </h1>
                     <p className="text-xs text-slate-500">
                       {modeOfPayment === "credit"
-                        ? "Credit sale · goes to separation (no cashier)"
-                        : modeOfPayment === "both"
-                          ? "Sent to cashier · cash and transfer"
-                          : modeOfPayment === "transfer"
-                            ? "Sent to cashier · transfer"
-                            : "Sent to cashier · cash"}
+                        ? "Credit sale · goes to credit approval (no cashier)"
+                        : modeOfPayment === "credit_split"
+                          ? "Sent to cashier · cash + transfer, remainder on credit"
+                          : modeOfPayment === "both"
+                            ? "Sent to cashier · cash and transfer"
+                            : modeOfPayment === "transfer"
+                              ? "Sent to cashier · transfer"
+                              : "Sent to cashier · cash"}
                     </p>
                   </div>
                 </div>
@@ -3607,17 +3612,19 @@ function MakeSale() {
               )}
             </div>
           ) : (
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-1.5 shadow-lg">
+            <div className="bg-[var(--aa-navy)] text-white px-4 py-1.5 shadow-lg">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h1 className="text-xl font-bold">
                     {modeOfPayment === "credit"
                       ? "Credit Sale"
-                      : modeOfPayment === "both"
-                        ? "Cash + Transfer Sale"
-                        : modeOfPayment === "transfer"
-                          ? "Transfer Sale"
-                          : "Cash Sale"}
+                      : modeOfPayment === "credit_split"
+                        ? "Credit + Cash + Transfer Sale"
+                        : modeOfPayment === "both"
+                          ? "Cash + Transfer Sale"
+                          : modeOfPayment === "transfer"
+                            ? "Transfer Sale"
+                            : "Cash Sale"}
                   </h1>
                 </div>
                 {allowSalesWithoutStock && (
@@ -3733,18 +3740,22 @@ function MakeSale() {
                     <option value="cash">Cash</option>
                     <option value="transfer">Transfer</option>
                     <option value="both">Cash + Transfer</option>
+                    <option value="credit_split">Credit + Cash + Transfer</option>
                     <option value="credit">Credit</option>
+                    <option value="deposit">Apply Deposit</option>
                   </select>
                   <p className="text-[11px] text-slate-500">
                     {modeOfPayment === "credit"
-                      ? "Credit invoice skips Cashier and goes straight to Separation for branch packs."
-                      : `Invoice is sent to Cashier for ${
-                          modeOfPayment === "both"
-                            ? "cash and transfer"
-                            : modeOfPayment === "transfer"
-                              ? "transfer"
-                              : "cash"
-                        } collection — payment is not taken here.`}
+                      ? "Credit invoice skips Cashier and goes to Credit approval, then Separation."
+                      : modeOfPayment === "credit_split"
+                        ? "Invoice is sent to Cashier for cash and transfer collection; unpaid remainder stays on credit."
+                        : `Invoice is sent to Cashier for ${
+                            modeOfPayment === "both"
+                              ? "cash and transfer"
+                              : modeOfPayment === "transfer"
+                                ? "transfer"
+                                : "cash"
+                          } collection — payment is not taken here. Select Apply Deposit to open the deposit application page.`}
                   </p>
                 </div>
               </div>
@@ -3780,7 +3791,7 @@ function MakeSale() {
                   onClick={() => setActiveTab("products")}
                   className={`flex-1 py-1.5 px-4 text-sm font-semibold transition-all ${
                     activeTab === "products"
-                      ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50"
+                      ? "text-blue-600 border-b-2 border-[var(--aa-accent)] bg-[var(--aa-sidebar-active)]"
                       : "text-gray-600 hover:bg-gray-50"
                   }`}
                 >
@@ -3791,7 +3802,7 @@ function MakeSale() {
                   onClick={() => setActiveTab("services")}
                   className={`flex-1 py-1.5 px-4 text-sm font-semibold transition-all ${
                     activeTab === "services"
-                      ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50"
+                      ? "text-blue-600 border-b-2 border-[var(--aa-accent)] bg-[var(--aa-sidebar-active)]"
                       : "text-gray-600 hover:bg-gray-50"
                   }`}
                 >
@@ -3810,12 +3821,14 @@ function MakeSale() {
                     <select
                       value={modeOfPayment}
                       onChange={(e) => applyPaymentMode(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                     >
                       <option value="cash">Cash</option>
                       <option value="transfer">Transfer</option>
                       <option value="both">Cash + Transfer</option>
+                      <option value="credit_split">Credit + Cash + Transfer</option>
                       <option value="credit">Credit</option>
+                      <option value="deposit">Apply Deposit</option>
                     </select>
                   </div>
                   <div>
@@ -3840,7 +3853,7 @@ function MakeSale() {
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         onKeyDown={handleSearchInputKeyDown}
-                        className="w-full pl-7 pr-2 py-0.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full pl-7 pr-2 py-0.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                       />
                     </div>
                     {lastScanPreview && (
@@ -3982,7 +3995,7 @@ function MakeSale() {
                           }
                         }
                       }}
-                      className={`w-full border border-gray-300 rounded-md px-2  focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      className={`w-full border border-gray-300 rounded-md px-2  focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] ${
                         selectedProduct &&
                         selectedProduct.item_type !== "Service" &&
                         !allowSalesWithoutStock &&
@@ -4092,7 +4105,7 @@ function MakeSale() {
                           }}
                           className={`bg-white rounded-xl shadow-md hover:shadow-xl transition-all cursor-pointer overflow-hidden border-2 ${
                             selectedIndex === index
-                              ? "border-blue-500 ring-2 ring-blue-200 bg-blue-50"
+                              ? "border-[var(--aa-accent)] ring-2 ring-blue-200 bg-blue-50"
                               : selectedProduct?.id === item.id
                                 ? "ring-1"
                                 : "border-transparent"
@@ -4107,7 +4120,7 @@ function MakeSale() {
                                 .join("")}
                             </span>
                             {selectedIndex === index && (
-                              <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                              <div className="absolute top-2 right-2 bg-[var(--aa-navy)] text-white text-xs font-bold px-2 py-1 rounded-full">
                                 {index + 1}
                               </div>
                             )}
@@ -4255,7 +4268,7 @@ function MakeSale() {
                                         addToCartNew(selectedProduct || item);
                                       }
                                     }}
-                                    className="flex-1 min-w-0 border border-gray-300 rounded-none px-2 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 m-0"
+                                    className="flex-1 min-w-0 border border-gray-300 rounded-none px-2 py-2 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] m-0"
                                     onClick={(e) => e.stopPropagation()}
                                   />
                                   <button
@@ -4395,7 +4408,7 @@ function MakeSale() {
                                         addToCartNew(selectedProduct);
                                       }
                                     }}
-                                    className="flex-1 min-w-0 text-right border border-gray-300 rounded-none px-2 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 m-0"
+                                    className="flex-1 min-w-0 text-right border border-gray-300 rounded-none px-2 py-2 focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] m-0"
                                     onClick={(e) => e.stopPropagation()}
                                   />
                                   <button
@@ -4451,7 +4464,7 @@ function MakeSale() {
                       addToCartNew(selectedProduct);
                     }}
                     disabled={processingCheckout}
-                    className="flex-1 px-3 py-0.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-semibold"
+                    className="flex-1 px-3 py-0.5 text-sm bg-[var(--aa-navy)] text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-semibold"
                   >
                     {processingCheckout
                       ? "Processing..."
@@ -4495,7 +4508,7 @@ function MakeSale() {
                         Selling Price
                       </th>
                       <th className="w-40 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
-                        Tax
+                        VAT
                       </th>
                       <th className="w-32 px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
                         Amount
@@ -4767,7 +4780,7 @@ function MakeSale() {
                                 }}
                                 className="w-full min-w-[9rem] rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-[var(--aa-accent)] disabled:bg-slate-50"
                               >
-                                <option value="">Select a Tax</option>
+                                <option value="">Select VAT</option>
                                 {lineTaxOptions.map((tax) => (
                                   <option key={tax.id} value={tax.id}>
                                     {tax.description} ({tax.rate}%)
@@ -4920,7 +4933,7 @@ function MakeSale() {
                                 className="w-full min-w-[9rem] rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm text-slate-400"
                                 defaultValue=""
                               >
-                                <option value="">Select a Tax</option>
+                                <option value="">Select VAT</option>
                               </select>
                             </td>
                             <td className="px-2 py-3 text-right text-sm text-slate-400">
@@ -5081,7 +5094,7 @@ function MakeSale() {
                     )}
                     {displayTotalTax > 0 && (
                       <div className="flex items-center justify-between gap-4">
-                        <span className="text-slate-600">Tax</span>
+                        <span className="text-slate-600">VAT</span>
                         <span className="tabular-nums text-slate-900">
                           {formatNumber1(displayTotalTax)}
                         </span>
@@ -5209,7 +5222,7 @@ function MakeSale() {
                   onClick={() => setCartAboveTransactionDate(false)}
                   className={`px-2 py-1 text-xs transition-colors ${
                     !cartAboveTransactionDate
-                      ? "bg-blue-600 text-white"
+                      ? "bg-[var(--aa-navy)] text-white"
                       : "bg-white text-gray-700 hover:bg-gray-50"
                   }`}
                 >
@@ -5220,7 +5233,7 @@ function MakeSale() {
                   onClick={() => setCartAboveTransactionDate(true)}
                   className={`px-2 py-1 text-xs border-l border-gray-200 transition-colors ${
                     cartAboveTransactionDate
-                      ? "bg-blue-600 text-white"
+                      ? "bg-[var(--aa-navy)] text-white"
                       : "bg-white text-gray-700 hover:bg-gray-50"
                   }`}
                 >
@@ -5245,7 +5258,7 @@ function MakeSale() {
                   value={transactionDate}
                   onChange={(e) => setTransactionDate(e.target.value)}
                   max={moment().format("YYYY-MM-DD")}
-                  className="w-full px-3 py-2 text-sm font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white hover:border-gray-400 transition-colors cursor-pointer"
+                  className="w-full px-3 py-2 text-sm font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] bg-white hover:border-gray-400 transition-colors cursor-pointer"
                   required
                   title="Select the transaction date for this sale"
                 />
@@ -5750,7 +5763,7 @@ function MakeSale() {
                       })}
                       {selectedTaxes.length > 1 && (
                         <div className="flex justify-between text-sm font-medium border-t pt-1">
-                          <span className="text-gray-700">Total Tax:</span>
+                          <span className="text-gray-700">Total VAT:</span>
                           <span className="font-semibold">
                             ₦{formatNumber1(tax)}
                           </span>
@@ -5804,280 +5817,6 @@ function MakeSale() {
           setShowNewCustomerModal(false);
         }}
       />
-
-      {/* Customer Deposit/Advance Confirmation Modal */}
-      {showPrepaymentModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-1xl max-w-2xl w-full max-h-[92vh] flex flex-col transform transition-all animate-in zoom-in-95 duration-200">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 via-green-500 to-blue-600 text-white p-5 rounded-t-2xl">
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                    <AlertCircle className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold">
-                      Customer Deposit Available
-                    </h3>
-                    <p className="text-sm text-amber-100 mt-1">
-                      You must apply this deposit to the transaction
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowPrepaymentModal(false);
-                    setShowDepositAccounting(false);
-                  }}
-                  className="p-1.5 hover:bg-white/20 rounded-lg transition-all"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-6 space-y-4 overflow-y-auto flex-1">
-              {/* Warning Banner */}
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 rounded-r-lg p-2">
-                <div className="flex items-start gap-3">
-                  <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-semibold text-amber-900 mb-1">
-                      Mandatory Deposit Application
-                    </p>
-                    <p className="text-sm text-amber-800">
-                      You have an available deposit balance with this customer.
-                      This deposit{" "}
-                      <strong className="font-bold">must be applied</strong> to
-                      this transaction.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Amount Cards */}
-              <div className="grid grid-cols-1 gap-3">
-                {/* Available Deposit */}
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-2 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-green-100 rounded-lg">
-                        <DollarSign className="w-5 h-5 text-green-700" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">
-                          Available Deposit
-                        </p>
-                        <p className="text-2xl font-bold text-green-700 mt-1">
-                          ₦{formatNumber1(customerBalance)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Transaction Amount */}
-                <div className="bg-gradient-to-br from-slate-50 to-gray-50 border-2 border-slate-200 rounded-xl p-2 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-slate-100 rounded-lg">
-                        <Package className="w-5 h-5 text-slate-700" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">
-                          Transaction Amount
-                        </p>
-                        <p className="text-2xl font-bold text-gray-900 mt-1">
-                          ₦{formatNumber1(total)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Deposit Status */}
-              <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-2">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Check className="w-5 h-5 text-blue-700" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-blue-900">
-                      Deposit Application Status
-                    </p>
-                    <p className="text-sm text-blue-700 mt-1">
-                      Deposit will be automatically applied to this transaction
-                    </p>
-                  </div>
-                  <div className="px-3 py-1 bg-blue-200 rounded-full">
-                    <span className="text-xs font-bold text-blue-800">
-                      REQUIRED
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Still Receivable & Deposit Remaining */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-300 rounded-xl p-3 shadow-md">
-                  <div className="text-center">
-                    <p className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">
-                      Still Receivable
-                    </p>
-                    <p className="text-xl font-bold text-emerald-700">
-                      ₦{formatNumber1(Math.max(0, total - customerBalance))}
-                    </p>
-                    {customerBalance >= total && (
-                      <p className="text-xs text-emerald-600 mt-1 font-medium">
-                        ✓ Fully covered
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-3 shadow-md">
-                  <div className="text-center">
-                    <p className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">
-                      Deposit Remaining
-                    </p>
-                    <p className="text-xl font-bold text-blue-700">
-                      ₦{formatNumber1(Math.max(0, customerBalance - total))}
-                    </p>
-                    <p className="text-xs text-blue-500 mt-1">
-                      after this sale
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Accounting Treatment (collapsible) */}
-              {(() => {
-                const settleAmount = Math.min(total, customerBalance);
-                const stillReceivable = Math.max(0, total - customerBalance);
-                return (
-                  <div className="border border-gray-200 rounded-xl overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setShowDepositAccounting((v) => !v)}
-                      className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-sm font-semibold text-gray-700"
-                    >
-                      <span className="flex items-center gap-2">
-                        <span className="text-base">📒</span> Accounting Treatment
-                      </span>
-                      <span className="text-gray-400 text-xs">
-                        {showDepositAccounting ? "▲ Hide" : "▼ Show"}
-                      </span>
-                    </button>
-                    {showDepositAccounting && (
-                      <div className="px-4 py-3 bg-white space-y-1.5 text-xs">
-                        <p className="text-gray-500 mb-2">
-                          Journal entries that will be posted when you confirm:
-                        </p>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-xs border-collapse">
-                            <thead>
-                              <tr className="bg-gray-50 text-gray-600 uppercase tracking-wide">
-                                <th className="text-left px-3 py-2 border border-gray-200">
-                                  Account
-                                </th>
-                                <th className="text-right px-3 py-2 border border-gray-200">
-                                  Dr (₦)
-                                </th>
-                                <th className="text-right px-3 py-2 border border-gray-200">
-                                  Cr (₦)
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                              {settleAmount > 0 && (
-                                <tr className="hover:bg-gray-50">
-                                  <td className="px-3 py-2 border border-gray-200 font-medium text-gray-800">
-                                    Customer Deposit / Advance Received
-                                  </td>
-                                  <td className="px-3 py-2 border border-gray-200 text-right font-semibold text-gray-800">
-                                    {formatNumber1(settleAmount)}
-                                  </td>
-                                  <td className="px-3 py-2 border border-gray-200 text-right text-gray-400">
-                                    —
-                                  </td>
-                                </tr>
-                              )}
-                              {stillReceivable > 0 && (
-                                <tr className="hover:bg-gray-50">
-                                  <td className="px-3 py-2 border border-gray-200 font-medium text-gray-800">
-                                    Trade Receivables
-                                  </td>
-                                  <td className="px-3 py-2 border border-gray-200 text-right font-semibold text-gray-800">
-                                    {formatNumber1(stillReceivable)}
-                                  </td>
-                                  <td className="px-3 py-2 border border-gray-200 text-right text-gray-400">
-                                    —
-                                  </td>
-                                </tr>
-                              )}
-                              <tr className="hover:bg-gray-50">
-                                <td className="px-3 py-2 border border-gray-200 font-medium text-gray-800">
-                                  Sales / Revenue
-                                </td>
-                                <td className="px-3 py-2 border border-gray-200 text-right text-gray-400">
-                                  —
-                                </td>
-                                <td className="px-3 py-2 border border-gray-200 text-right font-semibold text-gray-800">
-                                  {formatNumber1(total)}
-                                </td>
-                              </tr>
-                              {stillReceivable > 0 && (
-                                <tr className="bg-amber-50">
-                                  <td
-                                    className="px-3 py-2 border border-gray-200 font-medium text-amber-800"
-                                    colSpan={3}
-                                  >
-                                    ⚠ Remaining ₦{formatNumber1(stillReceivable)}{" "}
-                                    stays open as receivable
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Footer */}
-            <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-6 py-4 flex justify-end gap-3 rounded-b-2xl border-t border-gray-200 flex-shrink-0">
-              <button
-                onClick={handlePrepaymentCancel}
-                className="px-5 py-2.5 text-sm bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-300 rounded-lg transition-all font-semibold shadow-sm hover:shadow"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handlePrepaymentConfirm}
-                disabled={processingCheckout}
-                className="px-6 py-2.5 text-sm bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {processingCheckout ? (
-                  <>
-                    <Loader className="w-4 h-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Continue with Deposit
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

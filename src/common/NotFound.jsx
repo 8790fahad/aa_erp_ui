@@ -41,8 +41,8 @@ export default function NotFound() {
             {/* 404 Icon */}
             <div className="flex justify-center">
               <div className="relative">
-                <div className="absolute inset-0 bg-[#4267B2]/20 rounded-full blur-2xl"></div>
-                <div className="relative bg-gradient-to-br from-[#4267B2] to-blue-600 rounded-full p-6">
+                <div className="absolute inset-0 bg-[var(--aa-navy)]/20 rounded-full blur-2xl"></div>
+                <div className="relative bg-gradient-to-br from-[var(--aa-navy)] to-blue-600 rounded-full p-6">
                   <SearchX className="h-16 w-16 text-white animate-scale-in" />
                 </div>
               </div>
@@ -50,7 +50,7 @@ export default function NotFound() {
 
             {/* Error Code */}
             <div className="space-y-2">
-              <h1 className="text-7xl font-bold text-[#4267B2] animate-scale-in">
+              <h1 className="text-7xl font-bold text-[var(--aa-navy)] animate-scale-in">
                 404
               </h1>
               <h2 className="text-2xl font-semibold text-gray-900">
@@ -66,7 +66,7 @@ export default function NotFound() {
             <div className="space-y-3 pt-4">
               <Button
                 onClick={goTo}
-                className="w-full bg-gradient-to-r from-[#4267B2] to-blue-600 hover:from-[#4267B2]/90 hover:to-blue-600/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
+                className="w-full bg-gradient-to-r from-[var(--aa-navy)] to-blue-600 hover:from-[var(--aa-navy)]/90 hover:to-blue-600/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
               >
                 <Home className="mr-2 h-5 w-5" />
                 Go Back Home

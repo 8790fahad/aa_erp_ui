@@ -66,7 +66,7 @@ export default function PAYESettings({ embedded = false }) {
   const dispatch = useDispatch();
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const brandColor = activeBusiness?.primary_color || "var(--aa-navy)";
+  const brandColor = activeBusiness?.primary_color || "#1a2d5e";
 
   const now = new Date();
   const [assessmentYear, setAssessmentYear] = useState(now.getFullYear());

@@ -338,7 +338,7 @@ export default function AssetRegister() {
   const location = useLocation();
   const navigate = useNavigate();
   const facilityId = activeBusiness?.id || user?.facilityId;
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
   const darkColor = useMemo(
     () => shadeColor(primaryColor, -38),
     [primaryColor],

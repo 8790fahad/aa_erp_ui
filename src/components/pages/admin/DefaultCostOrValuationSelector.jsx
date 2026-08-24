@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Button } from "reactstrap";
-import { Card } from "reactstrap/lib";
+import { Card } from "@/components/ui/card";
 import { Settings, Check, X, Save } from "lucide-react";
 import { toast } from "sonner";
 import { _postApi } from "@/redux/actions/api";
@@ -86,35 +86,38 @@ const DefaultCostOrValuationSelector = ({
   const selectedSource = form.source;
 
   return (
-    <Card className="h-100 shadow-sm border-0">
+    <Card className="mb-0 overflow-hidden rounded-xl border border-slate-200 shadow-none">
       <div
-        className="card-header border-0 text-white position-relative overflow-hidden"
-        style={{
-          background: "var(--aa-navy)",
-          padding: "1rem",
-        }}
+        className="border-0 px-5 py-3.5 text-white"
+        style={{ background: "var(--aa-navy)" }}
       >
         <div className="d-flex align-items-center justify-content-between">
           <div className="d-flex align-items-center gap-2">
-            <span style={{ fontSize: "1.5rem" }}>📊</span>
+            <span style={{ fontSize: "1.25rem" }}>📊</span>
             <div>
               <h5 className="mb-0 fw-bold">{title}</h5>
               {description && <small className="opacity-75">{description}</small>}
             </div>
           </div>
-          <GiMetalHand size={20} className="opacity-75" />
+          <GiMetalHand size={18} className="opacity-75" />
         </div>
       </div>
 
-      <div className="card-body p-4">
+      <div className="px-5 py-4">
         {!code && !isEditing ? (
-          <div className="text-center py-2">
-            <p className="text-muted mb-3">No valuation source configured</p>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="mb-0 text-sm text-slate-500">
+              No valuation source configured
+            </p>
             <Button
               size="sm"
               color="primary"
               onClick={() => setIsEditing(true)}
-              className="d-flex align-items-center gap-2 mx-auto"
+              className="d-flex align-items-center gap-2"
+              style={{
+                backgroundColor: "var(--aa-navy)",
+                borderColor: "var(--aa-navy)",
+              }}
             >
               <Settings size={16} />
               Configure
@@ -134,11 +137,11 @@ const DefaultCostOrValuationSelector = ({
                     style={{
                       borderColor:
                         selectedSource === opt.value
-                          ? activeBusiness?.primary_color || "#007bff"
+                          ? "var(--aa-navy)"
                           : "#dee2e6",
                       backgroundColor:
                         selectedSource === opt.value
-                          ? `${activeBusiness?.primary_color || "#007bff"}10`
+                          ? "var(--aa-sidebar-active)"
                           : "transparent",
                       cursor: "pointer",
                     }}
@@ -157,8 +160,7 @@ const DefaultCostOrValuationSelector = ({
                             width: "18px",
                             height: "18px",
                             cursor: "pointer",
-                            accentColor:
-                              activeBusiness?.primary_color || "#007bff",
+                            accentColor: "var(--aa-navy)",
                           }}
                         />
                       </div>
@@ -168,7 +170,7 @@ const DefaultCostOrValuationSelector = ({
                           style={{
                             color:
                               selectedSource === opt.value
-                                ? activeBusiness?.primary_color || "#007bff"
+                                ? "var(--aa-navy)"
                                 : "#212529",
                           }}
                         >
@@ -179,12 +181,7 @@ const DefaultCostOrValuationSelector = ({
                         </div>
                       </div>
                       {selectedSource === opt.value && (
-                        <Check
-                          size={20}
-                          style={{
-                            color: activeBusiness?.primary_color || "#007bff",
-                          }}
-                        />
+                        <Check size={20} style={{ color: "var(--aa-navy)" }} />
                       )}
                     </div>
                   </div>
@@ -210,6 +207,10 @@ const DefaultCostOrValuationSelector = ({
                 onClick={handleSubmit}
                 disabled={loading || !form.source}
                 className="d-flex align-items-center gap-2"
+                style={{
+                  backgroundColor: "var(--aa-navy)",
+                  borderColor: "var(--aa-navy)",
+                }}
               >
                 {loading ? (
                   <>
@@ -229,22 +230,23 @@ const DefaultCostOrValuationSelector = ({
             </div>
           </div>
         ) : (
-          <div>
-            <div className="d-flex justify-content-between align-items-center mb-2">
+          <div className="space-y-3">
+            <div className="d-flex justify-content-between align-items-center">
               <span className="text-muted small">Current:</span>
               <Button
                 size="sm"
                 color="link"
                 className="text-decoration-none p-0 d-flex align-items-center gap-1"
                 onClick={() => setIsEditing(true)}
+                style={{ color: "var(--aa-accent)" }}
               >
                 <Settings size={14} />
                 Change
               </Button>
             </div>
 
-            <div className="bg-light rounded p-3">
-              <div className="fw-semibold text-primary">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="fw-semibold" style={{ color: "var(--aa-navy)" }}>
                 {currentOption?.label}
               </div>
               <div className="text-muted small mt-1">

@@ -167,9 +167,9 @@ export function SettingsContentHeader({
   const Icon = CATEGORY_ICONS[categoryId] || BookOpen;
 
   return (
-    <div className="mb-5 flex items-center gap-3 border-b border-slate-100 pb-4">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--aa-navy)] text-white">
-        <Icon className="h-5 w-5" />
+    <div className="flex items-center gap-3">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--aa-navy)] text-white">
+        <Icon className="h-4 w-4" />
       </div>
       <div className="min-w-0">
         {categoryLabel && (
@@ -177,7 +177,7 @@ export function SettingsContentHeader({
             {categoryLabel}
           </p>
         )}
-        <h3 className="truncate text-lg font-semibold text-slate-900 leading-tight">
+        <h3 className="truncate text-base font-semibold text-slate-900 leading-tight sm:text-lg">
           {activeLabel}
         </h3>
       </div>

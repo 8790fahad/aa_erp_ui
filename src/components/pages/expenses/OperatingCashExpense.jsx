@@ -585,7 +585,7 @@ export default function OperatingCashExpenses() {
                   min={POSTING_DATE_MIN}
                   max={getPostingDateMax()}
                   onChange={handleFormChange}
-                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-slate-400"
+                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all hover:border-slate-400"
                 />
               </div>
 
@@ -618,7 +618,7 @@ export default function OperatingCashExpenses() {
                       }));
                     }
                   }}
-                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white hover:border-slate-400"
+                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all bg-white hover:border-slate-400"
                 >
                   <option value="">Select supplier...</option>
                   {/* Show memo's supplier when added from memo but not yet in supplierList */}
@@ -649,7 +649,7 @@ export default function OperatingCashExpenses() {
                   name="mode_of_payment"
                   value={form.mode_of_payment}
                   onChange={handleFormChange}
-                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white hover:border-slate-400"
+                  className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all bg-white hover:border-slate-400"
                 >
                   <option value="">Select Mode of Payment</option>
                   <option value="cash">Cash</option>
@@ -680,7 +680,7 @@ export default function OperatingCashExpenses() {
                             setBankAccount({});
                           }
                         }}
-                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white hover:border-slate-400"
+                        className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all bg-white hover:border-slate-400"
                       >
                         <option value="">Select account...</option>
                         {accountList.map((account) => (
@@ -782,7 +782,7 @@ export default function OperatingCashExpenses() {
                     name="cheque_number"
                     value={form.cheque_number}
                     onChange={handleFormChange}
-                    className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-slate-400"
+                    className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all hover:border-slate-400"
                     placeholder="Enter cheque number..."
                   />
                 </div>
@@ -800,7 +800,7 @@ export default function OperatingCashExpenses() {
                 onChange={handleFormChange}
                 rows="2"
                 placeholder="Enter transaction description..."
-                className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none hover:border-slate-400"
+                className="w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all resize-none hover:border-slate-400"
               />
             </div>
           </div>
@@ -813,7 +813,7 @@ export default function OperatingCashExpenses() {
             </h2>
             <button
               onClick={handleOpenMemoDrawer}
-              className="text-blue-600 hover:text-blue-800 hover:underline font-medium cursor-pointer text-left"
+              className="text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:underline font-medium cursor-pointer text-left"
             >
               View Memos
             </button>
@@ -970,7 +970,7 @@ export default function OperatingCashExpenses() {
                         taxable: e.target.checked,
                       })
                     }
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-[var(--aa-accent)] focus:ring-2"
                   />
                   <span className="text-sm font-medium text-slate-700">
                     Mark as Taxable
@@ -983,7 +983,7 @@ export default function OperatingCashExpenses() {
                   <div className="flex gap-2">
                     <button
                       onClick={saveEditedItem}
-                      className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center justify-center gap-2 font-medium shadow-md hover:shadow-lg"
+                      className="flex-1 px-3 py-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white rounded-lg transition-all flex items-center justify-center gap-2 font-medium shadow-md hover:shadow-lg"
                     >
                       <Check className="w-4 h-4" />
                     </button>
@@ -1177,7 +1177,7 @@ export default function OperatingCashExpenses() {
                                     ),
                                   );
                                 }}
-                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-[var(--aa-accent)] focus:ring-2 cursor-pointer"
                               />
                               {item.taxable && (
                                 <span className="ml-2 text-xs text-green-600 font-medium">
@@ -1297,7 +1297,7 @@ export default function OperatingCashExpenses() {
                 <button
                   onClick={handleDirectPurchase}
                   disabled={loading}
-                  className="px-3 py-2.5 text-sm bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-2.5 text-sm bg-[var(--aa-navy)] hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Printer className="w-4 h-4" />
                   {loading ? (
@@ -1311,7 +1311,7 @@ export default function OperatingCashExpenses() {
                 <button
                   onClick={handleDirectPurchase}
                   disabled={loading}
-                  className="px-3 py-2.5 text-sm bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-2.5 text-sm bg-[var(--aa-navy)] hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Save className="w-4 h-4" />
                   {loading ? (
@@ -1474,7 +1474,7 @@ export default function OperatingCashExpenses() {
                         onClick={() =>
                           handleCloseMemo(memo, { addItems: true })
                         }
-                        className="w-full px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full px-3 py-1 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white rounded-lg transition-colors font-medium text-sm flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={
                           selectedMemoIds.includes(memo.memo_id) ||
                           closingMemoId === memo.memo_id

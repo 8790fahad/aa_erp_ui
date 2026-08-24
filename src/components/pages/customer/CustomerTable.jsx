@@ -256,6 +256,17 @@ export default function CustomerTable() {
       ),
     },
     {
+      value: "customerNo",
+      title: "CUSTOMER ID",
+      custom: true,
+      className: "text-left",
+      component: (item) => (
+        <div className="text-left font-mono text-xs text-slate-700">
+          {item.customerNo || item.customer_id || "-"}
+        </div>
+      ),
+    },
+    {
       value: "fullname",
       title: "NAME",
       custom: true,
@@ -264,7 +275,7 @@ export default function CustomerTable() {
         <button
           type="button"
           onClick={() => openCustomer(item)}
-          className="text-left font-medium text-blue-600 hover:underline"
+          className="text-left font-medium text-[var(--aa-accent)] hover:underline"
         >
           {item.fullname || item.company_name || item.customerNo || "-"}
         </button>
@@ -428,14 +439,14 @@ export default function CustomerTable() {
                 value={filterText}
                 placeholder="Search in Customers"
                 onChange={(e) => setFilterText(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]"
               />
             </div>
             <div className="relative w-full sm:w-60" ref={branchMenuRef}>
               <button
                 type="button"
                 onClick={() => setBranchMenuOpen((o) => !o)}
-                className="flex w-full items-center justify-between rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex w-full items-center justify-between rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]"
               >
                 <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <span className="truncate text-left text-gray-700">
@@ -490,7 +501,7 @@ export default function CustomerTable() {
                           <span
                             className={`flex h-4 w-4 items-center justify-center rounded border ${
                               checked
-                                ? "border-blue-600 bg-blue-600 text-white"
+                                ? "border-blue-600 bg-[var(--aa-navy)] text-white"
                                 : "border-gray-300 bg-white"
                             }`}
                           >

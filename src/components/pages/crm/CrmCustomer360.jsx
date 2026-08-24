@@ -133,7 +133,7 @@ export default function CrmCustomer360() {
         <div>
           <Link
             to="/app/crm/customers"
-            className="mb-2 inline-flex items-center text-sm text-[#4267B2] hover:underline"
+            className="mb-2 inline-flex items-center text-sm text-[var(--aa-navy)] hover:underline"
           >
             <ArrowLeft className="mr-1 h-4 w-4" />
             Back to customers
@@ -278,7 +278,7 @@ export default function CrmCustomer360() {
                 key={`${ev.type}-${ev.id}-${idx}`}
                 className="flex gap-3 border-b border-slate-100 pb-3"
               >
-                <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#4267B2]" />
+                <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--aa-navy)]" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs uppercase tracking-wide text-slate-400">

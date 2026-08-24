@@ -37,7 +37,7 @@ const PayrollPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get("tab") || "run";
   const { user, activeBusiness } = useSelector((state) => state.auth);
-  const primaryColor = activeBusiness?.primary_color || "#4267B2";
+  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
   const secondaryColor =
     activeBusiness?.secondary_color &&
     String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"

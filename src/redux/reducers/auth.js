@@ -38,21 +38,22 @@ const initialState = {
   error: "",
   signupLoading: false,
   theme: {
-    primary: "#4267B2", //appColor
-    secondary: "#fff", // appColorFaded
-    tertiary: "white", // white,
-    black: "black", //black
-    faded: "#f7f7f7", //faded
+    primary: "#1a2d5e", // --aa-navy
+    secondary: "#fff",
+    tertiary: "white",
+    black: "black",
+    faded: "#f7f7f7",
     inverse: "#292b2c",
+    accent: "#2c7be5", // --aa-accent
   },
   businessesList: [],
   businessCount: 0,
   activeBusiness: {
-    primary_color: "#4267B2", //appColor
-    secondary_color: "#fff", // appColorFaded
-    tertiary_color: "white", // white,
-    black: "black", //black
-    faded: "#f7f7f7", //faded
+    primary_color: "#1a2d5e", // --aa-navy
+    secondary_color: "#fff",
+    tertiary_color: "white",
+    black: "black",
+    faded: "#f7f7f7",
     inverse: "#292b2c",
   },
 };

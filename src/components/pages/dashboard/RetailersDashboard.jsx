@@ -194,7 +194,7 @@ export default function RetailersDashboard({ range }) {
             {widget.data.map((item, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between p-4 bg-[#4267B2] backdrop-blur-sm rounded-xl border border-gray-700/50 hover:border-emerald-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/10"
+                className="flex items-center justify-between p-4 bg-[var(--aa-navy)] backdrop-blur-sm rounded-xl border border-gray-700/50 hover:border-emerald-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/10"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center text-white font-bold">
@@ -365,7 +365,7 @@ export default function RetailersDashboard({ range }) {
                 className=" border-gray-700/50 shadow-2xl hover:shadow-3xl transition-all duration-300"
               >
                 <CardHeader className=" border-gray-700/50">
-                  <CardTitle className="text-[#4267B2] flex items-center gap-2">
+                  <CardTitle className="text-[var(--aa-navy)] flex items-center gap-2">
                     <div
                       className={`w-2 h-2 rounded-full bg-gradient-to-r ${data.gradient} animate-pulse`}
                     ></div>

@@ -300,6 +300,8 @@ export const modules = [
           "Cash Collection",
           "Transfer Collection",
           "Credit Collection",
+          "Switch Payment Mode",
+          "Approve Payment Mode Switch",
           "Receive Payment",
           "Payments",
           "Cashier",
@@ -308,6 +310,8 @@ export const modules = [
           { title: "Cash Collection" },
           { title: "Transfer Collection" },
           { title: "Credit Collection" },
+          { title: "Switch Payment Mode" },
+          { title: "Approve Payment Mode Switch" },
         ],
         access: [
           "services",
@@ -768,6 +772,13 @@ export const modules = [
       {
         title: "Manage Users",
         url: "/app/admin/manage-staff",
+        // Legacy privilege spellings still present in membership.functionalities
+        functionality: [
+          "Manage Users",
+          "Manage users",
+          "Manage staff",
+          "Manage Staffs",
+        ],
         access: [
           "services",
           "retailers",
@@ -779,6 +790,12 @@ export const modules = [
       {
         title: "Manage Warehouses",
         url: "/app/admin/manage-branches",
+        functionality: [
+          "Manage Warehouses",
+          "Manage Branches",
+          "Manage stores",
+          "Settings Manage Branches",
+        ],
         access: [
           "services",
           "retailers",

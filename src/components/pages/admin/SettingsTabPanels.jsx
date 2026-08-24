@@ -371,7 +371,7 @@ export default function SettingsTabPanels({
       {tabVisible("payable") && (
         <TabsContent value="payable" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <TripleSelectSettings
                 title="Payable"
                 description="Configure default payable, accrual and advance account"
@@ -392,7 +392,7 @@ export default function SettingsTabPanels({
       {tabVisible("receivable") && (
         <TabsContent value="receivable" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <TripleSelectSettings
                 title="Receivable"
                 description="Configure default receivable, accrual and advance account"
@@ -413,7 +413,7 @@ export default function SettingsTabPanels({
       {tabVisible("cost-of-service") && (
         <TabsContent value="cost-of-service" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <PayableSettings
                 title="Cost Of Service"
                 code={activeBusiness.cost_of_sale}
@@ -428,7 +428,7 @@ export default function SettingsTabPanels({
       {tabVisible("sales-revenue") && (
         <TabsContent value="sales-revenue" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <PayableSettings
                 title="Sales Revenue"
                 code={activeBusiness.sale_revenue_code}
@@ -443,7 +443,7 @@ export default function SettingsTabPanels({
       {tabVisible("work-in-progress") && (
         <TabsContent value="work-in-progress" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <PayableSettings
                 title="Work in Progress"
                 code={activeBusiness.wip}
@@ -458,7 +458,7 @@ export default function SettingsTabPanels({
       {tabVisible("finished-goods") && (
         <TabsContent value="finished-goods" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <PayableSettings
                 title="Finished Goods"
                 code={activeBusiness.finished_goods_code}
@@ -473,7 +473,7 @@ export default function SettingsTabPanels({
       {tabVisible("abnormal-loss") && (
         <TabsContent value="abnormal-loss" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8} id="production-abnormal-loss-account">
+            <Col md={12} id="production-abnormal-loss-account">
               <PayableSettings
                 title="Abnormal Loss"
                 code={activeBusiness.abnormal_loss_account}
@@ -488,7 +488,7 @@ export default function SettingsTabPanels({
       {tabVisible("scrap-inventory") && (
         <TabsContent value="scrap-inventory" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8} id="production-scrap-inventory-account">
+            <Col md={12} id="production-scrap-inventory-account">
               <PayableSettings
                 title="Scrap Inventory"
                 code={activeBusiness.scrap_inventory_account}
@@ -503,7 +503,7 @@ export default function SettingsTabPanels({
       {tabVisible("opening-balance-equity") && (
         <TabsContent value="opening-balance-equity" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <PayableSettings
                 title="Opening Balance Equity"
                 code={activeBusiness.opening_balance_equity}
@@ -518,7 +518,7 @@ export default function SettingsTabPanels({
       {tabVisible("pro-bono") && (
         <TabsContent value="pro-bono" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <PayableSettings
                 title="Pro Bono"
                 code={activeBusiness.pro_bono_code}
@@ -533,7 +533,7 @@ export default function SettingsTabPanels({
       {tabVisible("online-ordering") && (
         <TabsContent value="online-ordering" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <div className="card shadow-sm border-0 h-100">
                 <div className="card-header bg-white border-0 d-flex align-items-center justify-content-between">
                   <div className="d-flex align-items-center gap-2">
@@ -581,7 +581,7 @@ export default function SettingsTabPanels({
       {tabVisible("default-receipt") && (
         <TabsContent value="default-receipt" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <div className="card shadow-sm border-0 h-100">
                 <div className="card-header bg-white border-0 d-flex align-items-center justify-content-between">
                   <div className="d-flex align-items-center gap-2">
@@ -677,7 +677,7 @@ export default function SettingsTabPanels({
                 </div>
               </div>
             </Col>
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <div className="card shadow-sm border-0 h-100">
                 <div className="card-header bg-white border-0 d-flex align-items-center justify-content-between">
                   <div className="d-flex align-items-center gap-2">
@@ -855,7 +855,7 @@ export default function SettingsTabPanels({
                 </div>
               </div>
             </Col>
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <InvoiceNotesSettingsPanel
                 activeBusiness={activeBusiness}
                 dispatch={dispatch}
@@ -868,7 +868,7 @@ export default function SettingsTabPanels({
       {tabVisible("marketplace") && (
         <TabsContent value="marketplace" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <div className="card shadow-sm border-0 h-100">
                 <div className="card-header bg-white border-0 d-flex align-items-center justify-content-between">
                   <div className="d-flex align-items-center gap-2">
@@ -1459,7 +1459,7 @@ export default function SettingsTabPanels({
                 description="Set whether VAT is exclusive or inclusive of prices"
               />
             </Col>
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <PayableSettings
                 title="VAT Account"
                 code={activeBusiness.vat_account_code}
@@ -1474,7 +1474,7 @@ export default function SettingsTabPanels({
       {tabVisible("invoice-closing") && (
         <TabsContent value="invoice-closing" className="mt-0">
           <Row className="g-4">
-            <Col md={12} lg={8}>
+            <Col md={12}>
               <InvoiceClosingSettings />
             </Col>
           </Row>

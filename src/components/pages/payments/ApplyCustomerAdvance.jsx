@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
+import { useSearchParams } from "react-router-dom";
 import moment from "moment";
 import { toast } from "sonner";
 import { FileText, RefreshCw, Wallet } from "lucide-react";
@@ -45,6 +46,7 @@ function invoiceKey(inv) {
  */
 export default function ApplyCustomerAdvance() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
+  const [searchParams] = useSearchParams();
   const facilityId = activeBusiness?.id;
   const currency =
     activeBusiness?.currency ||
@@ -61,6 +63,7 @@ export default function ApplyCustomerAdvance() {
   const [paymentDate, setPaymentDate] = useState(moment().format("YYYY-MM-DD"));
   const [notes, setNotes] = useState("");
   const autoSeededFor = useRef("");
+  const prefilledFromUrl = useRef(false);
 
   const loadCustomerData = useCallback(
     (customerNo) => {
@@ -125,6 +128,19 @@ export default function ApplyCustomerAdvance() {
     setSelectedCustomer(customer);
     loadCustomerData(customer.customerNo);
   };
+
+  // Prefill customer when arriving from New Invoice → Apply Deposit
+  useEffect(() => {
+    if (prefilledFromUrl.current || !facilityId) return;
+    const customerNo = String(searchParams.get("customerNo") || "").trim();
+    if (!customerNo) return;
+    prefilledFromUrl.current = true;
+    setSelectedCustomer({
+      customerNo,
+      name: searchParams.get("customerName") || customerNo,
+    });
+    loadCustomerData(customerNo);
+  }, [facilityId, searchParams, loadCustomerData]);
 
   // FIFO seed once when advance + invoices are ready for this customer
   useEffect(() => {
@@ -338,7 +354,7 @@ export default function ApplyCustomerAdvance() {
                 max={getPostingDateMax()}
                 onChange={(e) => setPaymentDate(e.target.value)}
                 disabled={applying}
-                className="h-9 w-full max-w-xs rounded border border-gray-300 px-2.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="h-9 w-full max-w-xs rounded border border-gray-300 px-2.5 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
               />
             </div>
             <div>
@@ -351,7 +367,7 @@ export default function ApplyCustomerAdvance() {
                 onChange={(e) => setNotes(e.target.value)}
                 disabled={applying}
                 placeholder="Internal note"
-                className="h-9 w-full rounded border border-gray-300 px-2.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="h-9 w-full rounded border border-gray-300 px-2.5 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
               />
             </div>
           </div>
@@ -439,7 +455,7 @@ export default function ApplyCustomerAdvance() {
                           onChange={(e) => setAmount(inv, e.target.value)}
                           disabled={applying}
                           placeholder="0.00"
-                          className="ml-auto w-28 rounded border border-gray-300 px-2 py-1 text-right text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                          className="ml-auto w-28 rounded border border-gray-300 px-2 py-1 text-right text-sm outline-none focus:ring-1 focus:ring-[var(--aa-accent)]"
                         />
                       </td>
                       <td className="px-3 py-2 text-right">

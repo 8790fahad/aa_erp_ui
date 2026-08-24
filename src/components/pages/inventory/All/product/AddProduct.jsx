@@ -335,7 +335,7 @@ const AddProduct = ({
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="px-3 bg-transparent text-[#4267B2] hover:text-[#36549B]"
+                      className="px-3 bg-transparent text-[var(--aa-navy)] hover:text-[#36549B]"
                       onClick={() => setCategoryModalOpen(true)}
                     >
                       <MdAddCircle className="h-4 w-4" />
@@ -392,7 +392,7 @@ const AddProduct = ({
                   <Button
                     type="submit"
                     disabled={loading}
-                    className="flex-1 bg-[#4267B2] hover:bg-[#36549B]"
+                    className="flex-1 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]"
                   >
                     {loading ? (
                       <Loader className="animate-spin w-4 h-4 mx-auto" />
@@ -443,7 +443,7 @@ const AddProduct = ({
             </Button>
             <Button
               onClick={handleCategorySubmit}
-              className="bg-[#4267B2] hover:bg-[#36549B]"
+              className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]"
             >
               Add Category
             </Button>

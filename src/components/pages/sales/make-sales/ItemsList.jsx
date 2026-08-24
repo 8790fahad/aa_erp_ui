@@ -112,7 +112,7 @@ function Item({
       className="card card-body p-0 col-md-4 col-sm-6 col-lg-3"
       style={{
         cursor: "pointer",
-        border: isSelected ? "3px solid #007bff" : "1px solid #dee2e6",
+        border: isSelected ? "3px solid var(--aa-navy)" : "1px solid #dee2e6",
         transform: isSelected ? "scale(1.02)" : "scale(1)",
         transition: "all 0.2s ease-in-out",
         boxShadow: isSelected

@@ -139,7 +139,7 @@ const SalaryStructureList = ({
           <h1 className="text-2xl font-bold text-gray-900">Salary Structures</h1>
           <p className="text-gray-600">Manage employee salary structures and compensation</p>
         </div>
-        <Button onClick={onAddNew} className="bg-blue-500 hover:bg-blue-600">
+        <Button onClick={onAddNew} className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]">
           <Plus className="h-4 w-4 mr-2" />
           Add New Structure
         </Button>
@@ -207,7 +207,7 @@ const SalaryStructureList = ({
                 placeholder="Search salary structures..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]"
               />
             </div>
           </div>
@@ -215,7 +215,7 @@ const SalaryStructureList = ({
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)] bg-white"
             >
               <option value="">All Status</option>
               <option value="Active">Active</option>
@@ -229,7 +229,7 @@ const SalaryStructureList = ({
       <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
         {loading ? (
           <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--aa-accent)] mx-auto"></div>
             <p className="mt-2 text-gray-600">Loading salary structures...</p>
           </div>
         ) : salaryStructures.length === 0 ? (
@@ -237,7 +237,7 @@ const SalaryStructureList = ({
             <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No salary structures found</h3>
             <p className="text-gray-600 mb-4">Get started by creating your first salary structure.</p>
-            <Button onClick={onAddNew} className="bg-blue-500 hover:bg-blue-600">
+            <Button onClick={onAddNew} className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]">
               <Plus className="h-4 w-4 mr-2" />
               Add Salary Structure
             </Button>

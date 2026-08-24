@@ -246,7 +246,7 @@ export default function ProjectTable() {
                 <div className="flex flex-col">
                     <Link
                         to={`/app/projects/dashboard/${item.project_number}`}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                        className="text-sm font-medium text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:underline"
                     >
                         {item.project_name || "-"}
                     </Link>
@@ -469,7 +469,7 @@ export default function ProjectTable() {
                                     value={progressStatusFilter || undefined}
                                     onValueChange={(value) => setProgressStatusFilter(value === "all" ? "" : value)}
                                 >
-                                    <SelectTrigger id="progress-status-filter" className="w-full h-11 bg-white border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500">
+                                    <SelectTrigger id="progress-status-filter" className="w-full h-11 bg-white border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-[var(--aa-accent)]">
                                         <SelectValue placeholder="Select progress status" />
                                     </SelectTrigger>
                                     <SelectContent className="max-h-[300px]">
@@ -492,7 +492,7 @@ export default function ProjectTable() {
                                     value={followUpStatusFilter || undefined}
                                     onValueChange={(value) => setFollowUpStatusFilter(value === "all" ? "" : value)}
                                 >
-                                    <SelectTrigger id="follow-up-status-filter" className="w-full h-11 bg-white border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500">
+                                    <SelectTrigger id="follow-up-status-filter" className="w-full h-11 bg-white border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-[var(--aa-accent)]">
                                         <SelectValue placeholder="Select follow up status" />
                                     </SelectTrigger>
                                     <SelectContent className="max-h-[300px]">
@@ -528,7 +528,7 @@ export default function ProjectTable() {
                                 >
                                     <SelectTrigger
                                         id="customer-filter"
-                                        className="w-full h-11 bg-white border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500"
+                                        className="w-full h-11 bg-white border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-[var(--aa-accent)]"
                                     >
                                         <SelectValue placeholder="All customers" />
                                     </SelectTrigger>

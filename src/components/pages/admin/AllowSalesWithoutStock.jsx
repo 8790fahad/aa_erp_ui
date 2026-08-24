@@ -103,7 +103,7 @@ const AllowSalesWithoutStock = ({
                       height: "1.5rem",
                       cursor: "pointer",
                       accentColor:
-                        activeBusiness?.primary_color || "#007bff",
+                        activeBusiness?.primary_color || "#1a2d5e",
                     }}
                   />
                   <label
@@ -191,7 +191,7 @@ const AllowSalesWithoutStock = ({
                       width: "2.5rem",
                       height: "1.25rem",
                       accentColor:
-                        activeBusiness?.primary_color || "#007bff",
+                        activeBusiness?.primary_color || "#1a2d5e",
                     }}
                   />
                 </div>
@@ -200,7 +200,7 @@ const AllowSalesWithoutStock = ({
                     className="fw-semibold"
                     style={{
                       color: value
-                        ? activeBusiness?.primary_color || "#007bff"
+                        ? activeBusiness?.primary_color || "#1a2d5e"
                         : "#6c757d",
                     }}
                   >

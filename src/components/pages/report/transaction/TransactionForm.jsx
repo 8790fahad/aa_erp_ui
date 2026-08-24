@@ -425,7 +425,7 @@ const TransactionForm = () => {
           <div className="w-10 h-10 bg-[#AAC7EF] rounded-lg flex items-center justify-center">
             {selectedTransactionType &&
               React.createElement(selectedTransactionType.icon, {
-                className: 'w-5 h-5 text-[#4267B2]',
+                className: 'w-5 h-5 text-[var(--aa-navy)]',
               })}
           </div>
           <div>
@@ -651,7 +651,7 @@ const TransactionForm = () => {
             onDrop={onDrop}
             className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 ${
               isDragActive
-                ? 'border-blue-500 bg-blue-50'
+                ? 'border-[var(--aa-accent)] bg-blue-50'
                 : 'border-gray-300 bg-gray-50'
             }`}
             style={{ minHeight: '120px' }}
@@ -692,7 +692,7 @@ const TransactionForm = () => {
                   className="flex items-center justify-between rounded-md border p-3"
                 >
                   <div
-                    className="truncate text-sm cursor-pointer text-blue-600 hover:text-blue-800"
+                    className="truncate text-sm cursor-pointer text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)]"
                     title={file.name}
                     onClick={() => {
                       const url = URL.createObjectURL(file);
@@ -731,7 +731,7 @@ const TransactionForm = () => {
         <button
           onClick={handleSubmit}
           disabled={loading}
-          className="bg-[#5C7FC1] hover:bg-[#4267B2] text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+          className="bg-[var(--aa-navy-hover)] hover:bg-[var(--aa-navy)] text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
         >
           <Save className="w-4 h-4" />
           {loading ? 'Saving...' : 'Save & Post'}

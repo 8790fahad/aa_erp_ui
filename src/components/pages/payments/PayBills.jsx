@@ -908,7 +908,7 @@ export default function PayBills() {
                 isDisabled
                   ? "bg-gray-200 border-gray-300 cursor-not-allowed opacity-50"
                   : isSelected
-                  ? "bg-blue-600 border-blue-600"
+                  ? "bg-[var(--aa-navy)] border-[var(--aa-navy)]"
                   : "border-gray-300 hover:border-blue-400"
               }`}
               title={isDisabled ? "This invoice has already been paid" : ""}
@@ -1082,7 +1082,7 @@ export default function PayBills() {
           </Button>
           <Button
             size="sm"
-            className="bg-[#4267B2] hover:bg-[#5A7EC1]"
+            className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)]"
             onClick={() => navigate("/app/payments/pay-bills/new")}
           >
             New Payment
@@ -1274,7 +1274,7 @@ export default function PayBills() {
             disabled={totalPayment === 0}
             className="h-12 px-8 text-white font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed rounded-md"
             style={{
-              backgroundColor: activeBusiness?.primary_color || "#007bff",
+              backgroundColor: activeBusiness?.primary_color || "#1a2d5e",
             }}
           >
             Process Payment
@@ -1298,7 +1298,7 @@ export default function PayBills() {
               disabled={loading}
               className="px-6"
               style={{
-                backgroundColor: activeBusiness?.primary_color || "#007bff",
+                backgroundColor: activeBusiness?.primary_color || "#1a2d5e",
                 color: "white",
               }}
             >
@@ -1494,7 +1494,7 @@ export default function PayBills() {
                     }
                   }}
                   style={{
-                    backgroundColor: activeBusiness?.primary_color || "#007bff",
+                    backgroundColor: activeBusiness?.primary_color || "#1a2d5e",
                     color: "white",
                   }}
                 >
@@ -1778,8 +1778,8 @@ export default function PayBills() {
               className="text-white p-4"
               style={{
                 background: `linear-gradient(135deg, ${
-                  activeBusiness?.primary_color || "#007bff"
-                } 0%, ${activeBusiness?.primary_color || "#007bff"}dd 100%)`,
+                  activeBusiness?.primary_color || "#1a2d5e"
+                } 0%, ${activeBusiness?.primary_color || "#1a2d5e"}dd 100%)`,
               }}
             >
               <div className="flex justify-between items-center">
@@ -1929,7 +1929,7 @@ export default function PayBills() {
                         <span
                           className="ml-2 font-bold text-xl"
                           style={{
-                            color: activeBusiness?.primary_color || "#007bff",
+                            color: activeBusiness?.primary_color || "#1a2d5e",
                           }}
                         >
                           {formatCurrency(totalPayment)}
@@ -1959,7 +1959,7 @@ export default function PayBills() {
                         placeholder="Enter payment description/narration..."
                         rows={3}
                         required
-                        className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${
+                        className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent resize-none ${
                           !narration || !narration.trim()
                             ? "border-red-300 focus:border-red-500 focus:ring-red-500"
                             : "border-gray-300"
@@ -2022,7 +2022,7 @@ export default function PayBills() {
                                 className="px-4 py-3 text-right font-semibold"
                                 style={{
                                   color:
-                                    activeBusiness?.primary_color || "#007bff",
+                                    activeBusiness?.primary_color || "#1a2d5e",
                                 }}
                               >
                                 {formatCurrency(bill.paymentAmount)}
@@ -2042,7 +2042,7 @@ export default function PayBills() {
                               className="px-4 py-3 text-right"
                               style={{
                                 color:
-                                  activeBusiness?.primary_color || "#007bff",
+                                  activeBusiness?.primary_color || "#1a2d5e",
                               }}
                             >
                               {formatCurrency(totalPayment)}
@@ -2079,7 +2079,7 @@ export default function PayBills() {
                   disabled={processingPayment}
                   className="px-4 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   style={{
-                    backgroundColor: activeBusiness?.primary_color || "#007bff",
+                    backgroundColor: activeBusiness?.primary_color || "#1a2d5e",
                   }}
                 >
                   {processingPayment && (

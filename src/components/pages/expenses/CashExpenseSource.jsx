@@ -137,7 +137,7 @@ export default function CashExpenseSource() {
       title: "Unbilled Last 365 Days",
       description: `${summaryTotals.purchaseOrder.count} Purchase Orders`,
       amount: summaryTotals.purchaseOrder.amount,
-      bg: "bg-blue-600",
+      bg: "bg-[var(--aa-navy)]",
     },
     {
       title: "Unpaid Last 365 Days",
@@ -183,7 +183,7 @@ export default function CashExpenseSource() {
                 <Button
                   variant="default"
                   size="sm"
-                  className="flex items-center gap-2 bg-[#4267B2] hover:bg-[#5A7EC1] dark:bg-slate-800 dark:hover:bg-slate-700 shadow-none"
+                  className="flex items-center gap-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] dark:bg-slate-800 dark:hover:bg-slate-700 shadow-none"
                 >
                   <HandCoins className="w-4 h-4" />
                   Create Expense
@@ -291,7 +291,7 @@ export default function CashExpenseSource() {
                         <p>No suppliers found</p>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button className="flex items-center gap-2 bg-[#4267B2] hover:bg-[#5A7EC1] shadow-none">
+                            <Button className="flex items-center gap-2 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] shadow-none">
                               <HandCoins className="w-4 h-4" />
                               Create Expense
                               <ChevronDown className="w-4 h-4" />

@@ -33,7 +33,7 @@ export default function BulkUploadModal({
   payloadKey,
   facilityId,
   createdBy,
-  primaryColor = "#4267B2",
+  primaryColor = "#1a2d5e",
 }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState([]);
@@ -251,11 +251,27 @@ export default function BulkUploadModal({
             {/* Column reference */}
             <div className="mt-3 flex flex-wrap gap-1.5">
               {templateCols.map((c) => (
-                <span key={c.key} className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">
+                <span
+                  key={c.key}
+                  className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold"
+                  title={c.hint || undefined}
+                >
                   {c.label}
                 </span>
               ))}
             </div>
+            {templateCols.some((c) => c.hint) ? (
+              <ul className="mt-2 space-y-0.5">
+                {templateCols
+                  .filter((c) => c.hint)
+                  .map((c) => (
+                    <li key={`hint-${c.key}`} className="text-[11px] text-slate-500">
+                      <span className="font-semibold text-slate-600">{c.label}:</span>{" "}
+                      {c.hint}
+                    </li>
+                  ))}
+              </ul>
+            ) : null}
           </div>
 
           {/* Step 2 — Upload */}

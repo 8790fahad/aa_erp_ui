@@ -77,27 +77,24 @@ const SingleSelectSetting = ({
     setForm(initialAccount); // reset to original object
   };
 
-  // Debug render
-  console.log(`${label} render state:`, {
-    code,
-    initialAccount,
-    form,
-    isEditing,
-    hasChartOfAccount: chartOfAccount?.length > 0
-  });
-
   return (
-    <div className="p-4 py-2">
-      <Label className="fw-semibold text-gray-700 mb-2">{label} Code</Label>
+    <div className="space-y-3 px-5 py-4">
+      <Label className="mb-0 text-sm font-semibold text-slate-700">
+        {label} Code
+      </Label>
 
       {!form && !isEditing ? (
-        <div className="text-center py-2">
-          <p className="text-muted mb-3">No account configured</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
+          <p className="mb-0 text-sm text-slate-500">No account configured</p>
           <Button
             size="sm"
             color="primary"
             onClick={() => setIsEditing(true)}
-            className="d-flex align-items-center gap-2 mx-auto"
+            className="d-flex align-items-center gap-2"
+            style={{
+              backgroundColor: "var(--aa-navy)",
+              borderColor: "var(--aa-navy)",
+            }}
           >
             <Settings size={16} />
             Configure Account
@@ -135,6 +132,10 @@ const SingleSelectSetting = ({
               onClick={handleSubmit}
               disabled={loading || !form?.head}
               className="d-flex align-items-center gap-2"
+              style={{
+                backgroundColor: "var(--aa-navy)",
+                borderColor: "var(--aa-navy)",
+              }}
             >
               {loading ? (
                 <>
@@ -151,26 +152,27 @@ const SingleSelectSetting = ({
           </div>
         </div>
       ) : (
-        <div>
-          <div className="d-flex justify-content-between align-items-center mb-2">
+        <div className="space-y-2">
+          <div className="d-flex justify-content-between align-items-center">
             <span className="text-muted small">Current Account:</span>
             <Button
               size="sm"
               color="link"
               className="text-decoration-none p-0 d-flex align-items-center gap-1"
               onClick={() => setIsEditing(true)}
+              style={{ color: "var(--aa-accent)" }}
             >
               <Settings size={14} />
               Change
             </Button>
           </div>
 
-          <div className="bg-light rounded p-3">
-            <div className="fw-semibold text-primary">
-              {form?.description || 'No description available'}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="fw-semibold" style={{ color: "var(--aa-navy)" }}>
+              {form?.description || "No description available"}
             </div>
             <div className="text-muted small">
-              Code: {form?.head || 'No code available'}
+              Code: {form?.head || "No code available"}
             </div>
           </div>
         </div>

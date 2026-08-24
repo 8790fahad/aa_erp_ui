@@ -30,7 +30,7 @@ export default function BusinessFeatureToggle({
   const [loading, setLoading] = useState(false);
 
   const primary =
-    activeBusiness?.primary_color || "#4267B2";
+    activeBusiness?.primary_color || "#1a2d5e";
 
   const handleCancel = () => {
     setIsEnabled(currentValue);

@@ -181,13 +181,13 @@ const BankTypeahead = ({
         flip
         className={`w-full [&_.rbt-input-main]:rounded-lg [&_.rbt-input-main]:border ${
           error ? "[&_.rbt-input-main]:border-red-500" : "[&_.rbt-input-main]:border-gray-300"
-        } [&_.rbt-input-main]:min-h-[42px] [&_.rbt-input-main]:shadow-sm outline-none focus:ring-2 focus:ring-blue-500`}
+        } [&_.rbt-input-main]:min-h-[42px] [&_.rbt-input-main]:shadow-sm outline-none focus:ring-2 focus:ring-[var(--aa-accent)]`}
       />
       
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button
           type="button"
-          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+          className="text-sm font-medium text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:underline"
           onClick={() => setShowBankQuickAdd((v) => !v)}
         >
           {showBankQuickAdd
@@ -275,7 +275,7 @@ const BankTypeahead = ({
             </button>
             <button
               type="button"
-              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="px-3 py-1.5 text-sm bg-[var(--aa-navy)] text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               onClick={handleQuickAddBankDirectory}
               disabled={savingQuickBank}
             >

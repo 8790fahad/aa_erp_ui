@@ -76,7 +76,7 @@ const PaymentInput = memo(({ invoiceId, maxAmount, currentPayment, onPaymentChan
       placeholder="0.00"
       onChange={handleChange}
       onBlur={handleBlur}
-      className="w-full px-2 py-1 text-right border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      className="w-full px-2 py-1 text-right border border-gray-300 rounded focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
       style={{ maxWidth: "150px" }}
     />
   );
@@ -698,7 +698,7 @@ export const SupplierDepositForm = () => {
                 onChange={handleFormChange}
                 required
                 disabled={loading}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
               />,
               "date"
             )}
@@ -733,7 +733,7 @@ export const SupplierDepositForm = () => {
                   min="0"
                   step="0.01"
                   required
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                 />
                 {form.amount_paid && (
                   <div className="text-sm text-gray-500">
@@ -770,7 +770,7 @@ export const SupplierDepositForm = () => {
                   }))
                 }
                 disabled={loading}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
               >
                 <option value="">Select Mode of Payment</option>
                 {methods_of_payment.map((method) => (
@@ -800,7 +800,7 @@ export const SupplierDepositForm = () => {
                     value={form.mod_account_code}
                     onChange={handleFormChange}
                     disabled={loading}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                   >
                     <option value="">Select account...</option>
                     {accountList.map((account) => (
@@ -823,7 +823,7 @@ export const SupplierDepositForm = () => {
                   value={form.mod_account_code}
                   onChange={handleFormChange}
                   disabled={loading}
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                 >
                   <option value="">Select account...</option>
                   {accountList.map((account) => (
@@ -849,7 +849,7 @@ export const SupplierDepositForm = () => {
                   }
                   disabled={loading}
                   placeholder="Enter cheque number"
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
                 />
               </div>
             )}
@@ -869,7 +869,7 @@ export const SupplierDepositForm = () => {
                 disabled={loading}
                 placeholder="Optional notes about this deposit"
                 rows={3}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent resize-none"
               />,
               "narration"
             )}
@@ -913,7 +913,7 @@ export const SupplierDepositForm = () => {
                             <div className="flex flex-col">
                               <button
                                 onClick={() => handleInvoiceRefClick(item.invoice_ref)}
-                                className="text-blue-600 hover:text-blue-800 hover:underline font-medium cursor-pointer text-left"
+                                className="text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] hover:underline font-medium cursor-pointer text-left"
                               >
                                 {item.invoice_ref || "N/A"}
                               </button>
@@ -998,7 +998,7 @@ export const SupplierDepositForm = () => {
           <Button
             onClick={handleDeposit}
             disabled={loading}
-            className="bg-[#5C7FC1] shadow-none hover:bg-[#4267B2] text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+            className="bg-[var(--aa-navy-hover)] shadow-none hover:bg-[var(--aa-navy)] text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
           >
             {loading ? (
               <>
@@ -1020,7 +1020,7 @@ export const SupplierDepositForm = () => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
+            <div className="bg-[var(--aa-navy)] text-white p-4">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-bold">

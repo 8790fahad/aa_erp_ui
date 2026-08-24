@@ -130,9 +130,9 @@ export default function TokenVerification() {
             <div className="space-y-6 text-center">
               <div className="flex justify-center">
                 <div className="relative">
-                  <Loader2 className="h-20 w-20 animate-spin text-[#4267B2]" />
+                  <Loader2 className="h-20 w-20 animate-spin text-[var(--aa-navy)]" />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Mail className="h-8 w-8 text-[#4267B2]/50" />
+                    <Mail className="h-8 w-8 text-[var(--aa-navy)]/50" />
                   </div>
                 </div>
               </div>
@@ -172,7 +172,7 @@ export default function TokenVerification() {
                   }
                   className="block w-full"
                 >
-                  <Button className="w-full bg-gradient-to-r from-[#4267B2] to-blue-600 hover:from-[#4267B2]/90 hover:to-blue-600/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]">
+                  <Button className="w-full bg-gradient-to-r from-[var(--aa-navy)] to-blue-600 hover:from-[var(--aa-navy)]/90 hover:to-blue-600/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]">
                     {type === "login" ? "Go to Login" : "Create New Password"}
                   </Button>
                 </Link>
@@ -203,7 +203,7 @@ export default function TokenVerification() {
                 <Button
                   onClick={handleResendEmail}
                   disabled={loading}
-                  className="w-full bg-[#4267B2] hover:bg-[#4267B2]/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02]"
+                  className="w-full bg-[var(--aa-navy)] hover:bg-[var(--aa-navy)]/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02]"
                 >
                   {loading ? (
                     <>

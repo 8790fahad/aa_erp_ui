@@ -518,7 +518,7 @@ export default function WipInventory() {
         <DialogContent className="sm:max-w-[1200px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <History className="h-5 w-5 text-[#4267B2]" />
+              <History className="h-5 w-5 text-[var(--aa-navy)]" />
               Mixture History
             </DialogTitle>
           </DialogHeader>
@@ -703,7 +703,7 @@ export default function WipInventory() {
         <DialogContent className="sm:max-w-[1100px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ListOrdered className="h-5 w-5 text-[#4267B2]" />
+              <ListOrdered className="h-5 w-5 text-[var(--aa-navy)]" />
               WIP Action History
             </DialogTitle>
           </DialogHeader>

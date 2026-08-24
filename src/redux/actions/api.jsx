@@ -2,6 +2,7 @@
 /* eslint-disable no-undef */
 /* eslint-disable no-unused-vars */
 import store from "../store";
+import { notifyNetworkError } from "@/hooks/useNetworkStatus";
 
 // let remoteEndpoint = "http://localhost:42843";
 let remoteEndpoint = "https://server.brainstorm.ng/flowbooks";
@@ -63,7 +64,10 @@ const _postApi = (
 
       success(response);
     })
-    .catch((err) => error(err));
+    .catch((err) => {
+      notifyNetworkError(err);
+      error(err);
+    });
 };
 // posting ends here
 
@@ -89,6 +93,7 @@ const _fetchApi = (
       }
     })
     .catch((err) => {
+      notifyNetworkError(err);
       error(err);
     });
 };
@@ -121,6 +126,7 @@ const _deleteApi = (
       if (callback) callback(res);
     })
     .catch((err) => {
+      notifyNetworkError(err);
       if (err_cb) err_cb(err);
     });
 };
@@ -142,7 +148,10 @@ const _putApi = (url, data = {}, success = (f) => f, error = (f) => f) => {
         error(response);
       } else success(response);
     })
-    .catch((err) => error(err));
+    .catch((err) => {
+      notifyNetworkError(err);
+      error(err);
+    });
 };
 // PUT function stops here
 

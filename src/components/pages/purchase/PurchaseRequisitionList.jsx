@@ -9,13 +9,15 @@ import { _postApi } from "@/redux/actions/api";
 import moment from "moment";
 import { useCallback, useEffect, useState, useRef } from "react";
 import {
-  Eye,
   X,
   Plus,
   Trash2,
   FileText,
   Search,
   ClipboardList,
+  Upload,
+  Paperclip,
+  ExternalLink,
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useSearchParams } from "react-router-dom";
@@ -36,6 +38,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { apiURL } from "@/redux/actions/api";
+
+const MAX_PO_ATTACHMENTS = 5;
+const MAX_PO_FILE_BYTES = 25 * 1024 * 1024;
+const PO_ALLOWED_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
 
 const poInputClass =
   "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]";
@@ -88,6 +100,9 @@ export default function PurchaseRequisitionList() {
   // Form modal state
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [viewAttachments, setViewAttachments] = useState([]);
+  const attachmentInputRef = useRef(null);
 
   // Form state
   const [formItems, setFormItems] = useState([]);
@@ -125,6 +140,7 @@ export default function PurchaseRequisitionList() {
 
   const viewList = (item) => {
     toggle(item);
+    setViewAttachments([]);
     _postApi(
       "/account/purchase/getPr",
       {
@@ -142,6 +158,12 @@ export default function PurchaseRequisitionList() {
         console.log(err);
       },
     );
+    PurchaseRequisitionAPI.getPurchaseOrderDocuments(activeBusiness.id, {
+      pr_no: item.pr_no,
+      po_no: item.po_no,
+    })
+      .then((res) => setViewAttachments(res.data || []))
+      .catch(() => setViewAttachments([]));
   };
 
   const getPR = useCallback(() => {
@@ -197,6 +219,7 @@ export default function PurchaseRequisitionList() {
       unit: "",
     });
     setErrors({ reason: "", supplier: "" });
+    setAttachments([]);
     getProductList();
     getCategories();
     setIsFormModalOpen(true);
@@ -204,6 +227,7 @@ export default function PurchaseRequisitionList() {
 
   const closeFormModal = () => {
     setIsFormModalOpen(false);
+    setAttachments([]);
   };
 
   const handleFormSheetChange = (open) => {
@@ -364,6 +388,29 @@ export default function PurchaseRequisitionList() {
     setExpenses((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleAttachmentPick = (e) => {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!picked.length) return;
+    const next = [...attachments];
+    for (const file of picked) {
+      if (next.length >= MAX_PO_ATTACHMENTS) {
+        toast.error(`You can upload a maximum of ${MAX_PO_ATTACHMENTS} files`);
+        break;
+      }
+      if (!PO_ALLOWED_TYPES.has(file.type)) {
+        toast.error(`${file.name}: only PDF, PNG, JPG, or DOCX`);
+        continue;
+      }
+      if (file.size > MAX_PO_FILE_BYTES) {
+        toast.error(`${file.name}: exceeds 25MB limit`);
+        continue;
+      }
+      next.push(file);
+    }
+    setAttachments(next);
+  };
+
   const handleSubmitForm = async () => {
     if (!validateForm()) {
       return;
@@ -385,15 +432,18 @@ export default function PurchaseRequisitionList() {
           quantity: parseQty(row.quantity),
         })),
         user_id: user.id,
+        facilityId: activeBusiness.id,
       };
 
       const response = await PurchaseRequisitionAPI.submitPurchaseRequisition(
-        requisitionData
+        requisitionData,
+        attachments,
       );
       toast.success(response.message);
 
       // Close modal and refresh list
       setIsFormModalOpen(false);
+      setAttachments([]);
       getPR();
     } catch (error) {
       toast.error(error.message);
@@ -529,10 +579,9 @@ export default function PurchaseRequisitionList() {
                             variant="ghost"
                             size="sm"
                             onClick={() => viewList(row)}
-                            className="h-8 text-[var(--aa-accent)] hover:bg-slate-100"
-                            title="View details"
+                            className="h-8 px-2 text-sm font-medium capitalize text-[var(--aa-accent)] hover:bg-slate-100 hover:text-[var(--aa-navy)]"
                           >
-                            <Eye className="h-4 w-4" />
+                            View
                           </Button>
                         </td>
                       </tr>
@@ -545,10 +594,15 @@ export default function PurchaseRequisitionList() {
         </div>
       </div>
 
-        <Modal isOpen={isOpen} toggle={toggle} size="lg">
-          <ModalHeader toggle={toggle}>View purchase order</ModalHeader>
-          {/* {JSON.stringify(items)} */}
-          <ModalBody>
+        <Modal isOpen={isOpen} toggle={toggle} size="lg" contentClassName="overflow-hidden border-0 shadow-lg">
+          <ModalHeader
+            toggle={toggle}
+            className="border-0 text-white [&>.btn-close]:brightness-0 [&>.btn-close]:invert"
+            style={{ background: "var(--aa-navy)" }}
+          >
+            View purchase order
+          </ModalHeader>
+          <ModalBody className="bg-white">
             <div style={{ marginBottom: 20 }}>
               <div
                 style={{ display: "flex", flexDirection: "row", width: "100%" }}
@@ -682,6 +736,34 @@ export default function PurchaseRequisitionList() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Attachments (waybills / delivery docs)
+                </p>
+                {viewAttachments.length === 0 ? (
+                  <p className="text-xs text-slate-500">No documents attached</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {viewAttachments.map((doc) => (
+                      <li key={doc.id || doc.file_path}>
+                        <a
+                          href={`${apiURL}/public/uploads/${doc.file_path}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-sm text-[var(--aa-accent)] hover:text-[var(--aa-navy)] hover:underline"
+                        >
+                          <Paperclip className="h-3.5 w-3.5" />
+                          <span className="truncate">
+                            {doc.document_name || doc.original_name}
+                          </span>
+                          <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           </ModalBody>
@@ -1015,6 +1097,77 @@ export default function PurchaseRequisitionList() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Attachments
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Waybills and other delivery documents (PDF, PNG, JPG, DOCX)
+                    </p>
+                  </div>
+                  <span className="text-xs text-slate-500">
+                    {attachments.length}/{MAX_PO_ATTACHMENTS}
+                  </span>
+                </div>
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.png,.jpg,.jpeg,.docx,application/pdf,image/png,image/jpeg,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  className="hidden"
+                  onChange={handleAttachmentPick}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1.5 border-slate-300"
+                  disabled={formLoading || attachments.length >= MAX_PO_ATTACHMENTS}
+                  onClick={() => attachmentInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload documents
+                </Button>
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  Maximum {MAX_PO_ATTACHMENTS} files, 25MB each
+                </p>
+                {attachments.length > 0 && (
+                  <ul className="mt-3 space-y-1.5">
+                    {attachments.map((file, idx) => (
+                      <li
+                        key={`${file.name}-${idx}`}
+                        className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5 truncate">
+                          <Paperclip className="h-3.5 w-3.5 shrink-0 text-[var(--aa-accent)]" />
+                          <span className="truncate">
+                            {file.name}{" "}
+                            <span className="text-slate-400">
+                              ({(file.size / (1024 * 1024)).toFixed(1)} MB)
+                            </span>
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          disabled={formLoading}
+                          onClick={() =>
+                            setAttachments((prev) =>
+                              prev.filter((_, i) => i !== idx),
+                            )
+                          }
+                          className="shrink-0 text-red-600 hover:text-red-700"
+                          title="Remove"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
 

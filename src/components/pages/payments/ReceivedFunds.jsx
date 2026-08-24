@@ -101,7 +101,7 @@ export default function ReceivedFunds() {
         component: (item) => (
           <button
             type="button"
-            className="text-sm font-medium text-blue-600 hover:underline"
+            className="text-sm font-medium text-[var(--aa-accent)] hover:underline"
             onClick={() =>
               navigate(
                 `/app/customers/view-receipt/print?invoice_ref=${encodeURIComponent(
@@ -261,7 +261,7 @@ export default function ReceivedFunds() {
               value={search}
               placeholder="Search by payment #, customer, or reference"
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]"
             />
           </div>
           <Button

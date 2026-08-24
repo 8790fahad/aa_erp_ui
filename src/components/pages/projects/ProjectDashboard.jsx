@@ -380,7 +380,7 @@ export default function ProjectDashboard() {
           <div className="flex items-center gap-4">
             <Link
               to="/app/projects/project-list"
-              className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+              className="text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)] flex items-center gap-1"
             >
               <ArrowLeft className="h-4 w-4" />
               All projects
@@ -436,7 +436,7 @@ export default function ProjectDashboard() {
                 <button
                   type="button"
                   onClick={() => setShowEstimateModal(true)}
-                  className="text-sm text-blue-600 hover:underline text-left"
+                  className="text-sm text-[var(--aa-accent)] hover:underline text-left"
                 >
                   + add
                 </button>
@@ -457,7 +457,7 @@ export default function ProjectDashboard() {
                 <button
                   type="button"
                   onClick={() => setShowEstimateModal(true)}
-                  className="text-sm text-blue-600 hover:underline text-left"
+                  className="text-sm text-[var(--aa-accent)] hover:underline text-left"
                 >
                   + add
                 </button>
@@ -476,7 +476,7 @@ export default function ProjectDashboard() {
               <p className="text-sm text-gray-500 mt-1">Profit margin</p>
               <Link
                 to={`/app/sales/sale${id ? `?projectId=${id}` : ""}`}
-                className="text-sm text-blue-600 hover:underline mt-2 inline-block"
+                className="text-sm text-[var(--aa-accent)] hover:underline mt-2 inline-block"
               >
                 View all
               </Link>
@@ -491,7 +491,7 @@ export default function ProjectDashboard() {
               <p className="text-sm text-gray-500 mt-1">Overdue Invoices</p>
               <Link
                 to={`/app/sales/sale${id ? `?projectId=${id}` : ""}`}
-                className="text-sm text-blue-600 hover:underline mt-2 inline-block"
+                className="text-sm text-[var(--aa-accent)] hover:underline mt-2 inline-block"
               >
                 View all
               </Link>
@@ -1080,7 +1080,7 @@ export default function ProjectDashboard() {
                     <div className="text-center">
                       <label
                         htmlFor="file-upload"
-                        className="cursor-pointer inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                        className="cursor-pointer inline-flex items-center px-4 py-2 bg-[var(--aa-navy)] text-white rounded-md hover:bg-blue-700 transition-colors"
                       >
                         <Upload className="h-4 w-4 mr-2" />
                         Choose Files
@@ -1229,7 +1229,7 @@ export default function ProjectDashboard() {
                 </DrawerDescription>
                 <a
                   href="#"
-                  className="text-sm text-blue-600 hover:underline mt-2 inline-block"
+                  className="text-sm text-[var(--aa-accent)] hover:underline mt-2 inline-block"
                 >
                   Learn more
                 </a>

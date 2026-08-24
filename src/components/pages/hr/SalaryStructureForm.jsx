@@ -224,7 +224,7 @@ const SalaryStructureForm = ({
                 name="structureName"
                 value={formData.structureName}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)] ${
                   errors.structureName ? "border-red-500" : "border-gray-300"
                 }`}
                 placeholder="e.g., Manager Level 1"
@@ -245,7 +245,7 @@ const SalaryStructureForm = ({
                 onChange={handleChange}
                 min="0"
                 step="0.01"
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)] ${
                   errors.basicSalary ? "border-red-500" : "border-gray-300"
                 }`}
                 placeholder="0.00"
@@ -266,7 +266,7 @@ const SalaryStructureForm = ({
                 onChange={handleChange}
                 min="0"
                 step="0.1"
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)] ${
                   errors.overtimeRate ? "border-red-500" : "border-gray-300"
                 }`}
                 placeholder="1.5"
@@ -284,7 +284,7 @@ const SalaryStructureForm = ({
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)] bg-white"
               >
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
@@ -301,7 +301,7 @@ const SalaryStructureForm = ({
               value={formData.description}
               onChange={handleChange}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]"
               placeholder="Describe this salary structure..."
             />
           </div>
@@ -314,7 +314,7 @@ const SalaryStructureForm = ({
             <button
               type="button"
               onClick={addAllowanceItem}
-              className="flex items-center text-blue-600 hover:text-blue-800"
+              className="flex items-center text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)]"
             >
               <Plus className="h-4 w-4 mr-1" />
               Add Allowance
@@ -333,7 +333,7 @@ const SalaryStructureForm = ({
                     type="text"
                     value={item.name}
                     onChange={(e) => handleAllowanceChange(index, "name", e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]"
                     placeholder="Allowance name (e.g., Housing, Transport)"
                   />
                   <input
@@ -342,7 +342,7 @@ const SalaryStructureForm = ({
                     onChange={(e) => handleAllowanceChange(index, "amount", e.target.value)}
                     min="0"
                     step="0.01"
-                    className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]"
                     placeholder="0.00"
                   />
                   <button
@@ -365,7 +365,7 @@ const SalaryStructureForm = ({
             <button
               type="button"
               onClick={addDeductionItem}
-              className="flex items-center text-blue-600 hover:text-blue-800"
+              className="flex items-center text-[var(--aa-accent)] hover:text-[var(--aa-accent-hover)]"
             >
               <Plus className="h-4 w-4 mr-1" />
               Add Deduction
@@ -384,7 +384,7 @@ const SalaryStructureForm = ({
                     type="text"
                     value={item.name}
                     onChange={(e) => handleDeductionChange(index, "name", e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]"
                     placeholder="Deduction name (e.g., Loan, Advance)"
                   />
                   <input
@@ -393,7 +393,7 @@ const SalaryStructureForm = ({
                     onChange={(e) => handleDeductionChange(index, "amount", e.target.value)}
                     min="0"
                     step="0.01"
-                    className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)]"
                     placeholder="0.00"
                   />
                   <button
@@ -425,7 +425,7 @@ const SalaryStructureForm = ({
                 min="0"
                 max="100"
                 step="0.01"
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)] ${
                   errors.payeRate ? "border-red-500" : "border-gray-300"
                 }`}
                 placeholder="0.00"
@@ -447,7 +447,7 @@ const SalaryStructureForm = ({
                 min="0"
                 max="100"
                 step="0.01"
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)] ${
                   errors.pensionRate ? "border-red-500" : "border-gray-300"
                 }`}
                 placeholder="0.00"
@@ -515,7 +515,7 @@ const SalaryStructureForm = ({
           <button
             type="submit"
             disabled={loading}
-            className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 flex items-center"
+            className="px-6 py-2 bg-[var(--aa-navy)] text-white rounded-lg hover:bg-[var(--aa-navy-hover)] transition-colors disabled:opacity-50 flex items-center"
           >
             {loading ? (
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>

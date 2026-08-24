@@ -74,7 +74,7 @@ const IncomeExpenses = () => {
             // background-color: #ddd;
           }
             h1{
-            color: #4267B2;
+            color: var(--aa-navy);
             font-size: 20px;
             margin: 0;
             padding: 0;
@@ -82,16 +82,16 @@ const IncomeExpenses = () => {
             text-align: center;
             }
             footer {
-            background: linear-gradient(to right, #4267B2,rgb(130, 167, 240));
+            background: linear-gradient(to right, var(--aa-navy),rgb(130, 167, 240));
             padding: 20px;
             }
         `}
       </style>
       <div
         style={{
-          background: "linear-gradient(to right, #4267B2,rgb(130, 167, 240)",
+          background: "linear-gradient(to right, var(--aa-navy),rgb(130, 167, 240)",
           padding: "40px 50px 2px 50px",
-          borderBottom: "4px solid #4267B2",
+          borderBottom: "4px solid var(--aa-navy)",
           marginBottom: "15px",
           textAlign: "center",
         }}

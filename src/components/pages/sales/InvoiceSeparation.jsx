@@ -633,7 +633,7 @@ export default function InvoiceSeparation() {
                         type="button"
                         disabled={separating || packs.length === 0}
                         onClick={markSeparated}
-                        style={{ backgroundColor: "#4267B2" }}
+                        style={{ backgroundColor: "var(--aa-navy)" }}
                         className="flex items-center gap-2"
                       >
                         <CheckCircle2 className="w-4 h-4" />
@@ -690,7 +690,7 @@ export default function InvoiceSeparation() {
                         disabled={printingAll}
                         onClick={printAllInvoices}
                         className="h-8"
-                        style={{ backgroundColor: "#4267B2" }}
+                        style={{ backgroundColor: "var(--aa-navy)" }}
                       >
                         <Printer className="w-3.5 h-3.5 mr-1" />
                         {printingAll

@@ -264,7 +264,7 @@ export default function CreditNote() {
         component: (item) => (
           <button
             type="button"
-            className="font-mono text-sm font-semibold text-blue-600 hover:underline"
+            className="font-mono text-sm font-semibold text-[var(--aa-accent)] hover:underline"
             onClick={() => openDetail(item.creditNoteNumber)}
           >
             {item.creditNoteNumber}
@@ -512,7 +512,7 @@ export default function CreditNote() {
                   onClick={() => setStatusFilter(t.key)}
                   className={`rounded-md px-3 py-1.5 ${
                     statusFilter === t.key
-                      ? "bg-blue-600 text-white"
+                      ? "bg-[var(--aa-navy)] text-white"
                       : "text-gray-600 hover:bg-gray-50"
                   }`}
                 >
