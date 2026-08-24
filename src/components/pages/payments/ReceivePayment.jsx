@@ -94,7 +94,7 @@ const METHOD_TABS = [
   },
   {
     id: "mode",
-    label: "Mode",
+    label: "Mode Switch",
     icon: ArrowRightLeft,
     privilege: "Approve Payment Mode Switch",
   },
@@ -233,14 +233,11 @@ export default function ReceivePayment() {
 
       if (functionalities.includes(privilege)) return true;
 
-      // Switch Payment Mode holders can open Cash / Transfer / Credit queues to request a switch
+      // Mode Switch tab: Switch or Approve privilege
       if (
-        functionalities.includes(SWITCH_PAYMENT_MODE_PRIVILEGE) &&
-        [
-          "Cash Collection",
-          "Transfer Collection",
-          "Credit Collection",
-        ].includes(privilege)
+        privilege === APPROVE_PAYMENT_MODE_PRIVILEGE &&
+        (functionalities.includes(SWITCH_PAYMENT_MODE_PRIVILEGE) ||
+          functionalities.includes(APPROVE_PAYMENT_MODE_PRIVILEGE))
       ) {
         return true;
       }
@@ -260,8 +257,14 @@ export default function ReceivePayment() {
   );
 
   const visibleMethodTabs = useMemo(
-    () => METHOD_TABS.filter((t) => canViewCollectionTab(t.privilege)),
-    [canViewCollectionTab],
+    () =>
+      METHOD_TABS.filter((t) => {
+        if (t.id === "mode") {
+          return canSwitchPaymentMode || canApprovePaymentMode;
+        }
+        return canViewCollectionTab(t.privilege);
+      }),
+    [canViewCollectionTab, canSwitchPaymentMode, canApprovePaymentMode],
   );
 
   const [methodTab, setMethodTab] = useState("cash");
@@ -616,18 +619,35 @@ export default function ReceivePayment() {
   }, [pending, creditPending, discountPending, modePending]);
 
   const filteredPending = useMemo(() => {
-    let list =
-      methodTab === "credit"
-        ? creditPending
-        : methodTab === "discount"
-          ? discountPending
-          : methodTab === "mode"
-            ? modePending
-            : pending.filter(
-                (r) =>
-                  matchesMethod(r.payment_type, methodTab) &&
-                  needsCollectionSide(r, methodTab),
-              );
+    let list;
+    if (methodTab === "credit") {
+      list = creditPending;
+    } else if (methodTab === "discount") {
+      list = discountPending;
+    } else if (methodTab === "mode") {
+      // Mode Switch: invoices you can change + those awaiting mode approval
+      const byCode = new Map();
+      for (const r of [...pending, ...creditPending, ...modePending]) {
+        if (!r?.sale_code) continue;
+        const existing = byCode.get(r.sale_code);
+        // Prefer mode-approval row when both exist
+        if (
+          !existing ||
+          r.status === "awaiting_payment_mode_approval" ||
+          r.proposed_payment_type ||
+          r.pending_payment_mode
+        ) {
+          byCode.set(r.sale_code, r);
+        }
+      }
+      list = [...byCode.values()];
+    } else {
+      list = pending.filter(
+        (r) =>
+          matchesMethod(r.payment_type, methodTab) &&
+          needsCollectionSide(r, methodTab),
+      );
+    }
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((r) =>
@@ -1385,6 +1405,7 @@ export default function ReceivePayment() {
             const Icon = tab.icon;
             const active = methodTab === tab.id;
             const count = methodPendingCounts[tab.id] || 0;
+            const showCount = tab.id !== "mode";
             return (
               <button
                 key={tab.id}
@@ -1401,15 +1422,17 @@ export default function ReceivePayment() {
               >
                 <Icon className="h-4 w-4" />
                 {tab.label}
-                <span
-                  className={`rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums ${
-                    active
-                      ? "bg-white/20 text-white"
-                      : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  {count}
-                </span>
+                {showCount ? (
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums ${
+                      active
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -1535,7 +1558,8 @@ export default function ReceivePayment() {
                 }`}
               >
                 <Wallet className="h-4 w-4" />
-                Pending ({filteredPending.length})
+                Pending
+                {methodTab === "mode" ? null : ` (${filteredPending.length})`}
               </button>
               <button
                 type="button"
@@ -1647,64 +1671,78 @@ export default function ReceivePayment() {
                         </td>
                         <td className="px-4 py-3">
                           {methodTab === "mode" ? (
-                            <div className="space-y-1 text-xs">
-                              <div>
-                                <span className="text-slate-500">Current: </span>
-                                <span
-                                  className={`inline-flex rounded-full px-2 py-0.5 font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
-                                    row.payment_type,
-                                  )}`}
-                                >
-                                  {paymentTypeLabel(row.payment_type)}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-slate-500">Requested: </span>
-                                <span
-                                  className={`inline-flex rounded-full px-2 py-0.5 font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
-                                    row.proposed_payment_type ||
-                                      row.pending_payment_mode?.to,
-                                  )}`}
-                                >
-                                  {paymentTypeLabel(
-                                    row.proposed_payment_type ||
-                                      row.pending_payment_mode?.to,
-                                  )}
-                                </span>
-                              </div>
+                            <div className="space-y-2">
+                              {row.status === "awaiting_payment_mode_approval" ||
+                              row.proposed_payment_type ||
+                              row.pending_payment_mode?.to ? (
+                                <div className="space-y-1 text-xs">
+                                  <div>
+                                    <span className="text-slate-500">Current: </span>
+                                    <span
+                                      className={`inline-flex rounded-full px-2 py-0.5 font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
+                                        row.payment_type,
+                                      )}`}
+                                    >
+                                      {paymentTypeLabel(row.payment_type)}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-500">Requested: </span>
+                                    <span
+                                      className={`inline-flex rounded-full px-2 py-0.5 font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
+                                        row.proposed_payment_type ||
+                                          row.pending_payment_mode?.to,
+                                      )}`}
+                                    >
+                                      {paymentTypeLabel(
+                                        row.proposed_payment_type ||
+                                          row.pending_payment_mode?.to,
+                                      )}
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
+                                      row.payment_type,
+                                    )}`}
+                                  >
+                                    {paymentTypeLabel(row.payment_type)}
+                                  </span>
+                                  {canSwitchPaymentMode ? (
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        switchingModeCode === row.sale_code ||
+                                        submitting
+                                      }
+                                      onClick={() => openModeChange(row)}
+                                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                    >
+                                      {switchingModeCode === row.sale_code ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <ArrowRightLeft className="h-3 w-3" />
+                                      )}
+                                      Change
+                                    </button>
+                                  ) : null}
+                                </div>
+                              )}
                             </div>
                           ) : (
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span
-                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
-                                  row.payment_type ||
-                                    (methodTab === "credit" ? "credit" : ""),
-                                )}`}
-                              >
-                                {paymentTypeLabel(
-                                  row.payment_type ||
-                                    (methodTab === "credit" ? "credit" : ""),
-                                )}
-                              </span>
-                              {canSwitchPaymentMode ? (
-                                <button
-                                  type="button"
-                                  disabled={
-                                    switchingModeCode === row.sale_code ||
-                                    submitting
-                                  }
-                                  onClick={() => openModeChange(row)}
-                                  className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                                >
-                                  {switchingModeCode === row.sale_code ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <ArrowRightLeft className="h-3 w-3" />
-                                  )}
-                                  Change
-                                </button>
-                              ) : null}
-                            </div>
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
+                                row.payment_type ||
+                                  (methodTab === "credit" ? "credit" : ""),
+                              )}`}
+                            >
+                              {paymentTypeLabel(
+                                row.payment_type ||
+                                  (methodTab === "credit" ? "credit" : ""),
+                              )}
+                            </span>
                           )}
                           {methodTab !== "mode" &&
                           (isSplitPaymentType(row.payment_type) ||
@@ -1798,24 +1836,55 @@ export default function ReceivePayment() {
                               Approve Discount
                             </button>
                           ) : methodTab === "mode" ? (
-                            <div className="flex flex-wrap items-center justify-end gap-2">
+                            row.status === "awaiting_payment_mode_approval" ||
+                            row.proposed_payment_type ||
+                            row.pending_payment_mode?.to ? (
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                {canApprovePaymentMode ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={submitting}
+                                      onClick={() => setModeRejectRow(row)}
+                                      className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                    >
+                                      Reject
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={submitting}
+                                      onClick={() => setModeApproveRow(row)}
+                                      className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                                    >
+                                      Approve Mode
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-slate-500">
+                                    Awaiting approval
+                                  </span>
+                                )}
+                              </div>
+                            ) : canSwitchPaymentMode ? (
                               <button
                                 type="button"
-                                disabled={submitting}
-                                onClick={() => setModeRejectRow(row)}
-                                className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                disabled={
+                                  switchingModeCode === row.sale_code ||
+                                  submitting
+                                }
+                                onClick={() => openModeChange(row)}
+                                className="inline-flex items-center gap-1.5 rounded-md bg-[var(--aa-navy)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
                               >
-                                Reject
+                                {switchingModeCode === row.sale_code ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                                )}
+                                Switch Mode
                               </button>
-                              <button
-                                type="button"
-                                disabled={submitting}
-                                onClick={() => setModeApproveRow(row)}
-                                className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-                              >
-                                Approve Mode
-                              </button>
-                            </div>
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )
                           ) : (
                             <button
                               type="button"
