@@ -23,7 +23,7 @@ export default function AppIndex() {
         {!isProductionCostingDetail && <AppTopBar />}
         <div className="flex min-h-0 w-full flex-1">
           <AppSidebar />
-          <SidebarInset className="min-h-0 flex-1 overflow-hidden bg-white">
+          <SidebarInset className="min-h-0 flex-1 overflow-hidden bg-[var(--dash-paper,#F1F2ED)]">
             {!isProductionCostingDetail && <PageContextBar />}
             <div
               className={cn(

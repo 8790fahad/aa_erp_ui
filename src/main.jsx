@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import "./index.css";
+import "./styles/dashboard-home.css";
 // import "bootstrap/dist/css/bootstrap.min.css";
 import { SidebarProvider } from "./components/ui/sidebar.jsx";
 import { Provider } from "react-redux";

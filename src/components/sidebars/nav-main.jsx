@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import propTypes from "prop-types";
-
 import {
   Collapsible,
   CollapsibleContent,
@@ -17,90 +16,130 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSelector } from "react-redux";
 import { cn } from "@/lib/utils";
+import {
+  canAccessPrivileges,
+  getUserFunctionalities,
+  privilegeKeysForItem,
+} from "@/lib/access";
 
-const navBtn =
-  "text-slate-700 hover:bg-[var(--aa-sidebar-active)] hover:text-[var(--aa-accent)] data-[active=true]:bg-[var(--aa-sidebar-active)] data-[active=true]:text-[var(--aa-accent)] data-[active=true]:font-semibold";
+const MODULE_ACCENT = {
+  Inventory: "var(--cat-inventory-b)",
+  Purchase: "var(--cat-purchase-b)",
+  Sales: "var(--cat-sales-b)",
+  Account: "var(--cat-accounts-b)",
+  Payroll: "var(--cat-payroll-b)",
+  Admin: "var(--cat-admin-b)",
+  Reports: "var(--cat-reports-b)",
+};
+
+const NAV_SECTION_LABEL = {
+  Inventory: "Workspace",
+  Account: "Finance",
+  Payroll: "People",
+};
+
+const parentBtn =
+  "h-auto rounded-lg px-2.5 py-2 text-[13.5px] font-medium text-[#B4BACB] hover:bg-[#182642] hover:text-[#F1F2ED] data-[state=open]:text-[#F1F2ED]";
+const leafBtn =
+  "h-auto rounded-lg px-2.5 py-2 text-[13.5px] font-medium text-[#B4BACB] hover:bg-[#182642] hover:text-[#F1F2ED] data-[active=true]:bg-[var(--dash-primary,#1b7a5b)] data-[active=true]:text-white data-[active=true]:font-semibold";
 
 /**
- * YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES retail nav: show all retailer modules from props.
- * Sub-items still respect functionalities when that list is present.
+ * Dark ink sidebar nav matching dashboard-redesign.html.
+ * Sub-items respect functionalities when that list is present.
  */
 export function NavMain({ items }) {
   const [openMenu, setOpenMenu] = useState(null);
   const { activeBusiness, user } = useSelector((state) => state.auth);
+  const location = useLocation();
 
-  const parseAccessList = (value, fallback = []) => {
-    if (Array.isArray(value)) return value.filter(Boolean);
-    if (typeof value === "string" && value.trim()) {
-      return value
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
-    }
-    return fallback;
-  };
-
-  const functionalities = parseAccessList(
-    activeBusiness?.functionalities,
-    parseAccessList(user?.functionalities),
-  );
-
-  const handleMenuToggle = (title) => {
-    setOpenMenu(openMenu === title ? null : title);
-  };
+  const functionalities = getUserFunctionalities(user, activeBusiness);
 
   const { toggleSidebar } = useSidebar();
   const isMobile = useIsMobile();
 
+  const visibleItems = useMemo(() => {
+    return (items || [])
+      .map((item) => {
+        if (!item.items?.length) return item;
+        const children = item.items.filter((subItem) =>
+          canAccessPrivileges(privilegeKeysForItem(subItem), functionalities),
+        );
+        return { ...item, items: children };
+      })
+      .filter((item) => {
+        if (item.items) return item.items.length > 0;
+        if (!item.url || item.url === "#") return false;
+        return canAccessPrivileges(privilegeKeysForItem(item), functionalities);
+      });
+  }, [items, functionalities]);
+
   return (
     <SidebarGroup className="h-full py-1">
-      <SidebarMenu>
-        {(items || []).map((item) => {
+      <SidebarMenu className="gap-0.5">
+        {visibleItems.map((item) => {
+          const sectionLabel = NAV_SECTION_LABEL[item.title];
+          const accent = MODULE_ACCENT[item.title];
+
           if (item.items?.length) {
+            const childActive = item.items.some((sub) => {
+              if (!sub.url) return false;
+              const base = String(sub.url).split("?")[0];
+              return (
+                location.pathname === base ||
+                location.pathname.startsWith(`${base}/`)
+              );
+            });
+            const isOpen =
+              openMenu === item.title ||
+              (openMenu === null && childActive);
+
             return (
-              <Collapsible
-                key={item.title}
-                asChild
-                open={openMenu === item.title}
-                onOpenChange={() => handleMenuToggle(item.title)}
-                className="group/collapsible"
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      className={cn(navBtn)}
-                      tooltip={item.title}
-                    >
-                      {item.icon && <item.icon />}
-                      <span>{item.title}</span>
-                      <ChevronRight className="ml-auto size-4 shrink-0 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="overflow-hidden">
-                    <SidebarMenuSub>
-                      {item.items.map((subItem) => {
-                        const permissionKeys = Array.isArray(
-                          subItem.functionality,
-                        )
-                          ? subItem.functionality
-                          : [subItem.functionality ?? subItem.title];
-                        const allowed =
-                          functionalities.length === 0 ||
-                          permissionKeys.some((key) =>
-                            functionalities.includes(key),
-                          );
-                        if (!allowed) return null;
-                        return (
+              <div key={item.title}>
+                {sectionLabel ? (
+                  <div className="px-3 pb-1.5 pt-3.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#5C6478]">
+                    {sectionLabel}
+                  </div>
+                ) : null}
+                <Collapsible
+                  asChild
+                  open={isOpen}
+                  onOpenChange={(next) => {
+                    setOpenMenu(next ? item.title : false);
+                  }}
+                  className="group/collapsible"
+                  style={accent ? { ["--accent"]: accent } : undefined}
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        className={cn(parentBtn)}
+                        tooltip={item.title}
+                      >
+                        {item.icon ? (
+                          <item.icon
+                            className={cn(
+                              "size-4 shrink-0 opacity-85",
+                              isOpen && "text-[var(--accent,#F1F2ED)] opacity-100",
+                            )}
+                          />
+                        ) : null}
+                        <span className="truncate">{item.title}</span>
+                        <ChevronRight className="ml-auto size-3.5 shrink-0 opacity-55 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[state=open]/collapsible:opacity-90" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="overflow-hidden">
+                      <SidebarMenuSub className="ml-5 mt-0.5 border-l border-white/10 py-0.5 pl-0">
+                        {item.items.map((subItem) => (
                           <SidebarMenuSubItem
                             key={subItem.title || subItem.url}
                           >
                             <SidebarMenuSubButton
                               asChild
-                              className="text-slate-600 hover:text-[var(--aa-accent)] hover:bg-[var(--aa-sidebar-active)] data-[active=true]:!bg-[var(--aa-sidebar-active)] data-[active=true]:!text-[var(--aa-accent)]"
+                              className="h-auto rounded-[7px] px-2.5 py-1.5 text-[13px] font-normal text-[#9AA2B6] hover:bg-[#182642] hover:text-[#F1F2ED] data-[active=true]:bg-[#182642] data-[active=true]:text-white [&[data-active=true]_span.nav-dot]:bg-[var(--accent,var(--dash-primary))] [&[data-active=true]_span.nav-dot]:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent,var(--dash-primary))_25%,transparent)]"
                             >
                               <NavLink
                                 to={subItem.url}
@@ -108,20 +147,22 @@ export function NavMain({ items }) {
                                   if (isMobile) toggleSidebar();
                                 }}
                               >
-                                <span>{subItem.title}</span>
+                                <span
+                                  className="nav-dot size-1.5 shrink-0 rounded-full bg-[#3D4763]"
+                                  aria-hidden
+                                />
+                                <span className="truncate">{subItem.title}</span>
                               </NavLink>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
-                        );
-                      })}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              </div>
             );
           }
-
-          if (!item.url || item.url === "#") return null;
 
           return (
             <SidebarMenuItem
@@ -130,10 +171,16 @@ export function NavMain({ items }) {
                 if (isMobile) toggleSidebar();
               }}
             >
-              <SidebarMenuButton asChild className={cn(navBtn)} tooltip={item.title}>
+              <SidebarMenuButton
+                asChild
+                className={cn(leafBtn)}
+                tooltip={item.title}
+              >
                 <NavLink to={item.url}>
-                  {item.icon && <item.icon />}
-                  <span>{item.title}</span>
+                  {item.icon ? (
+                    <item.icon className="size-4 shrink-0 opacity-85" />
+                  ) : null}
+                  <span className="truncate">{item.title}</span>
                 </NavLink>
               </SidebarMenuButton>
             </SidebarMenuItem>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { Lock, LogOut } from "lucide-react";
+import { Lock, LogOut, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { apiURL } from "@/redux/actions/api";
@@ -37,6 +37,7 @@ export default function SessionLockGuard() {
 
   const [locked, setLocked] = useState(() => isSessionLocked());
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
   const [error, setError] = useState("");
   const [prefs, setPrefs] = useState(() => getSessionPrefs(userId));
@@ -61,6 +62,7 @@ export default function SessionLockGuard() {
     setSessionLocked(true);
     setLocked(true);
     setPassword("");
+    setShowPassword(false);
     setError("");
   }, []);
 
@@ -68,6 +70,7 @@ export default function SessionLockGuard() {
     setSessionLocked(false);
     setLocked(false);
     setPassword("");
+    setShowPassword(false);
     setError("");
     lastActivityRef.current = Date.now();
   }, []);
@@ -204,19 +207,34 @@ export default function SessionLockGuard() {
             >
               Password
             </label>
-            <input
-              id="session-unlock-password"
-              type="password"
-              autoFocus
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (error) setError("");
-              }}
-              className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-[var(--aa-accent,#2c7be5)] focus:ring-1 focus:ring-[var(--aa-accent,#2c7be5)]"
-              placeholder="Your account password"
-            />
+            <div className="relative">
+              <input
+                id="session-unlock-password"
+                type={showPassword ? "text" : "password"}
+                autoFocus
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError("");
+                }}
+                className="h-11 w-full rounded-md border border-slate-300 py-2 pl-3 pr-10 text-sm outline-none focus:border-[var(--aa-accent,#2c7be5)] focus:ring-1 focus:ring-[var(--aa-accent,#2c7be5)]"
+                placeholder="Your account password"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400 hover:text-slate-700"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
             {error ? (
               <p className="text-xs text-red-600" role="alert">
                 {error}

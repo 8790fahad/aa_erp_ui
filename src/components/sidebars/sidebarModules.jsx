@@ -505,6 +505,12 @@ export const modules = [
     title: "Reports",
     url: "/app/reports/accounting-reports",
     icon: NotebookPen,
+    functionality: [
+      "Reports",
+      "Accounting Reports",
+      "Production Reports",
+      "Report",
+    ],
     access: [
       "services",
       "retailers",
@@ -675,6 +681,12 @@ export const modules = [
     title: "Asset Register",
     url: "/app/assets",
     icon: Building2,
+    functionality: [
+      "Asset Register",
+      "Assets",
+      "Fixed Assets",
+      "Asset Management",
+    ],
     access: [
       "services",
       "retailers",

@@ -38,6 +38,10 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import logo from "@/assets/aa_erp_icon.png";
 import GlobalSearchBar from "@/components/GlobalSearchBar";
 import { NetworkStatusIndicator } from "@/components/NetworkStatusBanner";
+import {
+  canAccessPrivileges,
+  getUserFunctionalities,
+} from "@/lib/access";
 
 function parseAccess(accessStr) {
   if (!accessStr || typeof accessStr !== "string") return [];
@@ -59,18 +63,43 @@ const QUICK_CREATE = [
     label: "Create Invoice",
     href: "/app/sales/sale?view=lines",
     icon: FileText,
+    privileges: ["Create Invoice", "Make sales", "Invoices", "Make Sales"],
   },
-  { label: "Customers", href: "/app/customers", icon: Users },
+  {
+    label: "Customers",
+    href: "/app/customers",
+    icon: Users,
+    privileges: ["Customers", "Customer Register"],
+  },
   {
     label: "Purchase invoice",
     href: "/app/purchase/purchase-invoice",
     icon: Receipt,
+    privileges: [
+      "Purchase Invoice",
+      "Purchase invoice",
+      "Purchase Order",
+      "Purchases",
+    ],
   },
-  { label: "Bill", href: "/app/expenses/billing", icon: Wallet },
+  {
+    label: "Bill",
+    href: "/app/expenses/billing",
+    icon: Wallet,
+    privileges: ["Bill", "Billing Expense"],
+  },
   {
     label: "Collection Points",
     href: "/app/payments/collection-points",
     icon: Wallet,
+    privileges: [
+      "Collection Points",
+      "Cash Collection",
+      "Transfer Collection",
+      "Credit Collection",
+      "Receive Payment",
+      "Payments",
+    ],
   },
 ];
 
@@ -114,6 +143,19 @@ export function AppTopBar() {
       .join("")
       .toUpperCase()
       .slice(0, 2) || "BS";
+
+  const functionalities = useMemo(
+    () => getUserFunctionalities(user, activeBusiness),
+    [user, activeBusiness],
+  );
+
+  const quickCreateItems = useMemo(
+    () =>
+      QUICK_CREATE.filter((item) =>
+        canAccessPrivileges(item.privileges, functionalities),
+      ),
+    [functionalities],
+  );
 
   const _logout = () => dispatch(logout(() => navigate("/login")));
 
@@ -216,36 +258,42 @@ export function AppTopBar() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex size-8 items-center justify-center rounded-full text-white shadow-sm"
-              style={{ backgroundColor: "var(--aa-accent)" }}
-              aria-label="Quick create"
-            >
-              <Plus className="size-4" strokeWidth={2.5} />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-52">
-            <DropdownMenuLabel>Quick create</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {QUICK_CREATE.map((item) => {
-              const Icon = item.icon;
-              return (
-                <DropdownMenuItem
-                  key={item.href}
-                  onClick={() => navigate(item.href)}
-                  className="gap-2"
-                >
-                  <Icon className="size-4 text-[var(--aa-accent)]" />
-                  {item.label}
-                </DropdownMenuItem>
-              );
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {quickCreateItems.length > 0 ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex size-8 items-center justify-center rounded-full text-white shadow-sm"
+                style={{ backgroundColor: "var(--aa-accent)" }}
+                aria-label="Quick create"
+              >
+                <Plus className="size-4" strokeWidth={2.5} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-52">
+              <DropdownMenuLabel>Quick create</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {quickCreateItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <DropdownMenuItem
+                    key={item.href}
+                    onClick={() => navigate(item.href)}
+                    className="gap-2"
+                  >
+                    <Icon className="size-4 text-[var(--aa-accent)]" />
+                    {item.label}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
 
+        {canAccessPrivileges(
+          ["Settings", "Admin", "Settings Branding", "Settings Team Setup"],
+          functionalities,
+        ) ? (
         <button
           type="button"
           onClick={() => navigate("/app/admin/settings")}
@@ -254,6 +302,7 @@ export function AppTopBar() {
         >
           <Settings className="size-4" />
         </button>
+        ) : null}
 
         <button
           type="button"

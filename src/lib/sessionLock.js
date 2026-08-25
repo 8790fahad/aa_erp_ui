@@ -4,20 +4,27 @@ const PREFS_KEY = "aa_erp_session_prefs";
 const LOCKED_KEY = "aa_erp_session_locked";
 export const SESSION_PREFS_EVENT = "aa-erp-session-prefs-changed";
 
-export const IDLE_OPTIONS = [
-  { value: 5, label: "5 minutes" },
-  { value: 10, label: "10 minutes" },
-  { value: 15, label: "15 minutes" },
-  { value: 30, label: "30 minutes" },
-];
+/** Min / max idle minutes users can set. */
+export const MIN_IDLE_MINUTES = 1;
+export const MAX_IDLE_MINUTES = 240;
+/** Default idle timeout when session lock is first enabled. */
+export const DEFAULT_IDLE_MINUTES = 10;
 
 const DEFAULT_PREFS = {
   enabled: false,
-  idleMinutes: 10,
+  idleMinutes: DEFAULT_IDLE_MINUTES,
 };
 
 function prefsStorageKey(userId) {
   return userId ? `${PREFS_KEY}:${userId}` : PREFS_KEY;
+}
+
+export function normalizeIdleMinutes(value) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n) || n < MIN_IDLE_MINUTES) {
+    return DEFAULT_IDLE_MINUTES;
+  }
+  return Math.min(MAX_IDLE_MINUTES, Math.max(MIN_IDLE_MINUTES, n));
 }
 
 export function getSessionPrefs(userId) {
@@ -25,12 +32,9 @@ export function getSessionPrefs(userId) {
     const raw = localStorage.getItem(prefsStorageKey(userId));
     if (!raw) return { ...DEFAULT_PREFS };
     const parsed = JSON.parse(raw);
-    const idleMinutes = IDLE_OPTIONS.some((o) => o.value === Number(parsed.idleMinutes))
-      ? Number(parsed.idleMinutes)
-      : DEFAULT_PREFS.idleMinutes;
     return {
       enabled: Boolean(parsed.enabled),
-      idleMinutes,
+      idleMinutes: normalizeIdleMinutes(parsed.idleMinutes),
     };
   } catch {
     return { ...DEFAULT_PREFS };
@@ -40,9 +44,7 @@ export function getSessionPrefs(userId) {
 export function setSessionPrefs(userId, prefs) {
   const next = {
     enabled: Boolean(prefs.enabled),
-    idleMinutes: IDLE_OPTIONS.some((o) => o.value === Number(prefs.idleMinutes))
-      ? Number(prefs.idleMinutes)
-      : DEFAULT_PREFS.idleMinutes,
+    idleMinutes: normalizeIdleMinutes(prefs.idleMinutes),
   };
   localStorage.setItem(prefsStorageKey(userId), JSON.stringify(next));
   window.dispatchEvent(

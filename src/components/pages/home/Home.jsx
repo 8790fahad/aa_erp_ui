@@ -1,69 +1,173 @@
 import { useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import {
-  Building2,
-  CheckCircle2,
-  Circle,
-  FileText,
-  PlayCircle,
-  Users,
-  BookOpen,
-} from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
+import { getSidebarByAppType } from "@/components/sidebars/sidebarModules";
 import { cn } from "@/lib/utils";
+import {
+  canAccessPrivileges,
+  getUserFunctionalities,
+  privilegeKeysForItem,
+} from "@/lib/access";
 
-const SETUP_STEPS = [
-  {
-    id: "org",
-    title: "Add organisation details",
-    description:
-      "Confirm your business profile, address, and tax information so documents look correct.",
-    cta: "Open settings",
-    href: "/app/admin/settings",
-    secondary: [
-      { label: "Add address", href: "/app/admin/settings" },
-      { label: "Invite user", href: "/app/admin/settings#team-setup" },
-    ],
-    icon: Building2,
+const CAT_META = {
+  inventory: {
+    label: "Inventory",
+    dot: "var(--cat-inventory)",
+    tint: "var(--cat-inventory-t)",
   },
-  {
-    id: "customers",
-    title: "Add your first customer",
-    description:
-      "Create a customer record so you can invoice and track receivables.",
-    cta: "Add customer",
-    href: "/app/customers",
-    secondary: [],
-    icon: Users,
+  purchase: {
+    label: "Purchase",
+    dot: "var(--cat-purchase)",
+    tint: "var(--cat-purchase-t)",
   },
-  {
-    id: "invoice",
-    title: "Create your first invoice",
-    description:
-      "Raise a credit or cash sale invoice and get familiar with the sales workflow.",
-    cta: "Create invoice",
-    href: "/app/sales/sale?view=lines",
-    secondary: [{ label: "View invoices", href: "/app/sales/invoices" }],
-    icon: FileText,
+  sales: {
+    label: "Sales",
+    dot: "var(--cat-sales)",
+    tint: "var(--cat-sales-t)",
   },
-  {
-    id: "coa",
-    title: "Review chart of accounts",
-    description:
-      "Check that your ledger accounts are set up before posting more transactions.",
-    cta: "Open chart of accounts",
-    href: "/app/account/chart-of-account",
-    secondary: [],
-    icon: BookOpen,
+  accounts: {
+    label: "Accounting",
+    dot: "var(--cat-accounts)",
+    tint: "var(--cat-accounts-t)",
   },
+  reports: {
+    label: "Reports",
+    dot: "var(--cat-reports)",
+    tint: "var(--cat-reports-t)",
+  },
+  assets: {
+    label: "Assets",
+    dot: "var(--cat-purchase)",
+    tint: "var(--cat-purchase-t)",
+  },
+  payroll: {
+    label: "Payroll",
+    dot: "var(--cat-payroll)",
+    tint: "var(--cat-payroll-t)",
+  },
+  admin: {
+    label: "Admin",
+    dot: "var(--cat-admin)",
+    tint: "var(--cat-admin-t)",
+  },
+  other: {
+    label: "More",
+    dot: "var(--cat-other)",
+    tint: "var(--cat-other-t)",
+  },
+};
+
+const MODULE_TO_CAT = {
+  Inventory: "inventory",
+  Purchase: "purchase",
+  Sales: "sales",
+  Account: "accounts",
+  Reports: "reports",
+  Payroll: "payroll",
+  Admin: "admin",
+  "Asset Register": "assets",
+  Dashboard: "other",
+};
+
+const CAT_ORDER = [
+  "inventory",
+  "purchase",
+  "sales",
+  "accounts",
+  "reports",
+  "assets",
+  "payroll",
+  "admin",
+  "other",
 ];
+
+function collectGroupedActions(modules, functionalities) {
+  const groups = [];
+  const seen = new Set();
+
+  for (const mod of modules || []) {
+    const catKey = MODULE_TO_CAT[mod.title] || "other";
+    const items = [];
+    for (const item of mod.items || []) {
+      if (!item?.url || item.url === "#") continue;
+      if (!canAccessPrivileges(privilegeKeysForItem(item), functionalities)) {
+        continue;
+      }
+      if (seen.has(item.url)) continue;
+      seen.add(item.url);
+      items.push({
+        title: item.title,
+        url: item.url,
+        icon: mod.icon,
+      });
+    }
+    if ((!mod.items || mod.items.length === 0) && mod.url && mod.url !== "#") {
+      if (
+        canAccessPrivileges(privilegeKeysForItem(mod), functionalities) &&
+        !seen.has(mod.url)
+      ) {
+        seen.add(mod.url);
+        items.push({ title: mod.title, url: mod.url, icon: mod.icon });
+      }
+    }
+    if (!items.length) continue;
+    const existing = groups.find((g) => g.key === catKey);
+    if (existing) {
+      existing.items.push(...items);
+    } else {
+      groups.push({
+        key: catKey,
+        ...(CAT_META[catKey] || CAT_META.other),
+        items,
+      });
+    }
+  }
+
+  return groups.sort(
+    (a, b) =>
+      CAT_ORDER.indexOf(a.key) - CAT_ORDER.indexOf(b.key),
+  );
+}
+
+function greetingForNow(date = new Date()) {
+  const h = date.getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function formatDateTag(date = new Date()) {
+  const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+  const months = [
+    "JAN",
+    "FEB",
+    "MAR",
+    "APR",
+    "MAY",
+    "JUN",
+    "JUL",
+    "AUG",
+    "SEP",
+    "OCT",
+    "NOV",
+    "DEC",
+  ];
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${days[date.getDay()]} · ${String(date.getDate()).padStart(2, "0")} ${months[date.getMonth()]} ${date.getFullYear()} · ${hh}:${mm}`;
+}
 
 export default function Home() {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const navigate = useNavigate();
-  const [tab, setTab] = useState("getting-started");
-  const [activeStepId, setActiveStepId] = useState(SETUP_STEPS[0].id);
-  const [completed] = useState(() => new Set());
+  const [filter, setFilter] = useState("all");
+  const [query, setQuery] = useState("");
+
+  const functionalities = useMemo(
+    () => getUserFunctionalities(user, activeBusiness),
+    [user, activeBusiness],
+  );
 
   const displayName =
     (user?.firstname && user?.lastname
@@ -72,206 +176,169 @@ export default function Home() {
     user?.name ||
     user?.email ||
     "User";
+  const firstName = String(displayName).split(/\s+/)[0] || displayName;
   const businessName =
     activeBusiness?.business_name ||
     activeBusiness?.businessName ||
     user?.busName ||
     "";
 
-  const activeStep =
-    SETUP_STEPS.find((s) => s.id === activeStepId) || SETUP_STEPS[0];
-  const progress = Math.round((completed.size / SETUP_STEPS.length) * 100);
+  const linkGroups = useMemo(() => {
+    const modules = getSidebarByAppType("retailers")
+      .map((module) => {
+        if (!module.items?.length) return module;
+        return {
+          ...module,
+          items: module.items.filter((item) => {
+            const flag = item.requiresBusinessFlag;
+            if (!flag) return true;
+            if (flag === "enable_material_requisition") {
+              return activeBusiness?.[flag] !== false;
+            }
+            return !!activeBusiness?.[flag];
+          }),
+        };
+      })
+      .filter((module) => !module.items || module.items.length > 0);
+    return collectGroupedActions(modules, functionalities);
+  }, [activeBusiness, functionalities]);
 
-  const tabs = useMemo(
-    () => [
-      { id: "dashboard", label: "Dashboard" },
-      { id: "getting-started", label: "Getting Started" },
-      { id: "recent", label: "Recent Updates" },
-    ],
-    [],
-  );
+  const chips = useMemo(() => {
+    return [
+      { key: "all", label: "All", dot: undefined },
+      ...linkGroups.map((g) => ({
+        key: g.key,
+        label: g.label,
+        dot: g.dot,
+      })),
+    ];
+  }, [linkGroups]);
+
+  const visibleGroups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return linkGroups
+      .filter((g) => filter === "all" || g.key === filter)
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((item) =>
+          !q ? true : String(item.title).toLowerCase().includes(q),
+        ),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [linkGroups, filter, query]);
+
+  const totalShown = visibleGroups.reduce((n, g) => n + g.items.length, 0);
 
   return (
-    <div className="min-h-full bg-white">
-      {/* Patterned greeting */}
-      <div className="relative overflow-hidden border-b border-slate-200 bg-[#f7f8fb] px-4 py-6 sm:px-6">
-        <svg
-          className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.35]"
-          aria-hidden="true"
-        >
-          <defs>
-            <pattern
-              id="aa-home-icons"
-              width="48"
-              height="48"
-              patternUnits="userSpaceOnUse"
-            >
-              <path
-                d="M12 14h8v8h-8zM28 16h10M28 22h7M14 34h20"
-                fill="none"
-                stroke="#c5c9d4"
-                strokeWidth="1.2"
-              />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#aa-home-icons)" />
-        </svg>
-        <div className="relative">
-          <h1 className="text-xl font-semibold text-slate-800 sm:text-2xl">
-            Hello, {displayName}
-          </h1>
-          {businessName && (
-            <p className="mt-1 text-sm text-slate-500">{businessName}</p>
-          )}
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="border-b border-slate-200 px-4 sm:px-6">
-        <nav className="-mb-px flex gap-6" aria-label="Home sections">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={cn(
-                "border-b-2 py-3 text-sm font-medium transition-colors",
-                tab === t.id
-                  ? "border-[var(--aa-accent)] text-[var(--aa-accent)]"
-                  : "border-transparent text-slate-500 hover:text-slate-700",
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      <div className="px-4 py-5 sm:px-6">
-        {tab === "dashboard" && (
-          <div className="rounded-lg border border-slate-200 bg-white p-6">
-            <h2 className="text-base font-semibold text-slate-800">Dashboard</h2>
-            <p className="mt-2 text-sm text-slate-500">
-              Use the sidebar to open modules, or finish setup under Getting
-              Started.
-            </p>
-            <button
-              type="button"
-              onClick={() => setTab("getting-started")}
-              className="mt-4 rounded-md px-4 py-2 text-sm font-medium text-white"
-              style={{ backgroundColor: "var(--aa-accent)" }}
-            >
-              Continue setup
-            </button>
-          </div>
-        )}
-
-        {tab === "recent" && (
-          <div className="rounded-lg border border-slate-200 bg-white p-6">
-            <h2 className="text-base font-semibold text-slate-800">
-              Recent updates
-            </h2>
-            <p className="mt-2 text-sm text-slate-500">
-              No recent product updates to show yet.
-            </p>
-          </div>
-        )}
-
-        {tab === "getting-started" && (
-          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-slate-800">
-                  Welcome to YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES
-                </h2>
-                <button
-                  type="button"
-                  className="mt-1 inline-flex items-center gap-1.5 text-sm text-[var(--aa-accent)] hover:underline"
-                  onClick={() => navigate("/app/home")}
-                >
-                  <PlayCircle className="size-4" />
-                  Overview of YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES
-                </button>
-              </div>
-              <div className="w-full sm:w-48">
-                <div className="mb-1 flex justify-between text-xs text-slate-500">
-                  <span>{progress}% Completed</span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${progress}%`,
-                      backgroundColor: "var(--aa-accent)",
-                    }}
-                  />
-                </div>
-              </div>
+    <div className="dash-home">
+      <div className="mx-auto w-full max-w-[1240px] px-4 py-8 sm:px-8 sm:py-9">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <div>
+            <div className="mb-2 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-[var(--dash-primary-dark,#145f47)]">
+              Welcome back
             </div>
+            <h1 className="font-dash-display text-[28px] font-semibold tracking-[-0.01em] text-[var(--dash-ink,#101B33)] sm:text-[30px]">
+              {greetingForNow()}, {firstName}
+            </h1>
+            <p className="mt-1.5 text-[13.5px] text-[var(--dash-ink-soft,#4B5567)]">
+              {businessName
+                ? `${businessName} — jump to any page you can use.`
+                : "Jump to any page you can use."}
+            </p>
+          </div>
+          <div className="font-dash-mono text-[12.5px] text-[var(--dash-ink-faint,#8992A3)]">
+            {formatDateTag()}
+          </div>
+        </div>
 
-            <div className="grid md:grid-cols-[240px_1fr]">
-              <ul className="border-b border-slate-200 md:border-b-0 md:border-r">
-                {SETUP_STEPS.map((step) => {
-                  const done = completed.has(step.id);
-                  const active = step.id === activeStepId;
-                  return (
-                    <li key={step.id}>
+        <div className="ledger-rule" />
+
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="font-dash-display text-lg font-semibold text-[var(--dash-ink,#101B33)]">
+              Quick actions
+            </div>
+            <div className="mt-0.5 text-[12.5px] text-[var(--dash-ink-faint,#8992A3)]">
+              Jump to any page, grouped by where it lives in the business.
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {chips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                className={cn("dash-chip", filter === chip.key && "active")}
+                style={chip.dot ? { ["--dot"]: chip.dot } : undefined}
+                onClick={() => setFilter(chip.key)}
+              >
+                <span className="swatch" />
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative mb-6 max-w-md">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search pages…"
+            className="h-10 w-full rounded-[9px] border border-[var(--dash-line,#E1E1D8)] bg-white px-3 text-[13.5px] text-[var(--dash-ink)] outline-none placeholder:text-[var(--dash-ink-faint)] focus:outline focus:outline-2 focus:outline-[var(--dash-primary)] focus:outline-offset-[-1px]"
+            aria-label="Search quick actions"
+          />
+        </div>
+
+        {totalShown === 0 ? (
+          <div className="px-5 py-14 text-center text-[13.5px] text-[var(--dash-ink-faint)]">
+            No pages match your search. Try a different word.
+          </div>
+        ) : (
+          <div className="space-y-[30px]">
+            {visibleGroups.map((group) => (
+              <section key={group.key}>
+                <div className="mb-3 flex items-center gap-2.5">
+                  <span
+                    className="size-[9px] shrink-0 rounded-[2.5px]"
+                    style={{ background: group.dot }}
+                  />
+                  <span className="font-dash-display text-[13.5px] font-semibold text-[var(--dash-ink)]">
+                    {group.label}
+                  </span>
+                  <span className="font-dash-mono rounded-full bg-[var(--dash-paper)] px-1.5 py-px text-[11.5px] text-[var(--dash-ink-faint)]">
+                    {group.items.length}
+                  </span>
+                  <span className="h-px flex-1 bg-[var(--dash-line)]" />
+                </div>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2.5">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    return (
                       <button
+                        key={item.url}
                         type="button"
-                        onClick={() => setActiveStepId(step.id)}
-                        className={cn(
-                          "flex w-full items-start gap-2 border-l-[3px] px-4 py-3 text-left text-sm transition-colors",
-                          active
-                            ? "border-[var(--aa-accent)] bg-[#f5f9ff] text-slate-900"
-                            : "border-transparent text-slate-600 hover:bg-slate-50",
-                        )}
+                        className="dash-action-card"
+                        style={{
+                          ["--dot"]: group.dot,
+                          ["--tint"]: group.tint,
+                        }}
+                        onClick={() => navigate(item.url)}
                       >
-                        {done ? (
-                          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-500" />
-                        ) : (
-                          <Circle className="mt-0.5 size-4 shrink-0 text-slate-300" />
-                        )}
-                        <span className={cn(active && "font-medium")}>
-                          {step.title}
+                        <span className="dash-action-icon">
+                          {Icon ? <Icon className="size-4" /> : null}
+                        </span>
+                        <span className="text-[13.5px] font-medium leading-snug text-[var(--dash-ink)]">
+                          {item.title}
+                        </span>
+                        <span className="dash-action-arrow">
+                          <ArrowUpRight className="size-3.5" />
                         </span>
                       </button>
-                    </li>
-                  );
-                })}
-              </ul>
-
-              <div className="px-5 py-6">
-                <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-[var(--aa-sidebar-active)] text-[var(--aa-accent)]">
-                  <activeStep.icon className="size-5" />
+                    );
+                  })}
                 </div>
-                <h3 className="text-lg font-semibold text-slate-800">
-                  {activeStep.title}
-                </h3>
-                <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-500">
-                  {activeStep.description}
-                </p>
-                <div className="mt-5 flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => navigate(activeStep.href)}
-                    className="rounded-md px-4 py-2 text-sm font-medium text-white shadow-sm"
-                    style={{ backgroundColor: "var(--aa-accent)" }}
-                  >
-                    {activeStep.cta}
-                  </button>
-                  {activeStep.secondary.map((link) => (
-                    <button
-                      key={link.href}
-                      type="button"
-                      onClick={() => navigate(link.href)}
-                      className="text-sm font-medium text-[var(--aa-accent)] hover:underline"
-                    >
-                      {link.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+              </section>
+            ))}
           </div>
         )}
       </div>

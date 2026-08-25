@@ -11,13 +11,13 @@
 }
 
 .toast:not(.show) {
-    display: flex !important;
+  display: flex !important;
 }
 .toast.show {
-    display: flex !important;
+  display: flex !important;
 }
 .toast {
-    display: flex !important;
+  display: flex !important;
 }
 /* Zoho-like Alh. Ashiru Yanmusa shell tokens */
 :root {
@@ -131,10 +131,10 @@ button:focus-visible {
     --sidebar-accent-foreground: 214 78% 40%;
     --sidebar-border: 220 13% 90%;
     --sidebar-ring: 214 78% 54%;
-    --chart-1 : 217.2 91.2% 59.8%;
-    --chart-2 : 217.2 91.2% 59.8%;
-    --chart-3 : 217.2 91.2% 59.8%;
-    --chart-4 : 217.2 91.2% 59.8%;
+    --chart-1: 217.2 91.2% 59.8%;
+    --chart-2: 217.2 91.2% 59.8%;
+    --chart-3: 217.2 91.2% 59.8%;
+    --chart-4: 217.2 91.2% 59.8%;
   }
   .dark {
     --sidebar-background: 240 5.9% 10%;
@@ -148,12 +148,13 @@ button:focus-visible {
   }
 }
 
-
 .custom-toast {
   background-color: #e6f7ff !important;
   border: 2px solid #1890ff !important;
   color: #003a8c !important;
-  animation: toastSlideDown 0.3s ease-out, toastSlideUp 0.3s ease-in 2.7s !important;
+  animation:
+    toastSlideDown 0.3s ease-out,
+    toastSlideUp 0.3s ease-in 2.7s !important;
 }
 
 .custom-toast [data-sonner-toast-title],
@@ -169,12 +170,13 @@ button:focus-visible {
   margin-right: 8px !important;
 }
 
-
 .custom-error-toast {
   background-color: #fff1f0 !important;
   border: 2px solid #ff4d4f !important;
   color: #cf1322 !important;
-  animation: toastSlideDown 0.3s ease-out, toastSlideUp 0.3s ease-in 2.7s !important;
+  animation:
+    toastSlideDown 0.3s ease-out,
+    toastSlideUp 0.3s ease-in 2.7s !important;
 }
 
 .custom-error-toast [data-sonner-toast-title],
@@ -189,7 +191,6 @@ button:focus-visible {
 .custom-error-toast [data-sonner-toast-icon] {
   margin-right: 8px !important;
 }
-
 
 @keyframes toastSlideDown {
   from {
@@ -213,25 +214,23 @@ button:focus-visible {
   }
 }
 
-
-
 body {
   background-color: #eeeeee;
-  font-family: 'Open Sans', sans-serif;
+  font-family: "Open Sans", sans-serif;
 }
 * {
-  font-family: 'Open Sans', sans-serif;
+  font-family: "Open Sans", sans-serif;
 }
 @media all and (display-mode: standalone) {
   body {
     background-color: "#eee";
-    font-family: 'Open Sans', sans-serif;
+    font-family: "Open Sans", sans-serif;
   }
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
-    monospace;
+  font-family:
+    source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
 }
 
 .nav {
@@ -265,27 +264,27 @@ code {
   margin-bottom: 24px;
   border: none;
   ul {
-      li {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 15px;
-          h6 {
-              font-size: 15px;
-          }
-          &:last-child {
-              padding: 15px 0;
-              border-top: 1px solid #f8f9fa;
-              border-bottom: 1px solid #f8f9fa;
-          }
+    li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 15px;
+      h6 {
+        font-size: 15px;
       }
+      &:last-child {
+        padding: 15px 0;
+        border-top: 1px solid #f8f9fa;
+        border-bottom: 1px solid #f8f9fa;
+      }
+    }
   }
 }
 
 .invoice-info {
   .note-editable {
-      background: white;
-      min-height: 80px;
+    background: white;
+    min-height: 80px;
   }
 }
 
@@ -299,18 +298,18 @@ code {
   justify-content: center;
   min-height: 38px;
   span {
-      font-size: 15px;
-      color: #495057;
-      display: block;
+    font-size: 15px;
+    color: #495057;
+    display: block;
   }
-  input[type=file] {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      cursor: pointer;
+  input[type="file"] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
   }
 }
 
@@ -323,7 +322,8 @@ code {
   -ms-flex-align: center;
 }
 
-@media (max-width: 576px) { /* Assuming 'sm' corresponds to 576px */
+@media (max-width: 576px) {
+  /* Assuming 'sm' corresponds to 576px */
   .profile-wrap {
     display: block;
   }
@@ -356,9 +356,9 @@ code {
 
 .profile-uploader {
   .btn {
-      font-size: 12px;
-      margin: 0 0 10px 0;
-      padding: 6px 20px;
+    font-size: 12px;
+    margin: 0 0 10px 0;
+    padding: 6px 20px;
   }
 }
 

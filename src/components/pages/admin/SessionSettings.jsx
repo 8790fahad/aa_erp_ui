@@ -4,8 +4,11 @@ import { Lock, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
-  IDLE_OPTIONS,
+  MIN_IDLE_MINUTES,
+  MAX_IDLE_MINUTES,
+  DEFAULT_IDLE_MINUTES,
   getSessionPrefs,
+  normalizeIdleMinutes,
   setSessionPrefs,
 } from "@/lib/sessionLock";
 
@@ -17,22 +20,28 @@ export default function SessionSettings() {
   const user = useSelector((state) => state.auth.user);
   const userId = user?.id;
   const [enabled, setEnabled] = useState(false);
-  const [idleMinutes, setIdleMinutes] = useState(10);
+  const [idleMinutes, setIdleMinutes] = useState(String(DEFAULT_IDLE_MINUTES));
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     const prefs = getSessionPrefs(userId);
     setEnabled(prefs.enabled);
-    setIdleMinutes(prefs.idleMinutes);
+    setIdleMinutes(String(prefs.idleMinutes || DEFAULT_IDLE_MINUTES));
     setDirty(false);
   }, [userId]);
 
   const save = () => {
-    setSessionPrefs(userId, { enabled, idleMinutes });
+    const minutes = normalizeIdleMinutes(
+      idleMinutes === "" || idleMinutes == null
+        ? DEFAULT_IDLE_MINUTES
+        : idleMinutes,
+    );
+    setIdleMinutes(String(minutes));
+    setSessionPrefs(userId, { enabled, idleMinutes: minutes });
     setDirty(false);
     toast.success(
       enabled
-        ? `Auto-lock on after ${idleMinutes} minutes of inactivity`
+        ? `Auto-lock on after ${minutes} minute${minutes === 1 ? "" : "s"} of inactivity`
         : "Auto-lock turned off",
     );
   };
@@ -68,7 +77,14 @@ export default function SessionSettings() {
           className="h-5 w-5 rounded border-slate-300 accent-[var(--aa-navy,#1a2d5e)]"
           checked={enabled}
           onChange={(e) => {
-            setEnabled(e.target.checked);
+            const on = e.target.checked;
+            setEnabled(on);
+            if (
+              on &&
+              (!idleMinutes || !Number.isFinite(Number(idleMinutes)))
+            ) {
+              setIdleMinutes(String(DEFAULT_IDLE_MINUTES));
+            }
             setDirty(true);
           }}
         />
@@ -77,24 +93,34 @@ export default function SessionSettings() {
       <div
         className={`space-y-1.5 ${enabled ? "" : "pointer-events-none opacity-50"}`}
       >
-        <label className="text-xs font-medium text-slate-600">
-          Lock after
-        </label>
-        <select
-          className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent,#2c7be5)] focus:ring-1 focus:ring-[var(--aa-accent,#2c7be5)]"
-          value={idleMinutes}
-          disabled={!enabled}
-          onChange={(e) => {
-            setIdleMinutes(Number(e.target.value));
-            setDirty(true);
-          }}
+        <label
+          htmlFor="session-idle-minutes"
+          className="text-xs font-medium text-slate-600"
         >
-          {IDLE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+          Lock after (minutes)
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            id="session-idle-minutes"
+            type="number"
+            min={MIN_IDLE_MINUTES}
+            max={MAX_IDLE_MINUTES}
+            step={1}
+            disabled={!enabled}
+            value={idleMinutes}
+            onChange={(e) => {
+              setIdleMinutes(e.target.value);
+              setDirty(true);
+            }}
+            className="h-10 w-28 rounded-md border border-slate-300 bg-white px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent,#2c7be5)] focus:ring-1 focus:ring-[var(--aa-accent,#2c7be5)] disabled:bg-slate-100"
+            placeholder={String(DEFAULT_IDLE_MINUTES)}
+          />
+          <span className="text-sm text-slate-500">minute(s)</span>
+        </div>
+        <p className="text-[11px] text-slate-400">
+          Default is {DEFAULT_IDLE_MINUTES} minutes. You can enter{" "}
+          {MIN_IDLE_MINUTES}–{MAX_IDLE_MINUTES}.
+        </p>
       </div>
 
       <div className="flex justify-end pt-1">

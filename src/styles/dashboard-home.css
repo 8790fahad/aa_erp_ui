@@ -1,0 +1,171 @@
+/* Home + dark sidebar tokens from dashboard-redesign.html */
+:root {
+  --dash-ink: #101b33;
+  --dash-ink-soft: #4b5567;
+  --dash-ink-faint: #8992a3;
+  --dash-paper: #f1f2ed;
+  --dash-surface: #ffffff;
+  --dash-line: #e1e1d8;
+  --dash-primary: #1b7a5b;
+  --dash-primary-dark: #145f47;
+  --dash-primary-tint: #e6f1ec;
+
+  --cat-inventory: #c7852d;
+  --cat-inventory-t: #fbf0e1;
+  --cat-inventory-b: #e3a24c;
+  --cat-purchase: #3b6fa0;
+  --cat-purchase-t: #e7eef6;
+  --cat-purchase-b: #6fa3d6;
+  --cat-sales: #1b7a5b;
+  --cat-sales-t: #e6f1ec;
+  --cat-sales-b: #45b78c;
+  --cat-accounts: #6b4fa0;
+  --cat-accounts-t: #efeaf6;
+  --cat-accounts-b: #a688e0;
+  --cat-payroll: #b5504f;
+  --cat-payroll-t: #f7e8e7;
+  --cat-payroll-b: #e38584;
+  --cat-admin: #4b5567;
+  --cat-admin-t: #e9eaec;
+  --cat-admin-b: #9aa3b5;
+  --cat-reports: #3b6fa0;
+  --cat-reports-t: #e7eef6;
+  --cat-reports-b: #6fa3d6;
+  --cat-other: #4b5567;
+  --cat-other-t: #e9eaec;
+  --cat-other-b: #9aa3b5;
+
+  --dash-radius-m: 12px;
+  --dash-shadow-card: 0 1px 2px rgba(16, 27, 51, 0.04),
+    0 1px 1px rgba(16, 27, 51, 0.03);
+  --dash-shadow-hover: 0 8px 20px rgba(16, 27, 51, 0.09);
+}
+
+.font-dash-display {
+  font-family: "Space Grotesk", system-ui, sans-serif;
+}
+.font-dash-mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+
+.dash-home {
+  background: var(--dash-paper);
+  color: var(--dash-ink);
+  min-height: 100%;
+}
+
+.dash-home .ledger-rule {
+  margin: 22px 0 28px;
+  height: 1px;
+  background-image: linear-gradient(
+    to right,
+    var(--dash-line) 0 6px,
+    transparent 6px 10px
+  );
+  background-size: 10px 1px;
+  background-repeat: repeat-x;
+  position: relative;
+}
+.dash-home .ledger-rule::before,
+.dash-home .ledger-rule::after {
+  content: "";
+  position: absolute;
+  top: -2.5px;
+  width: 1px;
+  height: 6px;
+  background: var(--dash-ink-faint);
+}
+.dash-home .ledger-rule::before {
+  left: 0;
+}
+.dash-home .ledger-rule::after {
+  right: 0;
+}
+
+.dash-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6.5px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--dash-line);
+  background: #fff;
+  color: var(--dash-ink-soft);
+  transition: all 0.15s ease;
+}
+.dash-chip .swatch {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dot, var(--dash-ink-faint));
+}
+.dash-chip:hover {
+  border-color: var(--dash-ink-faint);
+}
+.dash-chip.active {
+  background: var(--dash-ink);
+  border-color: var(--dash-ink);
+  color: #fff;
+}
+.dash-chip.active .swatch {
+  background: #fff;
+}
+
+.dash-action-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-radius-m);
+  padding: 13px 14px;
+  box-shadow: var(--dash-shadow-card);
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+}
+.dash-action-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--dash-shadow-hover);
+  border-color: transparent;
+}
+.dash-action-card:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 2px;
+}
+.dash-action-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tint);
+  color: var(--dot);
+  flex-shrink: 0;
+}
+.dash-action-arrow {
+  margin-left: auto;
+  color: var(--dash-ink-faint);
+  opacity: 0;
+  transform: translate(-3px, 3px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  flex-shrink: 0;
+}
+.dash-action-card:hover .dash-action-arrow {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+
+/* Dark sidebar shell — same navy as top navbar */
+.dash-sidebar [data-sidebar="sidebar"] {
+  background: var(--aa-navy, #1a2d5e) !important;
+  color: #c7ccda !important;
+  border-right: none !important;
+}
+.dash-sidebar [data-sidebar="sidebar"] * {
+  border-color: color-mix(in srgb, #ffffff 12%, transparent);
+}
