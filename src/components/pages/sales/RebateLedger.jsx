@@ -178,12 +178,43 @@ const STATUS_META = {
 const inputClass =
   "h-9 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]";
 
+function monthRange(m) {
+  const start = m.clone().startOf("month");
+  const end = m.clone().endOf("month");
+  return {
+    fromDate: start.format("YYYY-MM-DD"),
+    toDate: end.format("YYYY-MM-DD"),
+  };
+}
+
 function parsePeriodDates(period) {
   const raw = String(period || "").trim();
   if (!raw) return null;
 
-  // Q1 2026 | Q1-2026 | 2026 Q1 | 2026-Q1
-  let m = raw.match(/^Q([1-4])[\s\-_/]*(\d{4})$/i);
+  if (/^this\s+month$/i.test(raw)) {
+    return monthRange(moment());
+  }
+  if (/^next\s+month$/i.test(raw)) {
+    return monthRange(moment().add(1, "month"));
+  }
+  if (/^last\s+month$/i.test(raw)) {
+    return monthRange(moment().subtract(1, "month"));
+  }
+
+  // In 2 months | +2 months
+  let m = raw.match(/^(?:in\s+)?\+?\s*(\d+)\s+months?$/i);
+  if (m) {
+    return monthRange(moment().add(Number(m[1]), "months"));
+  }
+
+  // Aug 2026 | August 2026 | 2026-08
+  const named = moment(raw, ["MMM YYYY", "MMMM YYYY", "YYYY-MM"], true);
+  if (named.isValid()) {
+    return monthRange(named);
+  }
+
+  // Legacy quarters still parse for existing rules
+  m = raw.match(/^Q([1-4])[\s\-_/]*(\d{4})$/i);
   if (!m) m = raw.match(/^(\d{4})[\s\-_/]*Q([1-4])$/i);
   if (m) {
     const q = Number(m[1].length === 4 ? m[2] : m[1]);
@@ -199,7 +230,7 @@ function parsePeriodDates(period) {
     };
   }
 
-  // YYYY-MM-DD → YYYY-MM-DD | YYYY-MM-DD to YYYY-MM-DD
+  // YYYY-MM-DD → YYYY-MM-DD
   m = raw.match(
     /^(\d{4}-\d{2}-\d{2})\s*(?:→|->|to|–|-)\s*(\d{4}-\d{2}-\d{2})$/i,
   );
@@ -210,13 +241,13 @@ function parsePeriodDates(period) {
   return null;
 }
 
-function buildPeriodOptions(baseYear = moment().year()) {
-  const years = [baseYear - 1, baseYear, baseYear + 1];
-  const opts = [];
-  for (const y of years) {
-    for (let q = 1; q <= 4; q += 1) {
-      opts.push(`Q${q} ${y}`);
-    }
+function buildPeriodOptions() {
+  const opts = ["Last month", "This month", "Next month"];
+  for (let i = 2; i <= 6; i += 1) {
+    opts.push(moment().add(i, "months").format("MMM YYYY"));
+  }
+  for (let i = 2; i <= 3; i += 1) {
+    opts.unshift(moment().subtract(i, "months").format("MMM YYYY"));
   }
   return opts;
 }
@@ -226,6 +257,17 @@ function formatPeriodFromDates(fromDate, toDate) {
   const from = moment(fromDate, "YYYY-MM-DD", true);
   const to = moment(toDate, "YYYY-MM-DD", true);
   if (!from.isValid() || !to.isValid()) return "";
+
+  const isFullMonth =
+    from.date() === 1 && to.isSame(from.clone().endOf("month"), "day");
+  if (isFullMonth) {
+    if (from.isSame(moment(), "month")) return "This month";
+    if (from.isSame(moment().add(1, "month"), "month")) return "Next month";
+    if (from.isSame(moment().subtract(1, "month"), "month")) return "Last month";
+    return from.format("MMM YYYY");
+  }
+
+  // Legacy quarter display for old rules
   if (
     from.date() === 1 &&
     to.isSame(from.clone().add(2, "months").endOf("month"), "day") &&
@@ -266,10 +308,10 @@ export default function RebateLedger() {
   const [branchIds, setBranchIds] = useState("");
 
   const [fromDate, setFromDate] = useState(
-    moment().startOf("quarter").format("YYYY-MM-DD"),
+    moment().startOf("month").format("YYYY-MM-DD"),
   );
   const [toDate, setToDate] = useState(
-    moment().endOf("quarter").format("YYYY-MM-DD"),
+    moment().endOf("month").format("YYYY-MM-DD"),
   );
   const [search, setSearch] = useState("");
 
@@ -1331,7 +1373,7 @@ export default function RebateLedger() {
                       </p>
                     ) : (
                       <p className="text-[11px] text-slate-400">
-                        Choose a quarter or set From / To dates for this rule.
+                        Choose this month, next month, or set From / To dates.
                       </p>
                     )}
                   </div>

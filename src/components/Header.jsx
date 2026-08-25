@@ -11,7 +11,6 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  Bell,
   ChevronsUpDown,
   FileText,
   LogOut,
@@ -38,6 +37,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import logo from "@/assets/aa_erp_icon.png";
 import GlobalSearchBar from "@/components/GlobalSearchBar";
 import { NetworkStatusIndicator } from "@/components/NetworkStatusBanner";
+import NotificationBell from "@/components/NotificationBell";
 import {
   canAccessPrivileges,
   getUserFunctionalities,
@@ -304,14 +304,7 @@ export function AppTopBar() {
         </button>
         ) : null}
 
-        <button
-          type="button"
-          className="inline-flex size-8 items-center justify-center rounded-md text-white/90 hover:bg-white/10"
-          aria-label="Notifications"
-          onClick={() => toast.message("No new notifications")}
-        >
-          <Bell className="size-4" />
-        </button>
+        <NotificationBell />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
