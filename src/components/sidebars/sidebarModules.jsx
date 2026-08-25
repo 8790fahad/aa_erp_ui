@@ -303,6 +303,7 @@ export const modules = [
           "Credit Collection",
           "Switch Payment Mode",
           "Approve Payment Mode Switch",
+          "Collection Reconciliation",
           "Receive Payment",
           "Payments",
           "Cashier",
@@ -313,6 +314,7 @@ export const modules = [
           { title: "Credit Collection" },
           { title: "Switch Payment Mode" },
           { title: "Approve Payment Mode Switch" },
+          { title: "Collection Reconciliation" },
         ],
         access: [
           "services",

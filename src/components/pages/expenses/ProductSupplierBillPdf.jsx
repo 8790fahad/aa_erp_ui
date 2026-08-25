@@ -61,27 +61,104 @@ const ProductSupplierBillHTML = ({ billData, company, invoiceRef }) => {
     0
   );
 
-  // Calculate grand total based on VAT policy
-  // For vat_inclusive: subtotal already includes VAT, so grandTotal = subtotal
-  // For vat_exclusive: VAT is added on top, so grandTotal = subtotal + VAT
-  // For "all": only add exclusive VAT (inclusive VAT is already in subtotal)
-  let grandTotal;
-  if (vatPolicy === "all" && taxes.length > 0) {
-    // Separate inclusive and exclusive taxes
-    const exclusiveTaxes = taxes.filter((tax) =>
-      tax.tax_type === "exclusive" ||
-      (tax.tax_type === undefined && tax.inclusive_type === "exclusive")
-    );
-    const exclusiveTaxAmount = exclusiveTaxes.reduce((sum, tax) => {
-      return sum + (parseFloat(tax.amount) || parseFloat(tax.cost) || 0);
-    }, 0);
-    // Grand total = Subtotal + Exclusive VAT only
-    grandTotal = subtotal + exclusiveTaxAmount;
-  } else if (vatPolicy === "vat_inclusive") {
-    grandTotal = subtotal;
-  } else {
-    grandTotal = subtotal + totalVatAmount;
+  const totalTaxFromItems = (items || []).reduce((sum, item) => {
+    const dbVat = parseFloat(item.vat_amount);
+    return sum + (Number.isFinite(dbVat) && dbVat > 0 ? dbVat : 0);
+  }, 0);
+  const totalTax =
+    totalTaxFromItems > 0
+      ? totalTaxFromItems
+      : parseFloat(totalVatAmount) || 0;
+
+  const isTaxInclusiveType = (tax) => {
+    const inclusiveType = String(tax.inclusive_type || tax.tax_type || "")
+      .toLowerCase()
+      .trim();
+    if (inclusiveType === "inclusive") return true;
+    if (inclusiveType === "exclusive") return false;
+    return vatPolicy === "vat_inclusive";
+  };
+
+  const formatTaxName = (tax) => {
+    const isInclusive = isTaxInclusiveType(tax);
+    const typeLabel = isInclusive ? "Incl." : "Excl.";
+    let base = String(tax.name || "").trim();
+    if (!base) {
+      base = String(tax.description || "Input VAT")
+        .replace(/\s*@?\s*\d+(\.\d+)?\s*%/gi, "")
+        .replace(/\s*\((inclusive|exclusive|incl\.?|excl\.?)\)/gi, "")
+        .replace(/\s+on purchase of\s+.+$/i, "")
+        .replace(/\s+purchase of\s+.+$/i, "")
+        .trim();
+    }
+    if (!base || /^vat$/i.test(base)) base = "Input VAT";
+    const rateRaw = tax.rate != null && tax.rate !== "" ? String(tax.rate) : "";
+    const rateLabel = rateRaw ? ` ${rateRaw}%` : "";
+    return `${base}${rateLabel} (${typeLabel})`;
+  };
+
+  const taxNameLabels = [];
+  const taxNameSeen = new Set();
+  let inclusiveTaxAmount = 0;
+  let exclusiveTaxAmount = 0;
+  (taxes || []).forEach((tax) => {
+    const amt = parseFloat(tax.amount) || parseFloat(tax.cost) || 0;
+    if (amt <= 0) return;
+    if (isTaxInclusiveType(tax)) inclusiveTaxAmount += amt;
+    else exclusiveTaxAmount += amt;
+    const label = formatTaxName(tax);
+    if (taxNameSeen.has(label)) return;
+    taxNameSeen.add(label);
+    taxNameLabels.push(label);
+  });
+
+  // When only item vat_amount is available, treat by vat_policy
+  if (
+    (!taxes || taxes.length === 0 || inclusiveTaxAmount + exclusiveTaxAmount <= 0) &&
+    totalTax > 0
+  ) {
+    if (vatPolicy === "vat_inclusive") inclusiveTaxAmount = totalTax;
+    else if (vatPolicy === "vat_exclusive") exclusiveTaxAmount = totalTax;
+    else inclusiveTaxAmount = totalTax;
   }
+
+  const totalTaxLabel =
+    taxNameLabels.length > 0
+      ? `${taxNameLabels.join(" + ")}:`
+      : totalTax > 0
+        ? vatPolicy === "vat_exclusive"
+          ? "Input VAT 7.5% (Excl.):"
+          : "Input VAT 7.5% (Incl.):"
+        : "TOTAL TAX:";
+
+  // Standard invoice totals:
+  // Inclusive: Subtotal (excl. VAT) + VAT = Grand Total (incl. VAT)
+  // Exclusive: Subtotal + VAT = Grand Total
+  const hasInclusiveTax =
+    vatPolicy === "vat_inclusive" ||
+    (inclusiveTaxAmount > 0 && vatPolicy !== "vat_exclusive");
+
+  let displaySubtotal = subtotal;
+  let subtotalLabel = "SUBTOTAL:";
+  let grandTotal = subtotal;
+
+  if (vatPolicy === "vat_inclusive" || (hasInclusiveTax && exclusiveTaxAmount <= 0)) {
+    displaySubtotal = Math.max(0, subtotal - (inclusiveTaxAmount || totalTax));
+    subtotalLabel = "SUBTOTAL (excl. VAT):";
+    grandTotal = subtotal;
+  } else if (vatPolicy === "all") {
+    displaySubtotal = Math.max(0, subtotal - inclusiveTaxAmount);
+    subtotalLabel =
+      inclusiveTaxAmount > 0 ? "SUBTOTAL (excl. VAT):" : "SUBTOTAL:";
+    grandTotal = subtotal + exclusiveTaxAmount;
+  } else {
+    // vat_exclusive
+    displaySubtotal = subtotal;
+    subtotalLabel = "SUBTOTAL:";
+    grandTotal = subtotal + (exclusiveTaxAmount || totalTax);
+  }
+
+  const colCount = 5; // #, Description, Quantity, Unit Price, Amount
 
   return (
     <div
@@ -153,7 +230,7 @@ const ProductSupplierBillHTML = ({ billData, company, invoiceRef }) => {
                   Unit Price
                 </th>
                 <th className="px-2 py-1.5 text-right text-xs font-semibold">
-                  Amount(₦)
+                  Amount (₦)
                 </th>
               </tr>
             </thead>
@@ -184,7 +261,7 @@ const ProductSupplierBillHTML = ({ billData, company, invoiceRef }) => {
                                   : ""
                               }`}
                             >
-                              {item.taxable === "Taxable" ? "Taxable" :null}
+                              {item.taxable === "Taxable" ? "Taxable" : null}
                             </span>
                           </div>
                         </td>
@@ -204,83 +281,52 @@ const ProductSupplierBillHTML = ({ billData, company, invoiceRef }) => {
               ) : (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={colCount}
                     className="border-t border-gray-200 px-4 py-8 text-center text-sm text-gray-500"
                   >
                     No data to view
                   </td>
                 </tr>
               )}
-              {/* Tax entries - Show each tax individually with inclusive/exclusive type */}
-              {taxes && taxes.length > 0 && taxes.map((tax, taxIndex) => {
-                const taxAmount = parseFloat(tax.amount) || parseFloat(tax.cost) || 0;
-                if (taxAmount <= 0) return null;
-
-                // Determine if this tax is inclusive or exclusive
-                // Check inclusive_type first, then tax_type as fallback
-                // Handle null, undefined, and empty string cases
-                const inclusiveType = tax.inclusive_type
-                  ? String(tax.inclusive_type).toLowerCase().trim()
-                  : null;
-                const taxType = tax.tax_type
-                  ? String(tax.tax_type).toLowerCase().trim()
-                  : null;
-
-                let isTaxInclusive = false;
-
-                if (inclusiveType === "inclusive") {
-                  isTaxInclusive = true;
-                } else if (inclusiveType === "exclusive") {
-                  isTaxInclusive = false;
-                } else if (taxType === "inclusive") {
-                  isTaxInclusive = true;
-                } else if (taxType === "exclusive") {
-                  isTaxInclusive = false;
-                } else {
-                  // If neither is set, use vatPolicy as fallback (only if not "all")
-                  if (vatPolicy === "vat_inclusive") {
-                    isTaxInclusive = true;
-                  } else {
-                    isTaxInclusive = false;
-                  }
-                }
-
-                return (
-                  <tr key={`tax-${taxIndex}`} className="bg-blue-50 border-t border-blue-200">
-                    <td className="border-r border-t border-blue-200 px-2 py-1.5 text-center text-xs font-semibold text-gray-600">
-                      {items.length + taxIndex + 1}
+              {/* Standardized totals: SUBTOTAL → TOTAL TAX → GRAND TOTAL */}
+              {items && items.length > 0 && (
+                <>
+                  <tr className="bg-slate-100 border-t border-slate-300">
+                    <td
+                      colSpan={4}
+                      className="border-r border-slate-300 px-2 py-2 text-right text-xs font-bold text-slate-800"
+                    >
+                      {subtotalLabel}
                     </td>
-                    <td className="border-r border-t border-blue-200 px-2 py-1.5 text-xs">
-                      <strong className="text-blue-900">
-                        {tax.description || tax.name || "Input VAT"} ({tax.rate || ""}%{" "}
-                        {isTaxInclusive ? "Inclusive" : "Exclusive"})
-                      </strong>
-                    </td>
-                    <td className="border-r border-t border-blue-200 px-2 py-1.5 text-center text-xs text-gray-700">
-                      -
-                    </td>
-                    <td className="border-r border-t border-blue-200 px-2 py-1.5 text-right text-xs text-gray-700">
-                      -
-                    </td>
-                    <td className="border-t border-blue-200 px-2 py-1.5 text-right text-xs font-semibold text-blue-900">
-                      {formatNumber(taxAmount)}
+                    <td className="px-2 py-2 text-right text-xs font-bold text-slate-900 tabular-nums">
+                      {formatNumber(displaySubtotal)}
                     </td>
                   </tr>
-                );
-              })}
-              {/* Grand Total Row */}
-              {items && items.length > 0 && (
-                <tr className="bg-gradient-to-r from-green-600 to-green-700 text-white border-t-2 border-green-800">
-                  <td
-                    colSpan={4}
-                    className="border-r border-green-500 px-2 py-2 text-right text-sm font-bold"
-                  >
-                    GRAND TOTAL:
-                  </td>
-                  <td className="px-2 py-2 text-right text-sm font-bold">
-                    {formatNumber(grandTotal)}
-                  </td>
-                </tr>
+                  {totalTax > 0 ? (
+                    <tr className="bg-slate-50 border-t border-slate-200">
+                      <td
+                        colSpan={4}
+                        className="border-r border-slate-200 px-2 py-2 text-right text-xs font-bold text-slate-800"
+                      >
+                        {totalTaxLabel}
+                      </td>
+                      <td className="px-2 py-2 text-right text-xs font-bold text-slate-900 tabular-nums">
+                        {formatNumber(totalTax)}
+                      </td>
+                    </tr>
+                  ) : null}
+                  <tr className="bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white border-t-2 border-[var(--aa-accent)]">
+                    <td
+                      colSpan={4}
+                      className="border-r border-[var(--aa-accent)] px-2 py-2 text-right text-sm font-bold"
+                    >
+                      GRAND TOTAL:
+                    </td>
+                    <td className="px-2 py-2 text-right text-sm font-bold tabular-nums">
+                      {formatNumber(grandTotal)}
+                    </td>
+                  </tr>
+                </>
               )}
             </tbody>
           </table>

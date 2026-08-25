@@ -785,64 +785,6 @@ function MakeSale() {
   /** Mode of payment: cash | transfer | both | credit | credit_split | deposit */
   const [modeOfPayment, setModeOfPayment] = useState("cash");
   const [chequeNumber, setChequeNumber] = useState("");
-  /** Assigned cashier (user id) for Collection Points */
-  const [cashiers, setCashiers] = useState([]);
-  const [assignedCashierId, setAssignedCashierId] = useState("");
-
-  const isCashierRoleName = useCallback((role) => {
-    const r = String(role || "")
-      .toLowerCase()
-      .trim();
-    return r === "cashier" || r === "casher" || r.includes("cashier") || r.includes("casher");
-  }, []);
-
-  const needsCashierAssignment = useMemo(
-    () =>
-      ["cash", "transfer", "both", "credit_split"].includes(modeOfPayment),
-    [modeOfPayment],
-  );
-
-  const assignedCashierName = useMemo(() => {
-    const c = cashiers.find((u) => String(u.id) === String(assignedCashierId));
-    if (!c) return "";
-    return (
-      [c.firstname, c.lastname].filter(Boolean).join(" ").trim() ||
-      c.username ||
-      c.email ||
-      `User ${c.id}`
-    );
-  }, [cashiers, assignedCashierId]);
-
-  useEffect(() => {
-    if (!activeBusiness?.id) return;
-    _fetchApi(
-      `/api/v1/get-users-by-facility/${activeBusiness.id}`,
-      (data) => {
-        const rows = Array.isArray(data?.results) ? data.results : [];
-        const list = rows.filter(
-          (u) =>
-            u?.id &&
-            String(u.status || "").toLowerCase() !== "suspended" &&
-            isCashierRoleName(u.role),
-        );
-        setCashiers(list);
-      },
-      () => setCashiers([]),
-    );
-  }, [activeBusiness?.id, isCashierRoleName]);
-
-  useEffect(() => {
-    if (!needsCashierAssignment) {
-      setAssignedCashierId("");
-      return;
-    }
-    if (
-      assignedCashierId &&
-      !cashiers.some((u) => String(u.id) === String(assignedCashierId))
-    ) {
-      setAssignedCashierId("");
-    }
-  }, [needsCashierAssignment, cashiers, assignedCashierId]);
 
   const applyPaymentMode = useCallback((mode) => {
     setModeOfPayment(mode);
@@ -2012,14 +1954,10 @@ function MakeSale() {
           apply_prepayment: saleType !== "paid" && usePrepayment,
           transaction_date: transactionDate, // Add transaction date
           sale_branch_id: branchId,
-          // Payment is collected by Cashier (cash or transfer), not on create.
+          // Payment is collected at Collection Points, not on create.
           defer_payment: saleType === "paid",
-          assigned_cashier_id: needsCashierAssignment
-            ? assignedCashierId || null
-            : null,
-          assigned_cashier_name: needsCashierAssignment
-            ? assignedCashierName || null
-            : null,
+          assigned_cashier_id: null,
+          assigned_cashier_name: null,
           taxes: (() => {
             const mapped = [
               // Regular taxes
@@ -2251,9 +2189,6 @@ function MakeSale() {
       accountHead,
       bankAccount,
       transactionDate,
-      assignedCashierId,
-      assignedCashierName,
-      needsCashierAssignment,
     ],
   );
 
@@ -2285,17 +2220,12 @@ function MakeSale() {
       return;
     }
 
-    if (needsCashierAssignment && !assignedCashierId) {
-      toast.error("Select a cashier for collection");
-      return;
-    }
-
     if (saleType === "paid") {
       if (!payWithCash && !payWithTransfer) {
         toast.error("Select Cash, Transfer, Cash + Transfer, or Credit + Cash + Transfer");
         return;
       }
-      // Payment is collected by the Cashier — invoice only records the mode.
+      // Payment is collected at Collection Points — invoice only records the mode.
       saveSale(false);
       return;
     }
@@ -2315,8 +2245,6 @@ function MakeSale() {
     transferPayAmount,
     accountHead,
     bankAccount,
-    needsCashierAssignment,
-    assignedCashierId,
   ]);
 
   const handleConfirmSale = useCallback(() => {
@@ -3664,13 +3592,15 @@ function MakeSale() {
                     <p className="text-xs text-slate-500">
                       {modeOfPayment === "credit"
                         ? "Credit sale · goes to credit approval (no cashier)"
-                        : modeOfPayment === "credit_split"
-                          ? "Sent to cashier · cash + transfer, remainder on credit"
-                          : modeOfPayment === "both"
-                            ? "Sent to cashier · cash and transfer"
-                            : modeOfPayment === "transfer"
-                              ? "Sent to cashier · transfer"
-                              : "Sent to cashier · cash"}
+                        : modeOfPayment === "deposit"
+                          ? "Apply Deposit · create invoice, then apply customer deposit"
+                          : modeOfPayment === "credit_split"
+                            ? "Sent to cashier · cash + transfer, remainder on credit"
+                            : modeOfPayment === "both"
+                              ? "Sent to cashier · cash and transfer"
+                              : modeOfPayment === "transfer"
+                                ? "Sent to cashier · transfer"
+                                : "Sent to cashier · cash"}
                     </p>
                   </div>
                 </div>
@@ -3847,43 +3777,6 @@ function MakeSale() {
                   </p>
                 </div>
               </div>
-
-              {needsCashierAssignment && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
-                  <label className="text-sm font-medium text-slate-600 lg:text-right">
-                    Cashier <span className="text-red-500">*</span>
-                  </label>
-                  <div className="w-full max-w-xs space-y-1">
-                    <select
-                      value={assignedCashierId}
-                      onChange={(e) => setAssignedCashierId(e.target.value)}
-                      className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                    >
-                      <option value="">Select cashier</option>
-                      {cashiers.map((c) => {
-                        const label =
-                          [c.firstname, c.lastname]
-                            .filter(Boolean)
-                            .join(" ")
-                            .trim() ||
-                          c.username ||
-                          c.email ||
-                          `User ${c.id}`;
-                        return (
-                          <option key={c.id} value={String(c.id)}>
-                            {label}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <p className="text-[11px] text-slate-500">
-                      {cashiers.length
-                        ? "Assigned cashier will see this invoice on Collection Points."
-                        : "No staff with Cashier role found. Add a cashier under Admin → Users."}
-                    </p>
-                  </div>
-                </div>
-              )}
 
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
                 <label className="text-sm font-medium text-slate-600 lg:text-right">

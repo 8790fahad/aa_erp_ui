@@ -218,6 +218,7 @@ import ProductSupplierBillPdf from "../pages/expenses/ProductSupplierBillPdf";
 import OperatingCashExpenses from "../pages/expenses/OperatingCashExpense";
 import ProductCashExpense from "../pages/expenses/ProductCashExpense";
 import ReceivePayment from "../pages/payments/ReceivePayment";
+import CollectionReconciliation from "../pages/payments/CollectionReconciliation";
 import ReceivedFunds from "../pages/payments/ReceivedFunds";
 import RecordPaymentForm from "../pages/payments/RecordPaymentForm";
 import RedirectToPayBills from "../pages/payments/RedirectToPayBills";
@@ -551,6 +552,10 @@ const routeModules = {
       {
         path: "cashier-point",
         element: <ReceivePayment />,
+      },
+      {
+        path: "collection-reconciliation",
+        element: <CollectionReconciliation />,
       },
       {
         path: "receive-payment",

@@ -6,7 +6,9 @@ import {
   Banknote,
   Building2,
   CheckCircle2,
+  ClipboardCheck,
   CreditCard,
+  Eye,
   History,
   Loader2,
   Percent,
@@ -53,10 +55,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAdvancePaymentAccounts, isCashInHandHead } from "@/components/common/useAdvancePaymentAccounts";
 import { WorkflowStatusBadge } from "@/lib/saleWorkflowStatus.js";
 import useScanDetection from "@/hooks/useScanDetection";
 import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
+import CreditSaleInvoiceImproved from "@/components/pages/sales/CreditSaleInvoiceImproved";
 
 const cashPayThroughLabel = (option) =>
   `${option?.description || option?.head || ""} (${option?.head || ""})`.trim();
@@ -132,7 +136,11 @@ function isSplitPaymentType(type) {
     t === "both" ||
     t === "cash+transfer" ||
     t === "cash_transfer" ||
-    t === "cash + transfer"
+    t === "cash + transfer" ||
+    t === "credit_split" ||
+    t === "credit+cash+transfer" ||
+    t === "credit + cash + transfer" ||
+    t === "credit_cash_transfer"
   );
 }
 
@@ -142,8 +150,15 @@ function normalizePaymentMode(type) {
     .toLowerCase()
     .trim();
   if (t === "bank") return "transfer";
+  if (
+    t === "credit_split" ||
+    t === "credit+cash+transfer" ||
+    t === "credit + cash + transfer" ||
+    t === "credit_cash_transfer"
+  ) {
+    return "credit_split";
+  }
   if (isSplitPaymentType(t)) return "split";
-  if (t === "credit_split") return "credit_split";
   if (t === "credit") return "credit";
   if (t === "transfer") return "transfer";
   if (t === "cash") return "cash";
@@ -312,7 +327,11 @@ export default function ReceivePayment() {
   const [search, setSearch] = useState("");
   const searchInputRef = useRef(null);
 
-  const [collectOpen, setCollectOpen] = useState(false);
+  /** Unified view + action hub: collect | credit | discount | mode | view */
+  const [hubOpen, setHubOpen] = useState(false);
+  const [hubAction, setHubAction] = useState("view");
+  const [hubInvoiceData, setHubInvoiceData] = useState(null);
+  const [hubLoading, setHubLoading] = useState(false);
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [switchingModeCode, setSwitchingModeCode] = useState(null);
@@ -322,6 +341,7 @@ export default function ReceivePayment() {
   const [modeRejectRow, setModeRejectRow] = useState(null);
   const [cashAmount, setCashAmount] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
+  const collectOpen = hubOpen && hubAction === "collect";
 
   const [advanceOpen, setAdvanceOpen] = useState(false);
   const [advanceCustomer, setAdvanceCustomer] = useState(null);
@@ -890,29 +910,88 @@ export default function ReceivePayment() {
     );
   };
 
-  const openCollect = (row) => {
-    const pt = String(row?.payment_type || "").toLowerCase();
-    if (pt === "credit") {
-      toast.info(
-        "Credit invoices are approved on the Credit tab — not collected as cash/transfer",
+  const loadHubInvoice = useCallback(
+    (saleCode) => {
+      const code = String(saleCode || "").trim();
+      if (!code || !activeBusiness?.id) {
+        setHubInvoiceData(null);
+        setHubLoading(false);
+        return;
+      }
+      setHubLoading(true);
+      setHubInvoiceData(null);
+      _fetchApi(
+        `/api/v1/transactions/get-sale?sale_code=${encodeURIComponent(
+          code,
+        )}&facility_id=${activeBusiness.id}`,
+        (res) => {
+          setHubLoading(false);
+          if (res?.success && res.data) {
+            setHubInvoiceData(res.data);
+          } else {
+            toast.error(res?.message || "Failed to load invoice");
+            setHubInvoiceData(null);
+          }
+        },
+        () => {
+          setHubLoading(false);
+          toast.error("Failed to load invoice");
+          setHubInvoiceData(null);
+        },
       );
-      return;
-    }
-    setSelected(row);
-    const due = Number(row.amount) || 0;
-    if (pt === "cash") {
-      setCashAmount(due > 0 ? formatNumberWithCommas(String(due)) : "");
-      setTransferAmount("");
-    } else if (pt === "transfer" || pt === "bank") {
-      setCashAmount("");
-      setTransferAmount(due > 0 ? formatNumberWithCommas(String(due)) : "");
-    } else {
-      // Transfer + Cash (and unknown): leave amounts empty for the cashier to enter
-      setCashAmount("");
-      setTransferAmount("");
-    }
-    setCollectOpen(true);
-  };
+    },
+    [activeBusiness?.id],
+  );
+
+  const resolveHubAction = useCallback(
+    (row, preferred) => {
+      if (preferred) return preferred;
+      const pt = String(row?.payment_type || "").toLowerCase();
+      if (methodTab === "credit" || pt === "credit") return "credit";
+      if (methodTab === "discount") return "discount";
+      if (methodTab === "mode") return "mode";
+      if (pt === "credit") return "credit";
+      return "collect";
+    },
+    [methodTab],
+  );
+
+  const openHub = useCallback(
+    (row, preferredAction = null) => {
+      if (!row?.sale_code) return;
+      const action = resolveHubAction(row, preferredAction);
+      const pt = String(row?.payment_type || "").toLowerCase();
+
+      if (action === "collect" && pt === "credit") {
+        toast.info(
+          "Credit invoices are approved on the Credit tab — not collected as cash/transfer",
+        );
+        return;
+      }
+
+      setSelected(row);
+      setHubAction(action);
+      setHubOpen(true);
+      loadHubInvoice(row.sale_code);
+
+      if (action === "collect") {
+        const due = Number(row.amount) || 0;
+        if (pt === "cash") {
+          setCashAmount(due > 0 ? formatNumberWithCommas(String(due)) : "");
+          setTransferAmount("");
+        } else if (pt === "transfer" || pt === "bank") {
+          setCashAmount("");
+          setTransferAmount(due > 0 ? formatNumberWithCommas(String(due)) : "");
+        } else {
+          setCashAmount("");
+          setTransferAmount("");
+        }
+      }
+    },
+    [loadHubInvoice, resolveHubAction],
+  );
+
+  const openCollect = (row) => openHub(row, "collect");
 
   const applySearchOrScan = useCallback(
     (raw, { fromScan = false } = {}) => {
@@ -955,11 +1034,18 @@ export default function ReceivePayment() {
             setMethodTab("cash");
           }
         }
-        if (pt === "credit" || creditPending.some((r) => r === pendingMatch || r.sale_code === pendingMatch.sale_code)) {
+        if (
+          pt === "credit" ||
+          creditPending.some(
+            (r) =>
+              r === pendingMatch || r.sale_code === pendingMatch.sale_code,
+          )
+        ) {
+          openHub(pendingMatch, "credit");
           if (fromScan) toast.success(`Scanned ${pendingMatch.sale_code}`);
           return;
         }
-        openCollect(pendingMatch);
+        openHub(pendingMatch, "collect");
         if (fromScan) toast.success(`Scanned ${pendingMatch.sale_code}`);
         return;
       }
@@ -969,6 +1055,9 @@ export default function ReceivePayment() {
       );
       if (historyMatch) {
         setActiveTab("history");
+        if (!historyMatch.kind || historyMatch.kind !== "customer_advance") {
+          openHub(historyMatch, "view");
+        }
         if (fromScan) toast.info(`${historyMatch.sale_code} already collected`);
         return;
       }
@@ -977,19 +1066,19 @@ export default function ReceivePayment() {
         toast.error(`No collection invoice found for ${code}`);
       }
     },
-    // openCollect only uses setters + row data; safe across renders
+    // openHub only uses setters + row data; safe across renders
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [history, pending, creditPending, canViewCollectionTab, methodTab],
+    [history, pending, creditPending, canViewCollectionTab, methodTab, openHub],
   );
 
   const handleBarcodeScan = useCallback(
     (code) => {
-      if (collectOpen) return;
+      if (hubOpen) return;
       const tag = String(document.activeElement?.tagName || "").toLowerCase();
       if (tag === "textarea") return;
       applySearchOrScan(code, { fromScan: true });
     },
-    [applySearchOrScan, collectOpen],
+    [applySearchOrScan, hubOpen],
   );
 
   useScanDetection({
@@ -997,12 +1086,26 @@ export default function ReceivePayment() {
     minLength: 3,
   });
 
-  const closeCollect = () => {
-    setCollectOpen(false);
-    setSelected(null);
-    setCashAmount("");
-    setTransferAmount("");
+  const closeHub = () => {
+    setHubOpen(false);
   };
+
+  const closeCollect = () => {
+    closeHub();
+  };
+
+  useEffect(() => {
+    if (hubOpen) return undefined;
+    const t = window.setTimeout(() => {
+      setHubAction("view");
+      setHubInvoiceData(null);
+      setHubLoading(false);
+      setSelected(null);
+      setCashAmount("");
+      setTransferAmount("");
+    }, 200);
+    return () => window.clearTimeout(t);
+  }, [hubOpen]);
 
   const openModeChange = (row) => {
     if (!canSwitchPaymentMode) {
@@ -1072,6 +1175,7 @@ export default function ReceivePayment() {
             }
             setModeChangeRow(null);
             setModeChangeNext("");
+            closeHub();
           }
           fetchDashboard();
         } else {
@@ -1107,6 +1211,7 @@ export default function ReceivePayment() {
         setModeApproveRow(null);
         if (res?.success) {
           toast.success(res.message || "Payment mode switch approved");
+          closeHub();
           fetchDashboard();
         } else {
           toast.error(res?.message || "Could not approve payment mode switch");
@@ -1141,6 +1246,7 @@ export default function ReceivePayment() {
         setModeRejectRow(null);
         if (res?.success) {
           toast.success(res.message || "Payment mode switch rejected");
+          closeHub();
           fetchDashboard();
         } else {
           toast.error(res?.message || "Could not reject payment mode switch");
@@ -1172,6 +1278,7 @@ export default function ReceivePayment() {
             res.message ||
               "Credit approved — invoice sent to Invoice Separation",
           );
+          closeHub();
           fetchDashboard();
         } else {
           toast.error(res?.message || "Could not approve credit");
@@ -1202,6 +1309,7 @@ export default function ReceivePayment() {
           toast.success(
             res.message || "Discount approved — invoice released to collection",
           );
+          closeHub();
           fetchDashboard();
         } else {
           toast.error(res?.message || "Could not approve discount");
@@ -1210,6 +1318,45 @@ export default function ReceivePayment() {
       (err) => {
         setSubmitting(false);
         toast.error(err?.message || "Could not approve discount");
+      },
+    );
+  };
+
+  const sendCreditRemainder = () => {
+    if (!selected || !activeBusiness?.id) return;
+    if (normalizePaymentMode(selected.payment_type) !== "credit_split") {
+      toast.error("Only Credit + Cash + Transfer invoices can leave a credit remainder");
+      return;
+    }
+    if (remainingDue <= 0.05) {
+      toast.error("Nothing left to send to credit");
+      return;
+    }
+    setSubmitting(true);
+    _postApi(
+      "/api/v1/sale-workflows/send-credit-remainder",
+      {
+        facilityId: activeBusiness.id,
+        saleCode: selected.sale_code,
+        updated_by: user?.id,
+        note: `Remainder ₦${remainingDue.toFixed(2)} sent to Credit Approval`,
+      },
+      (res) => {
+        setSubmitting(false);
+        if (res?.success) {
+          toast.success(
+            res.message ||
+              "Remainder sent to Credit Approval — approve on the Credit tab",
+          );
+          closeCollect();
+          fetchDashboard();
+        } else {
+          toast.error(res?.message || "Could not send remainder to credit");
+        }
+      },
+      (err) => {
+        setSubmitting(false);
+        toast.error(err?.message || "Could not send remainder to credit");
       },
     );
   };
@@ -1417,7 +1564,8 @@ export default function ReceivePayment() {
               Collection Points
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Customer collection hub: Collect Payment on pending invoices, Make
+              Customer collection hub: open any invoice to view it and collect,
+              approve credit/discount, or switch mode in the same modal. Make
               Deposit for prepaid funds, and Apply Deposit to open invoices.
               Supplier payments are handled under Purchase → Pay Bills.
               {hasCashCollection || hasTransferCollection ? (
@@ -1450,6 +1598,13 @@ export default function ReceivePayment() {
               className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
             >
               Apply Deposit
+            </Link>
+            <Link
+              to="/app/payments/collection-reconciliation"
+              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <ClipboardCheck className="h-4 w-4" />
+              Collection Reconciliation
             </Link>
             <button
               type="button"
@@ -1710,15 +1865,14 @@ export default function ReceivePayment() {
                     {filteredPending.map((row) => (
                       <tr key={row.id || row.sale_code} className="hover:bg-slate-50/80">
                         <td className="px-4 py-3 font-mono text-xs font-medium">
-                          <Link
-                            to={`/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-                              row.sale_code,
-                            )}&doc=invoice`}
-                            className="text-[var(--aa-accent)] hover:underline"
-                            title="Open Sales Invoice"
+                          <button
+                            type="button"
+                            onClick={() => openHub(row)}
+                            className="text-left text-[var(--aa-accent)] hover:underline"
+                            title="View invoice and take action"
                           >
                             {row.sale_code}
-                          </Link>
+                          </button>
                           <div className="mt-1.5">
                             <WorkflowStatusBadge
                               status={row.status}
@@ -1896,50 +2050,35 @@ export default function ReceivePayment() {
                             <button
                               type="button"
                               disabled={submitting}
-                              onClick={() => approveCredit(row)}
-                              className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                              onClick={() => openHub(row, "credit")}
+                              className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
                             >
-                              Approve Credit
+                              <Eye className="h-3.5 w-3.5" />
+                              View & Approve
                             </button>
                           ) : methodTab === "discount" ? (
                             <button
                               type="button"
                               disabled={submitting}
-                              onClick={() => approveDiscount(row)}
-                              className="rounded-md bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
+                              onClick={() => openHub(row, "discount")}
+                              className="inline-flex items-center gap-1.5 rounded-md bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
                             >
-                              Approve Discount
+                              <Eye className="h-3.5 w-3.5" />
+                              View & Approve
                             </button>
                           ) : methodTab === "mode" ? (
                             row.status === "awaiting_payment_mode_approval" ||
                             row.proposed_payment_type ||
                             row.pending_payment_mode?.to ? (
-                              <div className="flex flex-wrap items-center justify-end gap-2">
-                                {canApprovePaymentMode ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      disabled={submitting}
-                                      onClick={() => setModeRejectRow(row)}
-                                      className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                                    >
-                                      Reject
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={submitting}
-                                      onClick={() => setModeApproveRow(row)}
-                                      className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-                                    >
-                                      Approve Mode
-                                    </button>
-                                  </>
-                                ) : (
-                                  <span className="text-xs text-slate-500">
-                                    Awaiting approval
-                                  </span>
-                                )}
-                              </div>
+                              <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => openHub(row, "mode")}
+                                className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                View & Review
+                              </button>
                             ) : canSwitchPaymentMode ? (
                               <button
                                 type="button"
@@ -1947,26 +2086,30 @@ export default function ReceivePayment() {
                                   switchingModeCode === row.sale_code ||
                                   submitting
                                 }
-                                onClick={() => openModeChange(row)}
+                                onClick={() => openHub(row, "mode")}
                                 className="inline-flex items-center gap-1.5 rounded-md bg-[var(--aa-navy)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
                               >
-                                {switchingModeCode === row.sale_code ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <ArrowRightLeft className="h-3.5 w-3.5" />
-                                )}
-                                Switch Mode
+                                <Eye className="h-3.5 w-3.5" />
+                                View & Switch
                               </button>
                             ) : (
-                              <span className="text-xs text-slate-400">—</span>
+                              <button
+                                type="button"
+                                onClick={() => openHub(row, "view")}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                View
+                              </button>
                             )
                           ) : (
                             <button
                               type="button"
-                              onClick={() => openCollect(row)}
-                              className="rounded-md bg-[var(--aa-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--aa-accent-hover)]"
+                              onClick={() => openHub(row, "collect")}
+                              className="inline-flex items-center gap-1.5 rounded-md bg-[var(--aa-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--aa-accent-hover)]"
                             >
-                              Collect Payment
+                              <Eye className="h-3.5 w-3.5" />
+                              View & Collect
                             </button>
                           )}
                         </td>
@@ -2004,15 +2147,14 @@ export default function ReceivePayment() {
                         {isAdvance ? (
                           <span className="text-slate-800">{row.sale_code}</span>
                         ) : (
-                          <Link
-                            to={`/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-                              row.sale_code,
-                            )}&doc=invoice`}
-                            className="text-[var(--aa-accent)] hover:underline"
-                            title="Open Sales Invoice"
+                          <button
+                            type="button"
+                            onClick={() => openHub(row, "view")}
+                            className="text-left text-[var(--aa-accent)] hover:underline"
+                            title="View invoice"
                           >
                             {row.sale_code}
-                          </Link>
+                          </button>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -2058,246 +2200,473 @@ export default function ReceivePayment() {
         </div>
       </div>
 
-      <Sheet
-        open={collectOpen}
+      <Dialog
+        open={hubOpen}
         onOpenChange={(open) => {
-          if (!open) closeCollect();
+          if (!open) closeHub();
         }}
       >
-        <SheetContent
-          side="right"
-          className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 sm:!max-w-md [&>button]:text-white [&>button]:opacity-90 [&>button]:hover:bg-white/15"
-        >
-          <SheetHeader className="shrink-0 space-y-1 border-b border-white/10 bg-[var(--aa-navy)] px-5 py-4 text-left">
-            <SheetTitle className="pr-8 text-lg font-semibold text-white">
-              Collect Payment
-            </SheetTitle>
-            <SheetDescription className="text-sm text-white/70">
-              {selected?.sale_code} · {selected?.customer_name || "Customer"}
-            </SheetDescription>
-          </SheetHeader>
+        <DialogContent className="z-[200] flex max-h-[94vh] w-[min(98vw,72rem)] max-w-6xl flex-col gap-0 overflow-hidden border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl sm:rounded-xl">
+          <DialogHeader className="shrink-0 border-b border-slate-200 bg-[var(--aa-navy)] px-5 py-3.5 pr-12 text-left">
+            <DialogTitle className="pr-4 text-base font-semibold text-white sm:text-lg">
+              {hubAction === "collect"
+                ? "View & Collect Payment"
+                : hubAction === "credit"
+                  ? "View & Approve Credit"
+                  : hubAction === "discount"
+                    ? "View & Approve Discount"
+                    : hubAction === "mode"
+                      ? "View & Review Mode"
+                      : "Invoice"}{" "}
+              {selected?.sale_code ? `· ${selected.sale_code}` : ""}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-white/70">
+              {selected?.customer_name || "Customer"}
+              {selected?.customer_no ? ` · ${selected.customer_no}` : ""}
+              {" · "}
+              {paymentTypeLabel(
+                selected?.payment_type ||
+                  (hubAction === "credit" ? "credit" : ""),
+              )}
+            </DialogDescription>
+          </DialogHeader>
 
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-600">Amount due</span>
-                <span className="text-lg font-semibold tabular-nums text-slate-900">
-                  ₦{formatNumber1(amountDue)}
-                </span>
-              </div>
-              <div className="mt-2 flex items-center justify-between text-sm">
-                <span className="text-slate-600">Mode of payment</span>
-                <span
-                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
-                    paymentType,
-                  )}`}
-                >
-                  {paymentTypeLabel(paymentType)}
-                </span>
-              </div>
-              {isSplit ? (
-                <div className="mt-3 space-y-1 border-t border-slate-200 pt-2 text-xs text-slate-600">
-                  <p>
-                    Collecting{" "}
-                    <span className="font-semibold text-slate-800">
-                      {collectionSide === "transfer" ? "Transfer" : "Cash"}
-                    </span>{" "}
-                    part payment — both points can collect until the invoice is
-                    fully paid.
-                  </p>
-                  <p>
-                    Cash collected: ₦{formatNumber1(splitProgress?.cash || 0)}
-                    {splitProgress?.cash_by_name
-                      ? ` · signed by ${splitProgress.cash_by_name}`
-                      : ""}
-                  </p>
-                  <p>
-                    Transfer collected: ₦
-                    {formatNumber1(splitProgress?.transfer || 0)}
-                    {splitProgress?.transfer_by_name
-                      ? ` · signed by ${splitProgress.transfer_by_name}`
-                      : ""}
-                  </p>
-                  <p>
-                    Remaining:{" "}
-                    <span className="font-semibold tabular-nums text-slate-900">
-                      ₦{formatNumber1(remainingDue)}
-                    </span>
-                  </p>
-                  {(user?.firstname || user?.name || user?.username) && (
-                    <p className="text-slate-500">
-                      This collection will be signed by{" "}
-                      <span className="font-medium text-slate-700">
-                        {[user?.firstname, user?.lastname]
-                          .filter(Boolean)
-                          .join(" ")
-                          .trim() ||
-                          user?.name ||
-                          user?.username}
-                      </span>
-                    </p>
-                  )}
+          <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.9fr)]">
+            <div className="min-h-0 overflow-y-auto border-b border-slate-200 bg-slate-50 px-2 py-3 sm:px-4 lg:border-b-0 lg:border-r">
+              {hubLoading ? (
+                <div className="space-y-2 p-4">
+                  <Skeleton className="h-8 w-48" />
+                  <Skeleton className="h-40 w-full" />
+                  <Skeleton className="h-24 w-full" />
                 </div>
-              ) : null}
+              ) : hubInvoiceData ? (
+                <CreditSaleInvoiceImproved
+                  invoiceData={hubInvoiceData}
+                  business={hubInvoiceData.business || activeBusiness}
+                  customer={hubInvoiceData.customer}
+                  date={hubInvoiceData.date}
+                  taxes={hubInvoiceData.taxes || []}
+                  discount={hubInvoiceData.discount || null}
+                  showPrintButton={false}
+                  showCustomerCopyActions={false}
+                  enableInlineCustomerCopyPreview={false}
+                  documentMode="invoice"
+                  paperSize={
+                    String(
+                      hubInvoiceData?.business?.default_receipt_type ||
+                        activeBusiness?.default_receipt_type ||
+                        "pdf",
+                    )
+                      .toLowerCase()
+                      .trim() === "a5"
+                      ? "a5"
+                      : "a4"
+                  }
+                />
+              ) : (
+                <p className="px-4 py-10 text-center text-sm text-slate-500">
+                  Invoice could not be loaded. You can still use the actions on
+                  the right.
+                </p>
+              )}
             </div>
 
-            {showCashFields ? (
-              <div className="space-y-2">
-                {isSplit || !isCashOnly ? (
-                  <>
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="text-sm font-medium text-slate-700">
-                        Cash amount
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => fillAllRemaining("cash")}
-                        className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
-                      >
-                        All (₦{formatNumber1(remainingDue)})
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={cashAmount}
-                      onChange={(e) =>
-                        setCashAmount(formatNumberWithCommas(e.target.value))
+            <div className="flex min-h-0 flex-col bg-white">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-600">Amount due</span>
+                    <span className="text-lg font-semibold tabular-nums text-slate-900">
+                      ₦{formatNumber1(amountDue)}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2 text-sm">
+                    <span className="text-slate-600">Status</span>
+                    <WorkflowStatusBadge
+                      status={selected?.status}
+                      paymentType={
+                        selected?.payment_type ||
+                        (hubAction === "credit" ? "credit" : undefined)
                       }
-                      className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                      placeholder="0.00"
                     />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-sm">
+                    <span className="text-slate-600">Mode of payment</span>
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
+                        paymentType ||
+                          (hubAction === "credit" ? "credit" : ""),
+                      )}`}
+                    >
+                      {paymentTypeLabel(
+                        paymentType ||
+                          (hubAction === "credit" ? "credit" : ""),
+                      )}
+                    </span>
+                  </div>
+                  {hubAction === "mode" &&
+                  (selected?.proposed_payment_type ||
+                    selected?.pending_payment_mode?.to) ? (
+                    <div className="mt-2 flex items-center justify-between text-sm">
+                      <span className="text-slate-600">Requested</span>
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
+                          selected.proposed_payment_type ||
+                            selected.pending_payment_mode?.to,
+                        )}`}
+                      >
+                        {paymentTypeLabel(
+                          selected.proposed_payment_type ||
+                            selected.pending_payment_mode?.to,
+                        )}
+                      </span>
+                    </div>
+                  ) : null}
+                  {hubAction === "collect" && isSplit ? (
+                    <div className="mt-3 space-y-1 border-t border-slate-200 pt-2 text-xs text-slate-600">
+                      <p>
+                        Collecting{" "}
+                        <span className="font-semibold text-slate-800">
+                          {collectionSide === "transfer" ? "Transfer" : "Cash"}
+                        </span>{" "}
+                        part payment — both points can collect until the invoice
+                        is fully paid
+                        {normalizePaymentMode(paymentType) === "credit_split"
+                          ? ", or send the unpaid remainder to Credit Approval"
+                          : ""}
+                        .
+                      </p>
+                      <p>
+                        Cash collected: ₦
+                        {formatNumber1(splitProgress?.cash || 0)}
+                        {splitProgress?.cash_by_name
+                          ? ` · signed by ${splitProgress.cash_by_name}`
+                          : ""}
+                      </p>
+                      <p>
+                        Transfer collected: ₦
+                        {formatNumber1(splitProgress?.transfer || 0)}
+                        {splitProgress?.transfer_by_name
+                          ? ` · signed by ${splitProgress.transfer_by_name}`
+                          : ""}
+                      </p>
+                      <p>
+                        Remaining:{" "}
+                        <span className="font-semibold tabular-nums text-slate-900">
+                          ₦{formatNumber1(remainingDue)}
+                        </span>
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+
+                {hubAction === "collect" ? (
+                  <>
+                    {showCashFields ? (
+                      <div className="space-y-2">
+                        {isSplit || !isCashOnly ? (
+                          <>
+                            <div className="flex items-center justify-between gap-2">
+                              <label className="text-sm font-medium text-slate-700">
+                                Cash amount
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => fillAllRemaining("cash")}
+                                className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                              >
+                                All (₦{formatNumber1(remainingDue)})
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={cashAmount}
+                              onChange={(e) =>
+                                setCashAmount(
+                                  formatNumberWithCommas(e.target.value),
+                                )
+                              }
+                              className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                              placeholder="0.00"
+                            />
+                          </>
+                        ) : null}
+                        <label className="text-sm font-medium text-slate-700">
+                          {isCashOnly || isSplit
+                            ? "Pay Through"
+                            : "Cash account"}
+                        </label>
+                        <Select
+                          value={
+                            cashAccounts.accountHead?.head
+                              ? String(cashAccounts.accountHead.head)
+                              : undefined
+                          }
+                          onValueChange={(val) => {
+                            const found = (cashAccounts.headList || []).find(
+                              (h) => String(h.head) === String(val),
+                            );
+                            cashAccounts.setAccountHead(found || {});
+                          }}
+                        >
+                          <SelectTrigger className={payThroughSelectTriggerClass}>
+                            <SelectValue placeholder="Select cash / COA account…" />
+                          </SelectTrigger>
+                          <SelectContent className={payThroughSelectContentClass}>
+                            {(cashAccounts.headList || []).map((h) => (
+                              <SelectItem
+                                key={String(h.head)}
+                                value={String(h.head)}
+                              >
+                                {cashPayThroughLabel(h)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
+
+                    {showTransferFields ? (
+                      <div className="space-y-2">
+                        {isSplit || !isTransferOnly ? (
+                          <>
+                            <div className="flex items-center justify-between gap-2">
+                              <label className="text-sm font-medium text-slate-700">
+                                Transfer amount
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => fillAllRemaining("transfer")}
+                                className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                              >
+                                All (₦{formatNumber1(remainingDue)})
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={transferAmount}
+                              onChange={(e) =>
+                                setTransferAmount(
+                                  formatNumberWithCommas(e.target.value),
+                                )
+                              }
+                              className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                              placeholder="0.00"
+                            />
+                          </>
+                        ) : null}
+                        <label className="text-sm font-medium text-slate-700">
+                          {isTransferOnly || isSplit
+                            ? "Pay Through"
+                            : "Bank account"}
+                        </label>
+                        <Select
+                          value={
+                            bankAccounts.bankAccount?.id != null
+                              ? String(bankAccounts.bankAccount.id)
+                              : undefined
+                          }
+                          onValueChange={(val) => {
+                            const found = (bankAccounts.accountList || []).find(
+                              (b) => String(b.id) === String(val),
+                            );
+                            bankAccounts.setBankAccount(found || null);
+                          }}
+                        >
+                          <SelectTrigger className={payThroughSelectTriggerClass}>
+                            <SelectValue placeholder="Select bank account…" />
+                          </SelectTrigger>
+                          <SelectContent className={payThroughSelectContentClass}>
+                            {(bankAccounts.accountList || []).map((b) => (
+                              <SelectItem
+                                key={String(b.id)}
+                                value={String(b.id)}
+                              >
+                                {bankPayThroughLabel(b)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
+
+                    {isSplit ? (
+                      <p className="text-xs text-slate-500">
+                        Entered: ₦{formatNumber1(splitHintTotal)} · Remaining
+                        after this: ₦
+                        {formatNumber1(
+                          Math.max(
+                            0,
+                            Number((remainingDue - splitHintTotal).toFixed(2)),
+                          ),
+                        )}
+                      </p>
+                    ) : null}
                   </>
                 ) : null}
-                <label className="text-sm font-medium text-slate-700">
-                  {isCashOnly || isSplit ? "Pay Through" : "Cash account"}
-                </label>
-                <Select
-                  value={
-                    cashAccounts.accountHead?.head
-                      ? String(cashAccounts.accountHead.head)
-                      : undefined
-                  }
-                  onValueChange={(val) => {
-                    const found = (cashAccounts.headList || []).find(
-                      (h) => String(h.head) === String(val),
-                    );
-                    cashAccounts.setAccountHead(found || {});
-                  }}
-                >
-                  <SelectTrigger className={payThroughSelectTriggerClass}>
-                    <SelectValue placeholder="Select cash / COA account…" />
-                  </SelectTrigger>
-                  <SelectContent className={payThroughSelectContentClass}>
-                    {(cashAccounts.headList || []).map((h) => (
-                      <SelectItem key={String(h.head)} value={String(h.head)}>
-                        {cashPayThroughLabel(h)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-slate-500">
-                  Select the cash Chart of Accounts head for this collection.
-                </p>
-              </div>
-            ) : null}
 
-            {showTransferFields ? (
-              <div className="space-y-2">
-                {isSplit || !isTransferOnly ? (
-                  <>
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="text-sm font-medium text-slate-700">
-                        Transfer amount
-                      </label>
+                {hubAction === "credit" ? (
+                  <p className="text-sm text-slate-600">
+                    Review the invoice, then approve credit to send it to Invoice
+                    Separation.
+                  </p>
+                ) : null}
+                {hubAction === "discount" ? (
+                  <p className="text-sm text-slate-600">
+                    Review the invoice, then approve the discount to release it
+                    for collection.
+                  </p>
+                ) : null}
+                {hubAction === "mode" ? (
+                  <p className="text-sm text-slate-600">
+                    {selected?.status === "awaiting_payment_mode_approval" ||
+                    selected?.proposed_payment_type ||
+                    selected?.pending_payment_mode?.to
+                      ? "Review the invoice and approve or reject the requested payment mode switch."
+                      : "Review the invoice, then switch the payment mode if needed."}
+                  </p>
+                ) : null}
+                {hubAction === "view" ? (
+                  <p className="text-sm text-slate-600">
+                    Read-only view of this invoice from Collection Points
+                    history.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-5">
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeHub}
+                    disabled={submitting}
+                    className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Close
+                  </button>
+
+                  {hubAction === "collect" ? (
+                    <>
+                      {normalizePaymentMode(paymentType) === "credit_split" &&
+                      remainingDue > 0.05 ? (
+                        <button
+                          type="button"
+                          onClick={sendCreditRemainder}
+                          disabled={submitting}
+                          className="inline-flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          {submitting ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CreditCard className="h-4 w-4" />
+                          )}
+                          Leave ₦{formatNumber1(remainingDue)} on Credit
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        onClick={() => fillAllRemaining("transfer")}
-                        className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                        onClick={confirmPayment}
+                        disabled={submitting}
+                        className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:opacity-50"
                       >
-                        All (₦{formatNumber1(remainingDue)})
+                        {submitting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4" />
+                        )}
+                        {confirmButtonLabel}
                       </button>
-                    </div>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={transferAmount}
-                      onChange={(e) =>
-                        setTransferAmount(formatNumberWithCommas(e.target.value))
-                      }
-                      className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                      placeholder="0.00"
-                    />
-                  </>
-                ) : null}
-                <label className="text-sm font-medium text-slate-700">
-                  {isTransferOnly || isSplit ? "Pay Through" : "Bank account"}
-                </label>
-                <Select
-                  value={
-                    bankAccounts.bankAccount?.id != null
-                      ? String(bankAccounts.bankAccount.id)
-                      : undefined
-                  }
-                  onValueChange={(val) => {
-                    const found = (bankAccounts.accountList || []).find(
-                      (b) => String(b.id) === String(val),
-                    );
-                    bankAccounts.setBankAccount(found || null);
-                  }}
-                >
-                  <SelectTrigger className={payThroughSelectTriggerClass}>
-                    <SelectValue placeholder="Select bank account…" />
-                  </SelectTrigger>
-                  <SelectContent className={payThroughSelectContentClass}>
-                    {(bankAccounts.accountList || []).map((b) => (
-                      <SelectItem key={String(b.id)} value={String(b.id)}>
-                        {bankPayThroughLabel(b)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-slate-500">
-                  Select the bank / COA account for this transfer.
-                </p>
+                    </>
+                  ) : null}
+
+                  {hubAction === "credit" ? (
+                    <button
+                      type="button"
+                      disabled={submitting || !selected}
+                      onClick={() => approveCredit(selected)}
+                      className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                    >
+                      {submitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4" />
+                      )}
+                      Approve Credit
+                    </button>
+                  ) : null}
+
+                  {hubAction === "discount" ? (
+                    <button
+                      type="button"
+                      disabled={submitting || !selected}
+                      onClick={() => approveDiscount(selected)}
+                      className="inline-flex items-center gap-2 rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
+                    >
+                      {submitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4" />
+                      )}
+                      Approve Discount
+                    </button>
+                  ) : null}
+
+                  {hubAction === "mode" ? (
+                    selected?.status === "awaiting_payment_mode_approval" ||
+                    selected?.proposed_payment_type ||
+                    selected?.pending_payment_mode?.to ? (
+                      canApprovePaymentMode ? (
+                        <>
+                          <button
+                            type="button"
+                            disabled={submitting}
+                            onClick={() => setModeRejectRow(selected)}
+                            className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                          <button
+                            type="button"
+                            disabled={submitting}
+                            onClick={() => setModeApproveRow(selected)}
+                            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            Approve Mode
+                          </button>
+                        </>
+                      ) : (
+                        <span className="self-center text-xs text-slate-500">
+                          Awaiting approval
+                        </span>
+                      )
+                    ) : canSwitchPaymentMode ? (
+                      <button
+                        type="button"
+                        disabled={
+                          switchingModeCode === selected?.sale_code ||
+                          submitting
+                        }
+                        onClick={() => openModeChange(selected)}
+                        className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-navy)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                      >
+                        {switchingModeCode === selected?.sale_code ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ArrowRightLeft className="h-4 w-4" />
+                        )}
+                        Switch Mode
+                      </button>
+                    ) : null
+                  ) : null}
+                </div>
               </div>
-            ) : null}
-
-            {isSplit ? (
-              <p className="text-xs text-slate-500">
-                Entered: ₦{formatNumber1(splitHintTotal)} · Remaining after this: ₦
-                {formatNumber1(
-                  Math.max(0, Number((remainingDue - splitHintTotal).toFixed(2))),
-                )}
-              </p>
-            ) : null}
+            </div>
           </div>
-
-          <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-4 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={closeCollect}
-              disabled={submitting}
-              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={confirmPayment}
-              disabled={submitting}
-              className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:opacity-50"
-            >
-              {submitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <CheckCircle2 className="h-4 w-4" />
-              )}
-              {confirmButtonLabel}
-            </button>
-          </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       <Sheet
         open={advanceOpen}
