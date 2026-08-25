@@ -166,13 +166,13 @@ const SalaryStructureView = ({
         <div className="border-b border-gray-200 pb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Tax Rates</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="bg-[var(--aa-sidebar-active)] p-4 rounded-lg">
               <label className="block text-sm font-medium text-gray-600 mb-1">PAYE Rate</label>
-              <p className="text-2xl font-bold text-blue-600">{salaryStructure.payeRate}%</p>
+              <p className="text-2xl font-bold text-[var(--aa-accent)]">{salaryStructure.payeRate}%</p>
             </div>
-            <div className="bg-purple-50 p-4 rounded-lg">
+            <div className="bg-[var(--aa-sidebar-active)] p-4 rounded-lg">
               <label className="block text-sm font-medium text-gray-600 mb-1">Pension Rate</label>
-              <p className="text-2xl font-bold text-purple-600">{salaryStructure.pensionRate}%</p>
+              <p className="text-2xl font-bold text-[var(--aa-navy)]">{salaryStructure.pensionRate}%</p>
             </div>
           </div>
         </div>
@@ -221,7 +221,7 @@ const SalaryStructureView = ({
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {salaryStructure.employees.map((employee) => (
-                <div key={employee.id} className="bg-blue-50 p-3 rounded-lg">
+                <div key={employee.id} className="bg-[var(--aa-sidebar-active)] p-3 rounded-lg">
                   <div className="font-medium text-gray-900">
                     {employee.firstName} {employee.lastName}
                   </div>

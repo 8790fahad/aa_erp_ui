@@ -172,13 +172,13 @@ import TransactionTypeSelection from "../pages/report/transaction/TransactionTyp
 import TransactionForm from "../pages/report/transaction/TransactionForm";
 import AccountingReports from "../pages/report/components/AccountingReports";
 import GeneralLedgerPDF from "../pages/report/GeneralLedgerPDF";
-import InventriaGeneralLedger from "../pages/report/components/InventriaGeneralLedger";
-import InventriaTrialBalance from "../pages/report/components/InventriaTrialBalance";
-import InventriaBalanceSheet from "../pages/report/components/InventriaBalanceSheet";
+import AaErpGeneralLedger from "../pages/report/components/AaErpGeneralLedger";
+import AaErpTrialBalance from "../pages/report/components/AaErpTrialBalance";
+import AaErpBalanceSheet from "../pages/report/components/AaErpBalanceSheet";
 import StatementOfFinancialPositionReport from "../pages/report/components/StatementOfFinancialPositionReport";
 import InventoryValuationReport from "../pages/report/components/InventoryValuationReport";
-import InventriaIncomeStatement from "../pages/report/components/InventriaIncomeStatement";
-import InventriaIncomeStatementNotes from "../pages/report/components/InventriaIncomeStatementNotes";
+import AaErpIncomeStatement from "../pages/report/components/AaErpIncomeStatement";
+import AaErpIncomeStatementNotes from "../pages/report/components/AaErpIncomeStatementNotes";
 import PayableLedger from "../pages/report/components/PayableLedger";
 import CreditorsReport from "../pages/report/components/CreditorsReport";
 import PayableLedgerIndividualReport from "../pages/report/components/PayableLedgerIndividualReport";
@@ -1058,28 +1058,28 @@ const routeModules = {
             element: <GeneralLedgerPDF />,
           },
           {
-            path: "inventria-general-ledger",
-            element: <InventriaGeneralLedger />,
+            path: "aa_erp-general-ledger",
+            element: <AaErpGeneralLedger />,
           },
           {
-            path: "inventria-trial-balance",
-            element: <InventriaTrialBalance />,
+            path: "aa_erp-trial-balance",
+            element: <AaErpTrialBalance />,
           },
           {
-            path: "inventria-balance-sheet",
-            element: <InventriaBalanceSheet />,
+            path: "aa_erp-balance-sheet",
+            element: <AaErpBalanceSheet />,
           },
           {
-            path: "inventria-statement-of-financial-position",
+            path: "aa_erp-statement-of-financial-position",
             element: <StatementOfFinancialPositionReport />,
           },
           {
-            path: "inventria-income-statement",
-            element: <InventriaIncomeStatement />,
+            path: "aa_erp-income-statement",
+            element: <AaErpIncomeStatement />,
           },
           {
-            path: "inventria-income-statement-notes",
-            element: <InventriaIncomeStatementNotes />,
+            path: "aa_erp-income-statement-notes",
+            element: <AaErpIncomeStatementNotes />,
           },
           {
             path: "payable-ledger",

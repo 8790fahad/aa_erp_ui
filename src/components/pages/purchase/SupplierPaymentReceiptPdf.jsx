@@ -22,7 +22,7 @@ const SupplierPaymentReceiptHTML = ({ paymentData, company, receiptRef }) => {
   const invoice_ref = query.get("ref_number");
   const payment_ref = query.get("pv_code");
   const companyData = {
-    name: company?.business_name || "INVENTRIA MANUFACTURING LTD",
+    name: company?.business_name || "AA_ERP MANUFACTURING LTD",
     receiptNumber:
       paymentData?.reference_number || paymentData?.ref_number || "N/A",
     paymentDate:

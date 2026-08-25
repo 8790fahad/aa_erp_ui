@@ -48,7 +48,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import inventria from "../../assets/aa_erp.png";
+import aa_erp from "../../assets/aa_erp.png";
 import {
   Link,
   NavLink,
@@ -113,7 +113,7 @@ export default function AuthRoutes() {
             <SidebarMenuItem>
               <Link to="/app">
                 <img
-                  src={activeBusiness?.business_logo || inventria}
+                  src={activeBusiness?.business_logo || aa_erp}
                   alt={
                     activeBusiness?.business_logo
                       ? activeBusiness?.business_name || "Business logo"
@@ -123,7 +123,7 @@ export default function AuthRoutes() {
                   style={{ height: "55px", objectFit: "contain" }}
                   onError={(e) => {
                     e.target.onerror = null;
-                    e.target.src = inventria;
+                    e.target.src = aa_erp;
                   }}
                 />
               </Link>

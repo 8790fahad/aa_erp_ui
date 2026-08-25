@@ -32,20 +32,20 @@ import { _fetchApi, _postApi } from "@/redux/actions/api";
 import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
 import { Label } from "reactstrap";
 import BulkUploadModal from "./BulkUploadModal";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const Bonus = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor =
-    activeBusiness?.secondary_color &&
-    String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"
-      ? activeBusiness.secondary_color
-      : primaryColor;
-  const appColorStyle = {
-    ["--app-primary"]: primaryColor,
-    ["--app-secondary"]: secondaryColor,
-  };
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
+  const appColorStyle = brandAppStyle;
 
   const [bonuses, setBonuses] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -507,7 +507,7 @@ const Bonus = () => {
   const getBonusTypeColor = (type) => {
     switch (type) {
       case "performance":
-        return "bg-purple-100 text-purple-800";
+        return "bg-[var(--aa-sidebar-active)] text-[var(--aa-navy)]";
       case "holiday":
         return "bg-red-100 text-red-800";
       case "project":
@@ -755,7 +755,7 @@ const Bonus = () => {
         payloadKey="bonuses"
         facilityId={facilityId}
         createdBy={user?.id || user?.userId}
-        primaryColor={activeBusiness?.primary_color || "#1a2d5e"}
+        primaryColor={primaryColor}
         templateCols={[
           {
             key: "employeeId",
@@ -1152,8 +1152,7 @@ const Bonus = () => {
                         style={
                           formData.isTaxable === opt.value
                             ? {
-                                backgroundColor:
-                                  activeBusiness?.primary_color || "#1a2d5e",
+                                backgroundColor: primaryColor,
                               }
                             : undefined
                         }

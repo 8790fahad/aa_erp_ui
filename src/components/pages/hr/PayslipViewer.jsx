@@ -39,7 +39,7 @@ const PayslipViewer = () => {
   };
 
   const companyInfo = {
-    companyName: "INVENTRIA SYSTEMS LTD.",
+    companyName: "AA_ERP SYSTEMS LTD.",
     address:
       "Plot No. Sharada Industrial Estate, Phase III\nP.O. Box 2414\nKANO, Nigeria",
   };

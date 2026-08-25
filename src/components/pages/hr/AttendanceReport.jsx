@@ -24,20 +24,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { useSelector } from "react-redux";
 import { toast } from "sonner";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const AttendanceReport = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor =
-    activeBusiness?.secondary_color &&
-    String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"
-      ? activeBusiness.secondary_color
-      : primaryColor;
-  const appColorStyle = {
-    ["--app-primary"]: primaryColor,
-    ["--app-secondary"]: secondaryColor,
-  };
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
+  const appColorStyle = brandAppStyle;
   const brandButtonStyle = {
     backgroundColor: primaryColor,
     borderColor: primaryColor,

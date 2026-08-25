@@ -4,6 +4,7 @@ import { useSelector } from "react-redux";
 import RunPayrollTab from "./RunPayrollTab";
 import PayrollHistory from "./PayrollHistory";
 import { DollarSign, History, CreditCard } from "lucide-react";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const PAYROLL_TAB_PRIVILEGES = [
   "Run Payroll",
@@ -37,12 +38,14 @@ const PayrollPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get("tab") || "run";
   const { user, activeBusiness } = useSelector((state) => state.auth);
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor =
-    activeBusiness?.secondary_color &&
-    String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"
-      ? activeBusiness.secondary_color
-      : primaryColor;
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
 
   const functionalities = useMemo(() => {
     return [

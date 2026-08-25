@@ -33,14 +33,14 @@ const PurchaseOrderHTML = ({ orderData, company, invoiceRef }) => {
     name:
       orderData?.company?.name ||
       company?.business_name ||
-      "INVENTRIA MANUFACTURING LTD",
+      "AA_ERP MANUFACTURING LTD",
     requestNumber: orderData?.pr_no || "N/A",
     requestDate: orderData?.requestDate || orderData?.date || "N/A",
     branch: orderData?.branch || "N/A",
     email:
       orderData?.company?.email ||
       company?.business_email ||
-      "procurement@inventria.app",
+      "procurement@aa_erp.app",
   };
 
   const materials = orderData?.items || [];
@@ -240,7 +240,7 @@ const PurchaseOrderHTML = ({ orderData, company, invoiceRef }) => {
   );
 };
 
-const InventriaMaterialRequestPDF = () => {
+const AaErpMaterialRequestPDF = () => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const pr_no = useQuery().get("pr_no");
   const [orderData, setOrderData] = useState(null);
@@ -459,4 +459,4 @@ const InventriaMaterialRequestPDF = () => {
   );
 };
 
-export default InventriaMaterialRequestPDF;
+export default AaErpMaterialRequestPDF;

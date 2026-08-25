@@ -15,6 +15,7 @@ import {
   UserX,
   ScanLine,
 } from "lucide-react";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const normalizeScannedEmployeeId = (value) =>
   String(value ?? "")
@@ -35,18 +36,16 @@ const resolveFacilityId = (activeBusiness, user) => {
 const AttendanceClock = ({ employee, isSecurityGate = false }) => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = resolveFacilityId(activeBusiness, user);
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor = activeBusiness?.secondary_color;
-  const gradientEnd =
-    secondaryColor && String(secondaryColor).toLowerCase() !== "#ffffff"
-      ? secondaryColor
-      : primaryColor;
-  const headerGradient = `linear-gradient(to right, ${primaryColor}, ${gradientEnd})`;
-  const brandButtonStyle = {
-    backgroundColor: primaryColor,
-    borderColor: primaryColor,
-    color: "#fff",
-  };
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
+  const headerGradient = brandHeaderGradient;
+  const brandButtonStyle = brandBtn;
   const [attendance, setAttendance] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");

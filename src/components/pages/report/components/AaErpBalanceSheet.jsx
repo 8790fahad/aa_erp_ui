@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import AccountingTreatmentByScenarioPanel from "@/components/accounting/AccountingTreatmentByScenarioPanel";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 
-const InventriaBalanceSheet = () => {
+const AaErpBalanceSheet = () => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const location = useLocation();
   const facilityId = activeBusiness?.id;
@@ -528,4 +528,4 @@ const InventriaBalanceSheet = () => {
   );
 };
 
-export default InventriaBalanceSheet;
+export default AaErpBalanceSheet;

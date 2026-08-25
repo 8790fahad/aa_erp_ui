@@ -32,6 +32,7 @@ import InvoiceCorrection from "./InvoiceCorrection";
 import JournalCorrection from "./JournalCorrection";
 import MaterialRequisitionSettings from "./MaterialRequisitionSettings";
 import ProductionCorrectionSettings from "./ProductionCorrectionSettings";
+import SessionSettings from "./SessionSettings";
 import { getConfiguredSocialCount } from "./MarketplaceSocialMediaModal";
 import BusinessDocumentHeader, {
   DocumentHeaderPreview,
@@ -1689,6 +1690,16 @@ export default function SettingsTabPanels({
           <Row className="g-4">
             <Col md={12}>
               <MaterialRequisitionSettings />
+            </Col>
+          </Row>
+        </TabsContent>
+      )}
+
+      {tabVisible("session") && (
+        <TabsContent value="session" className="mt-0">
+          <Row className="g-4">
+            <Col md={12}>
+              <SessionSettings />
             </Col>
           </Row>
         </TabsContent>

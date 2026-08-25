@@ -3,7 +3,7 @@
 // import { showMessage } from 'react-native-flash-message'
 // import { REMOVE_PRINTER } from './actionTypes'
 
-// const SAVED_PRINTERS_KEY = '@@inventria:saved_pinters'
+// const SAVED_PRINTERS_KEY = '@@aa_erp:saved_pinters'
 
 export const getDefaultPrinter = async (
   callback = (f) => f,

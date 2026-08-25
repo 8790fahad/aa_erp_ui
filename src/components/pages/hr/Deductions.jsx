@@ -261,7 +261,7 @@ const Deductions = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {deduction.isRoleBased ? (
-                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-[var(--aa-sidebar-active)] text-[var(--aa-navy)]">
                         {deduction.roleName}
                       </span>
                     ) : (
@@ -274,14 +274,14 @@ const Deductions = () => {
                     <div className="flex space-x-2">
                       <button
                         onClick={() => handleViewDeduction(deduction)}
-                        className="text-blue-600 hover:text-blue-900"
+                        className="text-[var(--aa-accent)] hover:text-[var(--aa-navy)]"
                         title="View"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleEditDeduction(deduction)}
-                        className="text-indigo-600 hover:text-indigo-900"
+                        className="text-[var(--aa-accent)] hover:text-[var(--aa-navy)]"
                         title="Edit"
                       >
                         <Edit className="h-4 w-4" />

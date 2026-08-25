@@ -2,6 +2,7 @@ import React, { forwardRef } from "react";
 import { useSelector } from "react-redux";
 import { formatCurrency } from "../../../utils/numberUtils";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const PayslipPDF = forwardRef(
   (
@@ -17,21 +18,19 @@ const PayslipPDF = forwardRef(
   ) => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const business = businessProp || activeBusiness;
-  const primaryColor =
-    primaryColorProp || business?.primary_color || "#1a2d5e";
+  const {
+    primaryColor: appPrimary,
+    headerGradient: appHeaderGradient,
+  } = getAaBrandColors();
+  const primaryColor = primaryColorProp || appPrimary;
   const payeEnabled =
     showPaye &&
     business?.paye_auto_calculation !== false &&
     business?.paye_auto_calculation !== 0 &&
     business?.paye_auto_calculation !== "0";
-  const secondaryColor = business?.secondary_color;
-  const gradientEnd =
-    secondaryColor &&
-    String(secondaryColor).toLowerCase() !== "#ffffff" &&
-    String(secondaryColor).toLowerCase() !== "#fff"
-      ? secondaryColor
-      : primaryColor;
-  const headerGradient = `linear-gradient(to right, ${primaryColor}, ${gradientEnd})`;
+  const headerGradient = primaryColorProp
+    ? `linear-gradient(to right, ${primaryColor}, ${primaryColor})`
+    : appHeaderGradient;
 
   if (!data || !employee) return null;
 

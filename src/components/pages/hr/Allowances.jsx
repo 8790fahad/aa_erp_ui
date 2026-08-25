@@ -21,41 +21,22 @@ import { Button } from "@/components/ui/button";
 import { useSelector } from "react-redux";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const Allowances = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor =
-    activeBusiness?.secondary_color &&
-    String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"
-      ? activeBusiness.secondary_color
-      : primaryColor;
-  const appColorStyle = {
-    ["--app-primary"]: primaryColor,
-    ["--app-secondary"]: secondaryColor,
-  };
-  const shadeColor = (hex, percent) => {
-    const h = String(hex || "").replace("#", "").trim();
-    if (![3, 6].includes(h.length)) return primaryColor;
-    const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
-    const num = parseInt(full, 16);
-    const amt = Math.round(2.55 * percent);
-    const r = Math.min(255, Math.max(0, (num >> 16) + amt));
-    const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amt));
-    const b = Math.min(255, Math.max(0, (num & 0x0000ff) + amt));
-    return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
-  };
-  const gradientEnd =
-    secondaryColor &&
-    !["#fff", "#ffffff", "white"].includes(String(secondaryColor).toLowerCase())
-      ? secondaryColor
-      : shadeColor(primaryColor, -18);
-  const headerGradient = `linear-gradient(to right, ${primaryColor}, ${gradientEnd})`;
-  const brandButtonStyle = {
-    backgroundColor: primaryColor,
-    borderColor: primaryColor,
-  };
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
+  const appColorStyle = brandAppStyle;
+  const headerGradient = brandHeaderGradient;
+  const brandButtonStyle = brandBtn;
   const selectedToggleStyle = {
     backgroundColor: primaryColor,
     borderColor: primaryColor,
@@ -453,7 +434,7 @@ const Allowances = () => {
         payloadKey="allowances"
         facilityId={facilityId}
         createdBy={user?.id || user?.userId}
-        primaryColor={activeBusiness?.primary_color || "#1a2d5e"}
+        primaryColor={primaryColor}
         templateCols={[
           {
             key: "name",

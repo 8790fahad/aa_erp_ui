@@ -20,12 +20,19 @@ import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
 import { Label } from "@/components/ui/label";
 import { _postApi, _fetchApi, _putApi } from "@/redux/actions/api";
 import { Switch } from "@/components/ui/switch";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const SalaryStructure = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor = activeBusiness?.secondary_color;
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
   const shadeColor = (hex, percent) => {
     const h = String(hex || "").replace("#", "").trim();
     if (![3, 6].includes(h.length)) return primaryColor;

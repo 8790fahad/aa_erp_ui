@@ -468,7 +468,7 @@ function KpiReportSheet({
             <button
               type="button"
               onClick={() =>
-                navigate("/app/reports/accounting-reports/inventria-income-statement")
+                navigate("/app/reports/accounting-reports/aa_erp-income-statement")
               }
               className="mt-2 w-full rounded-lg border border-gray-200 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
@@ -1370,7 +1370,7 @@ export default function FinancialOverviewSection({
               type="button"
               onClick={() =>
                 navigate(
-                  "/app/reports/accounting-reports/inventria-income-statement",
+                  "/app/reports/accounting-reports/aa_erp-income-statement",
                 )
               }
               className="text-xs text-[var(--aa-navy,#1a2d5e)] hover:underline"

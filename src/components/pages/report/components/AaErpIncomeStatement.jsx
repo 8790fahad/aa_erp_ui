@@ -26,7 +26,7 @@ import ProfitLossSummaryTable from "./ProfitLossSummaryTable";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 import { buildIncomeStatementNotesUrl } from "./IncomeStatementNotesSection";
 
-const InventriaIncomeStatement = () => {
+const AaErpIncomeStatement = () => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const location = useLocation();
   const facilityId = activeBusiness?.id;
@@ -97,7 +97,7 @@ const InventriaIncomeStatement = () => {
                     kind: "income_statement",
                     fromDate: from,
                     toDate: to,
-                    route: `/app/reports/accounting-reports/inventria-income-statement`,
+                    route: `/app/reports/accounting-reports/aa_erp-income-statement`,
                     facilityId,
                   },
                   is_active: 1,
@@ -942,4 +942,4 @@ const InventriaIncomeStatement = () => {
   );
 };
 
-export default InventriaIncomeStatement;
+export default AaErpIncomeStatement;

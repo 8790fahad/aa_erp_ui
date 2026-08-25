@@ -15,6 +15,7 @@ import { accountTypes } from "@/lib/utils";
 import CustomButton from "@/common/Custom/CustomButton";
 import BankTypeahead from "../../common/BankTypeahead";
 import { formatNumberWithCommas } from "@/utils/numberUtils";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const readPayeFlag = (employee, key) => {
   const fromProfile = employee?.payeProfile?.[key];
@@ -36,7 +37,14 @@ const EmployeeForm = ({
 }) => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
   const shadePrimary = (hex, percent) => {
     const h = String(hex || "").replace("#", "").trim();
     if (![3, 6].includes(h.length)) return primaryColor;

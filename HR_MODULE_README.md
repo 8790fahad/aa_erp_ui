@@ -1,6 +1,6 @@
-# HR Module for Inventria System
+# HR Module for AaErp System
 
-A comprehensive Human Resources Management System integrated with the Inventria ERP platform.
+A comprehensive Human Resources Management System integrated with the AaErp ERP platform.
 
 ## Features
 
@@ -362,7 +362,7 @@ The HR module integrates with the existing chart of accounts:
 
 ## License
 
-This HR module is part of the Inventria ERP system and follows the same licensing terms.
+This HR module is part of the AaErp ERP system and follows the same licensing terms.
 
 ---
 

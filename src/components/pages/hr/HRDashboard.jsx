@@ -19,20 +19,20 @@ import {
 } from 'recharts';
 import { toast } from "sonner";
 import CustomButton from "@/common/Custom/CustomButton";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const HRDashboard = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId;
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor =
-    activeBusiness?.secondary_color &&
-    String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"
-      ? activeBusiness.secondary_color
-      : primaryColor;
-  const appColorStyle = {
-    ["--app-primary"]: primaryColor,
-    ["--app-secondary"]: secondaryColor,
-  };
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
+  const appColorStyle = brandAppStyle;
   const COLORS = [primaryColor, '#10b981', '#f59e0b', '#ef4444', secondaryColor, '#ec4899'];
 
   const [stats, setStats] = useState({
@@ -227,8 +227,8 @@ const HRDashboard = () => {
               <AreaChart data={attendanceTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                    <stop offset="5%" stopColor={accentColor} stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor={accentColor} stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
@@ -238,7 +238,7 @@ const HRDashboard = () => {
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   formatter={(value) => [`${value}%`, 'Attendance Rate']}
                 />
-                <Area type="monotone" dataKey="rate" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorRate)" />
+                <Area type="monotone" dataKey="rate" stroke={accentColor} strokeWidth={3} fillOpacity={1} fill="url(#colorRate)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>

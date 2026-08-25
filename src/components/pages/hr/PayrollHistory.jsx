@@ -10,6 +10,7 @@ import CustomTable1 from "@/common/Custom/CustomTable1";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import PayrollBatchDetails from "./PayrollBatchDetails";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const months = [
   "January","February","March","April","May","June",
@@ -35,16 +36,15 @@ const PayrollHistory = ({ mode = "history" }) => {
   const isPaymentMode = mode === "payment";
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId;
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor =
-    activeBusiness?.secondary_color &&
-    String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"
-      ? activeBusiness.secondary_color
-      : primaryColor;
-  const appColorStyle = {
-    ["--app-primary"]: primaryColor,
-    ["--app-secondary"]: secondaryColor,
-  };
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
+  const appColorStyle = brandAppStyle;
 
   const [batches, setBatches]           = useState([]);
   const [loading, setLoading]           = useState(true);

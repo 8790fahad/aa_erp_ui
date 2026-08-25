@@ -179,19 +179,61 @@ const inputClass =
   "h-9 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]";
 
 function parsePeriodDates(period) {
-  const m = String(period || "").trim().match(/^Q([1-4])\s+(\d{4})$/i);
-  if (!m) return null;
-  const q = Number(m[1]);
-  const y = Number(m[2]);
-  const startMonth = (q - 1) * 3;
-  return {
-    fromDate: moment({ year: y, month: startMonth, day: 1 }).format(
-      "YYYY-MM-DD",
-    ),
-    toDate: moment({ year: y, month: startMonth + 2 })
-      .endOf("month")
-      .format("YYYY-MM-DD"),
-  };
+  const raw = String(period || "").trim();
+  if (!raw) return null;
+
+  // Q1 2026 | Q1-2026 | 2026 Q1 | 2026-Q1
+  let m = raw.match(/^Q([1-4])[\s\-_/]*(\d{4})$/i);
+  if (!m) m = raw.match(/^(\d{4})[\s\-_/]*Q([1-4])$/i);
+  if (m) {
+    const q = Number(m[1].length === 4 ? m[2] : m[1]);
+    const y = Number(m[1].length === 4 ? m[1] : m[2]);
+    const startMonth = (q - 1) * 3;
+    return {
+      fromDate: moment({ year: y, month: startMonth, day: 1 }).format(
+        "YYYY-MM-DD",
+      ),
+      toDate: moment({ year: y, month: startMonth + 2 })
+        .endOf("month")
+        .format("YYYY-MM-DD"),
+    };
+  }
+
+  // YYYY-MM-DD → YYYY-MM-DD | YYYY-MM-DD to YYYY-MM-DD
+  m = raw.match(
+    /^(\d{4}-\d{2}-\d{2})\s*(?:→|->|to|–|-)\s*(\d{4}-\d{2}-\d{2})$/i,
+  );
+  if (m) {
+    return { fromDate: m[1], toDate: m[2] };
+  }
+
+  return null;
+}
+
+function buildPeriodOptions(baseYear = moment().year()) {
+  const years = [baseYear - 1, baseYear, baseYear + 1];
+  const opts = [];
+  for (const y of years) {
+    for (let q = 1; q <= 4; q += 1) {
+      opts.push(`Q${q} ${y}`);
+    }
+  }
+  return opts;
+}
+
+function formatPeriodFromDates(fromDate, toDate) {
+  if (!fromDate || !toDate) return "";
+  const from = moment(fromDate, "YYYY-MM-DD", true);
+  const to = moment(toDate, "YYYY-MM-DD", true);
+  if (!from.isValid() || !to.isValid()) return "";
+  if (
+    from.date() === 1 &&
+    to.isSame(from.clone().add(2, "months").endOf("month"), "day") &&
+    from.month() % 3 === 0
+  ) {
+    return `Q${Math.floor(from.month() / 3) + 1} ${from.year()}`;
+  }
+  return `${from.format("YYYY-MM-DD")} → ${to.format("YYYY-MM-DD")}`;
 }
 
 function lineDate(row) {
@@ -480,15 +522,40 @@ export default function RebateLedger() {
     }));
   };
 
+  const onPeriodDateChange = (key, value) => {
+    setRuleForm((f) => {
+      const next = { ...f, [key]: value };
+      const fromDate = key === "fromDate" ? value : f.fromDate;
+      const toDate = key === "toDate" ? value : f.toDate;
+      // Keep period label in sync with from/to when it was empty or a known quarter/range
+      const parsed = parsePeriodDates(f.period);
+      const periodLooksDerived =
+        !f.period ||
+        (parsed &&
+          parsed.fromDate === f.fromDate &&
+          parsed.toDate === f.toDate);
+      if (periodLooksDerived && fromDate && toDate) {
+        next.period = formatPeriodFromDates(fromDate, toDate);
+      }
+      return next;
+    });
+  };
+
   const addRule = (e) => {
     e.preventDefault();
     if (
       !ruleForm.name ||
       !ruleForm.period ||
+      !ruleForm.fromDate ||
+      !ruleForm.toDate ||
       !ruleForm.minQty ||
       !ruleForm.rebatePercent
     ) {
-      toast.error("Fill rule name, period, min qty, and rebate %");
+      toast.error("Fill rule name, period (from–to), min qty, and rebate %");
+      return;
+    }
+    if (ruleForm.fromDate > ruleForm.toDate) {
+      toast.error("Period From date must be on or before To date");
       return;
     }
     if (!facilityId) {
@@ -530,13 +597,13 @@ export default function RebateLedger() {
     }
 
     const targetType = basis === "purchase" ? "supplier" : "customer";
-    const dates =
-      ruleForm.fromDate && ruleForm.toDate
-        ? { fromDate: ruleForm.fromDate, toDate: ruleForm.toDate }
-        : parsePeriodDates(ruleForm.period) || {
-            fromDate: fromDate,
-            toDate: toDate,
-          };
+    const dates = {
+      fromDate: ruleForm.fromDate,
+      toDate: ruleForm.toDate,
+    };
+    const periodLabel =
+      ruleForm.period.trim() ||
+      formatPeriodFromDates(dates.fromDate, dates.toDate);
     setSavingRule(true);
     _postApi(
       "/api/v1/rebate-ledger/rules",
@@ -552,7 +619,7 @@ export default function RebateLedger() {
         supplierName: basis === "purchase" ? ruleForm.supplierName : "",
         customerNo: basis === "sales" ? ruleForm.customerNo : "",
         customerName: basis === "sales" ? ruleForm.customerName : "",
-        period: ruleForm.period.trim(),
+        period: periodLabel,
         fromDate: dates.fromDate,
         toDate: dates.toDate,
         minQty: Number(ruleForm.minQty),
@@ -1182,45 +1249,91 @@ export default function RebateLedger() {
                   ) : null}
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-slate-600">
-                      Period label
+                      Period
                     </label>
-                    <input
+                    <select
                       className={`${inputClass} w-full`}
-                      placeholder="e.g. Q3 2026"
-                      value={ruleForm.period}
-                      onChange={(e) => onPeriodChange(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-600">
-                        From
-                      </label>
-                      <input
-                        className={`${inputClass} w-full`}
-                        type="date"
-                        value={ruleForm.fromDate}
-                        onChange={(e) =>
-                          setRuleForm({
-                            ...ruleForm,
-                            fromDate: e.target.value,
-                          })
+                      value={
+                        buildPeriodOptions().includes(ruleForm.period)
+                          ? ruleForm.period
+                          : ruleForm.period || ruleForm.fromDate || ruleForm.toDate
+                            ? "__custom__"
+                            : ""
+                      }
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) {
+                          setRuleForm((f) => ({
+                            ...f,
+                            period: "",
+                            fromDate: "",
+                            toDate: "",
+                          }));
+                          return;
                         }
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-600">
-                        To
-                      </label>
-                      <input
-                        className={`${inputClass} w-full`}
-                        type="date"
-                        value={ruleForm.toDate}
-                        onChange={(e) =>
-                          setRuleForm({ ...ruleForm, toDate: e.target.value })
+                        if (v === "__custom__") {
+                          setRuleForm((f) => ({
+                            ...f,
+                            period:
+                              f.fromDate && f.toDate
+                                ? formatPeriodFromDates(f.fromDate, f.toDate) ||
+                                  f.period ||
+                                  "Custom"
+                                : f.period || "Custom",
+                          }));
+                          return;
                         }
-                      />
+                        onPeriodChange(v);
+                      }}
+                    >
+                      <option value="">Select period…</option>
+                      {buildPeriodOptions().map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                      <option value="__custom__">Custom range</option>
+                    </select>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-medium text-slate-500">
+                          From
+                        </label>
+                        <input
+                          className={`${inputClass} w-full`}
+                          type="date"
+                          value={ruleForm.fromDate}
+                          onChange={(e) =>
+                            onPeriodDateChange("fromDate", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-medium text-slate-500">
+                          To
+                        </label>
+                        <input
+                          className={`${inputClass} w-full`}
+                          type="date"
+                          value={ruleForm.toDate}
+                          onChange={(e) =>
+                            onPeriodDateChange("toDate", e.target.value)
+                          }
+                        />
+                      </div>
                     </div>
+                    {ruleForm.fromDate && ruleForm.toDate ? (
+                      <p className="text-[11px] text-slate-500">
+                        {formatPeriodFromDates(
+                          ruleForm.fromDate,
+                          ruleForm.toDate,
+                        ) || `${ruleForm.fromDate} → ${ruleForm.toDate}`}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-slate-400">
+                        Choose a quarter or set From / To dates for this rule.
+                      </p>
+                    )}
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">

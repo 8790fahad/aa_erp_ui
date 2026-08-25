@@ -71,7 +71,7 @@ Ensure your frontend is configured to call the correct API endpoint:
 
 ```javascript
 // In your axios configuration
-const API_BASE_URL = "http://localhost:3000/flowbooks";
+const API_BASE_URL = "http://localhost:3000/aa_erp";
 ```
 
 ### 3. User Authentication

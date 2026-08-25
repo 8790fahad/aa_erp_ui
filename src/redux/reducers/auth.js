@@ -28,7 +28,7 @@ const initialState = {
     wallet: 0,
     email: "",
     role: "",
-    busName: "Inventria General Enterprises",
+    busName: "AA ERP General Enterprises",
     businessType: BUSINESS_TYPES.PRODUCTS,
     businessIncludesLogistics: true,
     image:

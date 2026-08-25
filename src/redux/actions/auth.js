@@ -31,6 +31,7 @@ import {
 // import { pullbankChanges, pushbankChanges } from "./add_bank";
 
 import { apiURL, _postApi } from "./api";
+import { clearSessionLockState } from "@/lib/sessionLock";
 
 const endpoint = "auth";
 
@@ -101,6 +102,7 @@ export function authLoading() {
 export function logout(callback = (f) => f) {
   return (dispatch) => {
     // console.log('dispatching logout');
+    clearSessionLockState();
     dispatch({ type: LOGOUT });
     localStorage.removeItem("@@__token");
     callback();

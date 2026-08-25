@@ -42,7 +42,7 @@ const DEFAULT_PRINT_MARGINS_IN = {
 const inchesToMm = (inches) =>
   Math.max(0, parseFloat(inches) || 0) * 25.4;
 
-const InventriaTrialBalance = () => {
+const AaErpTrialBalance = () => {
   const BALANCE_TOLERANCE_NAIRA = 10;
   const { activeBusiness } = useSelector((state) => state.auth);
   const location = useLocation();
@@ -768,4 +768,4 @@ const InventriaTrialBalance = () => {
   );
 };
 
-export default InventriaTrialBalance;
+export default AaErpTrialBalance;

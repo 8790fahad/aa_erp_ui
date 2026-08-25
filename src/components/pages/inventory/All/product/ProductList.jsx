@@ -98,14 +98,14 @@ const resolveProductImageUrl = (src) => {
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
 
   const apiOrigin = apiURL.replace(
-    /\/(flowbooks|inventria_new|flowbooks_api|aa_erp_api)\/?$/,
+    /\/(aa_erp|aa_erp|aa_erp_api|aa_erp_api)\/?$/,
     "",
   );
 
   if (
-    trimmed.startsWith("/flowbooks/") ||
-    trimmed.startsWith("/flowbooks/") ||
-    trimmed.startsWith("/flowbooks_api/") ||
+    trimmed.startsWith("/aa_erp/") ||
+    trimmed.startsWith("/aa_erp/") ||
+    trimmed.startsWith("/aa_erp_api/") ||
     trimmed.startsWith("/aa_erp_api/")
   ) {
     return `${apiOrigin}${trimmed}`;

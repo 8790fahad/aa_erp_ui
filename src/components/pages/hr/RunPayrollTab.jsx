@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { apiURL } from "@/redux/actions/api";
 import { Alert } from "@/components/ui/alert";
 import PayrollBatchDetails from "./PayrollBatchDetails";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const months = [
   { value: 1, label: "January" },  { value: 2, label: "February" },
@@ -34,12 +35,14 @@ const formatCurrency = (amount) =>
 const PayrollRun = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor =
-    activeBusiness?.secondary_color &&
-    String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"
-      ? activeBusiness.secondary_color
-      : primaryColor;
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
 
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear]   = useState(new Date().getFullYear());

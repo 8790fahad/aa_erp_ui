@@ -31,7 +31,7 @@ import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 
-const InventriaGeneralLedger = () => {
+const AaErpGeneralLedger = () => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const location = useLocation();
   const navigate = useNavigate();
@@ -1634,4 +1634,4 @@ const InventriaGeneralLedger = () => {
   );
 };
 
-export default InventriaGeneralLedger;
+export default AaErpGeneralLedger;

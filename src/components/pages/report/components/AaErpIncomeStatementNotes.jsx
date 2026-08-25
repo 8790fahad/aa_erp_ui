@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import IncomeStatementNotesSection from "./IncomeStatementNotesSection";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 
-export default function InventriaIncomeStatementNotes() {
+export default function AaErpIncomeStatementNotes() {
   const { activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id;
   const navigate = useNavigate();
@@ -88,7 +88,7 @@ export default function InventriaIncomeStatementNotes() {
   const currentYearLabel = toDate ? moment(toDate).format("YYYY") : "";
 
   const backToStatement = () => {
-    navigate("/app/reports/accounting-reports/inventria-income-statement", {
+    navigate("/app/reports/accounting-reports/aa_erp-income-statement", {
       state: { fromDate, toDate },
     });
   };

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { _postApi, _fetchApi } from "@/redux/actions/api";
 import { toast } from "sonner";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const emptyLeaveType = (primaryColor) => ({
   name: "",
@@ -36,15 +37,16 @@ const emptyLeaveType = (primaryColor) => ({
 const LeaveSetup = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor = activeBusiness?.secondary_color;
-  const gradientEnd = secondaryColor || primaryColor;
-  const headerGradient = `linear-gradient(to right, ${primaryColor}, ${gradientEnd})`;
-  const brandButtonStyle = {
-    backgroundColor: primaryColor,
-    borderColor: primaryColor,
-    color: "#fff",
-  };
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
+  const headerGradient = brandHeaderGradient;
+  const brandButtonStyle = brandBtn;
   const focusRingStyle = { "--tw-ring-color": primaryColor };
 
   const [loading, setLoading] = useState(false);

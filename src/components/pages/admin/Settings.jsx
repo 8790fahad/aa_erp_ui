@@ -41,7 +41,9 @@ export default function Settings() {
 
   const canViewTab = useCallback(
     (tab) => {
-      const keys = [tab.privilege, ...(tab.altPrivileges || [])];
+      if (tab.openToAll) return true;
+      const keys = [tab.privilege, ...(tab.altPrivileges || [])].filter(Boolean);
+      if (!keys.length) return true;
       return keys.some((k) => functionalities.includes(k));
     },
     [functionalities],

@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Typeahead } from "react-bootstrap-typeahead";
 import "react-bootstrap-typeahead/css/Typeahead.css";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const months = [
   { value: 1, label: "January" }, { value: 2, label: "February" },
@@ -74,18 +75,16 @@ const PayrollBatchDetails = ({
 }) => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor = activeBusiness?.secondary_color;
-  const gradientEnd =
-    secondaryColor && String(secondaryColor).toLowerCase() !== "#ffffff"
-      ? secondaryColor
-      : primaryColor;
-  const headerGradient = `linear-gradient(to right, ${primaryColor}, ${gradientEnd})`;
-  const brandButtonStyle = {
-    backgroundColor: primaryColor,
-    borderColor: primaryColor,
-    color: "#fff",
-  };
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
+  const headerGradient = brandHeaderGradient;
+  const brandButtonStyle = brandBtn;
   const payeEnabled =
     activeBusiness?.paye_auto_calculation !== false &&
     activeBusiness?.paye_auto_calculation !== 0 &&
@@ -484,7 +483,7 @@ const PayrollBatchDetails = ({
       title.value =
         activeBusiness?.business_name ||
         activeBusiness?.name ||
-        "Inventria Business";
+        "AA ERP Business";
       title.style = {
         font: { bold: true, size: 16 },
         alignment: { horizontal: "center" },
@@ -711,7 +710,7 @@ const PayrollBatchDetails = ({
 
       // 1. Business Header
       const title = worksheet.getCell(rowIdx, 1);
-      title.value = activeBusiness?.business_name || activeBusiness?.name || "Inventria Business";
+      title.value = activeBusiness?.business_name || activeBusiness?.name || "AA ERP Business";
       title.style = {
         font: { bold: true, size: 16 },
         alignment: { horizontal: "center" },

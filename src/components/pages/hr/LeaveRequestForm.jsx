@@ -2,16 +2,19 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useSelector } from "react-redux";
 import { Calendar, Clock, FileText, Save, X, Users, Search, User } from "lucide-react";
 import { _fetchApi } from "@/redux/actions/api";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const LeaveRequestForm = ({ employee, onSave, onCancel }) => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor =
-    activeBusiness?.secondary_color &&
-    String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"
-      ? activeBusiness.secondary_color
-      : primaryColor;
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
 
   const [formData, setFormData] = useState({
     employeeId: "",

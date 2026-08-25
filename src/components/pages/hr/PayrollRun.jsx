@@ -3,16 +3,19 @@ import { useSelector } from "react-redux";
 import RunPayrollTab from "./RunPayrollTab";
 import PayrollHistory from "./PayrollHistory";
 import { DollarSign, History } from "lucide-react";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const PayrollContainer = () => {
   const [activeTab, setActiveTab] = useState("run");
   const { activeBusiness } = useSelector((state) => state.auth);
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor =
-    activeBusiness?.secondary_color &&
-    String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"
-      ? activeBusiness.secondary_color
-      : primaryColor;
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
 
   return (
     <div

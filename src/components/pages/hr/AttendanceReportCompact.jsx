@@ -5,12 +5,19 @@ import CustomTable1 from "@/common/Custom/CustomTable1";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const AttendanceReportCompact = ({ onViewFullReport }) => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor = activeBusiness?.secondary_color;
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
   const gradientEnd =
     secondaryColor && String(secondaryColor).toLowerCase() !== "#ffffff"
       ? secondaryColor

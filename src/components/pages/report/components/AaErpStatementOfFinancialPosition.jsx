@@ -18,7 +18,7 @@ import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 
-const InventriaStatementOfFinancialPosition = () => {
+const AaErpStatementOfFinancialPosition = () => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const location = useLocation();
   const navigate = useNavigate();
@@ -1438,4 +1438,4 @@ const InventriaStatementOfFinancialPosition = () => {
   );
 };
 
-export default InventriaStatementOfFinancialPosition;
+export default AaErpStatementOfFinancialPosition;

@@ -7,6 +7,7 @@ export const SETTINGS_CATEGORIES = [
   { id: "organization", label: "Organization" },
   { id: "store", label: "Store" },
   { id: "corrections", label: "Corrections" },
+  { id: "security", label: "Security" },
 ];
 
 export const SETTINGS_TABS = [
@@ -275,6 +276,12 @@ export const SETTINGS_TABS = [
     label: "Imprest History",
     privilege: "Settings Imprest History",
     category: "corrections",
+  },
+  {
+    value: "session",
+    label: "Session Lock",
+    category: "security",
+    openToAll: true,
   },
 ];
 

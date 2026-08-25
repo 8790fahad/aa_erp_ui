@@ -149,8 +149,8 @@ const SalaryStructureList = ({
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg shadow-sm border">
           <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <DollarSign className="h-5 w-5 text-blue-600" />
+            <div className="p-2 bg-[var(--aa-sidebar-active)] rounded-lg">
+              <DollarSign className="h-5 w-5 text-[var(--aa-accent)]" />
             </div>
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-600">Total Structures</p>
@@ -185,8 +185,8 @@ const SalaryStructureList = ({
 
         <div className="bg-white p-4 rounded-lg shadow-sm border">
           <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Users className="h-5 w-5 text-purple-600" />
+            <div className="p-2 bg-[var(--aa-sidebar-active)] rounded-lg">
+              <Users className="h-5 w-5 text-[var(--aa-navy)]" />
             </div>
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-600">Assigned Employees</p>
@@ -312,7 +312,7 @@ const SalaryStructureList = ({
                       <div className="flex justify-end space-x-2">
                         <button
                           onClick={() => onView(structure)}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="text-[var(--aa-accent)] hover:text-[var(--aa-navy)]"
                           title="View Details"
                         >
                           <Eye className="h-4 w-4" />

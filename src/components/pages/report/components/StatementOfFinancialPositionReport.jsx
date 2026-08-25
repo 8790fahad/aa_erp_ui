@@ -70,7 +70,7 @@ function notesFooterSentence(noteCodes) {
   return "The accounting policies and the accompanying notes form part of these financial statements.";
 }
 
-/** Same pattern as InventriaGeneralLedger — DD/MM/YYYY for header period lines */
+/** Same pattern as AaErpGeneralLedger — DD/MM/YYYY for header period lines */
 function formatReportDate(dateString) {
   if (!dateString) return "";
   const date = new Date(dateString);
@@ -798,7 +798,7 @@ export default function StatementOfFinancialPositionReport() {
             ref={reportExportRef}
             className="print-content"
           >
-            {/* Match InventriaGeneralLedger: blue band + company block + title box */}
+            {/* Match AaErpGeneralLedger: blue band + company block + title box */}
             <div className="mb-0">
               <BusinessDocumentHeader
                 business={business}

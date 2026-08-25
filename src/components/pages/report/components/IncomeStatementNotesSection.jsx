@@ -108,7 +108,7 @@ export default function IncomeStatementNotesSection({
 }
 
 export const INCOME_STATEMENT_NOTES_PATH =
-  "/app/reports/accounting-reports/inventria-income-statement-notes";
+  "/app/reports/accounting-reports/aa_erp-income-statement-notes";
 
 export function buildIncomeStatementNotesUrl(fromDate, toDate, noteRef) {
   const params = new URLSearchParams();

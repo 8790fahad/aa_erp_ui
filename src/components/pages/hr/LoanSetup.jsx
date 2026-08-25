@@ -28,19 +28,21 @@ import {
 import { Button } from "@/components/ui/button";
 import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
 import { Label } from "@/components/ui/label";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const LoanSetup = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId;
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor = activeBusiness?.secondary_color;
-  const gradientEnd = secondaryColor || primaryColor;
-  const headerGradient = `linear-gradient(to right, ${primaryColor}, ${gradientEnd})`;
-  const brandButtonStyle = {
-    backgroundColor: primaryColor,
-    borderColor: primaryColor,
-    color: "#fff",
-  };
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
+  const headerGradient = brandHeaderGradient;
+  const brandButtonStyle = brandBtn;
 
   const [setups, setSetups] = useState([]);
   const [loading, setLoading] = useState(true);

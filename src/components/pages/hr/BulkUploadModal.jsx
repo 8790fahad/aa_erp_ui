@@ -4,6 +4,7 @@ import { X, Upload, FileSpreadsheet, Download, CheckCircle, AlertTriangle, Loade
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { _postApi } from "@/redux/actions/api";
+import { AA_NAVY } from "@/lib/aaBrand";
 
 /**
  * Generic bulk-upload modal.
@@ -33,7 +34,7 @@ export default function BulkUploadModal({
   payloadKey,
   facilityId,
   createdBy,
-  primaryColor = "#1a2d5e",
+  primaryColor = AA_NAVY,
 }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState([]);

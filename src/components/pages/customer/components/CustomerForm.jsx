@@ -1,6 +1,6 @@
 
 import { Row } from "reactstrap";
-import SimpleInput from "../../../inventria/components/SimpleInput";
+import SimpleInput from "../../../aa_erp/components/SimpleInput";
 import PropTypes from "prop-types";
 function CustomerForm({
   form = {},

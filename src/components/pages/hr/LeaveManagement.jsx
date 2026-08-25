@@ -14,11 +14,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 // Custom Switch component with app colors
 const CustomSwitch = ({ checked, onCheckedChange, id, disabled = false }) => {
-  const { activeBusiness } = useSelector((state) => state.auth);
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
+  const { primaryColor } = getAaBrandColors();
 
   return (
     <button
@@ -70,23 +70,17 @@ const LeaveManagement = () => {
     reason: "",
   });
 
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor =
-    activeBusiness?.secondary_color &&
-    String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"
-      ? activeBusiness.secondary_color
-      : primaryColor;
-  const gradientEnd = secondaryColor;
-  const headerGradient = `linear-gradient(to right, ${primaryColor}, ${gradientEnd})`;
-  const brandButtonStyle = {
-    backgroundColor: primaryColor,
-    borderColor: primaryColor,
-    color: "#fff",
-  };
-  const appColorStyle = {
-    ["--app-primary"]: primaryColor,
-    ["--app-secondary"]: secondaryColor,
-  };
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
+  const headerGradient = brandHeaderGradient;
+  const brandButtonStyle = brandBtn;
+  const appColorStyle = brandAppStyle;
   // State for apply leave form
   const [applyLeaveForm, setApplyLeaveForm] = useState({
     employeeId: "",

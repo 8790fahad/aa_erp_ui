@@ -5,9 +5,9 @@ import store from "../store";
 import { notifyNetworkError } from "@/hooks/useNetworkStatus";
 
 // let remoteEndpoint = "http://localhost:42843";
-let remoteEndpoint = "https://server.brainstorm.ng/flowbooks";
+let remoteEndpoint = "https://server.brainstorm.ng/aa_erp";
 let localEndpoint = "http://localhost:42844";
-// let remoteEndpoint = "https://server.brainstorm.ng/inventria_new";
+// let remoteEndpoint = "https://server.brainstorm.ng/aa_erp";
 // let localEndpoint = "http://192.168.1.87:42844"
 export const ipAddr = "127.0.0.1";
 export const apiURL =

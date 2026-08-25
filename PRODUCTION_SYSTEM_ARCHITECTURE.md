@@ -198,14 +198,14 @@ Load Balancer → Frontend (React) → Backend (Node.js) → Database (MySQL)
 # Database
 DB_HOST=localhost
 DB_PORT=3306
-DB_NAME=inventria_new
+DB_NAME=aa_erp
 DB_USER=your_username
 DB_PASSWORD=your_password
 
 # API
 PORT=3000
 NODE_ENV=production
-API_BASE_URL=http://localhost:3000/flowbooks
+API_BASE_URL=http://localhost:3000/aa_erp
 
 # Security
 JWT_SECRET=your_jwt_secret

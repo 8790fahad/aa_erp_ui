@@ -8,6 +8,7 @@ import {
   Building2,
   ShoppingBag,
   ClipboardEdit,
+  Shield,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { SETTINGS_CATEGORIES } from "./settingsTabs";
@@ -20,6 +21,7 @@ const CATEGORY_ICONS = {
   organization: Building2,
   store: ShoppingBag,
   corrections: ClipboardEdit,
+  security: Shield,
 };
 
 /**

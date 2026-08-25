@@ -28,6 +28,7 @@ import {
 import { toast } from "sonner";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
+import { getAaBrandColors } from "@/lib/aaBrand";
 
 const ACCEPTED_EXTENSIONS = [".csv", ".xlsx", ".xls"];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -60,16 +61,15 @@ const formatExcelDate = (value) => {
 const AttendanceBulkUpload = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId;
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor =
-    activeBusiness?.secondary_color &&
-    String(activeBusiness.secondary_color).toLowerCase() !== "#ffffff"
-      ? activeBusiness.secondary_color
-      : primaryColor;
-  const appColorStyle = {
-    ["--app-primary"]: primaryColor,
-    ["--app-secondary"]: secondaryColor,
-  };
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
+  const appColorStyle = brandAppStyle;
   const [file, setFile] = useState(null);
   const [previewData, setPreviewData] = useState([]);
   const [loading, setLoading] = useState(false);

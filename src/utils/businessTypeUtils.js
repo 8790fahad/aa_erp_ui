@@ -1,5 +1,5 @@
 /**
- * Business-type helpers for FlowBooks (retailers, services, ngo, …).
+ * Business-type helpers for AA ERP (retailers, services, ngo, …).
  * Handles comma-separated `business.business_type` values from the API.
  */
 

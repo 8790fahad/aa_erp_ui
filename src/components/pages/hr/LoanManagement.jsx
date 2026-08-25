@@ -31,38 +31,76 @@ import {
 import { Button } from "@/components/ui/button";
 import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
 import { Label } from "@/components/ui/label";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 import {
   formatNumberWithCommas,
   parseFormattedNumber
 } from "@/utils/numberUtils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getAaBrandColors } from "@/lib/aaBrand";
+
+const inputClass =
+  "h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]";
+const labelClass = "text-xs font-medium text-slate-600";
+const hintClass = "text-[11px] text-slate-400";
+const sheetContentClass =
+  "!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-lg [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100";
+const sheetHeaderClass =
+  "shrink-0 space-y-1 border-b border-white/10 bg-[var(--aa-navy,#1a2d5e)] px-5 py-4 pr-12 text-left";
+const sheetFooterClass =
+  "shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-4 flex flex-wrap justify-end gap-2";
+
+function currentYearMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function toYearMonth(dateVal) {
+  if (!dateVal) return "";
+  const d = new Date(dateVal);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatAppliesFrom(dateVal) {
+  const ym = toYearMonth(dateVal);
+  if (!ym) return "—";
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+const emptyLoanForm = () => ({
+  amount: "",
+  purpose: "",
+  repaymentMethod: "Salary Deduction",
+  durationMonths: "1",
+  startMonth: currentYearMonth(),
+});
 
 const LoanManagement = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId;
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
-  const secondaryColor = activeBusiness?.secondary_color;
-  const isLightHex = (hex) => {
-    const h = String(hex || "").replace("#", "");
-    if (!/^[0-9a-fA-F]{6}$/i.test(h)) return false;
-    const r = parseInt(h.slice(0, 2), 16);
-    const g = parseInt(h.slice(2, 4), 16);
-    const b = parseInt(h.slice(4, 6), 16);
-    return (r * 299 + g * 587 + b * 114) / 1000 > 200;
-  };
-  const gradientEnd =
-    secondaryColor && !isLightHex(secondaryColor) ? secondaryColor : primaryColor;
-  const headerGradient = `linear-gradient(to right, ${primaryColor}, ${gradientEnd})`;
-  const brandButtonStyle = {
-    backgroundColor: primaryColor,
-    borderColor: primaryColor,
-    color: "#fff",
-  };
-  const appColorStyle = {
-    ["--app-primary"]: primaryColor,
-    ["--app-secondary"]: gradientEnd,
-  };
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    headerGradient: brandHeaderGradient,
+    brandButtonStyle: brandBtn,
+    appColorStyle: brandAppStyle,
+  } = getAaBrandColors();
+  const headerGradient = brandHeaderGradient;
+  const brandButtonStyle = brandBtn;
+  const appColorStyle = brandAppStyle;
 
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,6 +134,7 @@ const LoanManagement = () => {
   const [scheduleDraft, setScheduleDraft] = useState({
     repaymentMethod: "Salary Deduction",
     durationMonths: "1",
+    startMonth: currentYearMonth(),
   });
   const [savingSchedule, setSavingSchedule] = useState(false);
 
@@ -107,12 +146,7 @@ const LoanManagement = () => {
   const [paymentRef, setPaymentRef] = useState("");
   const [chequeNumber, setChequeNumber] = useState("");
 
-  const [formData, setFormData] = useState({
-    amount: "",
-    purpose: "",
-    repaymentMethod: "Salary Deduction",
-    durationMonths: "1"
-  });
+  const [formData, setFormData] = useState(emptyLoanForm);
 
   const resetPaymentSelection = () => {
     setPaymentMode("bank");
@@ -280,6 +314,9 @@ const LoanManagement = () => {
     if (paymentMode === "cheque" && !String(chequeNumber || "").trim()) {
       return toast.error("Enter the cheque number");
     }
+    if (!/^\d{4}-\d{2}$/.test(String(formData.startMonth || ""))) {
+      return toast.error("Select the month when the loan starts applying");
+    }
 
     setSubmitting(true);
     const requestData = {
@@ -287,6 +324,7 @@ const LoanManagement = () => {
       purpose: formData.purpose || undefined,
       amount: parseFloat(formData.amount),
       durationMonths: parseInt(formData.durationMonths),
+      startMonth: formData.startMonth,
       employeeId: selectedEmployee.id,
       receivableHead,
       paymentMode,
@@ -346,7 +384,8 @@ const LoanManagement = () => {
       amount: loan.amount.toString(),
       purpose: loan.purpose,
       repaymentMethod: loan.repaymentMethod || "Salary Deduction",
-      durationMonths: loan.durationMonths.toString()
+      durationMonths: loan.durationMonths.toString(),
+      startMonth: toYearMonth(loan.startDate) || currentYearMonth(),
     });
     const emp = employees.find(e => e.id === loan.employeeId);
     setSelectedEmployee(emp || null);
@@ -364,7 +403,7 @@ const LoanManagement = () => {
     setShowForm(false);
     setEditMode(false);
     setEditingLoanId(null);
-    setFormData({ amount: "", purpose: "", repaymentMethod: "Salary Deduction", durationMonths: "1" });
+    setFormData(emptyLoanForm());
     setSelectedEmployee(null);
     setSelectedReceivable(null);
     resetPaymentSelection();
@@ -396,6 +435,8 @@ const LoanManagement = () => {
         cashHead: paymentMode === 'cash' ? paymentHead : null,
         reference: paymentRef,
         chequeNumber: paymentMode === 'cheque' ? chequeNumber : null,
+        startMonth:
+          toYearMonth(showApproveModal.startDate) || currentYearMonth(),
         facilityId, 
         userId: user?.id 
       },
@@ -506,6 +547,8 @@ const LoanManagement = () => {
         setScheduleDraft({
           repaymentMethod: data.data.repaymentMethod || "Salary Deduction",
           durationMonths: String(data.data.durationMonths || 1),
+          startMonth:
+            toYearMonth(data.data.startDate) || currentYearMonth(),
         });
       }
     });
@@ -516,7 +559,9 @@ const LoanManagement = () => {
     (scheduleDraft.repaymentMethod !==
       (viewLoanData.repaymentMethod || "Salary Deduction") ||
       String(scheduleDraft.durationMonths) !==
-        String(viewLoanData.durationMonths || 1));
+        String(viewLoanData.durationMonths || 1) ||
+      String(scheduleDraft.startMonth || "") !==
+        String(toYearMonth(viewLoanData.startDate) || ""));
 
   const draftMonthlyDeduction = (() => {
     if (!viewLoanData) return 0;
@@ -542,6 +587,9 @@ const LoanManagement = () => {
     ) {
       return toast.error("Select a valid repayment method");
     }
+    if (!/^\d{4}-\d{2}$/.test(String(scheduleDraft.startMonth || ""))) {
+      return toast.error("Select the month when the loan starts applying");
+    }
     if (!scheduleDirty) {
       return toast.message("No changes to save");
     }
@@ -552,6 +600,7 @@ const LoanManagement = () => {
       {
         repaymentMethod: scheduleDraft.repaymentMethod,
         durationMonths: months,
+        startMonth: scheduleDraft.startMonth,
         facilityId,
         userId: user?.id,
       },
@@ -570,6 +619,7 @@ const LoanManagement = () => {
                   durationMonths: updated.durationMonths ?? months,
                   monthlyDeductionAmount:
                     updated.monthlyDeductionAmount ?? draftMonthlyDeduction,
+                  startDate: updated.startDate ?? prev.startDate,
                 }
               : prev,
           );
@@ -577,6 +627,8 @@ const LoanManagement = () => {
             repaymentMethod:
               updated.repaymentMethod || scheduleDraft.repaymentMethod,
             durationMonths: String(updated.durationMonths ?? months),
+            startMonth:
+              toYearMonth(updated.startDate) || scheduleDraft.startMonth,
           });
           fetchLoans();
         } else {
@@ -635,17 +687,13 @@ const LoanManagement = () => {
                </div>
             </div>
             <Button 
+              type="button"
               onClick={() => {
                 setEditMode(false);
                 setEditingLoanId(null);
-                setFormData({
-                  amount: "",
-                  purpose: "",
-                  repaymentMethod: "Salary Deduction",
-                  durationMonths: "1",
-                });
+                setFormData(emptyLoanForm());
                 setSelectedEmployee(null);
-                setSelectedSetup(null);
+                setSelectedReceivable(null);
                 resetPaymentSelection();
                 setShowForm(true);
               }}
@@ -773,7 +821,7 @@ const LoanManagement = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-col">
                           <span className="text-sm font-medium text-gray-900">{item.setup?.name}</span>
-                          <span className="text-xs text-gray-500 mt-0.5">{item.durationMonths} Months</span>
+                          <span className="text-xs text-gray-500 mt-0.5">{item.durationMonths} Months · From {formatAppliesFrom(item.startDate)}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -840,33 +888,39 @@ const LoanManagement = () => {
         </div>
       </div>
 
-      {/* New Loan Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[200]">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[94vh] overflow-hidden flex flex-col border border-gray-200 animate-in zoom-in-95 duration-200">
-            <div className="p-5 sm:p-6 text-white shrink-0" style={{ background: headerGradient }}>
-              <div className="flex justify-between items-start gap-4">
-                <div>
-                  <h3 className="text-xl font-bold">
-                    {editMode ? "Edit Loan Request" : "New Loan Disbursement"}
-                  </h3>
-                  <p className="text-white/80 text-xs mt-1">
-                    {editMode
-                      ? "Update pending loan details"
-                      : "Record loan and post accounting entries to the ledger"}
-                  </p>
-                </div>
-                <button onClick={handleCloseForm} className="p-1.5 hover:bg-white/20 rounded-full transition-all shrink-0">
-                   <X size={22} />
-                </button>
+      {/* New Loan Sheet */}
+      <Sheet
+        open={showForm}
+        onOpenChange={(open) => {
+          if (!open) handleCloseForm();
+        }}
+      >
+        <SheetContent side="right" className={sheetContentClass}>
+          <SheetHeader className={sheetHeaderClass}>
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 rounded-md bg-white/10 p-2">
+                <Banknote className="h-4 w-4 text-white/90" />
+              </div>
+              <div className="min-w-0">
+                <SheetTitle className="text-lg font-semibold leading-tight text-white">
+                  {editMode ? "Edit Loan Request" : "New Loan Disbursement"}
+                </SheetTitle>
+                <SheetDescription className="mt-0.5 text-xs text-white/70">
+                  {editMode
+                    ? "Update pending loan details"
+                    : "Record loan and post accounting entries to the ledger"}
+                </SheetDescription>
               </div>
             </div>
+          </SheetHeader>
 
-            <form onSubmit={handleSaveLoan} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
-              <div className="space-y-1">
-                <Label className="text-xs font-bold text-gray-700">
-                  Reference Number
-                </Label>
+          <form
+            onSubmit={handleSaveLoan}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-white px-5 py-5">
+              <div className="space-y-1.5">
+                <label className={labelClass}>Reference Number</label>
                 <input
                   type="text"
                   readOnly
@@ -877,16 +931,16 @@ const LoanManagement = () => {
                         ? "Generating…"
                         : loanReferencePreview || "Auto on submit"
                   }
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-slate-50 text-slate-700 font-mono outline-none"
+                  className={`${inputClass} bg-slate-50 font-mono text-slate-700`}
                 />
-                <p className="text-[10px] text-slate-400">
-                  From the LM number generator — same reference posted to the
+                <p className={hintClass}>
+                  From the LN number generator — same reference posted to the
                   general ledger
                 </p>
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-bold text-gray-700">Staff Selection</Label>
+              <div className="space-y-1.5">
+                <label className={labelClass}>Staff Selection</label>
                 <TypeaheadCustom
                   options={employees}
                   labelKey={(i) => `${i.firstName} ${i.lastName} (${i.employeeId})`}
@@ -896,10 +950,8 @@ const LoanManagement = () => {
                 />
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-bold text-gray-700">
-                  Loan Receivable Account
-                </Label>
+              <div className="space-y-1.5">
+                <label className={labelClass}>Loan Receivable Account</label>
                 <TypeaheadCustom
                   options={chartAccounts}
                   labelKey={(i) =>
@@ -909,99 +961,102 @@ const LoanManagement = () => {
                   placeholder="Select receivable account…"
                   selected={selectedReceivable ? [selectedReceivable] : []}
                 />
-                <p className="text-[10px] text-slate-400">
+                <p className={hintClass}>
                   Debit this account when the loan is disbursed
                 </p>
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-bold text-gray-700">Principal Amount</Label>
-                <input
-                  type="text"
-                  name="amount"
-                  required
-                  value={formatNumberWithCommas(formData.amount)}
-                  onChange={(e) => {
-                    const val = parseFormattedNumber(e.target.value);
-                    setFormData((p) => ({ ...p, amount: val }));
-                  }}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2"
-                  style={{ "--tw-ring-color": primaryColor }}
-                />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className={labelClass}>Principal Amount</label>
+                  <input
+                    type="text"
+                    name="amount"
+                    required
+                    value={formatNumberWithCommas(formData.amount)}
+                    onChange={(e) => {
+                      const val = parseFormattedNumber(e.target.value);
+                      setFormData((p) => ({ ...p, amount: val }));
+                    }}
+                    placeholder="0.00"
+                    className={`${inputClass} tabular-nums`}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelClass}>Duration (Months)</label>
+                  <input
+                    type="number"
+                    name="durationMonths"
+                    required
+                    min="1"
+                    value={formData.durationMonths}
+                    onChange={handleInputChange}
+                    className={`${inputClass} tabular-nums`}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-bold text-gray-700">Duration (Months)</Label>
-                <input
-                  type="number"
-                  name="durationMonths"
-                  required
-                  min="1"
-                  value={formData.durationMonths}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2"
-                  style={{ "--tw-ring-color": primaryColor }}
-                />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className={labelClass}>Applies From</label>
+                  <p className={hintClass}>First salary month to deduct</p>
+                  <input
+                    type="month"
+                    name="startMonth"
+                    required
+                    value={formData.startMonth || ""}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelClass}>Repayment Method</label>
+                  <p className={hintClass}>How the staff will repay</p>
+                  <select
+                    className={inputClass}
+                    value={formData.repaymentMethod || "Salary Deduction"}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        repaymentMethod: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="Salary Deduction">Salary Deduction</option>
+                    <option value="Self">Self (Manual Payment)</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-bold text-gray-700">Repayment Method</Label>
-                <p className="text-[10px] text-slate-400 -mt-0.5 mb-1">How the staff will repay</p>
-                <select
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2"
-                  style={{ "--tw-ring-color": primaryColor }}
-                  value={formData.repaymentMethod || "Salary Deduction"}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, repaymentMethod: e.target.value }))
-                  }
-                >
-                  <option value="Salary Deduction">Salary Deduction</option>
-                  <option value="Self">Self (Manual Payment)</option>
-                </select>
-              </div>
-
-              <div
-                className="p-3 rounded-lg border"
-                style={{
-                  backgroundColor: `${primaryColor}12`,
-                  borderColor: `${primaryColor}33`,
-                }}
-              >
-                <Label
-                  className="text-[10px] font-bold uppercase mb-1 block"
-                  style={{ color: primaryColor }}
-                >
+              <div className="rounded-lg border border-[var(--aa-navy)]/15 bg-[var(--aa-sidebar-active)] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--aa-navy)]">
                   Monthly Breakdown
-                </Label>
-                <p className="text-base font-black leading-none" style={{ color: primaryColor }}>
+                </p>
+                <p className="mt-1 text-base font-semibold tabular-nums text-[var(--aa-navy)]">
                   {formatCurrency(
                     parseFloat(formData.amount || 0) /
-                      parseInt(formData.durationMonths || 1),
+                      parseInt(formData.durationMonths || 1, 10),
                   )}
-                  /Mo
+                  <span className="text-sm font-medium text-slate-500"> /Mo</span>
                 </p>
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-bold text-gray-700">Purpose / Note</Label>
+              <div className="space-y-1.5">
+                <label className={labelClass}>Purpose / Note</label>
                 <textarea
                   name="purpose"
                   rows={2}
                   value={formData.purpose}
                   onChange={handleInputChange}
                   placeholder="Optional note about this loan..."
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none resize-none focus:ring-2"
-                  style={{ "--tw-ring-color": primaryColor }}
+                  className="min-h-[72px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none resize-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                 />
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+              <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3">
                 <div>
-                  <Label className="text-xs font-bold text-gray-800">Mode of Payment</Label>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
-                    How we disburse the loan (pay staff)
-                  </p>
+                  <label className={labelClass}>Mode of Payment</label>
+                  <p className={hintClass}>How we disburse the loan (pay staff)</p>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {["bank", "cheque", "cash"].map((m) => (
@@ -1013,28 +1068,23 @@ const LoanManagement = () => {
                         if (m === "cash") setSelectedBank(null);
                         else setSelectedCash(null);
                       }}
-                      className={`py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                      className={`rounded-md border py-2 text-[10px] font-semibold uppercase tracking-wide transition-all ${
                         paymentMode === m
-                          ? "text-white border-transparent"
-                          : "bg-white text-gray-500 border-gray-200 hover:bg-gray-100"
+                          ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
                       }`}
-                      style={
-                        paymentMode === m
-                          ? { backgroundColor: primaryColor, borderColor: primaryColor }
-                          : undefined
-                      }
                     >
                       {m}
                     </button>
                   ))}
                 </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-gray-700">
+                <div className="space-y-1.5">
+                  <label className={labelClass}>
                     {paymentMode === "cash"
                       ? "Pay From (Cash Account)"
                       : "Pay From (Bank Account)"}
-                  </Label>
+                  </label>
                   {["bank", "cheque"].includes(paymentMode) ? (
                     <Select
                       value={
@@ -1053,7 +1103,7 @@ const LoanManagement = () => {
                         setSelectedBank(account || null);
                       }}
                     >
-                      <SelectTrigger className="w-full h-11 bg-white border border-gray-200 text-gray-900 rounded-lg text-sm">
+                      <SelectTrigger className="h-10 w-full rounded-md border-slate-300 bg-white text-sm">
                         <SelectValue placeholder="Select bank account..." />
                       </SelectTrigger>
                       <SelectContent className="z-[300]">
@@ -1086,20 +1136,19 @@ const LoanManagement = () => {
                 </div>
 
                 {paymentMode === "cheque" && (
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold text-gray-700">
+                  <div className="space-y-1.5">
+                    <label className={labelClass}>
                       Cheque Number <span className="text-red-500">*</span>
-                    </Label>
+                    </label>
                     <input
                       type="text"
                       required
                       value={chequeNumber}
                       onChange={(e) => setChequeNumber(e.target.value)}
                       placeholder="e.g. 00452189"
-                      className="w-full px-3 py-2.5 border-2 border-[color:var(--app-primary)]/30 rounded-lg text-sm outline-none bg-white focus:ring-2 focus:border-[color:var(--app-primary)]"
-                      style={{ "--tw-ring-color": primaryColor }}
+                      className={inputClass}
                     />
-                    <p className="text-[10px] text-slate-400">
+                    <p className={hintClass}>
                       Required for cheque disbursements — included in the ledger
                       description
                     </p>
@@ -1107,19 +1156,19 @@ const LoanManagement = () => {
                 )}
               </div>
 
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 overflow-hidden">
+              <div className="overflow-hidden rounded-lg border border-slate-200">
                 <button
                   type="button"
                   onClick={() => setShowAccountingTreatment((v) => !v)}
-                  className="w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-emerald-50/80 transition-colors"
+                  className="flex w-full items-center justify-between gap-3 bg-slate-50 p-3 text-left hover:bg-slate-100/80"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <CreditCard className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <div className="flex min-w-0 items-center gap-2">
+                    <CreditCard className="h-4 w-4 shrink-0 text-[var(--aa-navy)]" />
                     <div className="min-w-0">
-                      <Label className="text-xs font-bold text-emerald-900 uppercase tracking-wide cursor-pointer">
+                      <p className="text-xs font-semibold text-slate-800">
                         Accounting Treatment
-                      </Label>
-                      <p className="text-[10px] text-emerald-700/80">
+                      </p>
+                      <p className={hintClass}>
                         {editMode
                           ? "Ledger posts when the loan is approved/disbursed"
                           : "Will post to general ledger on submit"}
@@ -1127,44 +1176,44 @@ const LoanManagement = () => {
                     </div>
                   </div>
                   <ChevronDown
-                    className={`w-4 h-4 text-emerald-700 shrink-0 transition-transform duration-200 ${
+                    className={`h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ${
                       showAccountingTreatment ? "rotate-180" : ""
                     }`}
                   />
                 </button>
 
                 {showAccountingTreatment && (
-                  <div className="px-4 pb-4 space-y-3">
-                    <div className="bg-white rounded-lg border border-emerald-100 overflow-hidden text-sm">
-                      <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2 bg-emerald-100/50 text-[10px] font-bold uppercase text-emerald-800 tracking-wider">
+                  <div className="space-y-3 border-t border-slate-200 bg-white p-3">
+                    <div className="overflow-hidden rounded-md border border-slate-200 text-sm">
+                      <div className="grid grid-cols-[1fr_auto_auto] gap-2 bg-slate-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                         <span>Account</span>
                         <span className="w-24 text-right">Debit</span>
                         <span className="w-24 text-right">Credit</span>
                       </div>
-                      <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2.5 border-b border-slate-100 items-center">
+                      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-b border-slate-100 px-3 py-2.5">
                         <div className="min-w-0">
-                          <p className="font-semibold text-slate-800 text-xs truncate">
+                          <p className="truncate text-xs font-semibold text-slate-800">
                             Dr · Loan Receivable
                           </p>
-                          <p className="text-[10px] text-slate-500 font-mono truncate">
+                          <p className="truncate font-mono text-[10px] text-slate-500">
                             {selectedReceivable?.head ||
                               selectedReceivable?.code ||
                               "Select receivable account…"}
                           </p>
                         </div>
-                        <span className="w-24 text-right font-bold text-slate-900 text-xs">
+                        <span className="w-24 text-right text-xs font-semibold tabular-nums text-slate-900">
                           {formData.amount
                             ? formatCurrency(parseFloat(formData.amount))
                             : "—"}
                         </span>
-                        <span className="w-24 text-right text-slate-300 text-xs">—</span>
+                        <span className="w-24 text-right text-xs text-slate-300">—</span>
                       </div>
-                      <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2.5 items-center">
+                      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 px-3 py-2.5">
                         <div className="min-w-0">
-                          <p className="font-semibold text-slate-800 text-xs truncate">
+                          <p className="truncate text-xs font-semibold text-slate-800">
                             Cr · {paymentMode === "cash" ? "Cash" : "Bank"}
                           </p>
-                          <p className="text-[10px] text-slate-500 font-mono truncate">
+                          <p className="truncate font-mono text-[10px] text-slate-500">
                             {paymentMode === "cash"
                               ? selectedCash?.head ||
                                 selectedCash?.code ||
@@ -1174,8 +1223,8 @@ const LoanManagement = () => {
                                 "Select bank account…"}
                           </p>
                         </div>
-                        <span className="w-24 text-right text-slate-300 text-xs">—</span>
-                        <span className="w-24 text-right font-bold text-slate-900 text-xs">
+                        <span className="w-24 text-right text-xs text-slate-300">—</span>
+                        <span className="w-24 text-right text-xs font-semibold tabular-nums text-slate-900">
                           {formData.amount
                             ? formatCurrency(parseFloat(formData.amount))
                             : "—"}
@@ -1186,40 +1235,40 @@ const LoanManagement = () => {
                     {!(
                       selectedReceivable?.head || selectedReceivable?.code
                     ) && (
-                      <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+                      <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800">
                         Select a loan receivable account above before saving.
                       </p>
                     )}
                   </div>
                 )}
               </div>
+            </div>
 
-              <div className="pt-2 flex justify-end gap-3 border-t border-slate-100">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCloseForm}
-                  className="rounded-lg font-bold px-5"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={submitting}
-                  className="text-white rounded-lg font-bold px-6 hover:opacity-90"
-                  style={brandButtonStyle}
-                >
-                  {submitting
-                    ? "Processing..."
-                    : editMode
-                      ? "Update Request"
-                      : "Disburse & Post to Ledger"}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <div className={sheetFooterClass}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCloseForm}
+                disabled={submitting}
+                className="rounded-md"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="rounded-md bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy-hover)]"
+              >
+                {submitting
+                  ? "Processing..."
+                  : editMode
+                    ? "Update Request"
+                    : "Disburse & Post to Ledger"}
+              </Button>
+            </div>
+          </form>
+        </SheetContent>
+      </Sheet>
 
       {/* Approval & Disbursement Modal */}
       {showApproveModal && (
@@ -1344,93 +1393,96 @@ const LoanManagement = () => {
         </div>
       )}
 
-      {/* Ledger Modal */}
-      {viewLoanId && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[200]">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col border border-gray-200">
-            <div className="p-8 bg-[color:var(--app-primary)] text-white flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <div className="h-14 w-14 rounded-xl bg-white/20 flex items-center justify-center border border-white/30 font-bold text-xl">
-                  {viewLoanData?.employee?.firstName?.[0]}{viewLoanData?.employee?.lastName?.[0]}
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold tracking-tight">Loan History & Ledger</h3>
-                  <p className="text-white/80 text-xs font-medium uppercase tracking-widest">{viewLoanData?.employee?.firstName} {viewLoanData?.employee?.lastName}</p>
-                </div>
+      {/* Ledger Sheet */}
+      <Sheet
+        open={Boolean(viewLoanId)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewLoanId(null);
+            setShowRepaymentForm(false);
+          }
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-xl [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100"
+        >
+          <SheetHeader className={sheetHeaderClass}>
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white/15 text-sm font-semibold text-white">
+                {viewLoanData?.employee?.firstName?.[0]}
+                {viewLoanData?.employee?.lastName?.[0]}
               </div>
-              <button onClick={() => setViewLoanId(null)} className="p-2 hover:bg-white/10 rounded-full transition-all">
-                <X size={24} />
-              </button>
+              <div className="min-w-0">
+                <SheetTitle className="text-lg font-semibold leading-tight text-white">
+                  Loan History & Ledger
+                </SheetTitle>
+                <SheetDescription className="mt-0.5 text-xs text-white/70">
+                  {viewLoanData?.employee?.firstName}{" "}
+                  {viewLoanData?.employee?.lastName}
+                  {viewLoanData?.referenceNumber
+                    ? ` · ${viewLoanData.referenceNumber}`
+                    : ""}
+                </SheetDescription>
+              </div>
             </div>
+          </SheetHeader>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-gray-50/30">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-white px-5 py-5">
                {!viewLoanData ? (
-                 <div className="text-center py-20">
-                   <div className="animate-spin rounded-full h-8 w-8 border-2 border-[color:var(--app-primary)] border-t-transparent mx-auto"></div>
-                   <p className="text-xs font-bold text-gray-400 mt-4 uppercase tracking-[0.2em]">Synchronizing...</p>
+                 <div className="py-16 text-center">
+                   <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-[var(--aa-navy)] border-t-transparent"></div>
+                   <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-400">Loading…</p>
                  </div>
                ) : (
                  <>
-                   <div className="grid grid-cols-3 gap-6">
-                     <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm text-center">
-                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Principal</p>
-                       <p className="text-xl font-bold text-gray-900">{formatCurrency(viewLoanData.amount)}</p>
+                   <div className="grid grid-cols-3 gap-3">
+                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
+                       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Principal</p>
+                       <p className="mt-1 text-sm font-semibold tabular-nums text-slate-900">{formatCurrency(viewLoanData.amount)}</p>
                      </div>
-                     <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm text-center">
-                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Paid</p>
-                       <p className="text-xl font-bold text-emerald-600">{formatCurrency(viewLoanData.amountPaid || 0)}</p>
+                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
+                       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Paid</p>
+                       <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-600">{formatCurrency(viewLoanData.amountPaid || 0)}</p>
                      </div>
-                     <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm text-center">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Outstanding</p>
-                        <p className="text-xl font-bold text-orange-600">{formatCurrency(parseFloat(viewLoanData.amount) - parseFloat(viewLoanData.amountPaid || 0))}</p>
+                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Outstanding</p>
+                        <p className="mt-1 text-sm font-semibold tabular-nums text-orange-600">{formatCurrency(parseFloat(viewLoanData.amount) - parseFloat(viewLoanData.amountPaid || 0))}</p>
                      </div>
                    </div>
 
-                   <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                   <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                        <div>
-                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
+                         <p className="text-xs font-semibold text-slate-800">
                            Repayment Schedule
                          </p>
-                         <p className="text-xs text-gray-500">
+                         <p className={hintClass}>
                            Adjust method and remaining months, then save
                          </p>
                          {viewLoanData.referenceNumber ? (
-                           <p className="text-[11px] font-mono text-slate-500 mt-1.5">
+                           <p className="mt-1 font-mono text-[11px] text-slate-500">
                              Ref: {viewLoanData.referenceNumber}
                            </p>
                          ) : null}
                        </div>
-                       <div
-                         className="rounded-lg border px-3 py-2 text-right"
-                         style={{
-                           backgroundColor: `${primaryColor}10`,
-                           borderColor: `${primaryColor}30`,
-                         }}
-                       >
-                         <p
-                           className="text-[10px] font-bold uppercase tracking-wide"
-                           style={{ color: primaryColor }}
-                         >
+                       <div className="rounded-md border border-[var(--aa-navy)]/15 bg-[var(--aa-sidebar-active)] px-3 py-2 text-right">
+                         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--aa-navy)]">
                            Monthly Deduction
                          </p>
-                         <p
-                           className="text-sm font-black"
-                           style={{ color: primaryColor }}
-                         >
+                         <p className="text-sm font-semibold tabular-nums text-[var(--aa-navy)]">
                            {formatCurrency(draftMonthlyDeduction)}/Mo
                          </p>
                        </div>
                      </div>
 
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                       <div className="space-y-1">
-                         <Label className="text-xs font-bold text-gray-700">
+                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                       <div className="space-y-1.5">
+                         <label className={labelClass}>
                            Repayment Method
-                         </Label>
+                         </label>
                          <select
-                           className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold outline-none focus:ring-2 bg-white disabled:opacity-60"
-                           style={{ "--tw-ring-color": primaryColor }}
+                           className={`${inputClass} disabled:opacity-60`}
                            value={scheduleDraft.repaymentMethod}
                            disabled={
                              savingSchedule ||
@@ -1451,18 +1503,17 @@ const LoanManagement = () => {
                            <option value="Self">Self (Manual Payment)</option>
                          </select>
                        </div>
-                       <div className="space-y-1">
-                         <Label className="text-xs font-bold text-gray-700">
+                       <div className="space-y-1.5">
+                         <label className={labelClass}>
                            Duration (Months)
-                         </Label>
-                         <p className="text-[10px] text-slate-400 -mt-0.5 mb-1">
+                         </label>
+                         <p className={hintClass}>
                            Remaining repayment period
                          </p>
                          <input
                            type="number"
                            min="1"
-                           className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold outline-none focus:ring-2 bg-white disabled:opacity-60"
-                           style={{ "--tw-ring-color": primaryColor }}
+                           className={`${inputClass} disabled:opacity-60`}
                            value={scheduleDraft.durationMonths}
                            disabled={
                              savingSchedule ||
@@ -1478,13 +1529,36 @@ const LoanManagement = () => {
                            }
                          />
                        </div>
+                       <div className="space-y-1.5 sm:col-span-2">
+                         <label className={labelClass}>Applies From</label>
+                         <p className={hintClass}>
+                           First salary month deductions begin
+                         </p>
+                         <input
+                           type="month"
+                           className={`${inputClass} disabled:opacity-60 sm:max-w-xs`}
+                           value={scheduleDraft.startMonth || ""}
+                           disabled={
+                             savingSchedule ||
+                             ["Paid Off", "Rejected"].includes(
+                               viewLoanData.status,
+                             )
+                           }
+                           onChange={(e) =>
+                             setScheduleDraft((prev) => ({
+                               ...prev,
+                               startMonth: e.target.value,
+                             }))
+                           }
+                         />
+                       </div>
                      </div>
 
                      <div className="flex justify-end gap-2 pt-1">
                        <Button
                          type="button"
                          variant="outline"
-                         className="rounded-lg font-bold"
+                         className="rounded-md"
                          disabled={
                            savingSchedule ||
                            !scheduleDirty ||
@@ -1500,6 +1574,9 @@ const LoanManagement = () => {
                              durationMonths: String(
                                viewLoanData.durationMonths || 1,
                              ),
+                             startMonth:
+                               toYearMonth(viewLoanData.startDate) ||
+                               currentYearMonth(),
                            })
                          }
                        >
@@ -1507,8 +1584,7 @@ const LoanManagement = () => {
                        </Button>
                        <Button
                          type="button"
-                         className="rounded-lg font-bold text-white px-6"
-                         style={brandButtonStyle}
+                         className="rounded-md bg-[var(--aa-navy)] px-5 text-white hover:bg-[var(--aa-navy-hover)]"
                          disabled={
                            savingSchedule ||
                            !scheduleDirty ||
@@ -1524,25 +1600,29 @@ const LoanManagement = () => {
                    </div>
 
                    {['Approved', 'Repaying'].includes(viewLoanData.status) && (
-                     <div className="bg-white p-6 rounded-2xl border border-[color:var(--app-primary)]/20 flex justify-between items-center shadow-sm">
-                       <div className="flex items-center gap-4">
-                         <div className="p-3 bg-[color:var(--app-primary)]/10 text-[color:var(--app-primary)] rounded-xl">
-                            <HandCoins size={24} />
+                     <div className="flex flex-col gap-3 rounded-lg border border-[var(--aa-navy)]/15 bg-[var(--aa-sidebar-active)]/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                       <div className="flex items-center gap-3">
+                         <div className="rounded-md bg-[var(--aa-navy)]/10 p-2 text-[var(--aa-navy)]">
+                            <HandCoins size={20} />
                          </div>
                          <div>
-                            <p className="font-bold text-gray-900">Manual Payment Recording</p>
-                            <p className="text-xs text-gray-500">Record a payment made directly to treasury</p>
+                            <p className="text-sm font-semibold text-slate-900">Manual Payment Recording</p>
+                            <p className={hintClass}>Record a payment made directly to treasury</p>
                          </div>
                        </div>
                        <Button
+                         type="button"
                          onClick={() => {
                            const next = !showRepaymentForm;
                            setShowRepaymentForm(next);
                            if (next) setShowAccountingTreatment(true);
                          }}
                          variant={showRepaymentForm ? "outline" : "default"}
-                         className="font-bold text-white hover:opacity-90"
-                         style={showRepaymentForm ? undefined : brandButtonStyle}
+                         className={
+                           showRepaymentForm
+                             ? "rounded-md"
+                             : "rounded-md bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy-hover)]"
+                         }
                        >
                           {showRepaymentForm ? "Close Form" : "Record Payment"}
                        </Button>
@@ -1550,10 +1630,10 @@ const LoanManagement = () => {
                    )}
 
                     {showRepaymentForm && (
-                      <div className="bg-[color:var(--app-primary)]/10 p-6 rounded-2xl border border-[color:var(--app-primary)]/30 animate-in slide-in-from-top-4 duration-300 shadow-inner space-y-4">
-                         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
-                           <div className="space-y-1">
-                              <Label className="text-[10px] font-bold text-[color:var(--app-primary)] uppercase">Amount to pay</Label>
+                      <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                           <div className="space-y-1.5">
+                              <label className={labelClass}>Amount to pay</label>
                               <input 
                                 type="text" 
                                 value={formatNumberWithCommas(repaymentAmount)} 
@@ -1572,19 +1652,19 @@ const LoanManagement = () => {
                                   }
                                   setRepaymentAmount(val);
                                 }} 
-                                className={`w-full px-3 py-2 bg-white border rounded-lg outline-none font-bold text-sm ${
+                                className={`${inputClass} font-semibold ${
                                   repaymentAmount &&
                                   viewLoanData &&
                                   parseFloat(repaymentAmount) >
                                     parseFloat(viewLoanData.amount) -
                                       parseFloat(viewLoanData.amountPaid || 0)
                                     ? "border-red-400 ring-1 ring-red-300"
-                                    : "border-[color:var(--app-primary)]/30"
+                                    : ""
                                 }`}
                                 placeholder="0.00" 
                               />
                               {viewLoanData && (
-                                <p className="text-[10px] text-slate-500">
+                                <p className={hintClass}>
                                   Outstanding:{" "}
                                   <span className="font-semibold text-orange-600">
                                     {formatCurrency(
@@ -1595,20 +1675,15 @@ const LoanManagement = () => {
                                 </p>
                               )}
                            </div>
-                           <div className="space-y-1">
-                              <Label className="text-[10px] font-bold text-[color:var(--app-primary)] uppercase">Mode</Label>
+                           <div className="space-y-1.5">
+                              <label className={labelClass}>Mode</label>
                               <div className="grid grid-cols-3 gap-1">
                                 {['bank', 'cheque', 'cash'].map(m => (
                                   <button
                                     key={m}
                                     type="button"
                                     onClick={() => setPaymentMode(m)}
-                                    className={`py-2 rounded-lg text-[9px] font-bold uppercase tracking-tighter border transition-all ${paymentMode === m ? 'text-white border-transparent' : 'bg-white text-gray-400 border-[color:var(--app-primary)]/20 hover:bg-[color:var(--app-primary)]/10'}`}
-                                    style={
-                                      paymentMode === m
-                                        ? { backgroundColor: primaryColor, borderColor: primaryColor }
-                                        : undefined
-                                    }
+                                    className={`rounded-md border py-2 text-[9px] font-semibold uppercase tracking-wide transition-all ${paymentMode === m ? 'border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-100'}`}
                                   >
                                     {m}
                                   </button>
@@ -1616,12 +1691,12 @@ const LoanManagement = () => {
                               </div>
                            </div>
                            {(paymentMode === "bank" || paymentMode === "cheque" || paymentMode === "cash") && (
-                             <div className="space-y-1">
+                             <div className="space-y-1.5">
                                {["bank", "cheque"].includes(paymentMode) ? (
                                  <>
-                                   <Label className="text-[10px] font-bold text-[color:var(--app-primary)] uppercase block mb-1">
+                                   <label className={labelClass}>
                                      Bank Account
-                                   </Label>
+                                   </label>
                                    <Select
                                      value={
                                        selectedBank?.id?.toString() ||
@@ -1639,7 +1714,7 @@ const LoanManagement = () => {
                                        setSelectedBank(account || null);
                                      }}
                                    >
-                                     <SelectTrigger className="w-full h-10 bg-white border border-[color:var(--app-primary)]/30 rounded-lg text-xs font-bold text-gray-900 focus:ring-2 outline-none">
+                                     <SelectTrigger className="h-10 w-full rounded-md border-slate-300 bg-white text-sm">
                                        <SelectValue placeholder="Select account..." />
                                      </SelectTrigger>
                                      <SelectContent className="z-[300]">
@@ -1657,9 +1732,9 @@ const LoanManagement = () => {
                                  </>
                                ) : (
                                  <>
-                                   <Label className="text-[10px] font-bold text-[color:var(--app-primary)] uppercase block mb-1">
+                                   <label className={labelClass}>
                                      Cash Account
-                                   </Label>
+                                   </label>
                                    <TypeaheadCustom
                                      options={cashAccounts}
                                      labelKey={(i) => `${i.head || i.code} - ${i.description || i.name || "Cash"}`}
@@ -1673,20 +1748,21 @@ const LoanManagement = () => {
                            )}
 
                            {paymentMode === "cheque" && (
-                             <div className="space-y-1">
-                               <Label className="text-[10px] font-bold text-[color:var(--app-primary)] uppercase block mb-1">Cheque No.</Label>
+                             <div className="space-y-1.5">
+                               <label className={labelClass}>Cheque No.</label>
                                <input
                                  type="text"
                                  value={chequeNumber}
                                  onChange={(e) => setChequeNumber(e.target.value)}
                                  placeholder="Cheque #"
-                                 className="w-full px-3 py-2 bg-white border border-[color:var(--app-primary)]/30 rounded-lg outline-none font-bold text-xs h-10"
+                                 className={inputClass}
                                />
                              </div>
                            )}
 
-                           <div className="flex flex-col gap-2">
+                           <div className="flex flex-col justify-end">
                              <Button
+                               type="button"
                                onClick={handleRecordRepayment}
                                disabled={
                                  repaymentLoading ||
@@ -1697,8 +1773,7 @@ const LoanManagement = () => {
                                      parseFloat(viewLoanData.amount) -
                                        parseFloat(viewLoanData.amountPaid || 0))
                                }
-                               className="font-bold text-white h-10 w-full hover:opacity-90 disabled:opacity-50"
-                               style={brandButtonStyle}
+                               className="h-10 w-full rounded-md bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy-hover)] disabled:opacity-50"
                              >
                                 {repaymentLoading ? "Wait..." : "Post Payment"}
                              </Button>
@@ -1706,44 +1781,44 @@ const LoanManagement = () => {
                          </div>
 
                          {/* Accounting Treatment — repayment */}
-                         <div className="rounded-xl border border-emerald-200 bg-white overflow-hidden">
+                         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                            <button
                              type="button"
                              onClick={() => setShowAccountingTreatment((v) => !v)}
-                             className="w-full flex items-center justify-between gap-3 p-3.5 text-left hover:bg-emerald-50/60 transition-colors"
+                             className="flex w-full items-center justify-between gap-3 bg-slate-50 p-3 text-left hover:bg-slate-100/80"
                            >
-                             <div className="flex items-center gap-2 min-w-0">
-                               <CreditCard className="w-4 h-4 text-emerald-700 shrink-0" />
+                             <div className="flex min-w-0 items-center gap-2">
+                               <CreditCard className="h-4 w-4 shrink-0 text-[var(--aa-navy)]" />
                                <div className="min-w-0">
-                                 <p className="text-xs font-bold text-emerald-900 uppercase tracking-wide">
+                                 <p className="text-xs font-semibold text-slate-800">
                                    Accounting Treatment
                                  </p>
-                                 <p className="text-[10px] text-emerald-700/80">
+                                 <p className={hintClass}>
                                    Will post to general ledger on payment
                                  </p>
                                </div>
                              </div>
                              <ChevronDown
-                               className={`w-4 h-4 text-emerald-700 shrink-0 transition-transform duration-200 ${
+                               className={`h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ${
                                  showAccountingTreatment ? "rotate-180" : ""
                                }`}
                              />
                            </button>
 
                            {showAccountingTreatment && (
-                             <div className="px-3.5 pb-3.5 space-y-2">
-                               <div className="bg-emerald-50/50 rounded-lg border border-emerald-100 overflow-hidden text-sm">
-                                 <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2 bg-emerald-100/50 text-[10px] font-bold uppercase text-emerald-800 tracking-wider">
+                             <div className="space-y-2 border-t border-slate-200 p-3">
+                               <div className="overflow-hidden rounded-md border border-slate-200 text-sm">
+                                 <div className="grid grid-cols-[1fr_auto_auto] gap-2 bg-slate-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                                    <span>Account</span>
                                    <span className="w-24 text-right">Debit</span>
                                    <span className="w-24 text-right">Credit</span>
                                  </div>
-                                 <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2.5 border-b border-slate-100 items-center">
+                                 <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-b border-slate-100 px-3 py-2.5">
                                    <div className="min-w-0">
-                                     <p className="font-semibold text-slate-800 text-xs truncate">
+                                     <p className="truncate text-xs font-semibold text-slate-800">
                                        Dr · {paymentMode === "cash" ? "Cash" : "Bank"}
                                      </p>
-                                     <p className="text-[10px] text-slate-500 font-mono truncate">
+                                     <p className="truncate font-mono text-[10px] text-slate-500">
                                        {paymentMode === "cash"
                                          ? selectedCash?.head ||
                                            selectedCash?.code ||
@@ -1753,26 +1828,26 @@ const LoanManagement = () => {
                                            "Select bank account…"}
                                      </p>
                                    </div>
-                                   <span className="w-24 text-right font-bold text-slate-900 text-xs">
+                                   <span className="w-24 text-right text-xs font-semibold tabular-nums text-slate-900">
                                      {repaymentAmount
                                        ? formatCurrency(parseFloat(repaymentAmount))
                                        : "—"}
                                    </span>
-                                   <span className="w-24 text-right text-slate-300 text-xs">—</span>
+                                   <span className="w-24 text-right text-xs text-slate-300">—</span>
                                  </div>
-                                 <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2.5 items-center">
+                                 <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 px-3 py-2.5">
                                    <div className="min-w-0">
-                                     <p className="font-semibold text-slate-800 text-xs truncate">
+                                     <p className="truncate text-xs font-semibold text-slate-800">
                                        Cr · Loan Receivable
                                      </p>
-                                     <p className="text-[10px] text-slate-500 font-mono truncate">
+                                     <p className="truncate font-mono text-[10px] text-slate-500">
                                        {viewLoanData.receivableHead ||
                                          viewLoanData.setup?.receivableHead ||
                                          "—"}
                                      </p>
                                    </div>
-                                   <span className="w-24 text-right text-slate-300 text-xs">—</span>
-                                   <span className="w-24 text-right font-bold text-slate-900 text-xs">
+                                   <span className="w-24 text-right text-xs text-slate-300">—</span>
+                                   <span className="w-24 text-right text-xs font-semibold tabular-nums text-slate-900">
                                      {repaymentAmount
                                        ? formatCurrency(parseFloat(repaymentAmount))
                                        : "—"}
@@ -1781,7 +1856,7 @@ const LoanManagement = () => {
                                </div>
                                {!(viewLoanData.receivableHead ||
                                  viewLoanData.setup?.receivableHead) && (
-                                 <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+                                 <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800">
                                    Loan receivable account is missing on this loan.
                                  </p>
                                )}
@@ -1790,24 +1865,17 @@ const LoanManagement = () => {
                          </div>
                          
                          {repaymentAmount > 0 && viewLoanData && (
-                           <div className="p-3 bg-white/50 rounded-xl border border-[color:var(--app-primary)]/20 flex justify-between items-center text-xs">
+                           <div className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-xs">
                              <div className="flex flex-col">
-                               <span className="text-gray-500 uppercase font-bold text-[9px]">New Balance after payment</span>
+                               <span className="text-[10px] font-semibold uppercase text-slate-500">New Balance after payment</span>
                                <span
-                                 className={`font-black ${
+                                 className={`font-semibold tabular-nums ${
                                    parseFloat(repaymentAmount) >
                                    parseFloat(viewLoanData.amount) -
                                      parseFloat(viewLoanData.amountPaid || 0)
                                      ? "text-red-600"
-                                     : ""
+                                     : "text-[var(--aa-navy)]"
                                  }`}
-                                 style={
-                                   parseFloat(repaymentAmount) >
-                                   parseFloat(viewLoanData.amount) -
-                                     parseFloat(viewLoanData.amountPaid || 0)
-                                     ? undefined
-                                     : { color: primaryColor }
-                                 }
                                >
                                  {formatCurrency(
                                    Math.max(
@@ -1824,26 +1892,26 @@ const LoanManagement = () => {
                       </div>
                     )}
 
-                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                   <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                      <table className="w-full text-sm">
-                        <thead className="bg-gray-50 border-b border-gray-100">
-                           <tr className="text-gray-400 font-bold uppercase text-[9px] tracking-widest">
-                              <th className="px-6 py-4 text-left">Date</th>
-                              <th className="px-6 py-4 text-left">Amount</th>
-                              <th className="px-6 py-4 text-left">Method</th>
-                              <th className="px-6 py-4 text-right">Reference</th>
+                        <thead className="border-b border-slate-200 bg-slate-50">
+                           <tr className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                              <th className="px-4 py-3 text-left">Date</th>
+                              <th className="px-4 py-3 text-left">Amount</th>
+                              <th className="px-4 py-3 text-left">Method</th>
+                              <th className="px-4 py-3 text-right">Reference</th>
                            </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-slate-100">
                            {viewLoanData.repayments?.map((rep) => (
                               <tr key={rep.id}>
-                                 <td className="px-6 py-4 font-medium text-gray-700">{new Date(rep.createdAt).toLocaleDateString()}</td>
-                                 <td className="px-6 py-4 font-bold text-emerald-600">{formatCurrency(rep.amount)}</td>
-                                 <td className="px-6 py-4">
-                                    <span className="px-2 py-0.5 bg-gray-100 rounded-full text-[10px] font-bold text-gray-500">{rep.paymentMethod}</span>
+                                 <td className="px-4 py-3 font-medium text-slate-700">{new Date(rep.createdAt).toLocaleDateString()}</td>
+                                 <td className="px-4 py-3 font-semibold tabular-nums text-emerald-600">{formatCurrency(rep.amount)}</td>
+                                 <td className="px-4 py-3">
+                                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">{rep.paymentMethod}</span>
                                  </td>
-                                 <td className="px-6 py-4 text-right">
-                                   <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-xs font-mono font-semibold text-slate-800">
+                                 <td className="px-4 py-3 text-right">
+                                   <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-xs font-semibold text-slate-800">
                                      {rep.reference ||
                                        viewLoanData.referenceNumber ||
                                        "—"}
@@ -1853,7 +1921,7 @@ const LoanManagement = () => {
                            ))}
                            {(!viewLoanData.repayments || viewLoanData.repayments.length === 0) && (
                               <tr>
-                                 <td colSpan={4} className="px-6 py-12 text-center text-gray-400 italic text-xs">No repayment records found</td>
+                                 <td colSpan={4} className="px-4 py-10 text-center text-xs text-slate-400">No repayment records found</td>
                               </tr>
                            )}
                         </tbody>
@@ -1862,9 +1930,8 @@ const LoanManagement = () => {
                  </>
                )}
             </div>
-          </div>
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

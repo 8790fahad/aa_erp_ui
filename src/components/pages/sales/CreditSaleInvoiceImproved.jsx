@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useReactToPrint } from "react-to-print";
-import { Printer, X, Check, Copy } from "lucide-react";
+import { Printer, X, Check } from "lucide-react";
 import useQuery from "@/hooks/useQuery";
 import { toast } from "sonner";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -53,7 +53,6 @@ export default function CreditSaleInvoice({
   const [customerCopyPrices, setCustomerCopyPrices] = useState(
     propCustomerCopyPrices,
   );
-  const [showCustomerCopyModal, setShowCustomerCopyModal] = useState(false);
   const [customerCopyTaxes, setCustomerCopyTaxes] = useState(
     propCustomerCopyTaxes.length ? propCustomerCopyTaxes : propTaxes,
   );
@@ -966,7 +965,6 @@ export default function CreditSaleInvoice({
       if (enableInlineCustomerCopyPreview) {
         setCustomerCopyEnabled(true);
       }
-      setShowCustomerCopyModal(false);
     } catch (error) {
       console.error("Failed to save customer copy:", error);
       toast.error("Failed to save customer copy");
@@ -998,8 +996,7 @@ export default function CreditSaleInvoice({
         if (typeof onCustomerCopySaved === "function") {
           await Promise.resolve(onCustomerCopySaved());
         }
-        setShowCustomerCopyModal(false);
-      } catch (error) {
+        } catch (error) {
         console.error("Failed to apply customer copy via callback:", error);
         toast.error("Failed to save customer copy");
       } finally {
@@ -1183,15 +1180,6 @@ export default function CreditSaleInvoice({
                 </button>
               </div>
             ) : null}
-            {showCustomerCopyActions && onCancel && (
-              <button
-                onClick={() => setShowCustomerCopyModal(true)}
-                className="px-3 py-0.5 text-sm bg-gray-100 text-gray-700 rounded flex items-center gap-1 hover:bg-gray-200 transition-colors border border-gray-300"
-              >
-                <Copy size={14} />
-                While Copy
-              </button>
-            )}
             {showPrintButton && (
               <button
                 onClick={handlePrint}
@@ -1806,38 +1794,19 @@ export default function CreditSaleInvoice({
               </div>
             </div>
 
-            {/* Warning Notice */}
+            {/* Closing note — compact, proportional to invoice body */}
             {showImportantNote ? (
               <div
-                className={`bg-gradient-to-r from-amber-50 to-yellow-50 border-r-4 border-l-4 border-amber-500 shadow-sm shrink-0 ${isA5 ? "px-2 py-1.5 mt-1" : "px-2.5 py-2 mt-2 print:mt-auto"}`}
+                className={`shrink-0 border-t border-dashed border-slate-300 ${isA5 ? "mt-1 px-1 py-1" : "mt-2 px-1.5 py-1.5"}`}
               >
-                <div className="flex items-start gap-2">
-                  <div className="flex-shrink-0 pt-0.5">
-                    <svg
-                      className={`${isA5 ? "h-3.5 w-3.5" : "h-5 w-5"} text-amber-600`}
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h6
-                      className={`${isA5 ? "text-[10px]" : "text-xs"} font-semibold text-amber-900 leading-tight`}
-                    >
-                      IMPORTANT NOTE
-                    </h6>
-                    <h6
-                      className={`${isA5 ? "text-[10px] leading-snug" : "text-xs leading-snug"} text-amber-800 mt-1`}
-                    >
-                      {importantNoteText}
-                    </h6>
-                  </div>
-                </div>
+                <p
+                  className={`${isA5 ? "text-[9px] leading-snug" : "text-[11px] leading-snug"} text-center text-slate-600`}
+                >
+                  <span className="font-semibold text-slate-700">
+                    Important note:{" "}
+                  </span>
+                  {importantNoteText}
+                </p>
               </div>
             ) : null}
           </section>
@@ -2069,298 +2038,6 @@ export default function CreditSaleInvoice({
         </div>
       </div>
 
-      {/* Customer Copy Modal */}
-      {showCustomerCopyActions && showCustomerCopyModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 no-print">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-            {/* Modal Header */}
-            <div className="bg-[var(--aa-navy)] text-white p-3">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <Copy size={20} />
-                  <div>
-                    <h3 className="text-base font-bold">While Copy Pricing</h3>
-                    <p className="text-blue-100 text-xs">
-                      Adjust pricing, taxes, and discounts for customer-facing
-                      invoice
-                    </p>
-                    {(customerCopyTaxes.length > 0 || customerCopyDiscount) && (
-                      <p className="text-blue-200 text-xs mt-0.5">
-                        {customerCopyTaxes.length > 0 &&
-                          `${customerCopyTaxes.length} tax(es)`}
-                        {customerCopyTaxes.length > 0 &&
-                          customerCopyDiscount &&
-                          " • "}
-                        {customerCopyDiscount && "1 discount"}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowCustomerCopyModal(false)}
-                  className="p-1 hover:bg-white/20 rounded transition-all"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
-              {/* Items Table */}
-              <div className="border border-gray-300 rounded-lg overflow-hidden mb-4">
-                <table className="w-full">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="border border-gray-300 px-3 py-1.5 text-left text-xs font-bold">
-                        Description
-                      </th>
-                      <th className="border border-gray-300 px-3 py-1.5 text-center text-xs font-bold">
-                        Quantity
-                      </th>
-
-                      <th className="border border-gray-300 px-3 py-1.5 text-right text-xs font-bold">
-                        Customer Price
-                      </th>
-                      <th className="border border-gray-300 px-3 py-1.5 text-right text-xs font-bold">
-                        Amount
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {items.map((item, index) => {
-                      const customerPrice = customerCopyPriceList[index];
-                      const customerAmount =
-                        customerPrice * (item.quantity_sold || 0);
-
-                      return (
-                        <tr
-                          key={item.id}
-                          className={
-                            index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                          }
-                        >
-                          <td className="border border-gray-300 px-3 py-2 text-xs">
-                            <strong>{item.item_name}</strong>
-                            {item.uom_category && (
-                              <div className="text-gray-600 text-xs mt-0.5">
-                                {item.uom_category}
-                              </div>
-                            )}
-                          </td>
-                          <td className="border border-gray-300 px-3 py-2 text-center text-xs">
-                            {item.quantity_sold}
-                          </td>
-                          {/* <td className="border border-gray-300 px-3 py-2 text-right text-xs">
-                            ₦{formatNumber(item.selling_price)}
-                          </td> */}
-                          <td className="border border-gray-300 px-3 py-2 text-right">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={customerPrice}
-                              onChange={(e) => {
-                                const newPrice =
-                                  parseFloat(e.target.value) || 0;
-                                handleCustomerCopyPriceChange(index, newPrice);
-                              }}
-                              className="w-28 px-2 py-0.5 border border-gray-300 rounded text-right text-xs focus:border-purple-500 focus:outline-none"
-                            />
-                          </td>
-                          <td className="border border-gray-300 px-3 py-2 text-right text-xs font-semibold">
-                            ₦{formatNumber(customerAmount)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-
-                    {/* Total Row */}
-                    <tr className="bg-gray-100">
-                      <td
-                        className="border border-gray-300 px-3 py-1.5 text-right text-xs font-semibold"
-                        colSpan="3"
-                      >
-                        TOTAL:
-                      </td>
-                      <td className="border border-gray-300 px-3 py-1.5 text-right text-xs font-semibold">
-                        ₦{formatNumber(customerCopySubtotal)}
-                      </td>
-                    </tr>
-
-                    {customerCopyDiscount && (
-                      <tr className="bg-green-50">
-                        <td
-                          className="border border-gray-300 px-3 py-1.5 text-right text-xs font-semibold"
-                          colSpan="3"
-                        >
-                          {customerCopyDiscount.name ||
-                            customerCopyDiscount.discount_name}
-                          :
-                        </td>
-                        <td className="border border-gray-300 px-3 py-1.5 text-right text-xs font-semibold text-red-600">
-                          -{formatNumber(customerCopyDiscountAmount)}
-                        </td>
-                      </tr>
-                    )}
-                    {customerCopyTaxes.map((tax, index) => {
-                      // Determine if this specific tax is inclusive or exclusive
-                      const isTaxInclusive =
-                        vatPolicy === "all"
-                          ? tax.inclusive_type === "inclusive" ||
-                            (tax.inclusive_type === undefined &&
-                              tax.tax_type === "inclusive")
-                          : isInclusiveTax;
-
-                      let taxAmount = 0;
-                      if (isTaxInclusive) {
-                        // For inclusive: Extract VAT from subtotal (before discount) since subtotal includes VAT
-                        // Formula: VAT = subtotal × rate / (100 + rate)
-                        const totalTaxRate = customerCopyTaxes
-                          .filter((t) => {
-                            const tIsInclusive =
-                              vatPolicy === "all"
-                                ? t.inclusive_type === "inclusive" ||
-                                  (t.inclusive_type === undefined &&
-                                    t.tax_type === "inclusive")
-                                : isInclusiveTax;
-                            return tIsInclusive;
-                          })
-                          .reduce((sum, t) => {
-                            return sum + (parseFloat(t.rate) || 0);
-                          }, 0);
-
-                        if (
-                          totalTaxRate > 0 &&
-                          customerCopyTaxableSubtotal > 0
-                        ) {
-                          const taxRate = parseFloat(tax.rate) || 0;
-                          const taxProportion = taxRate / totalTaxRate;
-                          // Extract total VAT from subtotal (inclusive amount)
-                          const totalVAT =
-                            (customerCopyTaxableSubtotal * totalTaxRate) /
-                            (100 + totalTaxRate);
-                          // Allocate VAT proportionally to this tax
-                          taxAmount = totalVAT * taxProportion;
-                        }
-                      } else {
-                        // For exclusive: Calculate VAT on taxable net amount (after discount)
-                        taxAmount =
-                          (customerCopyTaxableNetAmount *
-                            parseFloat(tax.rate)) /
-                          100;
-                      }
-                      return (
-                        <tr key={index} className="bg-blue-50">
-                          <td
-                            className="border border-gray-300 px-3 py-1.5 text-right text-xs font-semibold"
-                            colSpan="3"
-                          >
-                            {tax.description} {tax.rate}% (
-                            {vatPolicy === "all"
-                              ? tax.inclusive_type === "inclusive"
-                                ? "Inclusive"
-                                : tax.inclusive_type === "exclusive"
-                                  ? "Exclusive"
-                                  : tax.tax_type === "inclusive"
-                                    ? "Inclusive"
-                                    : "Exclusive"
-                              : isInclusiveTax
-                                ? "inclusive"
-                                : "exclusive"}
-                            ):
-                          </td>
-                          <td className="border border-gray-300 px-3 py-1.5 text-right text-xs font-semibold text-blue-600">
-                            {formatNumber(taxAmount)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    <tr className="bg-yellow-100">
-                      <td
-                        className="border border-gray-300 px-3 py-1.5 text-right text-xs font-bold"
-                        colSpan="3"
-                      >
-                        GRAND TOTAL:
-                      </td>
-                      <td className="border border-gray-300 px-3 py-1.5 text-right text-xs font-bold">
-                        ₦{formatNumber(customerCopyTotalAmount)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Summary */}
-              <div className="bg-gray-50 rounded-lg p-3 mb-4 text-center">
-                <div className="grid grid-cols-3 gap-6">
-                  <div>
-                    <h4 className="font-bold text-xs mb-1">Total Items</h4>
-                    <p className="text-base font-bold text-blue-600">
-                      {items.length}
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xs mb-1">Original Total</h4>
-                    <p className="text-base font-bold text-blue-600">
-                      ₦{formatNumber(totalAmount)}
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xs mb-1">
-                      Customer Copy Total
-                    </h4>
-                    <p className="text-base font-bold text-blue-600">
-                      ₦{formatNumber(customerCopyTotalAmount)}
-                    </p>
-                  </div>
-                </div>
-                {customerCopyTotalAmount !== totalAmount && (
-                  <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded">
-                    <p className="text-xs font-bold text-amber-900 mb-0.5">
-                      Pricing Difference
-                    </p>
-                    <p className="text-xs text-gray-700">
-                      Difference: ₦
-                      {formatNumber(
-                        Math.abs(customerCopyTotalAmount - totalAmount),
-                      )}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-2 pt-3 border-t">
-                <button
-                  onClick={() => setShowCustomerCopyModal(false)}
-                  className="px-3 py-0.5 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-all font-medium"
-                  disabled={isSavingCustomerCopy}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleApplyCustomerCopy}
-                  className="px-3 py-0.5 text-sm bg-[var(--aa-navy)] text-white rounded hover:from-blue-700 hover:to-indigo-700 transition-all font-medium flex items-center gap-1 shadow-lg hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed"
-                  disabled={isSavingCustomerCopy}
-                >
-                  {isSavingCustomerCopy ? (
-                    <>
-                      <span className="h-3 w-3 border-2 border-white/60 border-t-transparent rounded-full animate-spin"></span>
-                      Saving…
-                    </>
-                  ) : (
-                    <>
-                      <Check size={14} />
-                      Apply White Copy
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
