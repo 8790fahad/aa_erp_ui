@@ -149,15 +149,15 @@ export function AppTopBar() {
           className="flex items-center gap-2 font-semibold tracking-tight text-white hover:text-white"
         >
             <img
-              src={logo}
-              alt={activeBusiness?.business_name || "YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES"}
-              className="h-8 w-8 rounded-lg object-contain ring-1 ring-white/25"
+              src={activeBusiness?.business_logo || logo}
+              alt={activeBusiness?.business_name || "ALH ALI MUHAMMAD YAMMUSA"}
+              className="h-8 w-8 rounded-lg object-contain ring-1 ring-white/25 bg-white"
               onError={(e) => {
-                e.currentTarget.style.display = "none";
+                e.currentTarget.src = logo;
               }}
             />
-            <span className="hidden lg:inline text-[13px] whitespace-nowrap max-w-[220px] truncate" title={activeBusiness?.business_name || "YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES"}>
-              {activeBusiness?.business_name || "YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES"}
+            <span className="hidden lg:inline text-[13px] whitespace-nowrap max-w-[220px] truncate" title={activeBusiness?.business_name || "ALH ALI MUHAMMAD YAMMUSA"}>
+              {activeBusiness?.business_name || "ALH ALI MUHAMMAD YAMMUSA"}
             </span>
         </Link>
       </div>

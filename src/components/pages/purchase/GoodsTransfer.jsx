@@ -120,6 +120,8 @@ const GOODS_TRANSFER_TABS = [
   },
 ];
 
+const WRITE_OFF_PRIVILEGE = "Write-off (Scrap/Loss)";
+
 const parseNumberFromFormatted = (value) => {
   if (!value || value === "") return "";
   return String(value).replace(/,/g, "");
@@ -236,6 +238,8 @@ export default function GoodsTransfer() {
     },
     [functionalities],
   );
+
+  const canWriteOff = functionalities.includes(WRITE_OFF_PRIVILEGE);
 
   const visibleTabs = useMemo(
     () => GOODS_TRANSFER_TABS.filter((tab) => canViewTab(tab.privilege)),
@@ -391,6 +395,10 @@ export default function GoodsTransfer() {
   }, [activeBusiness?.id]);
 
   const openWriteOffHistory = () => {
+    if (!canWriteOff) {
+      toast.error("You do not have permission to view write-off history");
+      return;
+    }
     setHistorySearch("");
     setTimeout(() => {
       setHistoryOpen(true);
@@ -399,6 +407,10 @@ export default function GoodsTransfer() {
   };
 
   const openWriteOff = (item) => {
+    if (!canWriteOff) {
+      toast.error("You do not have permission to write off stock");
+      return;
+    }
     setWriteOffItem(item);
     setWriteOffQty(String(item.qty ?? item.balance ?? ""));
     setWriteOffNotes("");
@@ -409,6 +421,10 @@ export default function GoodsTransfer() {
   };
 
   const handleWriteOffSubmit = () => {
+    if (!canWriteOff) {
+      toast.error("You do not have permission to write off stock");
+      return;
+    }
     if (!writeOffItem || !selectedAccountOption) {
       toast.error("Please select a Chart of Account Head");
       return;
@@ -1448,14 +1464,16 @@ export default function GoodsTransfer() {
                     >
                       {loadingGoodsList ? "Refreshing…" : "Refresh"}
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={openWriteOffHistory}
-                    >
-                      <History className="mr-1 h-4 w-4" />
-                      Write-off History
-                    </Button>
+                    {canWriteOff && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={openWriteOffHistory}
+                      >
+                        <History className="mr-1 h-4 w-4" />
+                        Write-off History
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -1481,7 +1499,9 @@ export default function GoodsTransfer() {
                           <th className="px-3 py-2.5 text-left">Item Type</th>
                           <th className="px-3 py-2.5 text-right">Available Stock</th>
                           <th className="px-3 py-2.5 text-left">UoM</th>
-                          <th className="px-3 py-2.5 text-center">Actions</th>
+                          {canWriteOff && (
+                            <th className="px-3 py-2.5 text-center">Actions</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
@@ -1509,31 +1529,33 @@ export default function GoodsTransfer() {
                             <td className="px-3 py-2.5 text-slate-600">
                               {item.unit_of_measure || item.uom || "Pcs"}
                             </td>
-                            <td className="px-3 py-2.5 text-center">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onSelect={(e) => {
-                                      e.preventDefault();
-                                      setTimeout(() => openWriteOff(item), 0);
-                                    }}
-                                    className="text-red-600 focus:text-red-600 cursor-pointer"
-                                  >
-                                    <AlertTriangle className="mr-2 h-4 w-4" />
-                                    Write-off (Scrap/Loss)
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </td>
+                            {canWriteOff && (
+                              <td className="px-3 py-2.5 text-center">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        setTimeout(() => openWriteOff(item), 0);
+                                      }}
+                                      className="text-red-600 focus:text-red-600 cursor-pointer"
+                                    >
+                                      <AlertTriangle className="mr-2 h-4 w-4" />
+                                      Write-off (Scrap/Loss)
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>

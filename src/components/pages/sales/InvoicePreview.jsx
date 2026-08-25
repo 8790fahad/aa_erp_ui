@@ -734,7 +734,13 @@ function InvoicePreview() {
                             invoiceData={data}
                             business={
                               data.business?.business_name
-                                ? data.business
+                                ? {
+                                    ...data.business,
+                                    id:
+                                      data.business.id ||
+                                      data.facility_id ||
+                                      activeBusiness?.id,
+                                  }
                                 : activeBusiness
                             }
                             customer={data.customer}
@@ -778,7 +784,13 @@ function InvoicePreview() {
                             invoiceData={data}
                             business={
                               data.business?.business_name
-                                ? data.business
+                                ? {
+                                    ...data.business,
+                                    id:
+                                      data.business.id ||
+                                      data.facility_id ||
+                                      activeBusiness?.id,
+                                  }
                                 : activeBusiness
                             }
                             customer={data.customer}
@@ -953,7 +965,13 @@ function InvoicePreview() {
                   invoiceData={resolvedInvoiceData}
                   business={
                     resolvedInvoiceData.business?.business_name
-                      ? resolvedInvoiceData.business
+                      ? {
+                          ...resolvedInvoiceData.business,
+                          id:
+                            resolvedInvoiceData.business.id ||
+                            resolvedInvoiceData.facility_id ||
+                            activeBusiness?.id,
+                        }
                       : activeBusiness
                   }
                   customer={resolvedInvoiceData.customer}
@@ -1045,7 +1063,13 @@ function InvoicePreview() {
                   invoiceData={resolvedInvoiceData}
                   business={
                     resolvedInvoiceData.business?.business_name
-                      ? resolvedInvoiceData.business
+                      ? {
+                          ...resolvedInvoiceData.business,
+                          id:
+                            resolvedInvoiceData.business.id ||
+                            resolvedInvoiceData.facility_id ||
+                            activeBusiness?.id,
+                        }
                       : activeBusiness
                   }
                   customer={resolvedInvoiceData.customer}

@@ -11,6 +11,13 @@ import CustomButton from "@/common/Custom/CustomButton";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import CreditSaleInvoiceImproved from "@/components/pages/sales/CreditSaleInvoiceImproved";
+import {
   POSTING_DATE_MIN,
   getPostingDateMax,
   validatePostingDateClient,
@@ -62,6 +69,9 @@ export default function ApplyCustomerAdvance() {
   const [applying, setApplying] = useState(false);
   const [paymentDate, setPaymentDate] = useState(moment().format("YYYY-MM-DD"));
   const [notes, setNotes] = useState("");
+  const [viewSaleCode, setViewSaleCode] = useState(null);
+  const [viewInvoiceData, setViewInvoiceData] = useState(null);
+  const [viewLoading, setViewLoading] = useState(false);
   const autoSeededFor = useRef("");
   const prefilledFromUrl = useRef(false);
 
@@ -149,9 +159,19 @@ export default function ApplyCustomerAdvance() {
     if (invoices.length === 0) return;
     if (autoSeededFor.current === custNo) return;
 
+    const preferSale = String(searchParams.get("sale_code") || "").trim();
     let remaining = availableDeposit;
     const next = {};
-    for (const inv of invoices) {
+
+    // Prefer the invoice just created from New Invoice → Apply Deposit
+    const ordered = preferSale
+      ? [
+          ...invoices.filter((inv) => invoiceKey(inv) === preferSale),
+          ...invoices.filter((inv) => invoiceKey(inv) !== preferSale),
+        ]
+      : invoices;
+
+    for (const inv of ordered) {
       const k = invoiceKey(inv);
       const due = parseFloat(inv.amount_due ?? inv.balance_due ?? 0) || 0;
       const pay = Math.min(Math.max(0, due), Math.max(0, remaining));
@@ -160,7 +180,7 @@ export default function ApplyCustomerAdvance() {
     }
     autoSeededFor.current = custNo;
     setApplyAmounts(next);
-  }, [selectedCustomer, loading, availableDeposit, invoices]);
+  }, [selectedCustomer, loading, availableDeposit, invoices, searchParams]);
 
   const allocatedSum = useMemo(() => {
     let sum = 0;
@@ -190,6 +210,42 @@ export default function ApplyCustomerAdvance() {
   };
 
   const clearApplied = () => setApplyAmounts({});
+
+  const openInvoiceView = useCallback(
+    (saleCode) => {
+      const code = String(saleCode || "").trim();
+      if (!code || !facilityId) return;
+      setViewSaleCode(code);
+      setViewInvoiceData(null);
+      setViewLoading(true);
+      _fetchApi(
+        `/api/v1/transactions/get-sale?sale_code=${encodeURIComponent(
+          code,
+        )}&facility_id=${facilityId}`,
+        (res) => {
+          setViewLoading(false);
+          if (res?.success && res.data) {
+            setViewInvoiceData(res.data);
+          } else {
+            toast.error(res?.message || "Failed to load invoice");
+            setViewSaleCode(null);
+          }
+        },
+        () => {
+          setViewLoading(false);
+          toast.error("Failed to load invoice");
+          setViewSaleCode(null);
+        },
+      );
+    },
+    [facilityId],
+  );
+
+  const closeInvoiceView = () => {
+    setViewSaleCode(null);
+    setViewInvoiceData(null);
+    setViewLoading(false);
+  };
 
   const seedFifo = () => {
     let remaining = availableDeposit;
@@ -441,8 +497,15 @@ export default function ApplyCustomerAdvance() {
                           ? moment(inv.transaction_date).format("DD MMM YYYY")
                           : "—"}
                       </td>
-                      <td className="px-3 py-2 font-medium text-blue-600">
-                        {k}
+                      <td className="px-3 py-2 font-medium">
+                        <button
+                          type="button"
+                          onClick={() => openInvoiceView(k)}
+                          className="text-[var(--aa-accent)] hover:underline"
+                          title="View invoice"
+                        >
+                          {k}
+                        </button>
                       </td>
                       <td className="px-3 py-2 text-right font-medium">
                         {formatNumber1(inv.amount_due ?? inv.balance_due ?? 0)}
@@ -506,6 +569,58 @@ export default function ApplyCustomerAdvance() {
           </CustomButton>
         </div>
       </div>
+
+      <Dialog
+        open={Boolean(viewSaleCode)}
+        onOpenChange={(open) => {
+          if (!open) closeInvoiceView();
+        }}
+      >
+        <DialogContent className="z-[200] flex max-h-[92vh] w-[min(96vw,56rem)] max-w-5xl flex-col gap-0 overflow-hidden border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl sm:rounded-xl">
+          <DialogHeader className="shrink-0 border-b border-slate-200 px-5 py-3 pr-12">
+            <DialogTitle className="text-base font-semibold">
+              Invoice {viewSaleCode || ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-2 py-3 sm:px-4">
+            {viewLoading ? (
+              <div className="space-y-2 p-4">
+                <Skeleton className="h-8 w-48" />
+                <Skeleton className="h-40 w-full" />
+                <Skeleton className="h-24 w-full" />
+              </div>
+            ) : viewInvoiceData ? (
+              <CreditSaleInvoiceImproved
+                invoiceData={viewInvoiceData}
+                business={viewInvoiceData.business || activeBusiness}
+                customer={viewInvoiceData.customer}
+                date={viewInvoiceData.date}
+                taxes={viewInvoiceData.taxes || []}
+                discount={viewInvoiceData.discount || null}
+                showPrintButton={false}
+                showCustomerCopyActions={false}
+                enableInlineCustomerCopyPreview={false}
+                documentMode="invoice"
+                paperSize={
+                  String(
+                    viewInvoiceData?.business?.default_receipt_type ||
+                      activeBusiness?.default_receipt_type ||
+                      "pdf",
+                  )
+                    .toLowerCase()
+                    .trim() === "a5"
+                    ? "a5"
+                    : "a4"
+                }
+              />
+            ) : (
+              <p className="px-4 py-8 text-center text-sm text-slate-500">
+                Invoice could not be loaded.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

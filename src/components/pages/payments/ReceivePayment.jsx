@@ -153,7 +153,7 @@ function normalizePaymentMode(type) {
 const PAYMENT_MODE_OPTIONS = [
   { value: "cash", label: "Cash", icon: Banknote },
   { value: "transfer", label: "Transfer", icon: Building2 },
-  { value: "split", label: "Cash + Transfer", icon: Split },
+  { value: "split", label: "Transfer + Cash", icon: Split },
   { value: "credit", label: "Credit", icon: CreditCard },
   { value: "credit_split", label: "Credit + Cash + Transfer", icon: Wallet },
 ];
@@ -174,6 +174,24 @@ function paymentTypeBadgeClass(type) {
   if (t === "transfer") return "bg-sky-50 text-sky-700 ring-sky-200";
   if (t === "credit") return "bg-amber-50 text-amber-700 ring-amber-200";
   return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+}
+
+/** Journal-style amount input: 10000 → 10,000 (preserves typing decimals). */
+function formatNumberWithCommas(value) {
+  if (!value || value === "") return "";
+  const numericValue = String(value).replace(/[^0-9.]/g, "");
+  const endsWithDot = numericValue.endsWith(".");
+  const parts = numericValue.split(".");
+  const integerPart = parts[0] || "";
+  const decimalPart = parts[1] || "";
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  if (decimalPart) return `${formattedInteger}.${decimalPart}`;
+  if (endsWithDot) return integerPart ? `${formattedInteger}.` : ".";
+  return formattedInteger;
+}
+
+function parseFormattedAmount(value) {
+  return parseFloat(String(value || "").replace(/,/g, "")) || 0;
 }
 
 /** Cash + Transfer invoices appear on both Cash and Transfer tabs. */
@@ -219,12 +237,10 @@ export default function ReceivePayment() {
   );
   const canSwitchPaymentMode =
     !functionalities.length ||
-    functionalities.includes(SWITCH_PAYMENT_MODE_PRIVILEGE) ||
-    LEGACY_COLLECTION_PRIVILEGES.some((p) => functionalities.includes(p));
+    functionalities.includes(SWITCH_PAYMENT_MODE_PRIVILEGE);
   const canApprovePaymentMode =
     !functionalities.length ||
-    functionalities.includes(APPROVE_PAYMENT_MODE_PRIVILEGE) ||
-    LEGACY_COLLECTION_PRIVILEGES.some((p) => functionalities.includes(p));
+    functionalities.includes(APPROVE_PAYMENT_MODE_PRIVILEGE);
 
   const canViewCollectionTab = useCallback(
     (privilege) => {
@@ -233,19 +249,23 @@ export default function ReceivePayment() {
 
       if (functionalities.includes(privilege)) return true;
 
-      // Mode Switch tab: Switch or Approve privilege
+      // Mode Switch is never granted by parent/legacy Collection Points alone
       if (
-        privilege === APPROVE_PAYMENT_MODE_PRIVILEGE &&
-        (functionalities.includes(SWITCH_PAYMENT_MODE_PRIVILEGE) ||
-          functionalities.includes(APPROVE_PAYMENT_MODE_PRIVILEGE))
+        privilege === APPROVE_PAYMENT_MODE_PRIVILEGE ||
+        privilege === SWITCH_PAYMENT_MODE_PRIVILEGE
       ) {
-        return true;
+        return (
+          functionalities.includes(SWITCH_PAYMENT_MODE_PRIVILEGE) ||
+          functionalities.includes(APPROVE_PAYMENT_MODE_PRIVILEGE)
+        );
       }
 
-      const hasAnyTabPriv = COLLECTION_TAB_PRIVILEGES.some((p) =>
-        functionalities.includes(p),
-      );
-      // Parent / legacy keys only (no Cash/Transfer/Credit yet) → all tabs
+      const hasAnyTabPriv = COLLECTION_TAB_PRIVILEGES.filter(
+        (p) =>
+          p !== APPROVE_PAYMENT_MODE_PRIVILEGE &&
+          p !== SWITCH_PAYMENT_MODE_PRIVILEGE,
+      ).some((p) => functionalities.includes(p));
+      // Parent / legacy keys only (no Cash/Transfer/Credit yet) → collection tabs
       if (!hasAnyTabPriv) {
         return LEGACY_COLLECTION_PRIVILEGES.some((p) =>
           functionalities.includes(p),
@@ -260,6 +280,7 @@ export default function ReceivePayment() {
     () =>
       METHOD_TABS.filter((t) => {
         if (t.id === "mode") {
+          // Explicit Switch or Approve only — not Cash/Transfer/legacy alone
           return canSwitchPaymentMode || canApprovePaymentMode;
         }
         return canViewCollectionTab(t.privilege);
@@ -372,6 +393,8 @@ export default function ReceivePayment() {
     const params = new URLSearchParams({
       facilityId: activeBusiness.id,
     });
+    if (user?.id != null) params.set("userId", String(user.id));
+    if (user?.role) params.set("role", String(user.role));
     // Fetch all methods so tab counts/lists are complete; UI filters by method tab
     _fetchApi(
       `/api/v1/sale-workflows/cashier-dashboard?${params.toString()}`,
@@ -407,7 +430,7 @@ export default function ReceivePayment() {
         toast.error(err?.message || "Failed to load collection queue");
       },
     );
-  }, [activeBusiness?.id]);
+  }, [activeBusiness?.id, user?.id, user?.role]);
 
   useEffect(() => {
     fetchDashboard();
@@ -740,13 +763,9 @@ export default function ReceivePayment() {
       return;
     }
 
-    const cashAmt =
-      parseFloat(String(advanceCashAmount || advanceAmount).replace(/,/g, "")) ||
-      0;
-    const transferAmt =
-      parseFloat(String(advanceTransferAmount).replace(/,/g, "")) || 0;
-    const singleAmt =
-      parseFloat(String(advanceAmount).replace(/,/g, "")) || 0;
+    const cashAmt = parseFormattedAmount(advanceCashAmount || advanceAmount);
+    const transferAmt = parseFormattedAmount(advanceTransferAmount);
+    const singleAmt = parseFormattedAmount(advanceAmount);
 
     if (advanceMode === "split") {
       if (cashAmt <= 0 || transferAmt <= 0) {
@@ -882,13 +901,13 @@ export default function ReceivePayment() {
     setSelected(row);
     const due = Number(row.amount) || 0;
     if (pt === "cash") {
-      setCashAmount(String(due));
+      setCashAmount(due > 0 ? formatNumberWithCommas(String(due)) : "");
       setTransferAmount("");
     } else if (pt === "transfer" || pt === "bank") {
       setCashAmount("");
-      setTransferAmount(String(due));
+      setTransferAmount(due > 0 ? formatNumberWithCommas(String(due)) : "");
     } else {
-      // Cash + Transfer (and unknown): leave amounts empty for the cashier to enter
+      // Transfer + Cash (and unknown): leave amounts empty for the cashier to enter
       setCashAmount("");
       setTransferAmount("");
     }
@@ -1039,12 +1058,18 @@ export default function ReceivePayment() {
           if (skipped) {
             toast.error(skipped.reason || "Cannot change payment mode");
           } else {
-            toast.success(
-              res.message ||
-                (requireApproval
-                  ? `Submitted switch to ${paymentTypeLabel(modeChangeNext)} for approval`
-                  : `Switched to ${paymentTypeLabel(modeChangeNext)}`),
-            );
+            if (modeChangeNext === "credit" && !requireApproval) {
+              toast.success(
+                "Switched to Credit — approve on the Credit tab before Invoice Separation",
+              );
+            } else {
+              toast.success(
+                res.message ||
+                  (requireApproval
+                    ? `Submitted switch to ${paymentTypeLabel(modeChangeNext)} for approval`
+                    : `Switched to ${paymentTypeLabel(modeChangeNext)}`),
+              );
+            }
             setModeChangeRow(null);
             setModeChangeNext("");
           }
@@ -1143,7 +1168,10 @@ export default function ReceivePayment() {
       (res) => {
         setSubmitting(false);
         if (res?.success) {
-          toast.success(res.message || "Credit approved");
+          toast.success(
+            res.message ||
+              "Credit approved — invoice sent to Invoice Separation",
+          );
           fetchDashboard();
         } else {
           toast.error(res?.message || "Could not approve credit");
@@ -1188,9 +1216,8 @@ export default function ReceivePayment() {
 
   const confirmPayment = () => {
     if (!selected || !activeBusiness?.id) return;
-    const cashAmt = parseFloat(String(cashAmount).replace(/,/g, "")) || 0;
-    const transferAmt =
-      parseFloat(String(transferAmount).replace(/,/g, "")) || 0;
+    const cashAmt = parseFormattedAmount(cashAmount);
+    const transferAmt = parseFormattedAmount(transferAmount);
     const splits = [];
 
     if (showCashFields && cashAmt > 0) {
@@ -1316,8 +1343,44 @@ export default function ReceivePayment() {
   };
 
   const splitHintTotal =
-    (parseFloat(String(cashAmount).replace(/,/g, "")) || 0) +
-    (parseFloat(String(transferAmount).replace(/,/g, "")) || 0);
+    parseFormattedAmount(cashAmount) + parseFormattedAmount(transferAmount);
+
+  const fillAllRemaining = (side) => {
+    const amt = remainingDue > 0 ? remainingDue : 0;
+    const formatted = amt > 0 ? formatNumberWithCommas(String(amt)) : "";
+    if (side === "transfer") setTransferAmount(formatted);
+    else setCashAmount(formatted);
+  };
+
+  const confirmButtonAmount = (() => {
+    if (isSplit) {
+      return collectionSide === "transfer"
+        ? parseFormattedAmount(transferAmount)
+        : parseFormattedAmount(cashAmount);
+    }
+    if (showCashFields) {
+      const v = parseFormattedAmount(cashAmount);
+      return v > 0 ? v : remainingDue;
+    }
+    if (showTransferFields) {
+      const v = parseFormattedAmount(transferAmount);
+      return v > 0 ? v : remainingDue;
+    }
+    return remainingDue;
+  })();
+
+  const confirmButtonLabel = (() => {
+    const amtLabel =
+      confirmButtonAmount > 0
+        ? `₦${formatNumber1(confirmButtonAmount)}`
+        : null;
+    if (isSplit) {
+      const side =
+        collectionSide === "transfer" ? "Transfer" : "Cash";
+      return amtLabel ? `Confirm ${amtLabel} ${side}` : `Confirm ${side}`;
+    }
+    return amtLabel ? `Confirm ${amtLabel}` : "Confirm Payment";
+  })();
 
   const summaryGridCols =
     methodTab === "credit" ||
@@ -1450,7 +1513,7 @@ export default function ReceivePayment() {
                 ₦{formatNumber1(viewSummary.pending_cash)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Awaiting cash payment (includes Cash + Transfer)
+                Awaiting cash payment (includes Transfer + Cash)
               </p>
             </div>
           ) : null}
@@ -1465,7 +1528,7 @@ export default function ReceivePayment() {
                 ₦{formatNumber1(viewSummary.pending_transfer)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Awaiting bank transfer (includes Cash + Transfer)
+                Awaiting bank transfer (includes Transfer + Cash)
               </p>
             </div>
           ) : null}
@@ -1481,7 +1544,8 @@ export default function ReceivePayment() {
               </p>
               <p className="mt-1 text-xs text-slate-500">
                 {viewSummary.pending_count} credit invoice
-                {viewSummary.pending_count === 1 ? "" : "s"}
+                {viewSummary.pending_count === 1 ? "" : "s"} — approve before
+                Invoice Separation
               </p>
             </div>
           ) : null}
@@ -1635,6 +1699,7 @@ export default function ReceivePayment() {
                     <tr>
                       <th className="px-4 py-3">Invoice</th>
                       <th className="px-4 py-3">Customer</th>
+                      <th className="px-4 py-3">Cashier</th>
                       <th className="px-4 py-3">Mode</th>
                       <th className="px-4 py-3 text-right">Amount due</th>
                       <th className="px-4 py-3">Created</th>
@@ -1668,6 +1733,16 @@ export default function ReceivePayment() {
                           <div className="text-xs text-slate-500">
                             {row.customer_no}
                           </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm text-slate-800">
+                            {row.assigned_cashier_name || "—"}
+                          </div>
+                          {row.assigned_cashier_id ? (
+                            <div className="text-[11px] text-slate-500">
+                              ID {row.assigned_cashier_id}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3">
                           {methodTab === "mode" ? (
@@ -2070,17 +2145,26 @@ export default function ReceivePayment() {
               <div className="space-y-2">
                 {isSplit || !isCashOnly ? (
                   <>
-                    <label className="text-sm font-medium text-slate-700">
-                      Cash amount
-                    </label>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-sm font-medium text-slate-700">
+                        Cash amount
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => fillAllRemaining("cash")}
+                        className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                      >
+                        All (₦{formatNumber1(remainingDue)})
+                      </button>
+                    </div>
                     <input
                       type="text"
                       inputMode="decimal"
                       value={cashAmount}
                       onChange={(e) =>
-                        setCashAmount(e.target.value.replace(/[^\d.]/g, ""))
+                        setCashAmount(formatNumberWithCommas(e.target.value))
                       }
-                      className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                      className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                       placeholder="0.00"
                     />
                   </>
@@ -2122,17 +2206,26 @@ export default function ReceivePayment() {
               <div className="space-y-2">
                 {isSplit || !isTransferOnly ? (
                   <>
-                    <label className="text-sm font-medium text-slate-700">
-                      Transfer amount
-                    </label>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-sm font-medium text-slate-700">
+                        Transfer amount
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => fillAllRemaining("transfer")}
+                        className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                      >
+                        All (₦{formatNumber1(remainingDue)})
+                      </button>
+                    </div>
                     <input
                       type="text"
                       inputMode="decimal"
                       value={transferAmount}
                       onChange={(e) =>
-                        setTransferAmount(e.target.value.replace(/[^\d.]/g, ""))
+                        setTransferAmount(formatNumberWithCommas(e.target.value))
                       }
-                      className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                      className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                       placeholder="0.00"
                     />
                   </>
@@ -2200,9 +2293,7 @@ export default function ReceivePayment() {
               ) : (
                 <CheckCircle2 className="h-4 w-4" />
               )}
-              {isSplit
-                ? `Confirm ${collectionSide === "transfer" ? "Transfer" : "Cash"}`
-                : "Confirm Payment"}
+              {confirmButtonLabel}
             </button>
           </div>
         </SheetContent>
@@ -2255,7 +2346,7 @@ export default function ReceivePayment() {
               >
                 <option value="cash">Cash</option>
                 <option value="transfer">Transfer</option>
-                <option value="split">Cash + Transfer</option>
+                <option value="split">Transfer + Cash</option>
               </select>
             </div>
 
@@ -2270,10 +2361,10 @@ export default function ReceivePayment() {
                     value={advanceCashAmount}
                     onChange={(e) =>
                       setAdvanceCashAmount(
-                        e.target.value.replace(/[^\d.]/g, ""),
+                        formatNumberWithCommas(e.target.value),
                       )
                     }
-                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                     placeholder="0.00"
                   />
                   <label className="text-sm font-medium text-slate-700">
@@ -2320,10 +2411,10 @@ export default function ReceivePayment() {
                     value={advanceTransferAmount}
                     onChange={(e) =>
                       setAdvanceTransferAmount(
-                        e.target.value.replace(/[^\d.]/g, ""),
+                        formatNumberWithCommas(e.target.value),
                       )
                     }
-                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                     placeholder="0.00"
                   />
                   <label className="text-sm font-medium text-slate-700">
@@ -2357,8 +2448,8 @@ export default function ReceivePayment() {
                 <p className="text-xs text-slate-500">
                   Total advance: ₦
                   {formatNumber1(
-                    (parseFloat(advanceCashAmount) || 0) +
-                      (parseFloat(advanceTransferAmount) || 0),
+                    parseFormattedAmount(advanceCashAmount) +
+                      parseFormattedAmount(advanceTransferAmount),
                   )}
                 </p>
               </>
@@ -2372,9 +2463,9 @@ export default function ReceivePayment() {
                     inputMode="decimal"
                     value={advanceAmount}
                     onChange={(e) =>
-                      setAdvanceAmount(e.target.value.replace(/[^\d.]/g, ""))
+                      setAdvanceAmount(formatNumberWithCommas(e.target.value))
                     }
-                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                     placeholder="0.00"
                   />
                 </div>
@@ -2547,19 +2638,29 @@ export default function ReceivePayment() {
           modeChangeNext &&
           normalizePaymentMode(modeChangeRow.payment_type) !==
             modeChangeNext ? (
-            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              Switch from{" "}
-              <span className="font-semibold text-slate-900">
-                {paymentTypeLabel(modeChangeRow.payment_type)}
-              </span>{" "}
-              to{" "}
-              <span className="font-semibold text-slate-900">
-                {paymentTypeLabel(modeChangeNext)}
-              </span>
-              {canApprovePaymentMode
-                ? ". This will apply immediately."
-                : ". This will be sent for approval on the Mode tab."}
-            </p>
+            <div className="space-y-2">
+              <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                Switch from{" "}
+                <span className="font-semibold text-slate-900">
+                  {paymentTypeLabel(modeChangeRow.payment_type)}
+                </span>{" "}
+                to{" "}
+                <span className="font-semibold text-slate-900">
+                  {paymentTypeLabel(modeChangeNext)}
+                </span>
+                {canApprovePaymentMode
+                  ? ". This will apply immediately."
+                  : ". This will be sent for approval on the Mode tab."}
+              </p>
+              {modeChangeNext === "credit" ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Note: Credit must be approved on the{" "}
+                  <span className="font-semibold">Credit</span> tab before the
+                  invoice can go to{" "}
+                  <span className="font-semibold">Invoice Separation</span>.
+                </p>
+              ) : null}
+            </div>
           ) : null}
 
           <DialogFooter className="gap-2 sm:gap-0">

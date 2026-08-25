@@ -117,7 +117,7 @@ export default function AuthRoutes() {
                   alt={
                     activeBusiness?.business_logo
                       ? activeBusiness?.business_name || "Business logo"
-                      : "YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES logo"
+                      : "ALH ALI MUHAMMAD YAMMUSA logo"
                   }
                   className="logo"
                   style={{ height: "55px", objectFit: "contain" }}

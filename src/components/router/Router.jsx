@@ -18,6 +18,7 @@ import { gotoApp } from "./routeHelper";
 import Login from "../pages/auth/Login";
 import Register from "../pages/auth/Register";
 import NotFound from "@/common/NotFound";
+import CustomerFeedbackPage from "../pages/feedback/CustomerFeedbackPage";
 
 const Router = () => {
   const location = useLocation();
@@ -75,6 +76,7 @@ const Router = () => {
         { path: "/", element: <Navigate to="/login" replace /> },
         { path: "/login", element: <Login /> },
         { path: "/signup", element: <Register /> },
+        { path: "/feedback", element: <CustomerFeedbackPage /> },
       ],
     },
     {

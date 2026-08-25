@@ -401,7 +401,7 @@ const PayslipPDF = forwardRef(
             </span>
           </div>
           <span className="text-[10px] font-bold uppercase tracking-wide text-slate-800">
-            YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES
+            ALH ALI MUHAMMAD YAMMUSA
           </span>
         </div>
       </div>

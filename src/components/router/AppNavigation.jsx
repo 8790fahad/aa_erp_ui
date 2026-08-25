@@ -3,6 +3,7 @@ import Login from "../pages/auth/Login";
 // import Register from "../pages/auth/Register";
 import AppIndex from "./AppIndex";
 import { Navigate, Outlet, useRoutes } from "react-router-dom";
+import CustomerFeedbackPage from "../pages/feedback/CustomerFeedbackPage";
 import Random from "@/Random";
 import RecordExpenses from "../pages/account/RecordExpenses";
 // import SetupChartOfAccount from "../pages/account/SetupChartOfAccount";
@@ -82,6 +83,7 @@ import GenerateMemo from "../pages/purchase/GenerateMemo";
 import IndividualLedger from "../pages/report/IndividualLedger";
 import SupplierIndividualLedger from "../pages/report/SupplierIndividualLedger";
 import Settings from "../pages/admin/Settings";
+import CustomerFeedbackAdmin from "../pages/admin/CustomerFeedbackAdmin";
 import MrApproval from "../pages/inventory/MrApproval";
 
 import AddFinishedGoods from "../pages/inventory/AddFinishedGoods";
@@ -1394,6 +1396,10 @@ const routeModules = {
         element: <Settings />,
       },
       {
+        path: "customer-feedback",
+        element: <CustomerFeedbackAdmin />,
+      },
+      {
         path: "team-table",
         element: <Navigate to="/app/admin/settings#team-setup" replace />,
       },
@@ -1510,6 +1516,7 @@ export default function AppNavigation() {
           path: "accept-invite",
           element: <AcceptInvite />,
         },
+        { path: "feedback", element: <CustomerFeedbackPage /> },
       ],
     },
     { path: "*", element: <NotFound /> },

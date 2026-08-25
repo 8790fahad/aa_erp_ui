@@ -78,6 +78,7 @@ export const modules = [
           { title: "New Goods Transfer" },
           { title: "Transfer History" },
           { title: "Pending Approvals" },
+          { title: "Write-off (Scrap/Loss)" },
         ],
       },
       {
@@ -818,6 +819,18 @@ export const modules = [
         subFunctionalities: SETTINGS_TABS.map((tab) => ({
           title: tab.privilege,
         })),
+      },
+      {
+        title: "Customer Feedback",
+        url: "/app/admin/customer-feedback",
+        functionality: ["Customer Feedback", "Admin", "Settings"],
+        access: [
+          "services",
+          "retailers",
+          "recycling",
+          "manufacturing",
+          "contractors",
+        ],
       },
     ],
   },

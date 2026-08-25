@@ -154,7 +154,7 @@ export default function Login() {
       branding?.primary_color,
       branding?.secondary_color,
     );
-    const name = branding?.business_name || "YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES";
+    const name = branding?.business_name || "ALH ALI MUHAMMAD YAMMUSA";
     const isBranded = Boolean(branding);
     return {
       name,
@@ -233,7 +233,7 @@ export default function Login() {
 
             {brandingError ? (
               <p className="mt-4 rounded-lg border border-amber-200/80 bg-amber-50 px-3.5 py-2.5 text-left text-sm text-amber-800">
-                {brandingError}. Showing default YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES login.{" "}
+                {brandingError}. Showing default ALH ALI MUHAMMAD YAMMUSA login.{" "}
                 <Link to="/login" className="font-medium underline">
                   Continue here
                 </Link>
@@ -420,7 +420,7 @@ export default function Login() {
       </div>
 
       <p className="relative z-10 mt-8 text-center text-xs text-slate-400">
-        © {new Date().getFullYear()}, YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES. All Rights Reserved.
+        © {new Date().getFullYear()}, ALH ALI MUHAMMAD YAMMUSA. All Rights Reserved.
       </p>
 
       <style>{`

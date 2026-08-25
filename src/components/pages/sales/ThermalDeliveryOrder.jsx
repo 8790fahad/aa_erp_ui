@@ -1,4 +1,6 @@
+import { useEffect, useMemo, useState } from "react";
 import moment from "moment";
+import QRCode from "qrcode";
 
 function formatThermalNumber(value) {
   const n = Number(value);
@@ -44,12 +46,68 @@ export default function ThermalDeliveryOrder({
   importantNote = "",
   preparedBy = "",
 }) {
-  if (!invoiceData) return null;
+  const [feedbackQr, setFeedbackQr] = useState("");
 
   const isGoodsIssue =
     String(documentType || "")
       .toLowerCase()
       .replace(/-/g, "_") === "goods_issue_note";
+
+  const saleCode = useMemo(() => {
+    if (!invoiceData) return "";
+    return String(
+      invoiceData.sale_code ||
+        invoiceData.transaction?.id ||
+        invoiceData.invoice_ref ||
+        "",
+    );
+  }, [invoiceData]);
+
+  const feedbackUrl = useMemo(() => {
+    if (!isGoodsIssue) return "";
+    const businessId =
+      business?.id ||
+      invoiceData?.business?.id ||
+      invoiceData?.facility_id ||
+      invoiceData?.facilityId ||
+      "";
+    if (!businessId) return "";
+    const params = new URLSearchParams();
+    params.set("businessId", String(businessId));
+    if (saleCode) params.set("sale_code", saleCode);
+    const custNo = customer?.customerNo || customer?.account_no || "";
+    const custName =
+      customer?.customer_name || customer?.name || customer?.fullname || "";
+    if (custNo) params.set("customerNo", String(custNo));
+    if (custName) params.set("customerName", String(custName));
+    return `https://ashiru-ali.com/feedback?${params.toString()}`;
+  }, [isGoodsIssue, business, invoiceData, saleCode, customer]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!feedbackUrl) {
+      setFeedbackQr("");
+      return undefined;
+    }
+    QRCode.toDataURL(feedbackUrl, {
+      width: 280,
+      margin: 0,
+      errorCorrectionLevel: "M",
+      color: { dark: "#000000", light: "#ffffff" },
+    })
+      .then((url) => {
+        if (!cancelled) setFeedbackQr(url);
+      })
+      .catch(() => {
+        if (!cancelled) setFeedbackQr("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [feedbackUrl]);
+
+  if (!invoiceData) return null;
+
   const docTitle = isGoodsIssue ? "GOODS ISSUE NOTE" : "DELIVERY ORDER";
   const docPrefix = isGoodsIssue ? "GIN" : "DO";
   const DEFAULT_GIN_NOTE =
@@ -75,12 +133,7 @@ export default function ThermalDeliveryOrder({
       sum + Number(item.quantity_sold ?? item.qty ?? item.quantity ?? 0),
     0,
   );
-  const saleCode =
-    invoiceData.sale_code ||
-    invoiceData.transaction?.id ||
-    invoiceData.invoice_ref ||
-    "—";
-  const docNumber = `${docPrefix}-${saleCode}`;
+  const docNumber = `${docPrefix}-${saleCode || "—"}`;
   const warehouse =
     invoiceData.branch_name ||
     invoiceData.warehouse_name ||
@@ -163,6 +216,65 @@ export default function ThermalDeliveryOrder({
           font-style: italic;
           text-align: center;
         }
+        .thermal-do-root .tr-feedback {
+          margin-top: 4px;
+          display: flex;
+          flex-direction: row;
+          align-items: stretch;
+          width: 100%;
+          height: 28mm;
+          gap: 0;
+          padding: 0;
+          overflow: hidden;
+          background: #000;
+          line-height: 0;
+        }
+        .thermal-do-root .tr-feedback-qr {
+          flex: 0 0 28mm;
+          width: 28mm;
+          height: 28mm;
+          margin: 0;
+          padding: 0;
+          background: #fff;
+          line-height: 0;
+        }
+        .thermal-do-root .tr-feedback-qr img {
+          display: block;
+          width: 28mm;
+          height: 28mm;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          object-fit: cover;
+          vertical-align: top;
+        }
+        .thermal-do-root .tr-feedback-label {
+          flex: 1 1 auto;
+          min-width: 0;
+          margin: 0;
+          padding: 0 2mm;
+          box-sizing: border-box;
+          background: #000;
+          color: #fff;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          gap: 1px;
+          line-height: 1.15;
+        }
+        .thermal-do-root .tr-feedback-label-title {
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.02em;
+        }
+        .thermal-do-root .tr-feedback-label-url {
+          font-size: 7px;
+          font-weight: 600;
+          letter-spacing: 0.01em;
+          opacity: 0.95;
+        }
       `}</style>
 
       <div
@@ -194,7 +306,7 @@ export default function ThermalDeliveryOrder({
           ).format("DD/MM/YYYY HH:mm")}
         </div>
         {warehouse ? <div>Warehouse: {warehouse}</div> : null}
-        <div>Invoice: {saleCode}</div>
+        <div>Invoice: {saleCode || "—"}</div>
 
         <div className="tr-divider" />
 
@@ -280,6 +392,18 @@ export default function ThermalDeliveryOrder({
             <div className="tr-note tr-center">{noteText}</div>
           </>
         ) : null}
+
+        {isGoodsIssue && feedbackQr ? (
+          <div className="tr-feedback">
+            <div className="tr-feedback-qr">
+              <img src={feedbackQr} alt="Feedback QR code" />
+            </div>
+            <div className="tr-feedback-label">
+              <span className="tr-feedback-label-title">Scan for feedback</span>
+              <span className="tr-feedback-label-url">ashiru-ali.com</span>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -347,6 +471,64 @@ export function printThermalDeliveryOrder() {
         line-height: 1.35;
         font-style: italic;
         text-align: center;
+      }
+      .tr-feedback {
+        margin-top: 4px;
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        width: 100%;
+        height: 28mm;
+        gap: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #000;
+        line-height: 0;
+      }
+      .tr-feedback-qr {
+        flex: 0 0 28mm;
+        width: 28mm;
+        height: 28mm;
+        margin: 0;
+        padding: 0;
+        background: #fff;
+        line-height: 0;
+      }
+      .tr-feedback-qr img {
+        display: block;
+        width: 28mm;
+        height: 28mm;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        object-fit: cover;
+      }
+      .tr-feedback-label {
+        flex: 1 1 auto;
+        min-width: 0;
+        margin: 0;
+        padding: 0 2mm;
+        box-sizing: border-box;
+        background: #000;
+        color: #fff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        gap: 1px;
+        line-height: 1.15;
+      }
+      .tr-feedback-label-title {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .tr-feedback-label-url {
+        font-size: 7px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        opacity: 0.95;
       }
       .thermal-cut-mark {
         display: block;

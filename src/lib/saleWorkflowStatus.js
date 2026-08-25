@@ -1,7 +1,7 @@
 import React from "react";
 
 /**
- * User-facing process stages (YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES sales):
+ * User-facing process stages (ALH ALI MUHAMMAD YAMMUSA sales):
  * Invoice → Cashier → Separation → Warehouse → Done
  *
  * Raw DB statuses still exist for history; they map into these buckets.

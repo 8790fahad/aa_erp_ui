@@ -1190,17 +1190,28 @@ const StaffManagementDashboard = () => {
   const handleChildChechBoxChange = (subItem) => {
     setForm((prevForm) => {
       const isChecked = prevForm.functionalities.includes(subItem.title);
-      const subTitles =
+      const allSubTitles =
         subItem.subFunctionalities?.map((s) => s.title).filter(Boolean) || [];
+      // Privileges that must be granted explicitly — not auto-enabled
+      // when the parent module switch is turned on.
+      const EXPLICIT_ONLY = new Set([
+        "Switch Payment Mode",
+        "Approve Payment Mode Switch",
+        "Write-off (Scrap/Loss)",
+      ]);
+      const autoSubTitles = allSubTitles.filter((t) => !EXPLICIT_ONLY.has(t));
 
       let updatedFunctionalities = isChecked
         ? prevForm.functionalities.filter(
-            (func) => func !== subItem.title && !subTitles.includes(func),
+            (func) =>
+              func !== subItem.title && !allSubTitles.includes(func),
           )
         : [
             ...prevForm.functionalities,
             subItem.title,
-            ...subTitles.filter((t) => !prevForm.functionalities.includes(t)),
+            ...autoSubTitles.filter(
+              (t) => !prevForm.functionalities.includes(t),
+            ),
           ];
 
       updatedFunctionalities = [...new Set(updatedFunctionalities)];
