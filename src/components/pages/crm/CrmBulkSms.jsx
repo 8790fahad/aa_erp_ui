@@ -71,6 +71,18 @@ export default function CrmBulkSms() {
     if (!no) return;
     const phone = c.mobile || c.phone || "";
     const email = c.email || "";
+    if (isEmail && !String(email).trim()) {
+      toast.error(
+        "This customer has no email — type an address below and click Add",
+      );
+      return;
+    }
+    if (!isEmail && !String(phone).trim()) {
+      toast.error(
+        "This customer has no phone — type a number below and click Add",
+      );
+      return;
+    }
     setRecipients((prev) => {
       if (prev.some((r) => r.customer_no === no)) return prev;
       return [
@@ -106,6 +118,22 @@ export default function CrmBulkSms() {
     setManualContact("");
   };
 
+  const ensureManualRecipient = () => {
+    const value = manualContact.trim();
+    if (!value) return recipients;
+    if (isEmail) {
+      if (!value.includes("@")) return recipients;
+      if (recipients.some((r) => String(r.email || "").toLowerCase() === value.toLowerCase())) {
+        return recipients;
+      }
+      return [...recipients, { email: value, customer_name: value }];
+    }
+    if (recipients.some((r) => String(r.phone || "") === value)) {
+      return recipients;
+    }
+    return [...recipients, { phone: value, customer_name: value }];
+  };
+
   const onPickFiles = (e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = "";
@@ -130,14 +158,14 @@ export default function CrmBulkSms() {
     });
   };
 
-  const sendEmail = async (dryRun) => {
+  const sendEmail = async (dryRun, recipientList) => {
     const token = localStorage.getItem("@@__token");
     const form = new FormData();
     form.append("facilityId", facilityId || "");
     form.append("message", message);
     form.append("subject", subject);
     if (templateId) form.append("template_id", templateId);
-    form.append("recipients", JSON.stringify(recipients));
+    form.append("recipients", JSON.stringify(recipientList));
     form.append("dry_run", dryRun ? "true" : "false");
     if (user?.id) form.append("sent_by", user.id);
     for (const file of attachments) {
@@ -162,7 +190,12 @@ export default function CrmBulkSms() {
   };
 
   const send = async (dryRun) => {
-    if (!message.trim() || !recipients.length) {
+    const recipientList = ensureManualRecipient();
+    if (recipientList !== recipients) {
+      setRecipients(recipientList);
+      setManualContact("");
+    }
+    if (!message.trim() || !recipientList.length) {
       toast.error("Message and at least one recipient required");
       return;
     }
@@ -170,10 +203,21 @@ export default function CrmBulkSms() {
       toast.error("Email subject is required");
       return;
     }
+    const hasValid = isEmail
+      ? recipientList.some((r) => String(r.email || "").includes("@"))
+      : recipientList.some((r) => String(r.phone || "").trim());
+    if (!hasValid) {
+      toast.error(
+        isEmail
+          ? "No valid recipients with email addresses"
+          : "No valid recipients with phone numbers",
+      );
+      return;
+    }
     setSending(true);
     try {
       if (isEmail) {
-        const res = await sendEmail(dryRun);
+        const res = await sendEmail(dryRun, recipientList);
         if (dryRun) {
           const att =
             res?.attachments?.length > 0
@@ -194,7 +238,7 @@ export default function CrmBulkSms() {
               facilityId,
               message,
               template_id: templateId || null,
-              recipients,
+              recipients: recipientList,
               dry_run: dryRun,
               sent_by: user?.id,
             },
