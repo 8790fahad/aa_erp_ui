@@ -2330,23 +2330,39 @@ const StaffManagementDashboard = () => {
         facilityId={activeBusiness?.id}
         createdBy={user?.id}
         primaryColor="#1a2d5e"
+        requiredKeys={[
+          "firstname",
+          "lastname",
+          "email",
+          "phone",
+          "role",
+          "branch",
+        ]}
         templateCols={[
-          { key: "firstname", label: "First Name", example: "Ibrahim" },
-          { key: "lastname", label: "Last Name", example: "Sani" },
+          { key: "firstname", label: "First Name", example: "Ibrahim", required: true },
+          { key: "lastname", label: "Last Name", example: "Sani", required: true },
           {
             key: "email",
             label: "Email",
             example: "ibrahim.sani@example.com",
+            required: true,
           },
-          { key: "phone", label: "Phone", example: "08098765432" },
-          { key: "role", label: "Role", example: "Cashier", hint: "If the role name is not found it will be created automatically; if found, that role is used." },
+          { key: "phone", label: "Phone", example: "08098765432", required: true },
+          {
+            key: "role",
+            label: "Role",
+            example: "Cashier",
+            required: true,
+            hint: "If the role name is not found it will be created automatically; if found, that role is used.",
+          },
           {
             key: "branch",
             label: "Warehouse",
             example: branches[0]?.branch_name || "YAMUSA STORE",
+            required: true,
             hint: "If the warehouse name is not found it will be created automatically; if found, that warehouse is used.",
           },
-          { key: "status", label: "Status", example: "verified" },
+          { key: "status", label: "Status", example: "verified", required: false },
         ]}
         exampleRows={[
           {
