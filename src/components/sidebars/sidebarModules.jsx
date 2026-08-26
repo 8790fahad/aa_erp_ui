@@ -2,7 +2,6 @@ import {
   CreditCard,
   FileTextIcon,
   HandHelping,
-  LayoutDashboard,
   NotebookPen,
   PackageOpen,
   UserRoundPen,
@@ -14,11 +13,12 @@ import {
 import { SETTINGS_TABS } from "@/components/pages/admin/settingsTabs";
 
 export const modules = [
-  {
-    title: "Dashboard",
-    url: "/app",
-    icon: LayoutDashboard,
-  },
+  // Dashboard is rendered permanently under Home in AppSidebar (not privilege-gated).
+  // {
+  //   title: "Dashboard",
+  //   url: "/app",
+  //   icon: LayoutDashboard,
+  // },
   // Customers moved under Sales
   // {
   //   title: "Customers",

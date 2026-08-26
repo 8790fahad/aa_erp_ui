@@ -49,6 +49,54 @@ function cartQtyForSku(cart, sku, excludeId) {
     .reduce((sum, item) => sum + parseFloat(item.quantity_sold || item.quantity || 0), 0);
 }
 
+/** Max qty allowed on a cart line after sales target (+ optional stock). null = no cap. */
+function getMaxQtyForLine(item, cart, { allowWithoutStock = true, catalog = [] } = {}) {
+  if (!item) return null;
+  const sku = item.product_id || item.sku;
+  let remaining = getSalesLimitRemaining(item);
+  let period = item.sales_limit_period ?? null;
+  if (remaining == null && sku && catalog.length) {
+    const match = catalog.find(
+      (p) =>
+        String(p.product_id || p.sku || "") === String(sku) ||
+        String(p.id) === String(item.id),
+    );
+    if (match) {
+      remaining = getSalesLimitRemaining(match);
+      period = match.sales_limit_period ?? period;
+    }
+  }
+
+  let max = Infinity;
+  if (remaining != null) {
+    const other = cartQtyForSku(cart, sku, item.id);
+    max = Math.min(max, Math.max(0, remaining - other));
+  }
+
+  if (!allowWithoutStock && item.item_type !== "Service") {
+    const stock = parseFloat(item.balance);
+    if (Number.isFinite(stock)) {
+      const otherSameBatch = (cart || [])
+        .filter(
+          (c) =>
+            c.id !== item.id &&
+            String(c.product_id) === String(sku) &&
+            c.expiry_date === item.expiry_date,
+        )
+        .reduce(
+          (sum, c) => sum + parseFloat(c.quantity_sold || c.quantity || 0),
+          0,
+        );
+      max = Math.min(max, Math.max(0, stock - otherSameBatch));
+    }
+  }
+
+  if (!Number.isFinite(max) || max === Infinity) {
+    return { max: null, remaining, period };
+  }
+  return { max, remaining, period };
+}
+
 // Components
 import CartList from "./make-sales/CartList";
 import ItemSelection from "./make-sales/ItemSelection";
@@ -1105,11 +1153,13 @@ function MakeSale() {
     // Always load facility-wide stock with branch attached so the same SKU
     // can appear once per branch and lines can come from different branches.
     _fetchApi(
-      `/account/get-ready-for-sales/${activeBusiness.id}`,
+      `/account/get-ready-for-sales/${activeBusiness.id}?includeStopped=1`,
       (response) => {
         if (response.success) {
           // Show every branch's stock — same SKU can appear once per branch.
           // Do not filter by the user's assigned branchId (often stale / wrong).
+          // includeStopped=1 lists sales-stopped products so they appear in
+          // pickers; selecting them is blocked in addToCart / addToCartNew.
           const items = (response.results || [])
             .map((it) => {
               const bid = it.branchId ?? it.branch_id;
@@ -1129,6 +1179,7 @@ function MakeSale() {
                 location_name: locationName,
                 // Prefer real branch location over store-type text ("for sales")
                 branch_name: locationName || it.branch_name || null,
+                sales_stopped: isSalesStopped(it),
               };
             })
             .sort((a, b) => {
@@ -1157,10 +1208,15 @@ function MakeSale() {
 
     setLoadingServices(true);
     _fetchApi(
-      `/account/get-service-products/${activeBusiness.id}`,
+      `/account/get-service-products/${activeBusiness.id}?includeStopped=1`,
       (response) => {
         if (response.success) {
-          setServiceProducts(response.results || []);
+          setServiceProducts(
+            (response.results || []).map((it) => ({
+              ...it,
+              sales_stopped: isSalesStopped(it),
+            })),
+          );
         }
         setLoadingServices(false);
       },
@@ -1599,6 +1655,32 @@ function MakeSale() {
       return;
     }
 
+    // Sales target / limit — block even when stock remains
+    const limitRemaining = getSalesLimitRemaining(selectedItem);
+    if (limitRemaining != null) {
+      const sku = selectedItem.product_id || selectedItem.id;
+      const qtyInCartForSku = cartQtyForSku(cart, sku);
+      const totalForSku = qtyInCartForSku + quantity;
+      if (limitRemaining <= 0) {
+        toast.error(
+          `Sales ${salesLimitPeriodLabel(selectedItem.sales_limit_period)} limit reached for ${
+            selectedItem.item_name
+          }. No more can be sold this period.`,
+        );
+        return;
+      }
+      if (totalForSku > limitRemaining) {
+        toast.error(
+          `Sales ${salesLimitPeriodLabel(selectedItem.sales_limit_period)} limit for ${
+            selectedItem.item_name
+          }. Remaining: ${formatNumber1(limitRemaining)}, in cart: ${formatNumber1(
+            qtyInCartForSku,
+          )}, trying to add: ${formatNumber1(quantity)}`,
+        );
+        return;
+      }
+    }
+
     const amount = sellingPrice * quantity;
 
     const cartItem = {
@@ -1620,6 +1702,10 @@ function MakeSale() {
       expiry_date: selectedItem.expiry_date,
       taxable: selectedItem.taxable || "Taxable",
       proBono: false, // Default to false
+      sales_stopped: isSalesStopped(selectedItem),
+      sales_limit_period: selectedItem.sales_limit_period ?? null,
+      sales_limit: selectedItem.sales_limit ?? null,
+      sales_limit_remaining: selectedItem.sales_limit_remaining ?? null,
       branchId:
         selectedItem.branchId ||
         selectedItem.branch_id ||
@@ -2218,6 +2304,65 @@ function MakeSale() {
     if (saleItems.length === 0) {
       toast.error("No items to sell");
       return;
+    }
+
+    // Client-side guard (API also enforces): stop sales + sales targets
+    for (const item of saleItems) {
+      if (isSalesStopped(item)) {
+        toast.error(
+          `Sales are stopped for ${item.item_name}. Remove it before saving.`,
+        );
+        return;
+      }
+      const limitRemaining = getSalesLimitRemaining(item);
+      if (limitRemaining != null) {
+        const qty = parseFloat(item.quantity_sold || item.quantity || 0) || 0;
+        const sku = item.product_id;
+        const otherQty = cartQtyForSku(saleItems, sku, item.id);
+        if (qty + otherQty > limitRemaining) {
+          toast.error(
+            `Sales ${salesLimitPeriodLabel(item.sales_limit_period)} limit for ${
+              item.item_name
+            }. Remaining: ${formatNumber1(limitRemaining)}`,
+          );
+          return;
+        }
+      }
+    }
+
+    // Credit limit (credit / deposit / credit_split) — API re-checks on create-sale
+    const needsCreditCheck =
+      saleType !== "paid" ||
+      modeOfPayment === "credit" ||
+      modeOfPayment === "deposit" ||
+      modeOfPayment === "credit_split";
+    if (needsCreditCheck) {
+      const creditLimit = parseFloat(selectedCustomer.credit_limit || 0);
+      if (creditLimit > 0) {
+        const outstanding =
+          Math.max(
+            0,
+            parseFloat(
+              selectedCustomer.balance ||
+                selectedCustomer.outstanding_balance ||
+                selectedCustomer.amount ||
+                0,
+            ) || 0,
+          );
+        const thisSale = saleItems
+          .filter((item) => !item.proBono)
+          .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+        if (outstanding + thisSale > creditLimit + 0.01) {
+          toast.error(
+            `Credit limit exceeded. Limit: ${formatNumber1(
+              creditLimit,
+            )}, Outstanding: ${formatNumber1(
+              outstanding,
+            )}, This sale: ${formatNumber1(thisSale)}`,
+          );
+          return;
+        }
+      }
     }
 
     if (saleType === "paid") {
@@ -3099,6 +3244,7 @@ function MakeSale() {
         taxable: product.taxable || "Taxable",
         line_tax_id: defaultLineTaxId,
         proBono: false, // Default to false
+        sales_stopped: isSalesStopped(product),
         sales_limit_period: product.sales_limit_period ?? null,
         sales_limit: product.sales_limit ?? null,
         sales_limit_remaining: product.sales_limit_remaining ?? null,
@@ -4152,6 +4298,19 @@ function MakeSale() {
                                 </span>
                               )}
                             </h3>
+                            {isSalesStopped(item) ? (
+                              <p className="mb-1">
+                                <span className="rounded-full border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                                  Sales Stopped
+                                </span>
+                              </p>
+                            ) : getSalesLimitRemaining(item) != null ? (
+                              <p className="mb-1 text-[10px] font-semibold text-amber-700">
+                                {salesLimitPeriodLabel(item.sales_limit_period)}{" "}
+                                left:{" "}
+                                {formatNumber1(getSalesLimitRemaining(item))}
+                              </p>
+                            ) : null}
                             {activeTab === "products" &&
                               (item.unit_of_measure || item.uom_category) && (
                                 <p className="text-xs text-gray-600 mb-1 mx-0">
@@ -4865,11 +5024,22 @@ function MakeSale() {
                                       opt.location_name ||
                                       opt.branch_name ||
                                       getItemBranchLocation(opt);
+                                    const stopped = isSalesStopped(opt)
+                                      ? " · Sales Stopped"
+                                      : "";
+                                    const lim =
+                                      getSalesLimitRemaining(opt) != null
+                                        ? ` · ${salesLimitPeriodLabel(
+                                            opt.sales_limit_period,
+                                          )} left: ${formatNumber1(
+                                            getSalesLimitRemaining(opt),
+                                          )}`
+                                        : "";
                                     return `${opt.name || opt.item_name}${
                                       opt.product_id || opt.sku
                                         ? ` (${opt.product_id || opt.sku})`
                                         : ""
-                                    }${loc ? ` · ${loc}` : ""}`;
+                                    }${loc ? ` · ${loc}` : ""}${stopped}${lim}`;
                                   }}
                                   filterBy={(opt, props) => {
                                     const q = String(
@@ -4888,6 +5058,7 @@ function MakeSale() {
                                       opt.product_id,
                                       opt.item_code,
                                       loc,
+                                      isSalesStopped(opt) ? "sales stopped" : "",
                                     ].some((v) =>
                                       String(v || "")
                                         .toLowerCase()
@@ -4913,10 +5084,36 @@ function MakeSale() {
                                       opt.location_name ||
                                       opt.branch_name ||
                                       getItemBranchLocation(opt);
+                                    const stopped = isSalesStopped(opt);
+                                    const limitLeft = getSalesLimitRemaining(opt);
                                     return (
-                                      <div className="py-1">
-                                        <div className="text-sm font-medium text-slate-800">
-                                          {opt.name || opt.item_name}
+                                      <div
+                                        className={`py-1 ${
+                                          stopped ? "opacity-80" : ""
+                                        }`}
+                                      >
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                          <span
+                                            className={`text-sm font-medium ${
+                                              stopped
+                                                ? "text-slate-500"
+                                                : "text-slate-800"
+                                            }`}
+                                          >
+                                            {opt.name || opt.item_name}
+                                          </span>
+                                          {stopped ? (
+                                            <span className="rounded-full border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                                              Sales Stopped
+                                            </span>
+                                          ) : null}
+                                          {!stopped &&
+                                          limitLeft != null &&
+                                          limitLeft <= 0 ? (
+                                            <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                                              Target reached
+                                            </span>
+                                          ) : null}
                                         </div>
                                         <small className="text-xs text-slate-500">
                                           {opt.product_id || opt.sku}
@@ -4932,6 +5129,15 @@ function MakeSale() {
                                                 {formatNumber1(opt.balance)}
                                               </span>
                                             )}
+                                          {!stopped && limitLeft != null ? (
+                                            <span className="ml-1 text-amber-700">
+                                              ·{" "}
+                                              {salesLimitPeriodLabel(
+                                                opt.sales_limit_period,
+                                              )}{" "}
+                                              left: {formatNumber1(limitLeft)}
+                                            </span>
+                                          ) : null}
                                         </small>
                                       </div>
                                     );

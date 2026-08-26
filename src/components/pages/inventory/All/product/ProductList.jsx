@@ -1,4 +1,4 @@
-import { Input, Modal } from "antd";
+import { Input, Modal, Select as AntSelect } from "antd";
 import { toast } from "sonner";
 import {
   MoreVerticalIcon,
@@ -1201,10 +1201,20 @@ export default function ProductList() {
                               {item.status || "Active"}
                             </button>
                             {!!item.sales_stopped && (
-                              <span className="inline-flex rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700">
+                              <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">
                                 Sales Stopped
                               </span>
                             )}
+                            {(() => {
+                              const t = salesTargetFromProduct(item);
+                              if (t.period === "none") return null;
+                              return (
+                                <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                                  Target: {formatNumber1(t.quantity)}/
+                                  {t.period}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="px-4 py-3 align-middle">
@@ -1417,39 +1427,42 @@ export default function ProductList() {
           cancelText="Cancel"
           confirmLoading={savingSalesTarget}
           centered
+          width={520}
+          destroyOnClose
         >
-          <p className="text-gray-600 mb-4">
+          <p className="mb-5 text-sm leading-relaxed text-gray-600">
             Limit how many units of{" "}
             <strong>{salesTargetModal.productName}</strong> can be sold per
-            period. When the target is reached, further sales are blocked even
-            if stock remains.
+            period. When the target is reached, further sales are blocked on{" "}
+            <strong>Create Invoice</strong> even if stock remains.
           </p>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="mb-2 block text-sm font-medium text-gray-700">
             Period
           </label>
-          <Select
+          <AntSelect
+            className="mb-4 w-full"
+            size="large"
             value={salesTargetModal.period}
-            onValueChange={(value) =>
+            onChange={(value) =>
               setSalesTargetModal((prev) => ({
                 ...prev,
                 period: value,
                 quantity: value === "none" ? "" : prev.quantity,
               }))
             }
-          >
-            <SelectTrigger className="w-full mb-4">
-              <SelectValue placeholder="Select period" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No limit (unlimited)</SelectItem>
-              <SelectItem value="daily">Daily</SelectItem>
-              <SelectItem value="weekly">Weekly</SelectItem>
-              <SelectItem value="monthly">Monthly</SelectItem>
-            </SelectContent>
-          </Select>
+            options={[
+              { value: "none", label: "No limit (unlimited)" },
+              { value: "daily", label: "Daily" },
+              { value: "weekly", label: "Weekly" },
+              { value: "monthly", label: "Monthly" },
+            ]}
+            getPopupContainer={(node) =>
+              node?.parentElement || document.body
+            }
+          />
           {salesTargetModal.period !== "none" && (
             <>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
                 Max quantity ({salesTargetModal.period})
               </label>
               <Input
@@ -1466,6 +1479,10 @@ export default function ProductList() {
                 placeholder="e.g. 100"
                 size="large"
               />
+              <p className="mt-2 text-xs text-slate-500">
+                Create Invoice will show remaining units and block lines that
+                exceed this target.
+              </p>
             </>
           )}
         </Modal>

@@ -38,11 +38,33 @@ export default function BulkUploadModal({
 }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState([]);
+  const [previewTotal, setPreviewTotal] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef(null);
   const dragCounter = useRef(0);
+
+  const isStatusColumn = (key) =>
+    String(key || "")
+      .trim()
+      .toLowerCase() === "status";
+
+  const statusBadgeClass = (value) => {
+    const s = String(value || "")
+      .trim()
+      .toLowerCase();
+    if (s === "verified" || s === "active") {
+      return "bg-emerald-100 text-emerald-800 border-emerald-200";
+    }
+    if (s === "pending") {
+      return "bg-amber-100 text-amber-800 border-amber-200";
+    }
+    if (s === "suspended" || s === "inactive") {
+      return "bg-red-100 text-red-800 border-red-200";
+    }
+    return "bg-slate-100 text-slate-700 border-slate-200";
+  };
 
   const shadeColor = (hex, percent) => {
     // percent: -100..100 (negative = darker, positive = lighter)
@@ -98,11 +120,13 @@ export default function BulkUploadModal({
         const wb = XLSX.read(ev.target.result, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const raw = XLSX.utils.sheet_to_json(ws, { defval: "" });
-        setPreview(raw.slice(0, 5));
+        setPreviewTotal(raw.length);
+        setPreview(raw);
       } catch (err) {
         toast.error("Could not read file: " + err.message);
         setFile(null);
         setPreview([]);
+        setPreviewTotal(0);
       }
     };
     reader.readAsBinaryString(f);
@@ -164,20 +188,64 @@ export default function BulkUploadModal({
           { [payloadKey]: rows, facilityId, createdBy },
           (data) => {
             if (data?.success) {
-              setResult(data.data);
-              toast.success(data.message);
-              if (data.data?.failed === 0) {
+              const payload = data.data || {};
+              const failed = Number(payload.failed) || 0;
+              const created = Number(payload.created) || 0;
+              toast.success(data.message || "Upload complete");
+
+              // Full success → close modal + refresh list (parent onSuccess)
+              if (failed === 0 && created > 0) {
+                setFile(null);
+                setPreview([]);
+                setPreviewTotal(0);
+                setResult(null);
+                setUploading(false);
                 onSuccess?.();
+                return;
               }
-            } else {
-              if (data?.data?.errors?.length) {
-                setResult(data.data);
-              }
-              toast.error(data?.message || "Upload failed — no records were imported");
+
+              // Partial success / zero created — keep modal open with details
+              setResult({
+                created,
+                failed,
+                errors: payload.errors || [],
+                roles_created: payload.roles_created,
+                branches_created: payload.branches_created,
+                transactional: payload.transactional,
+              });
+              setUploading(false);
+              return;
             }
+
+            // Partial / full failure payload (when API still hits success callback)
+            const payload = data?.data || data;
+            if (payload?.errors?.length || payload?.failed > 0) {
+              setResult({
+                created: payload.created ?? 0,
+                failed: payload.failed ?? payload.errors?.length ?? 0,
+                errors: payload.errors || [],
+                roles_created: payload.roles_created,
+                branches_created: payload.branches_created,
+                transactional: payload.transactional,
+              });
+            }
+            toast.error(data?.message || "Upload failed — no records were imported");
             setUploading(false);
           },
           (err) => {
+            // _postApi calls this when success === false or HTTP !ok (e.g. 400)
+            const payload = err?.data || err;
+            const errors = Array.isArray(payload?.errors) ? payload.errors : [];
+            if (errors.length || payload?.failed > 0 || payload?.created != null) {
+              setResult({
+                created: payload.created ?? 0,
+                failed: payload.failed ?? errors.length,
+                errors,
+                roles_created: payload.roles_created,
+                branches_created: payload.branches_created,
+                transactional: payload.transactional,
+              });
+            }
             toast.error(
               err?.message ||
                 "Upload failed — check that the API is reachable and the bulk endpoint is deployed.",
@@ -196,6 +264,7 @@ export default function BulkUploadModal({
   const handleClose = () => {
     setFile(null);
     setPreview([]);
+    setPreviewTotal(0);
     setResult(null);
     setIsDragging(false);
     dragCounter.current = 0;
@@ -207,7 +276,7 @@ export default function BulkUploadModal({
       className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[150]"
       style={{ ["--app-primary"]: primaryColor }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
 
         {/* Header */}
         <div
@@ -327,53 +396,104 @@ export default function BulkUploadModal({
             </div>
           </div>
 
-          {/* Preview */}
+          {/* Preview — all rows */}
           {preview.length > 0 && (
             <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Preview (first {preview.length} rows)</p>
+              <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between gap-2">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  Preview ({previewTotal} row{previewTotal === 1 ? "" : "s"})
+                </p>
               </div>
-              <div className="overflow-x-auto">
+              <div className="max-h-64 overflow-auto">
                 <table className="w-full text-xs">
-                  <thead>
+                  <thead className="sticky top-0 z-[1]">
                     <tr className="bg-slate-100">
                       {Object.keys(preview[0]).map((k) => (
-                        <th key={k} className="px-3 py-2 text-left font-bold text-slate-600 whitespace-nowrap">{k}</th>
+                        <th
+                          key={k}
+                          className="px-3 py-2 text-left font-bold text-slate-600 whitespace-nowrap"
+                        >
+                          {k}
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {preview.map((row, i) => (
-                      <tr key={i} className="border-t border-slate-100">
-                        {Object.values(row).map((v, j) => (
-                          <td key={j} className="px-3 py-1.5 text-slate-700 whitespace-nowrap">{String(v)}</td>
-                        ))}
-                      </tr>
-                    ))}
+                    {preview.map((row, i) => {
+                      const keys = Object.keys(row);
+                      return (
+                        <tr key={i} className="border-t border-slate-100">
+                          {keys.map((k) => {
+                            const v = row[k];
+                            return (
+                              <td
+                                key={k}
+                                className="px-3 py-1.5 text-slate-700 whitespace-nowrap"
+                              >
+                                {isStatusColumn(k) ? (
+                                  <span
+                                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${statusBadgeClass(
+                                      v,
+                                    )}`}
+                                  >
+                                    {String(v || "").trim() || "—"}
+                                  </span>
+                                ) : (
+                                  String(v)
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
 
-          {/* Result */}
+          {/* Result / row errors */}
           {result && (
-            <div className={`rounded-xl p-4 border ${result.failed === 0 ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
-              <div className="flex items-center gap-2 mb-2">
-                {result.failed === 0
-                  ? <CheckCircle className="h-4 w-4 text-emerald-600" />
-                  : <AlertTriangle className="h-4 w-4 text-amber-600" />}
-                <p className="text-xs font-black text-slate-700">
-                  {result.transactional && result.failed > 0
-                    ? "Import rejected — no records saved"
-                    : `${result.created} created · ${result.failed} failed`}
-                </p>
+            <div
+              className={`rounded-xl p-4 border ${
+                result.failed === 0
+                  ? "bg-emerald-50 border-emerald-200"
+                  : "bg-red-50 border-red-200"
+              }`}
+            >
+              <div className="flex items-start gap-2 mb-2">
+                {result.failed === 0 ? (
+                  <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-black text-slate-800">
+                    {result.transactional && result.failed > 0
+                      ? "Import rejected — no records saved"
+                      : result.created > 0
+                        ? `${result.created} created · ${result.failed} failed`
+                        : "Upload failed — no records were imported"}
+                  </p>
+                  {result.failed > 0 ? (
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      Fix the rows below and try again.
+                    </p>
+                  ) : null}
+                </div>
               </div>
               {result.errors?.length > 0 && (
-                <ul className="space-y-1 mt-2">
+                <ul className="mt-2 max-h-40 overflow-y-auto space-y-1.5 rounded-lg border border-red-100 bg-white/70 p-2.5">
                   {result.errors.map((e, i) => (
-                    <li key={i} className="text-[10px] text-red-700 font-medium">
-                      {e.row != null ? `Row ${e.row}: ` : ""}{e.message}
+                    <li
+                      key={i}
+                      className="text-[11px] text-red-700 font-medium leading-snug"
+                    >
+                      {e.row != null ? (
+                        <span className="font-bold">Row {e.row}: </span>
+                      ) : null}
+                      {e.message}
                     </li>
                   ))}
                 </ul>
@@ -401,7 +521,13 @@ export default function BulkUploadModal({
             <Button
               className="flex-1 h-11 rounded-xl text-xs font-black text-white hover:brightness-95"
               style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-              onClick={() => { setFile(null); setPreview([]); setResult(null); fileRef.current && (fileRef.current.value = ""); }}
+              onClick={() => {
+                setFile(null);
+                setPreview([]);
+                setPreviewTotal(0);
+                setResult(null);
+                if (fileRef.current) fileRef.current.value = "";
+              }}
             >
               Try Again
             </Button>

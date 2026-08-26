@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { getSidebarByAppType } from "./sidebarModules";
 import { useSelector } from "react-redux";
 import { NavLink } from "react-router-dom";
-import { Home, PanelLeftClose } from "lucide-react";
+import { Home, LayoutDashboard, PanelLeftClose } from "lucide-react";
 
 export function AppSidebar(props) {
   // eslint-disable-next-line react/prop-types -- optional layout class from parent
@@ -65,6 +65,17 @@ export function AppSidebar(props) {
               <NavLink to="/app/home">
                 <Home className="size-4 shrink-0 opacity-85" />
                 <span>Home</span>
+              </NavLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              className="h-auto rounded-lg px-2.5 py-2 text-[13.5px] font-medium text-[#B4BACB] hover:bg-[#182642] hover:text-[#F1F2ED] data-[active=true]:bg-[var(--dash-primary,#1b7a5b)] data-[active=true]:font-semibold data-[active=true]:text-white"
+            >
+              <NavLink to="/app" end>
+                <LayoutDashboard className="size-4 shrink-0 opacity-85" />
+                <span>Dashboard</span>
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
