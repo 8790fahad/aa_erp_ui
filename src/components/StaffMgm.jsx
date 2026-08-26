@@ -2315,6 +2315,7 @@ const StaffManagementDashboard = () => {
             key: "branch",
             label: "Branch",
             example: branches[0]?.branch_name || "YAMUSA STORE",
+            hint: "If the branch name is not found it will be created automatically; if found, that branch is used.",
           },
           { key: "status", label: "Status", example: "verified" },
         ]}
