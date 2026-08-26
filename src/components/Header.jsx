@@ -89,10 +89,11 @@ const QUICK_CREATE = [
     privileges: ["Bill", "Billing Expense"],
   },
   {
-    label: "Collection Points",
-    href: "/app/payments/collection-points",
+    label: "Verification Points",
+    href: "/app/payments/verification-points",
     icon: Wallet,
     privileges: [
+      "Verification Points",
       "Collection Points",
       "Cash Collection",
       "Transfer Collection",

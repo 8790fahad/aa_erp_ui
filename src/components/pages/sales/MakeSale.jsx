@@ -2040,7 +2040,7 @@ function MakeSale() {
           apply_prepayment: saleType !== "paid" && usePrepayment,
           transaction_date: transactionDate, // Add transaction date
           sale_branch_id: branchId,
-          // Payment is collected at Collection Points, not on create.
+          // Payment is collected at Verification Points, not on create.
           defer_payment: saleType === "paid",
           assigned_cashier_id: null,
           assigned_cashier_name: null,
@@ -2370,7 +2370,7 @@ function MakeSale() {
         toast.error("Select Cash, Transfer, Cash + Transfer, or Credit + Cash + Transfer");
         return;
       }
-      // Payment is collected at Collection Points — invoice only records the mode.
+      // Payment is collected at Verification Points — invoice only records the mode.
       saveSale(false);
       return;
     }
@@ -3195,14 +3195,27 @@ function MakeSale() {
       }
 
       // Sales target / limit — block even when stock remains (facility-wide by SKU)
-      const limitRemaining = getSalesLimitRemaining(product);
+      const catalog = [...readyForSalesItems, ...serviceProducts];
+      let limitRemaining = getSalesLimitRemaining(product);
+      let limitPeriod = product.sales_limit_period;
+      if (limitRemaining == null) {
+        const match = catalog.find(
+          (p) =>
+            String(p.product_id || p.sku || "") ===
+            String(product.product_id || product.sku || product.id || ""),
+        );
+        if (match) {
+          limitRemaining = getSalesLimitRemaining(match);
+          limitPeriod = match.sales_limit_period ?? limitPeriod;
+        }
+      }
       if (limitRemaining != null) {
-        const sku = product.product_id || product.id;
+        const sku = product.product_id || product.sku || product.id;
         const qtyInCartForSku = cartQtyForSku(cart, sku);
         const totalForSku = qtyInCartForSku + quantityToAdd;
         if (limitRemaining <= 0) {
           toast.error(
-            `Sales ${salesLimitPeriodLabel(product.sales_limit_period)} limit reached for ${
+            `Sales ${salesLimitPeriodLabel(limitPeriod)} limit reached for ${
               product.name || product.item_name
             }. No more can be sold this period.`,
           );
@@ -3210,11 +3223,13 @@ function MakeSale() {
         }
         if (totalForSku > limitRemaining) {
           toast.error(
-            `Sales ${salesLimitPeriodLabel(product.sales_limit_period)} limit for ${
+            `Sales ${salesLimitPeriodLabel(limitPeriod)} limit for ${
               product.name || product.item_name
             }. Remaining: ${formatNumber1(limitRemaining)}, in cart: ${formatNumber1(
               qtyInCartForSku,
-            )}, trying to add: ${formatNumber1(quantityToAdd)}`,
+            )}, trying to add: ${formatNumber1(quantityToAdd)}. Max you can add: ${formatNumber1(
+              Math.max(0, limitRemaining - qtyInCartForSku),
+            )}`,
           );
           return;
         }
@@ -3245,9 +3260,10 @@ function MakeSale() {
         line_tax_id: defaultLineTaxId,
         proBono: false, // Default to false
         sales_stopped: isSalesStopped(product),
-        sales_limit_period: product.sales_limit_period ?? null,
+        sales_limit_period: limitPeriod ?? product.sales_limit_period ?? null,
         sales_limit: product.sales_limit ?? null,
-        sales_limit_remaining: product.sales_limit_remaining ?? null,
+        sales_limit_remaining:
+          limitRemaining ?? product.sales_limit_remaining ?? null,
         branchId:
           product.branchId ||
           product.branch_id ||
@@ -3297,6 +3313,8 @@ function MakeSale() {
       selectedBranchLocation,
       getItemBranchLocation,
       defaultLineTaxId,
+      readyForSalesItems,
+      serviceProducts,
     ],
   );
 
@@ -3471,102 +3489,68 @@ function MakeSale() {
     });
   }, []);
 
-  const updateQuantityNew = useCallback((itemId, newQuantity) => {
-    if (!Number.isFinite(newQuantity) || newQuantity < 0.0001) return;
+  const updateQuantityNew = useCallback(
+    (itemId, newQuantity) => {
+      if (!Number.isFinite(newQuantity) || newQuantity < 0.0001) return;
 
-    setCart((prev) => {
-      const itemToUpdate = prev.find((item) => item.id === itemId);
+      setCart((prev) => {
+        const itemToUpdate = prev.find((item) => item.id === itemId);
+        if (!itemToUpdate) return prev;
 
-      if (!itemToUpdate) return prev;
-
-      // Check stock availability for products (skip for services)
-      if (itemToUpdate.item_type !== "Service") {
-        const availableStock = parseFloat(itemToUpdate.balance) || 0;
-
-        // Calculate quantity of same product already in cart (excluding current item)
-        const quantityInCart = prev
-          .filter(
-            (item) =>
-              item.id !== itemId &&
-              item.product_id === itemToUpdate.product_id &&
-              item.expiry_date === itemToUpdate.expiry_date,
-          )
-          .reduce((sum, item) => sum + parseFloat(item.quantity_sold || 0), 0);
-
-        const totalQuantity = quantityInCart + newQuantity;
-
-        // Only check stock if allow_sales_without_stock is disabled
-        if (!allowSalesWithoutStock) {
-          if (totalQuantity > availableStock) {
-            toast.error(
-              `Insufficient stock! Available: ${formatNumber1(
-                availableStock,
-              )}, ` +
-                `Other in cart: ${formatNumber1(quantityInCart)}, ` +
-                `Maximum for this item: ${formatNumber1(
-                  availableStock - quantityInCart,
-                )}`,
-            );
-            return prev; // Don't update if exceeds stock
-          }
-        } else {
-          // When allow_sales_without_stock is enabled, warn but allow
-          if (totalQuantity > availableStock) {
-            toast.warning(
-              `Insufficient stock! Available: ${formatNumber1(
-                availableStock,
-              )}, ` +
-                `Other in cart: ${formatNumber1(quantityInCart)}, ` +
-                `Requested: ${formatNumber1(newQuantity)}. ` +
-                `Sale will proceed due to settings.`,
-            );
-          }
-        }
-      }
-
-      const limitRemaining = getSalesLimitRemaining(itemToUpdate);
-      if (isSalesStopped(itemToUpdate)) {
-        toast.error(
-          `Sales are stopped for ${itemToUpdate.item_name}. This product cannot be sold.`,
-        );
-        return prev;
-      }
-      if (limitRemaining != null) {
-        const qtyInCartForSku = cartQtyForSku(
-          prev,
-          itemToUpdate.product_id,
-          itemId,
-        );
-        const totalForSku = qtyInCartForSku + newQuantity;
-        if (totalForSku > limitRemaining) {
+        if (isSalesStopped(itemToUpdate)) {
           toast.error(
-            `Sales ${salesLimitPeriodLabel(itemToUpdate.sales_limit_period)} limit for ${
-              itemToUpdate.item_name
-            }. Remaining: ${formatNumber1(limitRemaining)}, other in cart: ${formatNumber1(
-              qtyInCartForSku,
-            )}`,
+            `Sales are stopped for ${itemToUpdate.item_name}. This product cannot be sold.`,
           );
           return prev;
         }
-      }
 
-      return prev.map((item) => {
-        if (item.id === itemId) {
-          // If Pro-bono, amount is always 0, otherwise calculate normally
+        const catalog = [...readyForSalesItems, ...serviceProducts];
+        const { max, remaining, period } = getMaxQtyForLine(
+          itemToUpdate,
+          prev,
+          {
+            allowWithoutStock: !!allowSalesWithoutStock,
+            catalog,
+          },
+        );
+
+        let qty = newQuantity;
+        if (max != null && qty > max + 1e-9) {
+          const label = salesLimitPeriodLabel(
+            period || itemToUpdate.sales_limit_period,
+          );
+          toast.error(
+            remaining != null
+              ? `Sales ${label} target for ${itemToUpdate.item_name}: max ${formatNumber1(
+                  max,
+                )} (remaining ${formatNumber1(remaining)})`
+              : `Maximum quantity for ${itemToUpdate.item_name} is ${formatNumber1(
+                  max,
+                )}`,
+          );
+          if (max < 0.0001) return prev;
+          qty = max;
+        }
+
+        return prev.map((item) => {
+          if (item.id !== itemId) return item;
           const newAmount = item.proBono
             ? 0
-            : parseFloat(item.selling_price) * newQuantity;
+            : parseFloat(item.selling_price) * qty;
           return {
             ...item,
-            quantity_sold: newQuantity,
-            quantity: newQuantity,
+            quantity_sold: qty,
+            quantity: qty,
             amount: newAmount,
+            sales_limit_remaining:
+              item.sales_limit_remaining ?? remaining ?? null,
+            sales_limit_period: item.sales_limit_period ?? period ?? null,
           };
-        }
-        return item;
+        });
       });
-    });
-  }, []);
+    },
+    [readyForSalesItems, serviceProducts, allowSalesWithoutStock],
+  );
 
   /** Step price on product/service cards (±1) without replacing typed decimals. */
   const CARD_PRICE_STEP = 1;
@@ -4791,6 +4775,18 @@ function MakeSale() {
                               </div>
                             </td>
                             <td className="px-2 py-3 text-right align-top">
+                              {(() => {
+                                const catalog = [
+                                  ...readyForSalesItems,
+                                  ...serviceProducts,
+                                ];
+                                const { max, remaining, period } =
+                                  getMaxQtyForLine(item, cart, {
+                                    allowWithoutStock: !!allowSalesWithoutStock,
+                                    catalog,
+                                  });
+                                return (
+                                  <>
                               <input
                                 id={`invoice-line-qty-${item.id}`}
                                 data-scanner-ignore="true"
@@ -4798,6 +4794,19 @@ function MakeSale() {
                                 inputMode="decimal"
                                 autoComplete="off"
                                 placeholder="1.00"
+                                title={
+                                  max != null
+                                    ? `Max ${formatNumber1(max)}${
+                                        remaining != null
+                                          ? ` (${salesLimitPeriodLabel(
+                                              period,
+                                            )} target left: ${formatNumber1(
+                                              remaining,
+                                            )})`
+                                          : ""
+                                      }`
+                                    : undefined
+                                }
                                 value={
                                   lineQtyDrafts[item.id] !== undefined
                                     ? lineQtyDrafts[item.id]
@@ -4817,10 +4826,54 @@ function MakeSale() {
                                   const sanitized =
                                     handleNumericInput(withoutCommas);
                                   const parts = sanitized.split(".");
-                                  const numericValue =
+                                  let numericValue =
                                     parts.length > 2
                                       ? parts[0] + "." + parts.slice(1).join("")
                                       : sanitized;
+
+                                  // Allow empty / trailing decimal while typing
+                                  if (
+                                    numericValue === "" ||
+                                    numericValue === "." ||
+                                    numericValue.endsWith(".")
+                                  ) {
+                                    setLineQtyDrafts((prev) => ({
+                                      ...prev,
+                                      [item.id]: numericValue,
+                                    }));
+                                    return;
+                                  }
+
+                                  const parsedValue =
+                                    parseNumberFromFormatted(numericValue);
+                                  let num = parseFloat(parsedValue);
+                                  if (!Number.isFinite(num)) {
+                                    setLineQtyDrafts((prev) => ({
+                                      ...prev,
+                                      [item.id]: numericValue,
+                                    }));
+                                    return;
+                                  }
+
+                                  // Clamp to sales target / stock max
+                                  if (max != null && num > max + 1e-9) {
+                                    num = max;
+                                    numericValue = String(max);
+                                    toast.error(
+                                      remaining != null
+                                        ? `Sales ${salesLimitPeriodLabel(
+                                            period,
+                                          )} target max is ${formatNumber1(
+                                            max,
+                                          )} (left: ${formatNumber1(
+                                            remaining,
+                                          )})`
+                                        : `Maximum quantity is ${formatNumber1(
+                                            max,
+                                          )}`,
+                                    );
+                                  }
+
                                   const formattedValue =
                                     formatNumberWithCommasQuantity(
                                       numericValue,
@@ -4829,12 +4882,6 @@ function MakeSale() {
                                     ...prev,
                                     [item.id]: formattedValue,
                                   }));
-                                  const parsedValue =
-                                    parseNumberFromFormatted(formattedValue);
-                                  const num =
-                                    parsedValue === ""
-                                      ? 0
-                                      : parseFloat(parsedValue) || 0;
                                   if (num >= 0.0001) {
                                     updateQuantityNew(item.id, num);
                                   }
@@ -4844,7 +4891,7 @@ function MakeSale() {
                                   const parsed = parseNumberFromFormatted(
                                     String(draft ?? ""),
                                   );
-                                  const num =
+                                  let num =
                                     parsed === "" || parsed === "."
                                       ? NaN
                                       : parseFloat(parsed);
@@ -4852,7 +4899,24 @@ function MakeSale() {
                                     draft !== undefined &&
                                     (!Number.isFinite(num) || num < 0.0001)
                                   ) {
-                                    updateQuantityNew(item.id, 1);
+                                    num = max != null && max >= 0.0001
+                                      ? Math.min(1, max)
+                                      : 1;
+                                  }
+                                  if (
+                                    max != null &&
+                                    Number.isFinite(num) &&
+                                    num > max
+                                  ) {
+                                    num = max >= 0.0001 ? max : 1;
+                                    toast.error(
+                                      `Quantity capped at ${formatNumber1(
+                                        max,
+                                      )} by sales target`,
+                                    );
+                                  }
+                                  if (Number.isFinite(num) && num >= 0.0001) {
+                                    updateQuantityNew(item.id, num);
                                   }
                                   setLineQtyDrafts((prev) => {
                                     const next = { ...prev };
@@ -4862,6 +4926,16 @@ function MakeSale() {
                                 }}
                                 className="ml-auto w-20 rounded border border-slate-300 px-2 py-1.5 text-right text-sm"
                               />
+                              {max != null && remaining != null ? (
+                                <div className="mt-0.5 text-[10px] font-medium text-amber-700">
+                                  Max {formatNumber1(max)} (
+                                  {salesLimitPeriodLabel(period)} left{" "}
+                                  {formatNumber1(remaining)})
+                                </div>
+                              ) : null}
+                                  </>
+                                );
+                              })()}
                             </td>
                             <td className="px-2 py-3 text-right align-top">
                               {item.proBono ? (

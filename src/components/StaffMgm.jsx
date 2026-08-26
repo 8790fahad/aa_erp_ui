@@ -148,7 +148,18 @@ const StaffManagementDashboard = () => {
     });
   };
 
-  /** Make a clicked branch the primary (first item) without losing the others. */
+  const selectAllWarehouses = () => {
+    setFormData((prev) => ({
+      ...prev,
+      branchIds: branches.map((b) => Number(b.id)).filter(Boolean),
+    }));
+  };
+
+  const clearAllWarehouses = () => {
+    setFormData((prev) => ({ ...prev, branchIds: [] }));
+  };
+
+  /** Make a clicked warehouse the primary (first item) without losing the others. */
   const promoteBranchToPrimary = (branchId) => {
     const id = Number(branchId);
     setFormData((prev) => {
@@ -706,7 +717,7 @@ const StaffManagementDashboard = () => {
     const branchIdsToUse = (formData.branchIds || []).map(Number).filter(Boolean);
 
     if (branchIdsToUse.length === 0) {
-      toast.error("Please assign the staff to at least one branch.");
+      toast.error("Please assign the staff to at least one warehouse.");
       setLoading2(false);
       return;
     }
@@ -776,7 +787,7 @@ const StaffManagementDashboard = () => {
     const branchIdsToUse = (formData.branchIds || []).map(Number).filter(Boolean);
 
     if (branchIdsToUse.length === 0) {
-      toast.error("Please assign the staff to at least one branch.");
+      toast.error("Please assign the staff to at least one warehouse.");
       setLoading2(false);
       return;
     }
@@ -1537,61 +1548,79 @@ const StaffManagementDashboard = () => {
 
                 <div className="mb-4">
                   <ShadcnLabel className="text-sm font-semibold text-gray-700 mb-1 block">
-                    Branches <span className="text-red-500">*</span>
+                    Warehouses <span className="text-red-500">*</span>
                     <span className="text-gray-500 font-normal ml-1">
-                      (click a selected branch to make it primary)
+                      (click a selected warehouse to make it primary)
                     </span>
                   </ShadcnLabel>
                   {branchesLoading ? (
-                    <p className="text-xs text-gray-500">Loading branches...</p>
+                    <p className="text-xs text-gray-500">Loading warehouses...</p>
                   ) : branches.length === 0 ? (
                     <p className="text-xs text-gray-500">
-                      No branches yet — create one below.
+                      No warehouses yet — create one below.
                     </p>
                   ) : (
-                    <div className="border border-gray-200 rounded-lg p-3 max-h-44 overflow-y-auto space-y-2">
-                      {branches.map((branch) => {
-                        const branchId = Number(branch.id);
-                        const ids = (formData.branchIds || []).map(Number);
-                        const checked = ids.includes(branchId);
-                        const isPrimary = checked && ids[0] === branchId;
-                        return (
-                          <div
-                            key={branch.id}
-                            className="flex items-center gap-2 text-sm text-gray-800"
-                          >
-                            <input
-                              type="checkbox"
-                              className="rounded border-gray-300 text-[var(--aa-accent)] focus:ring-[var(--aa-accent)] cursor-pointer"
-                              checked={checked}
-                              onChange={() => toggleBranchId(branchId)}
-                              id={`branch-${branchId}`}
-                            />
-                            <button
-                              type="button"
-                              className={`flex-1 text-left flex items-center justify-between gap-2 px-2 py-0.5 rounded ${
-                                checked
-                                  ? "hover:bg-[var(--aa-sidebar-active)]"
-                                  : "cursor-default"
-                              }`}
-                              onClick={() => {
-                                if (checked) {
-                                  promoteBranchToPrimary(branchId);
-                                } else {
-                                  toggleBranchId(branchId);
-                                }
-                              }}
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="flex items-center justify-between border-b border-gray-100 bg-slate-50 px-3 py-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={selectAllWarehouses}
+                          className="font-medium text-[var(--aa-accent)] hover:underline"
+                        >
+                          Select all
+                        </button>
+                        <button
+                          type="button"
+                          onClick={clearAllWarehouses}
+                          className="font-medium text-gray-500 hover:text-gray-700"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <div className="max-h-44 overflow-y-auto space-y-2 p-3">
+                        {branches.map((branch) => {
+                          const branchId = Number(branch.id);
+                          const ids = (formData.branchIds || []).map(Number);
+                          const checked = ids.includes(branchId);
+                          const isPrimary = checked && ids[0] === branchId;
+                          return (
+                            <div
+                              key={branch.id}
+                              className="flex items-center gap-2 text-sm text-gray-800"
                             >
-                              <span>{branch.branch_name}</span>
-                              {isPrimary && (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-[var(--aa-navy)] text-white rounded">
-                                  Primary
-                                </span>
-                              )}
-                            </button>
-                          </div>
-                        );
-                      })}
+                              <input
+                                type="checkbox"
+                                className="rounded border-gray-300 text-[var(--aa-accent)] focus:ring-[var(--aa-accent)] cursor-pointer"
+                                checked={checked}
+                                onChange={() => toggleBranchId(branchId)}
+                                id={`branch-${branchId}`}
+                              />
+                              <button
+                                type="button"
+                                className={`flex-1 text-left flex items-center justify-between gap-2 px-2 py-0.5 rounded ${
+                                  checked
+                                    ? "hover:bg-[var(--aa-sidebar-active)]"
+                                    : "cursor-default"
+                                }`}
+                                onClick={() => {
+                                  if (checked) {
+                                    promoteBranchToPrimary(branchId);
+                                  } else {
+                                    toggleBranchId(branchId);
+                                  }
+                                }}
+                              >
+                                <span>{branch.branch_name}</span>
+                                {isPrimary && (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-[var(--aa-navy)] text-white rounded">
+                                    Primary
+                                  </span>
+                                )}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
@@ -2302,33 +2331,24 @@ const StaffManagementDashboard = () => {
         createdBy={user?.id}
         primaryColor="#1a2d5e"
         templateCols={[
-          { key: "firstname", label: "First Name", example: "Amina" },
-          { key: "lastname", label: "Last Name", example: "Bello" },
+          { key: "firstname", label: "First Name", example: "Ibrahim" },
+          { key: "lastname", label: "Last Name", example: "Sani" },
           {
             key: "email",
             label: "Email",
-            example: "amina.bello@example.com",
+            example: "ibrahim.sani@example.com",
           },
-          { key: "phone", label: "Phone", example: "08012345678" },
-          { key: "role", label: "Role", example: "Accountant", hint: "If the role name is not found it will be created automatically; if found, that role is used." },
+          { key: "phone", label: "Phone", example: "08098765432" },
+          { key: "role", label: "Role", example: "Cashier", hint: "If the role name is not found it will be created automatically; if found, that role is used." },
           {
             key: "branch",
-            label: "Branch",
+            label: "Warehouse",
             example: branches[0]?.branch_name || "YAMUSA STORE",
-            hint: "If the branch name is not found it will be created automatically; if found, that branch is used.",
+            hint: "If the warehouse name is not found it will be created automatically; if found, that warehouse is used.",
           },
           { key: "status", label: "Status", example: "verified" },
         ]}
         exampleRows={[
-          {
-            firstname: "Amina",
-            lastname: "Bello",
-            email: "amina.bello@example.com",
-            phone: "08012345678",
-            role: "Accountant",
-            branch: branches[0]?.branch_name || "YAMUSA STORE",
-            status: "verified",
-          },
           {
             firstname: "Ibrahim",
             lastname: "Sani",
@@ -2336,6 +2356,15 @@ const StaffManagementDashboard = () => {
             phone: "08098765432",
             role: "Cashier",
             branch: branches[0]?.branch_name || "YAMUSA STORE",
+            status: "verified",
+          },
+          {
+            firstname: "Salisu",
+            lastname: "Jafar",
+            email: "salisujafargaro@gmail.com",
+            phone: "7065964601",
+            role: "Cashier",
+            branch: "Head Office",
             status: "verified",
           },
         ]}
@@ -2346,8 +2375,8 @@ const StaffManagementDashboard = () => {
           phone: r["Phone"] || r.phone || "",
           role: r["Role"] || r.role || "",
           branch:
-            r["Branch"] ||
             r["Warehouse"] ||
+            r["Branch"] ||
             r.branch ||
             r.branch_name ||
             r.warehouse ||

@@ -91,7 +91,7 @@ export default function ReceivedFunds() {
   }, [rows, search]);
 
   const goNew = () =>
-    navigate("/app/payments/collection-points?action=deposit");
+    navigate("/app/payments/verification-points?action=deposit");
 
   const fields = useMemo(
     () => [
@@ -236,7 +236,7 @@ export default function ReceivedFunds() {
             <p className="text-sm text-muted-foreground">
               History of customer deposits and received funds. Create new
               deposits and collect invoice payments at{" "}
-              <span className="font-medium text-gray-800">Collection Points</span>
+              <span className="font-medium text-gray-800">Verification Points</span>
               .
               {totalCount > 0 && (
                 <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
@@ -325,7 +325,7 @@ export default function ReceivedFunds() {
             <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500">
               {search
                 ? "Try a different search term."
-                : "Make a customer deposit at Collection Points, or collect invoice payments there."}
+                : "Make a customer deposit at Verification Points, or collect invoice payments there."}
             </p>
             {!search && (
               <CustomButton className="!mb-0 mt-4" onClick={goNew}>

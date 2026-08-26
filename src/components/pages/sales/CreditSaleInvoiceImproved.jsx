@@ -30,7 +30,7 @@ export default function CreditSaleInvoice({
   warehouseDualSignature = false,
   /** "a4" | "a5" — print page size from business receipt setting */
   paperSize = "a4",
-  /** "invoice" | "dispatch" | "both" — Collection Points vs Invoice Separation */
+  /** "invoice" | "dispatch" | "both" — Verification Points vs Invoice Separation */
   documentMode = "both",
   onConfirm,
   onCancel,

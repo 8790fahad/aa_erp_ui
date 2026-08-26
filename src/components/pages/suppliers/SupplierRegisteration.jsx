@@ -80,8 +80,6 @@ const SupplierRegisteration = ({
     return [];
   }, [user?.branchIds, user?.branches, user?.branchId]);
 
-  const userBranchId = userBranchIds[0] ?? null;
-
   const visibleBranches = useMemo(() => {
     if (!userBranchIds.length) return branches;
     return branches.filter((b) => userBranchIds.includes(Number(b.id)));
@@ -106,7 +104,7 @@ const SupplierRegisteration = ({
       obdate: "",
       payable_code: activeBusiness?.payable_code || "",
       payable_accural_code: activeBusiness?.payable_accural_code || "",
-      branch_id: userBranchId ? String(userBranchId) : "",
+      branch_id: "",
       // Address
       billing_attention: "",
       billing_country: "Nigeria",
@@ -126,11 +124,7 @@ const SupplierRegisteration = ({
       shipping_phone: "",
       remarks: "",
     }),
-    [
-      activeBusiness?.payable_code,
-      activeBusiness?.payable_accural_code,
-      userBranchId,
-    ],
+    [activeBusiness?.payable_code, activeBusiness?.payable_accural_code],
   );
 
   const [form, setForm] = useState(() => getInitialFormValues());
@@ -199,9 +193,7 @@ const SupplierRegisteration = ({
         branch_id:
           selectedSupplier.branch_id != null
             ? String(selectedSupplier.branch_id)
-            : userBranchId
-              ? String(userBranchId)
-              : "",
+            : "",
         billing_street1: selectedSupplier.address || "",
       });
     } else {
@@ -210,24 +202,7 @@ const SupplierRegisteration = ({
     setContactPersons([emptyContactPerson()]);
     setErrors({});
     setActiveTab("other");
-  }, [selectedSupplier, getInitialFormValues, userBranchId]);
-
-  useEffect(() => {
-    if (!visibleBranches.length || selectedSupplier) return;
-    setForm((prev) => {
-      if (prev.branch_id) return prev;
-      const isDefaultBranch = (b) =>
-        b?.is_default === 1 || b?.is_default === "1" || b?.is_default === true;
-      const fromUser =
-        userBranchId &&
-        visibleBranches.find((b) => String(b.id) === String(userBranchId));
-      const target =
-        fromUser ||
-        visibleBranches.find(isDefaultBranch) ||
-        visibleBranches[0];
-      return target ? { ...prev, branch_id: String(target.id) } : prev;
-    });
-  }, [visibleBranches, userBranchId, selectedSupplier]);
+  }, [selectedSupplier, getInitialFormValues]);
 
   const handleChange = ({ target: { name, value } }) => {
     if (name === "opening_balance") {
@@ -599,7 +574,10 @@ const SupplierRegisteration = ({
                 Email Address
               </ShadcnLabel>
               <div className="relative">
-                <Mail className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                <Mail
+                  aria-hidden
+                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
+                />
                 <input
                   id="email"
                   name="email"
@@ -608,8 +586,7 @@ const SupplierRegisteration = ({
                   onChange={handleChange}
                   placeholder="Email address"
                   className={cn(
-                    inputClass,
-                    "pl-9",
+                    "h-9 w-full rounded-md border border-slate-300 bg-white py-0 pl-10 pr-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]",
                     errors.email && "border-red-500",
                   )}
                 />
@@ -784,7 +761,8 @@ const SupplierRegisteration = ({
                 </div>
                 <div>
                   <ShadcnLabel htmlFor="branch_id" className={labelClass}>
-                    Warehouse
+                    Warehouse{" "}
+                    <span className="font-normal text-slate-400">(optional)</span>
                   </ShadcnLabel>
                   <select
                     id="branch_id"

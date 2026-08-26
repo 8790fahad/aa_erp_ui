@@ -4,10 +4,10 @@ import {
   parseNumberFromFormatted,
   filterJournalAmountInput,
 } from "@/utilities";
-import { _postApi } from "@/redux/actions/api";
+import { _postApi, _fetchApi, apiURL } from "@/redux/actions/api";
 
 import moment from "moment";
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import {
   X,
   Plus,
@@ -38,7 +38,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { apiURL } from "@/redux/actions/api";
 
 const MAX_PO_ATTACHMENTS = 5;
 const MAX_PO_FILE_BYTES = 25 * 1024 * 1024;
@@ -103,6 +102,7 @@ export default function PurchaseRequisitionList() {
   const [attachments, setAttachments] = useState([]);
   const [viewAttachments, setViewAttachments] = useState([]);
   const attachmentInputRef = useRef(null);
+  const [allBranches, setAllBranches] = useState([]);
 
   // Form state
   const [formItems, setFormItems] = useState([]);
@@ -121,16 +121,64 @@ export default function PurchaseRequisitionList() {
   const quantityInputRef = useRef(null);
   const uomInputRef = useRef(null);
 
+  /** Branch ids assigned to the logged-in staff. */
+  const userBranchIds = useMemo(() => {
+    if (Array.isArray(user?.branchIds) && user.branchIds.length > 0) {
+      return user.branchIds.map(Number).filter(Boolean);
+    }
+    if (Array.isArray(user?.branches) && user.branches.length > 0) {
+      return user.branches
+        .map((b) => Number(b.id || b.branch_id))
+        .filter(Boolean);
+    }
+    if (user?.branchId) return [Number(user.branchId)];
+    return [];
+  }, [user?.branchIds, user?.branches, user?.branchId]);
+
+  /** Warehouses the user can pick — only their assigned branches. */
+  const warehouseOptions = useMemo(() => {
+    const mapped = (allBranches || []).map((b) => ({
+      id: Number(b.id || b.branch_id),
+      branch_name: b.branch_name || b.storeName || "",
+    }));
+    if (!userBranchIds.length) return mapped.filter((b) => b.id && b.branch_name);
+    return mapped.filter(
+      (b) => b.id && b.branch_name && userBranchIds.includes(b.id),
+    );
+  }, [allBranches, userBranchIds]);
+
+  const defaultWarehouse = useMemo(() => {
+    if (!warehouseOptions.length) return { branch_id: "", branch: "" };
+    const preferredId = user?.branchId ? Number(user.branchId) : null;
+    const match =
+      (preferredId &&
+        warehouseOptions.find((b) => b.id === preferredId)) ||
+      warehouseOptions.find(
+        (b) =>
+          b.branch_name &&
+          user?.branch_name &&
+          String(b.branch_name).toLowerCase() ===
+            String(user.branch_name).toLowerCase(),
+      ) ||
+      warehouseOptions[0];
+    return {
+      branch_id: match?.id ? String(match.id) : "",
+      branch: match?.branch_name || "",
+    };
+  }, [warehouseOptions, user?.branchId, user?.branch_name]);
+
   const [form, setForm] = useState({
     date: moment().format("YYYY-MM-DD"),
     requisitor: `${user.firstname} ${user.lastname}`,
-    branch: user.branch_name,
+    branch: user.branch_name || "",
+    branch_id: user.branchId ? String(user.branchId) : "",
     reason: "inventory topup",
   });
 
   const [errors, setErrors] = useState({
     reason: "",
     supplier: "",
+    branch: "",
   });
 
   const toggle = (item) => {
@@ -198,12 +246,29 @@ export default function PurchaseRequisitionList() {
     getPR();
   }, [getPR]);
 
+  useEffect(() => {
+    if (!activeBusiness?.id) return;
+    _fetchApi(
+      `/account/get/branches?facilityId=${activeBusiness.id}`,
+      (res) => {
+        if (res.success) setAllBranches(res.results || []);
+        else setAllBranches([]);
+      },
+      (err) => {
+        console.error("Error fetching warehouses:", err);
+        setAllBranches([]);
+      },
+    );
+  }, [activeBusiness?.id]);
+
   // Form modal functions
   const openFormModal = () => {
+    const wh = defaultWarehouse;
     setForm({
       date: moment().format("YYYY-MM-DD"),
       requisitor: `${user.firstname} ${user.lastname}`,
-      branch: user.branch_name,
+      branch: wh.branch || user.branch_name || "",
+      branch_id: wh.branch_id || "",
       reason: "inventory topup",
       expenses: [],
       supplier_name: "",
@@ -218,7 +283,7 @@ export default function PurchaseRequisitionList() {
       category: "",
       unit: "",
     });
-    setErrors({ reason: "", supplier: "" });
+    setErrors({ reason: "", supplier: "", branch: "" });
     setAttachments([]);
     getProductList();
     getCategories();
@@ -286,6 +351,7 @@ export default function PurchaseRequisitionList() {
     const newErrors = {
       reason: "",
       supplier: "",
+      branch: "",
     };
 
     let isValid = true;
@@ -293,6 +359,12 @@ export default function PurchaseRequisitionList() {
     if (!form.supplier_name || !form.supplier_code) {
       toast.error("Preferred vendor/supplier is required");
       newErrors.supplier = "Preferred vendor/supplier is required";
+      isValid = false;
+    }
+
+    if (!form.branch_id || !form.branch) {
+      toast.error("Warehouse is required");
+      newErrors.branch = "Select a warehouse";
       isValid = false;
     }
 
@@ -833,6 +905,52 @@ export default function PurchaseRequisitionList() {
                 {errors.supplier && (
                   <p className="mt-1 text-xs text-red-500">{errors.supplier}</p>
                 )}
+              </div>
+
+              <div>
+                <label htmlFor="po-warehouse" className={poLabelClass}>
+                  Warehouse <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="po-warehouse"
+                  name="branch_id"
+                  value={form.branch_id || ""}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    const match = warehouseOptions.find(
+                      (b) => String(b.id) === String(id),
+                    );
+                    setForm((prev) => ({
+                      ...prev,
+                      branch_id: id,
+                      branch: match?.branch_name || "",
+                    }));
+                    setErrors((prev) => ({ ...prev, branch: "" }));
+                  }}
+                  className={`${poInputClass} ${
+                    errors.branch ? "border-red-500" : ""
+                  }`}
+                  disabled={warehouseOptions.length === 0}
+                >
+                  <option value="">
+                    {warehouseOptions.length
+                      ? "Select warehouse..."
+                      : "No warehouse assigned to your account"}
+                  </option>
+                  {warehouseOptions.map((b) => (
+                    <option key={b.id} value={String(b.id)}>
+                      {b.branch_name}
+                    </option>
+                  ))}
+                </select>
+                {errors.branch && (
+                  <p className="mt-1 text-xs text-red-500">{errors.branch}</p>
+                )}
+                {warehouseOptions.length === 1 ? (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Only your assigned warehouse is available.
+                  </p>
+                ) : null}
               </div>
 
               <div>

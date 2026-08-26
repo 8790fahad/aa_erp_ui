@@ -276,6 +276,13 @@ const CustomerRegistartion = ({
       }));
     } else if (name === "work_phone" || name === "mobile") {
       setForm((prev) => ({ ...prev, [name]: sanitizePhoneInput(value) }));
+    } else if (name === "entity_type") {
+      setForm((prev) => ({
+        ...prev,
+        entity_type: value,
+        // Company RC only applies to business customers
+        company_id: value === "individual" ? "" : prev.company_id,
+      }));
     } else {
       setForm((prev) => ({ ...prev, [name]: value }));
     }
@@ -449,8 +456,9 @@ const CustomerRegistartion = ({
         phone: phone || "",
         mobile: mobile || "",
         address: address || "",
-        tin: form.tin || form.company_id || "",
-        company_id: form.company_id || form.tin || "",
+        tin: form.tin || "",
+        company_id:
+          form.entity_type === "business" ? form.company_id || "" : "",
         tax_rate: form.tax_rate || "",
         enable_portal: Boolean(form.enable_portal),
         language: form.language || "English",
@@ -718,7 +726,10 @@ const CustomerRegistartion = ({
                 Email Address
               </ShadcnLabel>
               <div className="relative">
-                <Mail className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                <Mail
+                  aria-hidden
+                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
+                />
                 <input
                   id="email"
                   name="email"
@@ -727,8 +738,7 @@ const CustomerRegistartion = ({
                   onChange={handleChange}
                   placeholder="Email address"
                   className={cn(
-                    inputClass,
-                    "pl-9",
+                    "h-9 w-full rounded-md border border-slate-300 bg-white py-0 pl-10 pr-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]",
                     errors.email && "border-red-500",
                   )}
                 />
@@ -831,19 +841,21 @@ const CustomerRegistartion = ({
               </TabsList>
 
               <TabsContent value="other" className="mt-4 space-y-4">
-                <div>
-                  <ShadcnLabel htmlFor="company_id" className={labelClass}>
-                    Company ID
-                  </ShadcnLabel>
-                  <input
-                    id="company_id"
-                    name="company_id"
-                    value={form.company_id}
-                    onChange={handleChange}
-                    placeholder="Company ID "
-                    className={inputClass}
-                  />
-                </div>
+                {form.entity_type === "business" ? (
+                  <div>
+                    <ShadcnLabel htmlFor="company_id" className={labelClass}>
+                      RC/Company ID
+                    </ShadcnLabel>
+                    <input
+                      id="company_id"
+                      name="company_id"
+                      value={form.company_id}
+                      onChange={handleChange}
+                      placeholder="RC / Company ID"
+                      className={inputClass}
+                    />
+                  </div>
+                ) : null}
                 <div>
                   <ShadcnLabel htmlFor="tin" className={labelClass}>
                     TIN

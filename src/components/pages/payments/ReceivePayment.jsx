@@ -110,6 +110,7 @@ const SWITCH_PAYMENT_MODE_PRIVILEGE = "Switch Payment Mode";
 const APPROVE_PAYMENT_MODE_PRIVILEGE = "Approve Payment Mode Switch";
 
 const LEGACY_COLLECTION_PRIVILEGES = [
+  "Verification Points",
   "Collection Points",
   "Receive Payment",
   "Payments",
@@ -736,7 +737,7 @@ export default function ReceivePayment() {
     setAdvanceAmount("");
     setAdvanceCashAmount("");
     setAdvanceTransferAmount("");
-    setAdvanceNarration("Collection Points customer deposit");
+    setAdvanceNarration("Verification Points customer deposit");
     setAdvanceOpen(true);
   }, [methodTab]);
 
@@ -827,7 +828,7 @@ export default function ReceivePayment() {
       userId: user.id,
       narration:
         advanceNarration.trim() ||
-        "Collection Points customer deposit",
+        "Verification Points customer deposit",
       receivable_deposit_code: activeBusiness.receivable_accural_code,
       receivable_code: activeBusiness.receivable_code,
       pure_advance: true,
@@ -1150,7 +1151,7 @@ export default function ReceivePayment() {
         paymentType: modeChangeNext,
         updated_by: user?.id,
         requireApproval,
-        note: `Collection Points: payment mode ${current} → ${modeChangeNext}`,
+        note: `Verification Points: payment mode ${current} → ${modeChangeNext}`,
       },
       (res) => {
         setSwitchingModeCode(null);
@@ -1452,8 +1453,8 @@ export default function ReceivePayment() {
                 : undefined,
         payment_splits: splits,
         note: isSplit
-          ? `${collectionSide === "transfer" ? "Transfer" : "Cash"} portion at Collection Points`
-          : "Collected at Collection Points",
+          ? `${collectionSide === "transfer" ? "Transfer" : "Cash"} portion at Verification Points`
+          : "Collected at Verification Points",
       },
       (res) => {
         setSubmitting(false);
@@ -1541,13 +1542,13 @@ export default function ReceivePayment() {
       <div className="min-h-full bg-[#f5f7fb] px-4 py-5 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Collection Points
+            Verification Points
           </h1>
           <div className="mt-6 rounded-xl border border-slate-200 bg-white p-8 text-center">
             <p className="text-sm font-medium text-slate-600">
               You do not have permission to collect payments. Ask an admin to
               grant Cash Collection, Transfer Collection, or Credit Collection
-              under Sales → Collection Points.
+              under Sales → Verification Points.
             </p>
           </div>
         </div>
@@ -1561,7 +1562,7 @@ export default function ReceivePayment() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-              Collection Points
+              Verification Points
             </h1>
             <p className="mt-1 text-sm text-slate-500">
               Customer collection hub: open any invoice to view it and collect,
@@ -2530,7 +2531,7 @@ export default function ReceivePayment() {
                 ) : null}
                 {hubAction === "view" ? (
                   <p className="text-sm text-slate-600">
-                    Read-only view of this invoice from Collection Points
+                    Read-only view of this invoice from Verification Points
                     history.
                   </p>
                 ) : null}
@@ -2921,7 +2922,7 @@ export default function ReceivePayment() {
                 onChange={(e) => setAdvanceNarration(e.target.value)}
                 rows={2}
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                placeholder="Collection Points customer deposit"
+                placeholder="Verification Points customer deposit"
               />
             </div>
           </div>

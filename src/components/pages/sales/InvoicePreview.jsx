@@ -240,7 +240,7 @@ function InvoicePreview() {
     .trim()
     .toLowerCase()
     .replace(/-/g, "_");
-  // Collection Points → invoice; Invoice Separation → gin/dispatch
+  // Verification Points → invoice; Invoice Separation → gin/dispatch
   const isDispatchDoc =
     docParam === "gin" ||
     docParam === "dispatch" ||
@@ -1024,7 +1024,7 @@ function InvoicePreview() {
               </h2>
               <p className="text-sm text-gray-500">
                 80mm {dispatchDocLabel} — print at Invoice Separation (Sales
-                Invoice is printed at Collection Points)
+                Invoice is printed at Verification Points)
               </p>
             </div>
             <div className="flex items-center gap-2">

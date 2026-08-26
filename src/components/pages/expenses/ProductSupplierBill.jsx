@@ -9,6 +9,7 @@ import {
   Users,
   ExternalLink,
   Calendar,
+  Building2,
 } from "lucide-react";
 import {
   Drawer,
@@ -920,6 +921,29 @@ export default function ProductSupplierBill() {
     fetchApprovedRequisitions();
   };
 
+  const resolveWarehouseFromPr = (requisition) => {
+    const rawId = requisition?.branch_id;
+    if (rawId != null && rawId !== "" && rawId !== "all") {
+      const n = parseInt(rawId, 10);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    const name = String(requisition?.branch || "").trim();
+    if (!name || !branches.length) return null;
+    const match = branches.find(
+      (b) =>
+        String(b.branch_name || "").toLowerCase() === name.toLowerCase(),
+    );
+    return match ? Number(match.id) : null;
+  };
+
+  const warehouseLabelForPr = (requisition) => {
+    if (requisition?.branch) return requisition.branch;
+    const id = requisition?.branch_id;
+    if (id == null || id === "") return null;
+    const match = branches.find((b) => String(b.id) === String(id));
+    return match?.branch_name || null;
+  };
+
   // Add requisition items to the current items list
   // Items are now already included in the requisition object from the API
   const addRequisitionItems = (requisition) => {
@@ -963,24 +987,59 @@ export default function ProductSupplierBill() {
     // Append items (functional update so multiple PRs can be added in one drawer session)
     setItems((prev) => [...prev, ...requisitionItems]);
 
-    // If supplier info exists on the requisition, set it on the form by default
-    // Note: Purchase Requisition stores supplier_number in supplier_code field
+    // Auto-fill warehouse from the PR
+    const warehouseId = resolveWarehouseFromPr(requisition);
+    if (warehouseId) {
+      setTargetBranch(warehouseId);
+    }
+
+    const prDate = requisition.date
+      ? moment(requisition.date).format("YYYY-MM-DD")
+      : null;
+
+    // Supplier, date, remark, payable account from the requisition
     const supplierNo =
       requisition.supplier_number ||
       requisition.supplier_no ||
       requisition.supplier_code;
-    if (requisition.supplier_name || supplierNo) {
-      setForm((prev) => ({
-        ...prev,
-        supplier_name: requisition.supplier_name || prev.supplier_name,
-        supplier_number: supplierNo || prev.supplier_number,
-        supplier_code: requisition.supplier_code || prev.supplier_code,
-        supplier_subhead:
+
+    setForm((prev) => {
+      const next = { ...prev };
+
+      if (requisition.supplier_name || supplierNo) {
+        next.supplier_name = requisition.supplier_name || prev.supplier_name;
+        next.supplier_number = supplierNo || prev.supplier_number;
+        next.supplier_code = requisition.supplier_code || prev.supplier_code;
+        next.supplier_subhead =
           requisition.supplier_subhead ||
           requisition.account_code ||
-          prev.supplier_subhead,
-      }));
-    }
+          prev.supplier_subhead;
+      } else if (requisition.account_code && !prev.supplier_subhead) {
+        next.supplier_subhead = requisition.account_code;
+      }
+
+      if (prDate) {
+        next.date = prDate;
+        const termsDays = parseInt(prev.terms, 10);
+        if (Number.isFinite(termsDays) && termsDays > 0) {
+          next.due_date = moment(prDate)
+            .add(termsDays, "days")
+            .format("YYYY-MM-DD");
+        } else if (
+          !prev.due_date ||
+          prev.due_date === prev.date ||
+          prev.due_date === today
+        ) {
+          next.due_date = prDate;
+        }
+      }
+
+      if (requisition.reason && !String(prev.remark || "").trim()) {
+        next.remark = requisition.reason;
+      }
+
+      return next;
+    });
 
     // Track which PRs were already added (still allow adding other PRs)
     setSelectedRequisitionIds((prev) =>
@@ -2024,7 +2083,9 @@ export default function ProductSupplierBill() {
               <div className="divide-y divide-slate-100">
                 {requisitions
                   .filter((r) => !dismissedPrIds.includes(r.pr_no))
-                  .map((requisition) => (
+                  .map((requisition) => {
+                    const warehouseLabel = warehouseLabelForPr(requisition);
+                    return (
                     <div
                       key={requisition.pr_no || requisition._id}
                       className={`py-5 transition-colors ${
@@ -2166,6 +2227,14 @@ export default function ProductSupplierBill() {
                                 </span>
                               </div>
                             )}
+                            {warehouseLabel && (
+                              <div className="col-span-2 flex items-center gap-2">
+                                <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                <span className="truncate font-medium text-slate-700">
+                                  {warehouseLabel}
+                                </span>
+                              </div>
+                            )}
                           </div>
 
                           {requisition.items &&
@@ -2242,7 +2311,8 @@ export default function ProductSupplierBill() {
                         </>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
               </div>
             )}
           </div>

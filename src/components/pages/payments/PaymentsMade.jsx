@@ -251,7 +251,7 @@ export default function PaymentsMade() {
           <p className="text-muted-foreground">
             Supplier payment hub: New Payment for unpaid bills, Make Deposit for
             prepaid vendor funds, Apply Deposit to bills. Customer collections
-            are under Sales → Collection Points.
+            are under Sales → Verification Points.
           </p>
         </div>
       </div>

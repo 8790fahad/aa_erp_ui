@@ -398,12 +398,12 @@ export default function SupplierTable() {
                 <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <span className="truncate text-left text-gray-700">
                   {filterBranches.length === 0
-                    ? "All branches"
+                    ? "All Warehouses"
                     : filterBranches.length === visibleBranches.length
-                      ? "All branches"
+                      ? "All Warehouses"
                       : filterBranches.length === 1
                         ? branchNameById(filterBranches[0])
-                        : `${filterBranches.length} branches selected`}
+                        : `${filterBranches.length} warehouses selected`}
                 </span>
                 <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-gray-400" />
               </button>
@@ -433,7 +433,7 @@ export default function SupplierTable() {
                   <div className="max-h-56 overflow-y-auto py-1">
                     {visibleBranches.length === 0 && (
                       <div className="px-3 py-2 text-xs text-gray-400">
-                        No branches available
+                        No warehouses available
                       </div>
                     )}
                     {visibleBranches.map((b) => {
@@ -497,7 +497,7 @@ export default function SupplierTable() {
                   in{" "}
                   {filterBranches.length === 1
                     ? branchNameById(filterBranches[0])
-                    : `${filterBranches.length} branches`}
+                    : `${filterBranches.length} warehouses`}
                 </span>
               )}
           </span>

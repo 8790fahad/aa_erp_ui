@@ -294,9 +294,10 @@ export const modules = [
         ],
       },
       {
-        title: "Collection Points",
-        url: "/app/payments/collection-points",
+        title: "Verification Points",
+        url: "/app/payments/verification-points",
         functionality: [
+          "Verification Points",
           "Collection Points",
           "Cash Collection",
           "Transfer Collection",
@@ -332,6 +333,7 @@ export const modules = [
           "Payments",
           "Customer Deposit",
           "Credit & Debit Note",
+          "Verification Points",
           "Collection Points",
         ],
         access: [
