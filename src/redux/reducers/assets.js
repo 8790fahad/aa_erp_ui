@@ -1,11 +1,10 @@
 import axios from 'axios';
 
-// Configure axios base URL for development
-const API_BASE_URL = import.meta.env.DEV ? 'http://localhost:42843' : '';
+import { apiURL } from '../actions/apiConfig';
 
 // Create axios instance with proper configuration
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: apiURL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

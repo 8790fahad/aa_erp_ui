@@ -3,15 +3,9 @@
 /* eslint-disable no-unused-vars */
 import store from "../store";
 import { notifyNetworkError } from "@/hooks/useNetworkStatus";
+import { apiURL, ipAddr } from "./apiConfig";
 
-// let remoteEndpoint = "http://localhost:42843";
-let remoteEndpoint = "https://server.brainstorm.ng/flowbooks";
-let localEndpoint = "http://localhost:42844";
-// let remoteEndpoint = "https://server.brainstorm.ng/inventria_new";
-// let localEndpoint = "http://192.168.1.87:42844"
-export const ipAddr = "127.0.0.1";
-export const apiURL =
-  process.env.NODE_ENV === "production" ? remoteEndpoint : localEndpoint;
+export { apiURL, ipAddr };
 
 // API posting
 const _postApi = (
