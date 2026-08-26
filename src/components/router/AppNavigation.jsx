@@ -83,7 +83,6 @@ import GenerateMemo from "../pages/purchase/GenerateMemo";
 import IndividualLedger from "../pages/report/IndividualLedger";
 import SupplierIndividualLedger from "../pages/report/SupplierIndividualLedger";
 import Settings from "../pages/admin/Settings";
-import CustomerFeedbackAdmin from "../pages/admin/CustomerFeedbackAdmin";
 import MrApproval from "../pages/inventory/MrApproval";
 
 import AddFinishedGoods from "../pages/inventory/AddFinishedGoods";
@@ -111,6 +110,7 @@ import CrmSegments from "../pages/crm/CrmSegments";
 import CrmBulkSms from "../pages/crm/CrmBulkSms";
 import CrmTemplates from "../pages/crm/CrmTemplates";
 import CrmSettings from "../pages/crm/CrmSettings";
+import CrmFeedback from "../pages/crm/CrmFeedback";
 import CreateInvoice from "../pages/invoice/CreateInvoice";
 import StatementOfFinancial from "../pages/report/StatementOfFinancial";
 import UnitOfMeasurement from "../pages/inventory/UnitOfMeasurement";
@@ -250,6 +250,7 @@ const routeModules = {
       { path: "customers/:customerNo", element: <CrmCustomer360 /> },
       { path: "activities", element: <CrmActivities /> },
       { path: "followups", element: <CrmFollowups /> },
+      { path: "feedback", element: <CrmFeedback /> },
       { path: "segments", element: <CrmSegments /> },
       { path: "sms", element: <CrmBulkSms /> },
       { path: "templates", element: <CrmTemplates /> },
@@ -1402,7 +1403,7 @@ const routeModules = {
       },
       {
         path: "customer-feedback",
-        element: <CustomerFeedbackAdmin />,
+        element: <Navigate to="/app/crm/feedback" replace />,
       },
       {
         path: "team-table",

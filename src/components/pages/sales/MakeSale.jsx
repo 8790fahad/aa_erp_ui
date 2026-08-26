@@ -1105,7 +1105,7 @@ function MakeSale() {
     // Always load facility-wide stock with branch attached so the same SKU
     // can appear once per branch and lines can come from different branches.
     _fetchApi(
-      `/account/get-ready-for-sales/${activeBusiness.id}`,
+      `/account/get-ready-for-sales/${activeBusiness.id}?includeStopped=1`,
       (response) => {
         if (response.success) {
           // Show every branch's stock — same SKU can appear once per branch.
@@ -1157,7 +1157,7 @@ function MakeSale() {
 
     setLoadingServices(true);
     _fetchApi(
-      `/account/get-service-products/${activeBusiness.id}`,
+      `/account/get-service-products/${activeBusiness.id}?includeStopped=1`,
       (response) => {
         if (response.success) {
           setServiceProducts(response.results || []);
@@ -2499,8 +2499,13 @@ function MakeSale() {
   }, [activeTab, mockProducts, mockServices, searchTerm]);
 
   // Line-item Typeahead options — do not reuse the POS grid searchTerm.
+  // Stopped items stay in the list but carry `disabled` so Typeahead renders
+  // them greyed out and refuses selection by click or keyboard.
   const filterItemsByTab = useCallback(
-    (tab) => (tab === "products" ? mockProducts : mockServices),
+    (tab) =>
+      (tab === "products" ? mockProducts : mockServices).map((item) =>
+        isSalesStopped(item) ? { ...item, disabled: true } : item,
+      ),
     [mockProducts, mockServices],
   );
 
@@ -4083,10 +4088,20 @@ function MakeSale() {
                             parseFloat(item.selling_price) ||
                             0;
                       const itemBranchLocation = getItemBranchLocation(item);
+                      const stopped = isSalesStopped(item);
                       return (
                         <div
                           key={item.id}
+                          aria-disabled={stopped}
                           onClick={() => {
+                            if (stopped) {
+                              toast.error(
+                                `Sales are stopped for ${
+                                  item.name || item.item_name
+                                }. This product cannot be sold.`,
+                              );
+                              return;
+                            }
                             setSelectedIndex(index);
                             // Ensure service has its default price when selected
                             const priceValue =
@@ -4121,12 +4136,14 @@ function MakeSale() {
                               }
                             }, 100);
                           }}
-                          className={`bg-white rounded-xl shadow-md hover:shadow-xl transition-all cursor-pointer overflow-hidden border-2 ${
-                            selectedIndex === index
-                              ? "border-[var(--aa-accent)] ring-2 ring-blue-200 bg-blue-50"
-                              : selectedProduct?.id === item.id
-                                ? "ring-1"
-                                : "border-transparent"
+                          className={`bg-white rounded-xl shadow-md transition-all overflow-hidden border-2 ${
+                            stopped
+                              ? "cursor-not-allowed border-transparent opacity-60 grayscale"
+                              : selectedIndex === index
+                                ? "cursor-pointer hover:shadow-xl border-[var(--aa-accent)] ring-2 ring-blue-200 bg-blue-50"
+                                : selectedProduct?.id === item.id
+                                  ? "cursor-pointer hover:shadow-xl ring-1"
+                                  : "cursor-pointer hover:shadow-xl border-transparent"
                           }`}
                         >
                           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 flex items-center justify-center h-32 relative m-0">
@@ -4137,7 +4154,12 @@ function MakeSale() {
                                 .map((word) => word.charAt(0).toUpperCase())
                                 .join("")}
                             </span>
-                            {selectedIndex === index && (
+                            {stopped && (
+                              <div className="absolute top-2 left-2 rounded-full bg-red-600 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+                                Sales stopped
+                              </div>
+                            )}
+                            {selectedIndex === index && !stopped && (
                               <div className="absolute top-2 right-2 bg-[var(--aa-navy)] text-white text-xs font-bold px-2 py-1 rounded-full">
                                 {index + 1}
                               </div>
@@ -4897,6 +4919,18 @@ function MakeSale() {
                                   placeholder="Type or click to select an item"
                                   onChange={(selected) => {
                                     if (selected && selected.length > 0) {
+                                      // Keyboard selection bypasses the menu's
+                                      // disabled check, so re-test here and keep
+                                      // the empty row when nothing was added.
+                                      if (isSalesStopped(selected[0])) {
+                                        toast.error(
+                                          `Sales are stopped for ${
+                                            selected[0].name ||
+                                            selected[0].item_name
+                                          }. This product cannot be sold.`,
+                                        );
+                                        return;
+                                      }
                                       addToCartNew(selected[0]);
                                       setExtraEmptyLineRows((n) => n - 1);
                                     }
@@ -4913,10 +4947,24 @@ function MakeSale() {
                                       opt.location_name ||
                                       opt.branch_name ||
                                       getItemBranchLocation(opt);
+                                    const optStopped = isSalesStopped(opt);
                                     return (
                                       <div className="py-1">
-                                        <div className="text-sm font-medium text-slate-800">
-                                          {opt.name || opt.item_name}
+                                        <div className="flex items-center gap-2">
+                                          <span
+                                            className={`text-sm font-medium ${
+                                              optStopped
+                                                ? "text-slate-400"
+                                                : "text-slate-800"
+                                            }`}
+                                          >
+                                            {opt.name || opt.item_name}
+                                          </span>
+                                          {optStopped && (
+                                            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
+                                              Sales stopped
+                                            </span>
+                                          )}
                                         </div>
                                         <small className="text-xs text-slate-500">
                                           {opt.product_id || opt.sku}

@@ -835,8 +835,10 @@ export const modules = [
         })),
       },
       {
+        // Lives under the CRM tabs, but linked here too: the CRM sidebar entry
+        // is retailer-only, and every business type needs to reach feedback.
         title: "Customer Feedback",
-        url: "/app/admin/customer-feedback",
+        url: "/app/crm/feedback",
         functionality: ["Customer Feedback", "Admin", "Settings"],
         access: [
           "services",

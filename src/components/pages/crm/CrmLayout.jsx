@@ -7,6 +7,7 @@ const TABS = [
   { to: "/app/crm/customers", label: "Customers" },
   { to: "/app/crm/activities", label: "Activities" },
   { to: "/app/crm/followups", label: "Follow-ups" },
+  { to: "/app/crm/feedback", label: "Feedback" },
   { to: "/app/crm/segments", label: "Segments" },
   { to: "/app/crm/sms", label: "Outreach" },
   { to: "/app/crm/templates", label: "Templates" },
