@@ -95,7 +95,6 @@ const SupplierRegisteration = ({
       email: "",
       work_phone: "",
       mobile: "",
-      language: "English",
       tin: "",
       currency: "NGN - Nigerian Naira",
       payment_terms: "Due on Receipt",
@@ -379,7 +378,6 @@ const SupplierRegisteration = ({
         mobile: form.mobile || "",
         address: address || "",
         tin: form.tin || "",
-        language: form.language || "English",
         currency: form.currency || "NGN - Nigerian Naira",
         payment_terms: form.payment_terms || "Due on Receipt",
         remarks: form.remarks || "",
@@ -632,25 +630,6 @@ const SupplierRegisteration = ({
               )}
             </div>
 
-            <div>
-              <ShadcnLabel htmlFor="language" className={labelClass}>
-                Vendor Language
-              </ShadcnLabel>
-              <select
-                id="language"
-                name="language"
-                value={form.language}
-                onChange={handleChange}
-                className={inputClass}
-              >
-                <option value="English">English</option>
-                <option value="French">French</option>
-                <option value="Hausa">Hausa</option>
-                <option value="Yoruba">Yoruba</option>
-                <option value="Igbo">Igbo</option>
-              </select>
-            </div>
-
             {/* Tabs */}
             <Tabs
               value={activeTab}
@@ -771,7 +750,7 @@ const SupplierRegisteration = ({
                     onChange={handleChange}
                     className={inputClass}
                   >
-                    <option value="">Select warehouse...</option>
+                    <option value="">No warehouse (optional)</option>
                     {visibleBranches.map((b) => (
                       <option key={b.id} value={String(b.id)}>
                         {b.branch_name}

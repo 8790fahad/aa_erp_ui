@@ -369,34 +369,27 @@ export default function ReceivePayment() {
   const amountDue = Number(selected?.amount) || 0;
   const paymentType = String(selected?.payment_type || "").toLowerCase();
   const isSplit = isSplitPaymentType(paymentType);
-  const isCreditSplit = normalizePaymentMode(paymentType) === "credit_split";
-  // Cash + Transfer (split): one side per tab. Credit + Cash + Transfer: both
-  // cash and transfer fields in one collect form.
-  const collectionSide = isCreditSplit
-    ? ""
-    : isSplit
-      ? methodTab === "transfer"
-        ? "transfer"
-        : "cash"
-      : methodTab === "transfer"
-        ? "transfer"
-        : methodTab === "cash"
-          ? "cash"
-          : "";
+  // Split invoices: show only the active tab’s side (cash person vs transfer person)
+  const collectionSide = isSplit
+    ? methodTab === "transfer"
+      ? "transfer"
+      : "cash"
+    : methodTab === "transfer"
+      ? "transfer"
+      : methodTab === "cash"
+        ? "cash"
+        : "";
   const showCashFields =
-    paymentType === "cash" ||
-    (isSplit && (isCreditSplit || collectionSide === "cash"));
+    paymentType === "cash" || (isSplit && collectionSide === "cash");
   const showTransferFields =
     paymentType === "transfer" ||
     paymentType === "bank" ||
-    (isSplit && (isCreditSplit || collectionSide === "transfer"));
-  const isCashOnly =
-    paymentType === "cash" ||
-    (isSplit && !isCreditSplit && collectionSide === "cash");
+    (isSplit && collectionSide === "transfer");
+  const isCashOnly = paymentType === "cash" || (isSplit && collectionSide === "cash");
   const isTransferOnly =
     paymentType === "transfer" ||
     paymentType === "bank" ||
-    (isSplit && !isCreditSplit && collectionSide === "transfer");
+    (isSplit && collectionSide === "transfer");
   const splitProgress = selected?.split_progress || null;
   const remainingDue = isSplit
     ? Number(
@@ -1389,6 +1382,11 @@ export default function ReceivePayment() {
           );
           closeHub();
           fetchDashboard();
+          if (row?.sale_code) {
+            navigate(
+              `/app/sales/process?sale_code=${encodeURIComponent(row.sale_code)}`,
+            );
+          }
         } else {
           toast.error(res?.message || "Could not approve credit");
         }
@@ -1434,13 +1432,14 @@ export default function ReceivePayment() {
   const sendCreditRemainder = () => {
     if (!selected || !activeBusiness?.id) return;
     if (normalizePaymentMode(selected.payment_type) !== "credit_split") {
-      toast.error("Only Credit + Cash + Transfer invoices can leave a credit remainder");
+      toast.error("Only Credit + Cash + Transfer invoices can confirm a credit amount");
       return;
     }
     if (remainingDue <= 0.05) {
-      toast.error("Nothing left to send to credit");
+      toast.error("Nothing left to confirm as credit");
       return;
     }
+    const collected = Number(splitProgress?.collected_total) || 0;
     setSubmitting(true);
     _postApi(
       "/api/v1/sale-workflows/send-credit-remainder",
@@ -1448,24 +1447,28 @@ export default function ReceivePayment() {
         facilityId: activeBusiness.id,
         saleCode: selected.sale_code,
         updated_by: user?.id,
-        note: `Remainder ₦${remainingDue.toFixed(2)} sent to Credit Approval`,
+        note:
+          collected <= 0.05
+            ? `Full amount ₦${remainingDue.toFixed(2)} confirmed as Credit`
+            : `Credit ₦${remainingDue.toFixed(2)} confirmed after cash/transfer collection`,
       },
       (res) => {
         setSubmitting(false);
         if (res?.success) {
           toast.success(
             res.message ||
-              "Remainder sent to Credit Approval — approve on the Credit tab",
+              `Credit ₦${formatNumber1(remainingDue)} — approve on the Credit tab to continue`,
           );
           closeCollect();
+          setMethodTab("credit");
           fetchDashboard();
         } else {
-          toast.error(res?.message || "Could not send remainder to credit");
+          toast.error(res?.message || "Could not confirm credit amount");
         }
       },
       (err) => {
         setSubmitting(false);
-        toast.error(err?.message || "Could not send remainder to credit");
+        toast.error(err?.message || "Could not confirm credit amount");
       },
     );
   };
@@ -1497,6 +1500,16 @@ export default function ReceivePayment() {
         amount: transferAmt,
         bankAccount: bankAccounts.bankAccount,
       });
+    }
+
+    // Credit + Cash + Transfer: no cash/transfer entered → confirm full remaining as Credit
+    if (
+      !splits.length &&
+      normalizePaymentMode(selected.payment_type) === "credit_split" &&
+      remainingDue > 0.05
+    ) {
+      sendCreditRemainder();
+      return;
     }
 
     if (!splits.length) {
@@ -2158,7 +2171,13 @@ export default function ReceivePayment() {
                           {methodTab !== "mode" &&
                           (isSplitPaymentType(row.payment_type) ||
                             normalizePaymentMode(row.payment_type) ===
-                              "credit_split") ? (
+                              "credit_split" ||
+                            (String(row.payment_type || "").toLowerCase() ===
+                              "credit" &&
+                              row.split_progress &&
+                              (Number(row.split_progress.cash) > 0 ||
+                                Number(row.split_progress.transfer) > 0 ||
+                                Number(row.split_progress.credit) > 0))) ? (
                             <div className="mt-1.5 space-y-0.5 text-[11px] text-slate-500">
                               <div>
                                 Cash:{" "}
@@ -2171,6 +2190,13 @@ export default function ReceivePayment() {
                                         {row.split_progress.cash_by_name}
                                       </span>
                                     ) : null}
+                                  </span>
+                                ) : normalizePaymentMode(row.payment_type) ===
+                                    "credit_split" ||
+                                  String(row.payment_type || "").toLowerCase() ===
+                                    "credit" ? (
+                                  <span className="font-medium text-slate-600">
+                                    ₦0.00
                                   </span>
                                 ) : (
                                   <span className="font-medium text-amber-600">
@@ -2191,31 +2217,76 @@ export default function ReceivePayment() {
                                       </span>
                                     ) : null}
                                   </span>
+                                ) : normalizePaymentMode(row.payment_type) ===
+                                    "credit_split" ||
+                                  String(row.payment_type || "").toLowerCase() ===
+                                    "credit" ? (
+                                  <span className="font-medium text-slate-600">
+                                    ₦0.00
+                                  </span>
                                 ) : (
                                   <span className="font-medium text-amber-600">
                                     Pending
                                   </span>
                                 )}
                               </div>
-                              <div>
-                                Remaining:{" "}
-                                <span className="font-medium text-slate-700">
-                                  ₦
-                                  {formatNumber1(
-                                    Math.max(
-                                      0,
-                                      Number(
-                                        (
-                                          (Number(row.amount) || 0) -
-                                          (Number(
-                                            row.split_progress?.collected_total,
-                                          ) || 0)
-                                        ).toFixed(2),
+                              {(normalizePaymentMode(row.payment_type) ===
+                                "credit_split" ||
+                                String(row.payment_type || "").toLowerCase() ===
+                                  "credit") && (
+                                <div>
+                                  Credit:{" "}
+                                  <span className="font-medium text-amber-700">
+                                    ₦
+                                    {formatNumber1(
+                                      Number(row.split_progress?.credit) > 0
+                                        ? row.split_progress.credit
+                                        : Math.max(
+                                            0,
+                                            Number(
+                                              (
+                                                (Number(
+                                                  row.split_progress
+                                                    ?.original_amount,
+                                                ) ||
+                                                  Number(row.amount) ||
+                                                  0) -
+                                                (Number(
+                                                  row.split_progress
+                                                    ?.collected_total,
+                                                ) || 0)
+                                              ).toFixed(2),
+                                            ),
+                                          ),
+                                    )}
+                                  </span>
+                                </div>
+                              )}
+                              {normalizePaymentMode(row.payment_type) !==
+                                "credit_split" &&
+                                String(row.payment_type || "").toLowerCase() !==
+                                  "credit" && (
+                                <div>
+                                  Remaining:{" "}
+                                  <span className="font-medium text-slate-700">
+                                    ₦
+                                    {formatNumber1(
+                                      Math.max(
+                                        0,
+                                        Number(
+                                          (
+                                            (Number(row.amount) || 0) -
+                                            (Number(
+                                              row.split_progress
+                                                ?.collected_total,
+                                            ) || 0)
+                                          ).toFixed(2),
+                                        ),
                                       ),
-                                    ),
-                                  )}
-                                </span>
-                              </div>
+                                    )}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           ) : null}
                         </td>
@@ -2527,35 +2598,69 @@ export default function ReceivePayment() {
                   {hubAction === "collect" && isSplit ? (
                     <div className="mt-3 space-y-1 border-t border-slate-200 pt-2 text-xs text-slate-600">
                       <p>
-                        Collecting{" "}
-                        <span className="font-semibold text-slate-800">
-                          {collectionSide === "transfer" ? "Transfer" : "Cash"}
-                        </span>{" "}
-                        part payment — both points can collect until the invoice
-                        is fully paid
+                        Collect cash and/or transfer as needed
                         {normalizePaymentMode(paymentType) === "credit_split"
-                          ? ", or send the unpaid remainder to Credit Approval"
-                          : ""}
+                          ? ". Any unpaid balance is Credit — confirm it to send for Credit Approval"
+                          : ". Both points can collect until the invoice is fully paid"}
                         .
                       </p>
                       <p>
-                        Cash collected: ₦
+                        Cash: ₦
                         {formatNumber1(splitProgress?.cash || 0)}
                         {splitProgress?.cash_by_name
                           ? ` · signed by ${splitProgress.cash_by_name}`
                           : ""}
                       </p>
                       <p>
-                        Transfer collected: ₦
+                        Transfer: ₦
                         {formatNumber1(splitProgress?.transfer || 0)}
                         {splitProgress?.transfer_by_name
                           ? ` · signed by ${splitProgress.transfer_by_name}`
                           : ""}
                       </p>
+                      {normalizePaymentMode(paymentType) === "credit_split" ? (
+                        <p>
+                          Credit:{" "}
+                          <span className="font-semibold tabular-nums text-amber-800">
+                            ₦{formatNumber1(remainingDue)}
+                          </span>
+                        </p>
+                      ) : (
+                        <p>
+                          Remaining:{" "}
+                          <span className="font-semibold tabular-nums text-slate-900">
+                            ₦{formatNumber1(remainingDue)}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+                  {hubAction === "credit" &&
+                  selected?.split_progress &&
+                  (Number(selected.split_progress.cash) > 0 ||
+                    Number(selected.split_progress.transfer) > 0 ||
+                    Number(selected.split_progress.credit) > 0) ? (
+                    <div className="mt-3 space-y-1 border-t border-slate-200 pt-2 text-xs text-slate-600">
+                      <p className="font-medium text-slate-700">
+                        Payment breakdown
+                      </p>
                       <p>
-                        Remaining:{" "}
-                        <span className="font-semibold tabular-nums text-slate-900">
-                          ₦{formatNumber1(remainingDue)}
+                        Cash: ₦
+                        {formatNumber1(selected.split_progress.cash || 0)}
+                      </p>
+                      <p>
+                        Transfer: ₦
+                        {formatNumber1(selected.split_progress.transfer || 0)}
+                      </p>
+                      <p>
+                        Credit:{" "}
+                        <span className="font-semibold text-amber-800">
+                          ₦
+                          {formatNumber1(
+                            selected.split_progress.credit ??
+                              selected.amount ??
+                              0,
+                          )}
                         </span>
                       </p>
                     </div>
@@ -2696,8 +2801,11 @@ export default function ReceivePayment() {
 
                     {isSplit ? (
                       <p className="text-xs text-slate-500">
-                        Entered: ₦{formatNumber1(splitHintTotal)} · Remaining
-                        after this: ₦
+                        Entered: ₦{formatNumber1(splitHintTotal)} ·{" "}
+                        {normalizePaymentMode(paymentType) === "credit_split"
+                          ? "Credit after this"
+                          : "Remaining after this"}
+                        : ₦
                         {formatNumber1(
                           Math.max(
                             0,
@@ -2764,7 +2872,7 @@ export default function ReceivePayment() {
                           ) : (
                             <CreditCard className="h-4 w-4" />
                           )}
-                          Leave ₦{formatNumber1(remainingDue)} on Credit
+                          Confirm ₦{formatNumber1(remainingDue)} as Credit
                         </button>
                       ) : null}
                       <button

@@ -1403,7 +1403,35 @@ const ProductServiceForm = () => {
                         </label>
                         <input
                           type="text"
-                          {...register("name", { required: "Name is required" })}
+                          {...register("name", {
+                            required: "Name is required",
+                            validate: async (value) => {
+                              const trimmed = String(value || "").trim();
+                              if (!trimmed) return "Name is required";
+                              if (!facilityId) return true;
+                              const params = new URLSearchParams({
+                                name: trimmed,
+                              });
+                              if (isEditMode && id) {
+                                params.set("excludeId", String(id));
+                              }
+                              return new Promise((resolve) => {
+                                _fetchApi(
+                                  `/api/products/check-name/${facilityId}?${params.toString()}`,
+                                  (res) => {
+                                    if (res?.exists) {
+                                      resolve(
+                                        "Product name already exists — use a unique name",
+                                      );
+                                    } else {
+                                      resolve(true);
+                                    }
+                                  },
+                                  () => resolve(true),
+                                );
+                              });
+                            },
+                          })}
                           placeholder={
                             watchedItemType === "Service"
                               ? "e.g. Consulting, Delivery"
