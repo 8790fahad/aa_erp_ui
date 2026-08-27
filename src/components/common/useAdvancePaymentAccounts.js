@@ -29,7 +29,15 @@ export function useAdvancePaymentAccounts(open, facilityId, modeOfPayment) {
     setAccountList([]);
     setHeadList([]);
 
-    if (modeOfPayment === "cash") {
+    const mode = String(modeOfPayment || "")
+      .toLowerCase()
+      .trim();
+    const isSplit =
+      mode === "cash+transfer" || mode === "split" || mode === "cash_transfer";
+    const needCash = mode === "cash" || isSplit;
+    const needBank = mode === "bank" || mode === "cheque" || isSplit;
+
+    if (needCash) {
       _postApi(
         `/inventory/product-list?query_type=cash`,
         { facilityId },
@@ -45,9 +53,10 @@ export function useAdvancePaymentAccounts(open, facilityId, modeOfPayment) {
         (err) => {
           console.error("API Error:", err);
           toast.error("Could not load account heads.");
-        }
+        },
       );
-    } else if (["bank", "cheque"].includes(modeOfPayment)) {
+    }
+    if (needBank) {
       _fetchApi(
         `/api/get/bank-accounts?facilityId=${facilityId}`,
         (data) => {
@@ -60,7 +69,7 @@ export function useAdvancePaymentAccounts(open, facilityId, modeOfPayment) {
         (err) => {
           console.error(err);
           toast.error("Failed to load bank accounts");
-        }
+        },
       );
     }
   }, [modeOfPayment, facilityId, open]);

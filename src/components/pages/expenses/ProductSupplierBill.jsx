@@ -29,6 +29,11 @@ import { Typeahead } from "react-bootstrap-typeahead";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import useQuery from "@/hooks/useQuery";
+import CashTransferPaymentFields, {
+  buildPaymentSplits,
+  isCashTransferSplitMode,
+  parseMoneyInput,
+} from "@/components/common/CashTransferPaymentFields";
 import CreatableSelect from "react-select/creatable";
 
 const initialItemForm = {
@@ -77,8 +82,11 @@ export default function ProductSupplierBill() {
   const [headList, setHeadList] = useState([]);
   const [bankAccount, setBankAccount] = useState({});
   const [accountHead, setAccountHead] = useState({});
+  const [cashAmount, setCashAmount] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
   const cashAccountTypeaheadRef = useRef();
   const isCashPayment = form.payment_type === "cash";
+  const isSplitPayment = isCashTransferSplitMode(form.mode_of_payment);
 
   // Editing state (legacy top-form edit; table is inline)
   const [editingItem, setEditingItem] = useState(null);
@@ -130,7 +138,14 @@ export default function ProductSupplierBill() {
     setHeadList([]);
     if (!isCashPayment || !activeBusiness?.id) return;
 
-    if (form.mode_of_payment === "cash") {
+    const needCash =
+      form.mode_of_payment === "cash" || isCashTransferSplitMode(form.mode_of_payment);
+    const needBank =
+      form.mode_of_payment === "bank" ||
+      form.mode_of_payment === "cheque" ||
+      isCashTransferSplitMode(form.mode_of_payment);
+
+    if (needCash) {
       _postApi(
         `/inventory/product-list?query_type=cash`,
         { facilityId: activeBusiness.id },
@@ -140,10 +155,8 @@ export default function ProductSupplierBill() {
         },
         () => toast.error("Something went wrong while fetching cash accounts."),
       );
-    } else if (
-      form.mode_of_payment === "bank" ||
-      form.mode_of_payment === "cheque"
-    ) {
+    }
+    if (needBank) {
       _fetchApi(
         `/api/get/bank-accounts?facilityId=${activeBusiness.id}`,
         (data) => {
@@ -624,23 +637,51 @@ export default function ProductSupplierBill() {
         resetSaving();
         return;
       }
-      if (form.mode_of_payment === "cash" && !accountHead?.head) {
-        toast.error("Please select a cash account");
-        resetSaving();
-        return;
-      }
-      if (
-        ["bank", "cheque"].includes(form.mode_of_payment) &&
-        !bankAccount?.id
-      ) {
-        toast.error("Please select a bank account");
-        resetSaving();
-        return;
-      }
-      if (form.mode_of_payment === "cheque" && !form.cheque_number) {
-        toast.error("Please enter a cheque number");
-        resetSaving();
-        return;
+      if (isSplitPayment) {
+        const cash = parseMoneyInput(cashAmount);
+        const transfer = parseMoneyInput(transferAmount);
+        const billTotal = getTotalWithTax();
+        if (cash <= 0 || transfer <= 0) {
+          toast.error("Enter both cash and transfer amounts");
+          resetSaving();
+          return;
+        }
+        if (Math.abs(cash + transfer - billTotal) > 0.02) {
+          toast.error(
+            `Cash + Transfer must equal bill total (₦${billTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })})`,
+          );
+          resetSaving();
+          return;
+        }
+        if (!accountHead?.head) {
+          toast.error("Please select a cash account");
+          resetSaving();
+          return;
+        }
+        if (!bankAccount?.id) {
+          toast.error("Please select a bank account");
+          resetSaving();
+          return;
+        }
+      } else {
+        if (form.mode_of_payment === "cash" && !accountHead?.head) {
+          toast.error("Please select a cash account");
+          resetSaving();
+          return;
+        }
+        if (
+          ["bank", "cheque"].includes(form.mode_of_payment) &&
+          !bankAccount?.id
+        ) {
+          toast.error("Please select a bank account");
+          resetSaving();
+          return;
+        }
+        if (form.mode_of_payment === "cheque" && !form.cheque_number) {
+          toast.error("Please enter a cheque number");
+          resetSaving();
+          return;
+        }
       }
     }
 
@@ -707,6 +748,15 @@ export default function ProductSupplierBill() {
         bankAccount: isCashPayment ? bankAccount : undefined,
         accountHead: isCashPayment ? accountHead : undefined,
         cheque_number: isCashPayment ? form.cheque_number : undefined,
+        payment_splits: isCashPayment
+          ? buildPaymentSplits({
+              mode: form.mode_of_payment,
+              cashAmount,
+              transferAmount,
+              accountHead,
+              bankAccount,
+            })
+          : undefined,
       },
       (res) => {
         if (res.success) {
@@ -937,11 +987,14 @@ export default function ProductSupplierBill() {
   };
 
   const warehouseLabelForPr = (requisition) => {
-    if (requisition?.branch) return requisition.branch;
+    const name = String(requisition?.branch || "").trim();
+    if (name) return name;
     const id = requisition?.branch_id;
-    if (id == null || id === "") return null;
-    const match = branches.find((b) => String(b.id) === String(id));
-    return match?.branch_name || null;
+    if (id != null && id !== "" && id !== "all") {
+      const match = branches.find((b) => String(b.id) === String(id));
+      if (match?.branch_name) return match.branch_name;
+    }
+    return "No warehouse assigned";
   };
 
   // Add requisition items to the current items list
@@ -1407,95 +1460,34 @@ export default function ProductSupplierBill() {
               />
             </div>
           ) : (
-            <>
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
-                <label className="text-sm font-medium text-slate-600 lg:text-right">
-                  Mode of Payment <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="mode_of_payment"
-                  value={form.mode_of_payment}
-                  onChange={handleFormChange}
-                  className="h-9 w-full max-w-xs rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                >
-                  <option value="">Select mode...</option>
-                  <option value="cash">Cash</option>
-                  <option value="bank">Bank Transfer</option>
-                  <option value="cheque">Cheque</option>
-                </select>
-              </div>
-              {(form.mode_of_payment === "bank" ||
-                form.mode_of_payment === "cheque") && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
-                  <label className="text-sm font-medium text-slate-600 lg:text-right">
-                    Bank Account <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={bankAccount?.id || ""}
-                    onChange={(e) => {
-                      const selected = accountList.find(
-                        (a) => a.id === Number(e.target.value),
-                      );
-                      setBankAccount(selected || {});
-                    }}
-                    className="h-9 w-full max-w-md rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                  >
-                    <option value="">Select bank account...</option>
-                    {accountList.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.account_name} ({account.id})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {form.mode_of_payment === "cash" && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
-                  <label className="text-sm font-medium text-slate-600 lg:text-right">
-                    Cash Account <span className="text-red-500">*</span>
-                  </label>
-                  <Typeahead
-                    ref={cashAccountTypeaheadRef}
-                    id="product-bill-cash-account"
-                    labelKey={(option) =>
-                      `${option.head || ""} ${option.description || ""}`
-                    }
-                    options={headList}
-                    placeholder="Select cash account..."
-                    onChange={(selectedItems) => {
-                      if (selectedItems?.length) {
-                        const cash = selectedItems[0];
-                        setAccountHead({
-                          head: cash.head || "",
-                          description: cash.description || "",
-                        });
-                      } else setAccountHead({});
-                    }}
-                    selected={
-                      accountHead?.head
-                        ? headList.filter((c) => c.head === accountHead.head)
-                        : []
-                    }
-                    clearButton
-                  />
-                </div>
-              )}
-              {form.mode_of_payment === "cheque" && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
-                  <label className="text-sm font-medium text-slate-600 lg:text-right">
-                    Cheque No <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="cheque_number"
-                    value={form.cheque_number}
-                    onChange={handleFormChange}
-                    placeholder="Enter cheque number..."
-                    className="h-9 w-full max-w-xs rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                  />
-                </div>
-              )}
-            </>
+            <CashTransferPaymentFields
+              modeOfPayment={form.mode_of_payment}
+              onModeChange={(value) => {
+                setForm((p) => ({
+                  ...p,
+                  mode_of_payment: value,
+                  cheque_number: value === "cheque" ? p.cheque_number : "",
+                }));
+                setCashAmount("");
+                setTransferAmount("");
+              }}
+              cashAmount={cashAmount}
+              onCashAmountChange={setCashAmount}
+              transferAmount={transferAmount}
+              onTransferAmountChange={setTransferAmount}
+              expectedTotal={getTotalWithTax()}
+              accountHead={accountHead}
+              onAccountHeadChange={setAccountHead}
+              bankAccount={bankAccount}
+              onBankAccountChange={(acc) => setBankAccount(acc || {})}
+              accountList={accountList}
+              headList={headList}
+              chequeNumber={form.cheque_number}
+              onChequeNumberChange={(v) =>
+                setForm((p) => ({ ...p, cheque_number: v }))
+              }
+              cashTypeaheadRef={cashAccountTypeaheadRef}
+            />
           )}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-start">
@@ -2227,14 +2219,19 @@ export default function ProductSupplierBill() {
                                 </span>
                               </div>
                             )}
-                            {warehouseLabel && (
-                              <div className="col-span-2 flex items-center gap-2">
-                                <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                                <span className="truncate font-medium text-slate-700">
-                                  {warehouseLabel}
-                                </span>
-                              </div>
-                            )}
+                            <div className="col-span-2 flex items-center gap-2">
+                              <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                              <span
+                                className={`truncate font-medium ${
+                                  warehouseLabel === "No warehouse assigned"
+                                    ? "text-slate-400 italic"
+                                    : "text-slate-700"
+                                }`}
+                                title={warehouseLabel}
+                              >
+                                {warehouseLabel}
+                              </span>
+                            </div>
                           </div>
 
                           {requisition.items &&
