@@ -127,6 +127,7 @@ export default function CashTransferPaymentFields({
   chequeNumber,
   onChequeNumberChange,
   cashTypeaheadRef,
+  bankTypeaheadRef,
   disabled = false,
   /** Custom row wrapper for Pay Bills (Row component) */
   Row,
@@ -269,26 +270,29 @@ export default function CashTransferPaymentFields({
     />
   );
 
+  const bankAccountLabel = (account) =>
+    `${account?.account_name || ""}${
+      account?.account_number ? ` (${account.account_number})` : ""
+    }`.trim();
+
   const BankAccountSelect = (
-    <select
-      value={bankAccount?.id || ""}
-      onChange={(e) => {
-        const selected = accountList.find(
-          (a) => String(a.id) === String(e.target.value),
-        );
-        onBankAccountChange?.(selected || null);
-      }}
+    <Typeahead
+      ref={bankTypeaheadRef}
+      id="cash-transfer-bank-account"
+      labelKey={bankAccountLabel}
+      options={accountList}
+      placeholder="Select bank account..."
       disabled={disabled}
-      className={inputClass}
-    >
-      <option value="">Select bank account...</option>
-      {accountList.map((account) => (
-        <option key={account.id} value={account.id}>
-          {account.account_name}
-          {account.account_number ? ` (${account.account_number})` : ""}
-        </option>
-      ))}
-    </select>
+      onChange={(selectedItems) => {
+        onBankAccountChange?.(selectedItems?.length ? selectedItems[0] : null);
+      }}
+      selected={
+        bankAccount?.id
+          ? accountList.filter((a) => String(a.id) === String(bankAccount.id))
+          : []
+      }
+      clearButton
+    />
   );
 
   if (Row) {
@@ -309,7 +313,7 @@ export default function CashTransferPaymentFields({
               {TransferAmountInput}
             </Row>
             <Row label="Bank Account" required>
-              {BankAccountSelect}
+              <div className="w-full max-w-md">{BankAccountSelect}</div>
             </Row>
           </>
         ) : (
@@ -374,7 +378,7 @@ export default function CashTransferPaymentFields({
             <label className={labelClass}>
               Bank Account <span className="text-red-500">*</span>
             </label>
-            {BankAccountSelect}
+            <div className="w-full max-w-md">{BankAccountSelect}</div>
           </div>
         </>
       ) : (
@@ -384,7 +388,7 @@ export default function CashTransferPaymentFields({
               <label className={labelClass}>
                 Bank Account <span className="text-red-500">*</span>
               </label>
-              {BankAccountSelect}
+              <div className="w-full max-w-md">{BankAccountSelect}</div>
             </div>
           )}
           {modeOfPayment === "cash" && (
