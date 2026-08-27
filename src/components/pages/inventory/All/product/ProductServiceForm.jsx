@@ -26,7 +26,6 @@ import {
   Check,
   Loader2,
   Package,
-  DollarSign,
   ShoppingCart,
   Settings,
   Image as ImageIcon,
@@ -1484,7 +1483,12 @@ const ProductServiceForm = () => {
               <AccordionItem value="sales-info" className="border rounded-lg">
                 <AccordionTrigger className="px-6 py-4 hover:no-underline">
                   <div className="flex items-center gap-3">
-                    <DollarSign className="w-5 h-5 text-green-600" />
+                    <span
+                      className="inline-flex h-5 w-5 items-center justify-center text-lg font-bold leading-none text-green-600"
+                      aria-hidden
+                    >
+                      ₦
+                    </span>
                     <span className="text-lg font-semibold">
                       Sales Information
                     </span>

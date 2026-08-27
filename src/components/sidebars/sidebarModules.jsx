@@ -688,6 +688,11 @@ export const modules = [
       "Assets",
       "Fixed Assets",
       "Asset Management",
+      // Privilege names used on Manage Staff / membership for this module
+      "Asset List",
+      "Add Asset",
+      "Asset Disposal",
+      "Asset Dashboard",
     ],
     access: [
       "services",

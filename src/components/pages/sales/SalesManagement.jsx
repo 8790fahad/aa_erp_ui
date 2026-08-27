@@ -154,10 +154,19 @@ export default function SalesManagement() {
               }
               const pt = String(r.payment_type || "").toLowerCase();
               if (hasCash && !hasTransfer) {
-                return pt === "cash" || pt === "split";
+                return (
+                  pt === "cash" ||
+                  pt === "split" ||
+                  pt === "credit_split"
+                );
               }
               if (hasTransfer && !hasCash) {
-                return pt === "transfer" || pt === "bank" || pt === "split";
+                return (
+                  pt === "transfer" ||
+                  pt === "bank" ||
+                  pt === "split" ||
+                  pt === "credit_split"
+                );
               }
               return true;
             });

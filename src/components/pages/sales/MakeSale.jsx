@@ -2226,12 +2226,27 @@ function MakeSale() {
                 navigate(
                   `/app/payments/apply-advance?${params.toString()}`,
                 );
+              } else if (modeOfPayment === "credit") {
+                toast.success(
+                  `Invoice ${response.sale_code} sent to Credit approval`,
+                );
+                navigate(
+                  `/app/payments/verification-points?sale_code=${encodeURIComponent(
+                    response.sale_code,
+                  )}&tab=credit`,
+                );
               } else {
-                const dest =
-                  saleType === "credit"
-                    ? `/app/sales/process?sale_code=${response.sale_code}`
-                    : `/app/sales/process?sale_code=${response.sale_code}`;
-                navigate(dest);
+                // cash | transfer | both | credit_split → Verification Points
+                const tip =
+                  modeOfPayment === "credit_split"
+                    ? "Collect cash + transfer at Verification Points (remainder on credit)"
+                    : "Collect payment at Verification Points";
+                toast.success(`Invoice ${response.sale_code} — ${tip}`);
+                navigate(
+                  `/app/payments/verification-points?sale_code=${encodeURIComponent(
+                    response.sale_code,
+                  )}`,
+                );
               }
             }
           } else {
@@ -3725,12 +3740,12 @@ function MakeSale() {
                         : modeOfPayment === "deposit"
                           ? "Apply Deposit · create invoice, then apply customer deposit"
                           : modeOfPayment === "credit_split"
-                            ? "Sent to cashier · cash + transfer, remainder on credit"
+                            ? "Sent to Verification Points · cash + transfer, remainder on credit"
                             : modeOfPayment === "both"
-                              ? "Sent to cashier · cash and transfer"
+                              ? "Sent to Verification Points · cash and transfer"
                               : modeOfPayment === "transfer"
-                                ? "Sent to cashier · transfer"
-                                : "Sent to cashier · cash"}
+                                ? "Sent to Verification Points · transfer"
+                                : "Sent to Verification Points · cash"}
                     </p>
                   </div>
                 </div>
@@ -3894,10 +3909,10 @@ function MakeSale() {
                     {modeOfPayment === "deposit"
                       ? "Invoice is created like credit, then you apply the customer deposit (not Credit Approval)."
                       : modeOfPayment === "credit"
-                        ? "Credit invoice goes to Credit approval first, then Invoice Separation."
+                        ? "Credit invoice goes to Verification Points (Credit tab) for approval first, then Invoice Separation."
                         : modeOfPayment === "credit_split"
-                          ? "Invoice is sent to Cashier for cash and transfer collection; unpaid remainder stays on credit."
-                          : `Invoice is sent to Cashier for ${
+                          ? "Sent to Verification Points for cash + transfer; unpaid remainder stays on credit."
+                          : `Invoice is sent to Verification Points for ${
                               modeOfPayment === "both"
                                 ? "cash and transfer"
                                 : modeOfPayment === "transfer"

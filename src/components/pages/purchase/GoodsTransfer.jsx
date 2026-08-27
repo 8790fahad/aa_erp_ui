@@ -1599,7 +1599,7 @@ export default function GoodsTransfer() {
                         onChange={(e) => setHistoryStatus(e.target.value)}
                         className={`${fieldClass} min-w-[9rem]`}
                       >
-                        <option value="all">All statuses</option>
+                        <option value="all">All status</option>
                         <option value="pending">Pending</option>
                         <option value="approved">Approved</option>
                         <option value="rejected">Rejected</option>

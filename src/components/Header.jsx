@@ -1,10 +1,9 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
-  BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -42,6 +41,7 @@ import {
   canAccessPrivileges,
   getUserFunctionalities,
 } from "@/lib/access";
+import { breadcrumbHrefForIndex } from "@/lib/breadcrumbNav";
 
 function parseAccess(accessStr) {
   if (!accessStr || typeof accessStr !== "string") return [];
@@ -377,25 +377,39 @@ export function PageContextBar() {
     <div className="flex h-11 shrink-0 items-center gap-2 border-b bg-white px-4">
       <Breadcrumb>
         <BreadcrumbList className="mb-0 pl-0">
-          <BreadcrumbItem className="hidden md:block">
-            <BreadcrumbLink href="#">{pathParts[0] || "app"}</BreadcrumbLink>
-          </BreadcrumbItem>
-          {pathParts[1] ? (
-            <>
-              <BreadcrumbSeparator className="hidden md:block" />
-              <BreadcrumbItem>
-                <BreadcrumbPage>{pathParts[1]}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </>
-          ) : null}
-          {pathParts[2] ? (
-            <>
-              <BreadcrumbSeparator className="hidden md:block" />
-              <BreadcrumbItem>
-                <BreadcrumbPage>{pathParts[2]}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </>
-          ) : null}
+          {pathParts.map((part, index) => {
+            const isLast = index === pathParts.length - 1;
+            const href = breadcrumbHrefForIndex(pathParts, index);
+            const label = part || "app";
+            return (
+              <Fragment key={`${part}-${index}`}>
+                {index > 0 ? (
+                  <BreadcrumbSeparator className="hidden md:block" />
+                ) : null}
+                <BreadcrumbItem className={index === 0 ? "hidden md:block" : undefined}>
+                  {isLast ? (
+                    <BreadcrumbLink asChild>
+                      <Link
+                        to={location.pathname}
+                        className="rounded px-1.5 py-0.5 font-medium text-slate-900 hover:bg-amber-50 hover:text-slate-950"
+                      >
+                        {label}
+                      </Link>
+                    </BreadcrumbLink>
+                  ) : (
+                    <BreadcrumbLink asChild>
+                      <Link
+                        to={href}
+                        className="rounded px-1.5 py-0.5 hover:bg-amber-50 hover:text-slate-950"
+                      >
+                        {label}
+                      </Link>
+                    </BreadcrumbLink>
+                  )}
+                </BreadcrumbItem>
+              </Fragment>
+            );
+          })}
         </BreadcrumbList>
       </Breadcrumb>
 

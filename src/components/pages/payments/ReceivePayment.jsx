@@ -5,6 +5,7 @@ import {
   ArrowRightLeft,
   Banknote,
   Building2,
+  Calendar,
   CheckCircle2,
   ClipboardCheck,
   CreditCard,
@@ -23,6 +24,10 @@ import moment from "moment";
 import { toast } from "sonner";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
+import {
+  POSTING_DATE_MIN,
+  getPostingDateMax,
+} from "@/utilities";
 import {
   Sheet,
   SheetContent,
@@ -307,6 +312,10 @@ export default function ReceivePayment() {
   const [methodTab, setMethodTab] = useState("cash");
   const [activeTab, setActiveTab] = useState("pending");
   const [loading, setLoading] = useState(false);
+  const [dashboardReady, setDashboardReady] = useState(false);
+  const todayYmd = moment().format("YYYY-MM-DD");
+  const [historyFrom, setHistoryFrom] = useState(todayYmd);
+  const [historyTo, setHistoryTo] = useState(todayYmd);
   const [pending, setPending] = useState([]);
   const [creditPending, setCreditPending] = useState([]);
   const [discountPending, setDiscountPending] = useState([]);
@@ -324,6 +333,10 @@ export default function ReceivePayment() {
     collected_cash_today: 0,
     collected_transfer_today: 0,
     collected_today: 0,
+    approved_credit_today: 0,
+    approved_credit_count_today: 0,
+    history_from: todayYmd,
+    history_to: todayYmd,
   });
   const [search, setSearch] = useState("");
   const searchInputRef = useRef(null);
@@ -411,8 +424,17 @@ export default function ReceivePayment() {
   const fetchDashboard = useCallback(() => {
     if (!activeBusiness?.id) return;
     setLoading(true);
+    let from = historyFrom || todayYmd;
+    let to = historyTo || historyFrom || todayYmd;
+    if (from > to) {
+      const tmp = from;
+      from = to;
+      to = tmp;
+    }
     const params = new URLSearchParams({
       facilityId: activeBusiness.id,
+      historyFrom: from,
+      historyTo: to,
     });
     if (user?.id != null) params.set("userId", String(user.id));
     if (user?.role) params.set("role", String(user.role));
@@ -421,6 +443,7 @@ export default function ReceivePayment() {
       `/api/v1/sale-workflows/cashier-dashboard?${params.toString()}`,
       (res) => {
         setLoading(false);
+        setDashboardReady(true);
         if (res?.success) {
           setPending(res.results?.pending || []);
           setCreditPending(res.results?.credit_pending || []);
@@ -440,6 +463,10 @@ export default function ReceivePayment() {
               collected_cash_today: 0,
               collected_transfer_today: 0,
               collected_today: 0,
+              approved_credit_today: 0,
+              approved_credit_count_today: 0,
+              history_from: from,
+              history_to: to,
             },
           );
         } else {
@@ -448,12 +475,21 @@ export default function ReceivePayment() {
       },
       (err) => {
         setLoading(false);
+        setDashboardReady(true);
         toast.error(err?.message || "Failed to load collection queue");
       },
     );
-  }, [activeBusiness?.id, user?.id, user?.role]);
+  }, [
+    activeBusiness?.id,
+    user?.id,
+    user?.role,
+    historyFrom,
+    historyTo,
+    todayYmd,
+  ]);
 
   useEffect(() => {
+    setDashboardReady(false);
     fetchDashboard();
   }, [fetchDashboard]);
 
@@ -578,6 +614,9 @@ export default function ReceivePayment() {
         pending_mode: 0,
         collected_cash_today: 0,
         collected_transfer_today: 0,
+        approved_credit_today: Number(summary.approved_credit_today) || 0,
+        approved_credit_count_today:
+          Number(summary.approved_credit_count_today) || 0,
         pending_count: creditPending.length,
       };
     }
@@ -1071,6 +1110,38 @@ export default function ReceivePayment() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [history, pending, creditPending, canViewCollectionTab, methodTab, openHub],
   );
+
+  // Deep-link: /verification-points?sale_code=INV-…&tab=credit|cash|transfer
+  useEffect(() => {
+    const code = String(searchParams.get("sale_code") || "").trim();
+    if (!code || !dashboardReady || loading) return;
+
+    const tab = String(searchParams.get("tab") || "").toLowerCase();
+    if (tab === "credit" && canViewCollectionTab("Credit Collection")) {
+      setMethodTab("credit");
+    } else if (
+      tab === "transfer" &&
+      canViewCollectionTab("Transfer Collection")
+    ) {
+      setMethodTab("transfer");
+    } else if (tab === "cash" && canViewCollectionTab("Cash Collection")) {
+      setMethodTab("cash");
+    }
+
+    applySearchOrScan(code);
+
+    const next = new URLSearchParams(searchParams);
+    next.delete("sale_code");
+    next.delete("tab");
+    setSearchParams(next, { replace: true });
+  }, [
+    searchParams,
+    setSearchParams,
+    dashboardReady,
+    loading,
+    applySearchOrScan,
+    canViewCollectionTab,
+  ]);
 
   const handleBarcodeScan = useCallback(
     (code) => {
@@ -1690,18 +1761,44 @@ export default function ReceivePayment() {
           ) : null}
 
           {viewSummary.showCredit ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-amber-800">
                 <CreditCard className="h-4 w-4 text-amber-600" />
                 Credit awaiting approval
               </div>
               <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">
                 ₦{formatNumber1(viewSummary.pending_credit)}
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-amber-800/80">
                 {viewSummary.pending_count} credit invoice
                 {viewSummary.pending_count === 1 ? "" : "s"} — approve before
                 Invoice Separation
+              </p>
+            </div>
+          ) : null}
+
+          {viewSummary.showCredit ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                {historyFrom === todayYmd && historyTo === todayYmd
+                  ? "Credit approved today"
+                  : "Credit approved"}
+              </div>
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-emerald-700">
+                ₦{formatNumber1(viewSummary.approved_credit_today)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {viewSummary.approved_credit_count_today || 0} credit invoice
+                {(viewSummary.approved_credit_count_today || 0) === 1
+                  ? ""
+                  : "s"}{" "}
+                approved
+                {historyFrom === todayYmd && historyTo === todayYmd
+                  ? " today"
+                  : historyFrom === historyTo
+                    ? ` on ${moment(historyFrom).format("DD MMM")}`
+                    : ` in range`}
               </p>
             </div>
           ) : null}
@@ -1744,7 +1841,9 @@ export default function ReceivePayment() {
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
                 <Wallet className="h-4 w-4 text-emerald-600" />
-                Cash collected today
+                {historyFrom === todayYmd && historyTo === todayYmd
+                  ? "Cash collected today"
+                  : "Cash collected"}
               </div>
               <p className="mt-2 text-2xl font-semibold tabular-nums text-emerald-700">
                 ₦{formatNumber1(viewSummary.collected_cash_today)}
@@ -1756,7 +1855,9 @@ export default function ReceivePayment() {
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
                 <Building2 className="h-4 w-4 text-sky-600" />
-                Transfer collected today
+                {historyFrom === todayYmd && historyTo === todayYmd
+                  ? "Transfer collected today"
+                  : "Transfer collected"}
               </div>
               <p className="mt-2 text-2xl font-semibold tabular-nums text-sky-700">
                 ₦{formatNumber1(viewSummary.collected_transfer_today)}
@@ -1826,6 +1927,49 @@ export default function ReceivePayment() {
                 <ScanLine className="h-4 w-4" />
               </button>
             </div>
+
+            {activeTab === "history" ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500">
+                  <Calendar className="h-3.5 w-3.5" />
+                  Date
+                </span>
+                <input
+                  type="date"
+                  value={historyFrom}
+                  min={POSTING_DATE_MIN}
+                  max={getPostingDateMax()}
+                  onChange={(e) => {
+                    const v = e.target.value || todayYmd;
+                    setHistoryFrom(v);
+                    if (historyTo && v > historyTo) setHistoryTo(v);
+                  }}
+                  className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                />
+                <span className="text-xs text-slate-400">to</span>
+                <input
+                  type="date"
+                  value={historyTo}
+                  min={historyFrom || POSTING_DATE_MIN}
+                  max={getPostingDateMax()}
+                  onChange={(e) => {
+                    const v = e.target.value || historyFrom || todayYmd;
+                    setHistoryTo(v);
+                  }}
+                  className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHistoryFrom(todayYmd);
+                    setHistoryTo(todayYmd);
+                  }}
+                  className="h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Today
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {loading ? (
@@ -2122,7 +2266,14 @@ export default function ReceivePayment() {
             )
           ) : filteredHistory.length === 0 ? (
             <div className="px-4 py-16 text-center text-sm text-slate-500">
-              No confirmed {methodTab === "credit" ? "credit approvals" : "payments"} yet.
+              No confirmed{" "}
+              {methodTab === "credit" ? "credit approvals" : "payments"} for{" "}
+              {historyFrom === historyTo
+                ? moment(historyFrom).format("DD MMM YYYY")
+                : `${moment(historyFrom).format("DD MMM YYYY")} – ${moment(
+                    historyTo,
+                  ).format("DD MMM YYYY")}`}
+              .
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -2595,6 +2746,9 @@ export default function ReceivePayment() {
                         <CheckCircle2 className="h-4 w-4" />
                       )}
                       Approve Credit
+                      {selected?.amount > 0
+                        ? ` · ₦${formatNumber1(selected.amount)}`
+                        : ""}
                     </button>
                   ) : null}
 
