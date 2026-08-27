@@ -679,8 +679,8 @@ function MakeSale() {
       // Prefer resolving the real branch from the product's branch id.
       // The raw branch_name on sales rows can contain store-type text like
       // "for sales", so it is not reliable as a location label.
-      const itemBranchId = item?.branchId || item?.branch_id;
-      if (itemBranchId) {
+      const itemBranchId = item?.branchId ?? item?.branch_id;
+      if (itemBranchId != null && String(itemBranchId).trim() !== "") {
         const match = branches.find(
           (b) => String(b.id) === String(itemBranchId),
         );
@@ -1707,12 +1707,11 @@ function MakeSale() {
       sales_limit: selectedItem.sales_limit ?? null,
       sales_limit_remaining: selectedItem.sales_limit_remaining ?? null,
       branchId:
-        selectedItem.branchId ||
-        selectedItem.branch_id ||
+        selectedItem.branchId ??
+        selectedItem.branch_id ??
         (selectedBranch ? Number(selectedBranch) : null),
       branch_name:
         selectedItem.location_name ||
-        selectedItem.branch_name ||
         getItemBranchLocation(selectedItem) ||
         selectedBranchLocation ||
         null,
@@ -2002,12 +2001,24 @@ function MakeSale() {
           sale_revenue_code: activeBusiness.sale_revenue_code,
           finished_goods_code: activeBusiness.finished_goods_code,
           inventory_account: activeBusiness.inventory_account || null,
-          items: saleItems.map((item) => ({
-            ...item,
-            type: item.proBono ? "Pro-bono" : "Regular",
-            // GL uses product.sku from DB; product_id on each line must match that sku
-            product_id: item.product_id || item.sku,
-          })),
+          items: saleItems.map((item) => {
+            const bidRaw = item.branchId ?? item.branch_id;
+            const bid =
+              bidRaw != null && String(bidRaw).trim() !== ""
+                ? parseInt(String(bidRaw), 10)
+                : null;
+            const lineBranchId =
+              Number.isFinite(bid) && bid > 0 ? bid : null;
+            return {
+              ...item,
+              type: item.proBono ? "Pro-bono" : "Regular",
+              // GL uses product.sku from DB; product_id on each line must match that sku
+              product_id: item.product_id || item.sku,
+              // Keep stock warehouse on the line (do not drop / coerce to 0)
+              branchId: lineBranchId,
+              branch_id: lineBranchId,
+            };
+          }),
           pro_bono_code: activeBusiness.pro_bono_code,
           subtotal: currentSubtotal,
           discount_amount: totalDiscount,
@@ -2226,24 +2237,16 @@ function MakeSale() {
                 navigate(
                   `/app/payments/apply-advance?${params.toString()}`,
                 );
-              } else if (modeOfPayment === "credit") {
-                toast.success(
-                  `Invoice ${response.sale_code} sent to Credit approval`,
-                );
-                navigate(
-                  `/app/payments/verification-points?sale_code=${encodeURIComponent(
-                    response.sale_code,
-                  )}&tab=credit`,
-                );
               } else {
-                // cash | transfer | both | credit_split → Verification Points
                 const tip =
                   modeOfPayment === "credit_split"
-                    ? "Collect cash + transfer at Verification Points (remainder on credit)"
-                    : "Collect payment at Verification Points";
+                    ? "Available at Verification Points (Cash, Transfer, Credit)"
+                    : modeOfPayment === "credit"
+                      ? "Sent to Credit approval at Verification Points"
+                      : "Available at Verification Points for collection";
                 toast.success(`Invoice ${response.sale_code} — ${tip}`);
                 navigate(
-                  `/app/payments/verification-points?sale_code=${encodeURIComponent(
+                  `/app/sales/process?sale_code=${encodeURIComponent(
                     response.sale_code,
                   )}`,
                 );
@@ -3279,13 +3282,16 @@ function MakeSale() {
         sales_limit: product.sales_limit ?? null,
         sales_limit_remaining:
           limitRemaining ?? product.sales_limit_remaining ?? null,
-        branchId:
-          product.branchId ||
-          product.branch_id ||
-          (selectedBranch ? Number(selectedBranch) : null),
+        branchId: (() => {
+          const bid = product.branchId ?? product.branch_id;
+          if (bid != null && String(bid).trim() !== "") {
+            const n = Number(bid);
+            return Number.isFinite(n) && n > 0 ? n : null;
+          }
+          return selectedBranch ? Number(selectedBranch) : null;
+        })(),
         branch_name:
           product.location_name ||
-          product.branch_name ||
           getItemBranchLocation(product) ||
           selectedBranchLocation ||
           null,
@@ -3740,7 +3746,7 @@ function MakeSale() {
                         : modeOfPayment === "deposit"
                           ? "Apply Deposit · create invoice, then apply customer deposit"
                           : modeOfPayment === "credit_split"
-                            ? "Sent to Verification Points · cash + transfer, remainder on credit"
+                            ? "Sent to Verification Points · Cash, Transfer & Credit"
                             : modeOfPayment === "both"
                               ? "Sent to Verification Points · cash and transfer"
                               : modeOfPayment === "transfer"
@@ -3911,7 +3917,7 @@ function MakeSale() {
                       : modeOfPayment === "credit"
                         ? "Credit invoice goes to Verification Points (Credit tab) for approval first, then Invoice Separation."
                         : modeOfPayment === "credit_split"
-                          ? "Sent to Verification Points for cash + transfer; unpaid remainder stays on credit."
+                          ? "Sent to Verification Points — shows on Cash, Transfer, and Credit tabs."
                           : `Invoice is sent to Verification Points for ${
                               modeOfPayment === "both"
                                 ? "cash and transfer"
@@ -5111,7 +5117,6 @@ function MakeSale() {
                                   labelKey={(opt) => {
                                     const loc =
                                       opt.location_name ||
-                                      opt.branch_name ||
                                       getItemBranchLocation(opt);
                                     const stopped = isSalesStopped(opt)
                                       ? " · Sales Stopped"
@@ -5137,7 +5142,6 @@ function MakeSale() {
                                     if (!q) return true;
                                     const loc =
                                       opt.location_name ||
-                                      opt.branch_name ||
                                       getItemBranchLocation(opt) ||
                                       "";
                                     return [
@@ -5171,7 +5175,6 @@ function MakeSale() {
                                   renderMenuItemChildren={(opt) => {
                                     const loc =
                                       opt.location_name ||
-                                      opt.branch_name ||
                                       getItemBranchLocation(opt);
                                     const stopped = isSalesStopped(opt);
                                     const limitLeft = getSalesLimitRemaining(opt);

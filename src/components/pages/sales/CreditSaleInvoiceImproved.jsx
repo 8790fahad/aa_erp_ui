@@ -730,8 +730,28 @@ export default function CreditSaleInvoice({
   };
 
   const formatPaymentMode = (mode) => {
-    const raw = String(mode || "").trim();
+    const raw = String(mode || "")
+      .trim()
+      .toLowerCase();
     if (!raw) return "—";
+    const labels = {
+      credit_split: "Credit + Cash + Transfer",
+      "credit+cash+transfer": "Credit + Cash + Transfer",
+      "credit + cash + transfer": "Credit + Cash + Transfer",
+      credit_cash_transfer: "Credit + Cash + Transfer",
+      split: "Cash + Transfer",
+      both: "Cash + Transfer",
+      "cash+transfer": "Cash + Transfer",
+      cash_transfer: "Cash + Transfer",
+      "cash + transfer": "Cash + Transfer",
+      bank: "Transfer",
+      transfer: "Transfer",
+      cash: "Cash",
+      credit: "Credit",
+      deposit: "Deposit",
+      customer_advance: "Deposit",
+    };
+    if (labels[raw]) return labels[raw];
     return raw
       .replace(/_/g, " ")
       .split(" ")
@@ -811,13 +831,21 @@ export default function CreditSaleInvoice({
     return [...new Set(transferLines.map((p) => p.bank_name).filter(Boolean))];
   })();
 
-  const invoiceTotalForBalance = Number(
-    invoice?.invoice_total_amount ??
-      invoice?.totalAmount ??
-      invoice?.total_amount ??
-      totalAmount ??
-      0,
-  );
+  // Prefer a positive total — API often sends invoice_total_amount: 0 before
+  // collection, and `??` would keep that 0 instead of falling through to the
+  // computed display total (so Balance wrongly showed ₦0).
+  const invoiceTotalForBalance = (() => {
+    for (const c of [
+      totalAmount,
+      invoice?.totalAmount,
+      invoice?.total_amount,
+      invoice?.invoice_total_amount,
+    ]) {
+      const n = Number(c);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return 0;
+  })();
 
   const balanceDue = Math.max(
     0,

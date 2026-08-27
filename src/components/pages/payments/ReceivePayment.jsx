@@ -215,26 +215,26 @@ function parseFormattedAmount(value) {
   return parseFloat(String(value || "").replace(/,/g, "")) || 0;
 }
 
-/** Cash + Transfer invoices appear on both Cash and Transfer tabs. */
+/** Cash / Transfer / Credit tabs — credit_split appears on all three. */
 function matchesMethod(paymentType, method) {
   const pt = normalizePaymentMode(paymentType);
   if (method === "cash")
     return pt === "cash" || pt === "split" || pt === "credit_split";
   if (method === "transfer")
     return pt === "transfer" || pt === "split" || pt === "credit_split";
-  if (method === "credit") return pt === "credit";
+  if (method === "credit") return pt === "credit" || pt === "credit_split";
   return true;
 }
 
-/** Cash + Transfer: show on a tab while any balance remains to collect. */
+/** Show split / credit_split while any balance remains to collect. */
 function needsCollectionSide(row, method) {
   if (!isSplitPaymentType(row?.payment_type)) return true;
   const due = Number(row?.amount) || 0;
   const collected = Number(row?.split_progress?.collected_total) || 0;
   const remaining = Number((due - collected).toFixed(2));
   if (remaining <= 0.05) return false;
-  // Both Cash and Transfer tabs show until the invoice is fully collected
-  return method === "cash" || method === "transfer";
+  // Cash, Transfer, and Credit tabs all show until fully settled
+  return method === "cash" || method === "transfer" || method === "credit";
 }
 
 export default function ReceivePayment() {
@@ -369,27 +369,34 @@ export default function ReceivePayment() {
   const amountDue = Number(selected?.amount) || 0;
   const paymentType = String(selected?.payment_type || "").toLowerCase();
   const isSplit = isSplitPaymentType(paymentType);
-  // Split invoices: show only the active tab’s side (cash person vs transfer person)
-  const collectionSide = isSplit
-    ? methodTab === "transfer"
-      ? "transfer"
-      : "cash"
-    : methodTab === "transfer"
-      ? "transfer"
-      : methodTab === "cash"
-        ? "cash"
-        : "";
+  const isCreditSplit = normalizePaymentMode(paymentType) === "credit_split";
+  // Cash + Transfer (split): one side per tab. Credit + Cash + Transfer: both
+  // cash and transfer fields in one collect form.
+  const collectionSide = isCreditSplit
+    ? ""
+    : isSplit
+      ? methodTab === "transfer"
+        ? "transfer"
+        : "cash"
+      : methodTab === "transfer"
+        ? "transfer"
+        : methodTab === "cash"
+          ? "cash"
+          : "";
   const showCashFields =
-    paymentType === "cash" || (isSplit && collectionSide === "cash");
+    paymentType === "cash" ||
+    (isSplit && (isCreditSplit || collectionSide === "cash"));
   const showTransferFields =
     paymentType === "transfer" ||
     paymentType === "bank" ||
-    (isSplit && collectionSide === "transfer");
-  const isCashOnly = paymentType === "cash" || (isSplit && collectionSide === "cash");
+    (isSplit && (isCreditSplit || collectionSide === "transfer"));
+  const isCashOnly =
+    paymentType === "cash" ||
+    (isSplit && !isCreditSplit && collectionSide === "cash");
   const isTransferOnly =
     paymentType === "transfer" ||
     paymentType === "bank" ||
-    (isSplit && collectionSide === "transfer");
+    (isSplit && !isCreditSplit && collectionSide === "transfer");
   const splitProgress = selected?.split_progress || null;
   const remainingDue = isSplit
     ? Number(
@@ -598,6 +605,12 @@ export default function ReceivePayment() {
       };
     }
     if (methodTab === "credit") {
+      const creditSplitPending = pending.filter(
+        (r) =>
+          normalizePaymentMode(r.payment_type) === "credit_split" &&
+          needsCollectionSide(r, "credit"),
+      );
+      const creditCount = creditPending.length + creditSplitPending.length;
       return {
         showCash: false,
         showTransfer: false,
@@ -609,7 +622,8 @@ export default function ReceivePayment() {
         pending_transfer: 0,
         pending_split: 0,
         pending_credit:
-          Number(summary.pending_credit) || sumAmounts(creditPending),
+          Number(summary.pending_credit) ||
+          sumAmounts([...creditPending, ...creditSplitPending]),
         pending_discount: 0,
         pending_mode: 0,
         collected_cash_today: 0,
@@ -617,7 +631,7 @@ export default function ReceivePayment() {
         approved_credit_today: Number(summary.approved_credit_today) || 0,
         approved_credit_count_today:
           Number(summary.approved_credit_count_today) || 0,
-        pending_count: creditPending.length,
+        pending_count: creditCount,
       };
     }
     if (methodTab === "discount") {
@@ -680,10 +694,16 @@ export default function ReceivePayment() {
   }, [methodTab, pending, creditPending, discountPending, modePending, summary]);
 
   const methodPendingCounts = useMemo(() => {
+    const creditSplitPending = pending.filter(
+      (r) =>
+        matchesMethod(r.payment_type, "credit") &&
+        needsCollectionSide(r, "credit") &&
+        normalizePaymentMode(r.payment_type) === "credit_split",
+    );
     const counts = {
       cash: 0,
       transfer: 0,
-      credit: creditPending.length,
+      credit: creditPending.length + creditSplitPending.length,
       discount: discountPending.length,
       mode: modePending.length,
     };
@@ -704,7 +724,22 @@ export default function ReceivePayment() {
   const filteredPending = useMemo(() => {
     let list;
     if (methodTab === "credit") {
-      list = creditPending;
+      // Pure credit awaiting approval + Credit+Cash+Transfer still at cashier
+      const byCode = new Map();
+      for (const r of creditPending) {
+        if (r?.sale_code) byCode.set(r.sale_code, r);
+      }
+      for (const r of pending) {
+        if (
+          normalizePaymentMode(r.payment_type) === "credit_split" &&
+          needsCollectionSide(r, "credit")
+        ) {
+          if (r?.sale_code && !byCode.has(r.sale_code)) {
+            byCode.set(r.sale_code, r);
+          }
+        }
+      }
+      list = [...byCode.values()];
     } else if (methodTab === "discount") {
       list = discountPending;
     } else if (methodTab === "mode") {
@@ -743,7 +778,7 @@ export default function ReceivePayment() {
   const filteredHistory = useMemo(() => {
     let list = history.filter((r) => {
       if (methodTab === "credit") {
-        return String(r.payment_type || "").toLowerCase() === "credit";
+        return matchesMethod(r.payment_type, "credit");
       }
       return matchesMethod(r.payment_type, methodTab);
     });
@@ -986,7 +1021,9 @@ export default function ReceivePayment() {
   const resolveHubAction = useCallback(
     (row, preferred) => {
       if (preferred) return preferred;
-      const pt = String(row?.payment_type || "").toLowerCase();
+      const pt = normalizePaymentMode(row?.payment_type);
+      // Credit + Cash + Transfer: collect (cash/transfer/remainder) on any tab
+      if (pt === "credit_split" || pt === "split") return "collect";
       if (methodTab === "credit" || pt === "credit") return "credit";
       if (methodTab === "discount") return "discount";
       if (methodTab === "mode") return "mode";
@@ -2192,15 +2229,28 @@ export default function ReceivePayment() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           {methodTab === "credit" ? (
-                            <button
-                              type="button"
-                              disabled={submitting}
-                              onClick={() => openHub(row, "credit")}
-                              className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                              View & Approve
-                            </button>
+                            normalizePaymentMode(row.payment_type) ===
+                            "credit_split" ? (
+                              <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => openHub(row, "collect")}
+                                className="inline-flex items-center gap-1.5 rounded-md bg-[var(--aa-navy)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                View & Collect
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => openHub(row, "credit")}
+                                className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                View & Approve
+                              </button>
+                            )
                           ) : methodTab === "discount" ? (
                             <button
                               type="button"

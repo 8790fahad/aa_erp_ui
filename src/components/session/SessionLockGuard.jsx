@@ -33,9 +33,10 @@ export default function SessionLockGuard() {
   const user = useSelector((state) => state.auth.user);
   const authenticated = useSelector((state) => state.auth.authenticated);
   const userId = user?.id;
-  const email = user?.email || "";
+  const storedEmail = String(user?.email || "").trim();
 
   const [locked, setLocked] = useState(() => isSessionLocked());
+  const [unlockEmail, setUnlockEmail] = useState(storedEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
@@ -44,10 +45,15 @@ export default function SessionLockGuard() {
 
   const timerRef = useRef(null);
   const lastActivityRef = useRef(Date.now());
+  const needsEmail = !storedEmail;
 
   useEffect(() => {
     setPrefs(getSessionPrefs(userId));
   }, [userId]);
+
+  useEffect(() => {
+    if (storedEmail) setUnlockEmail(storedEmail);
+  }, [storedEmail]);
 
   useEffect(() => {
     const onPrefs = (e) => {
@@ -61,10 +67,11 @@ export default function SessionLockGuard() {
   const lockNow = useCallback(() => {
     setSessionLocked(true);
     setLocked(true);
+    setUnlockEmail(String(user?.email || "").trim());
     setPassword("");
     setShowPassword(false);
     setError("");
-  }, []);
+  }, [user?.email]);
 
   const unlockLocal = useCallback(() => {
     setSessionLocked(false);
@@ -115,12 +122,13 @@ export default function SessionLockGuard() {
 
   const handleUnlock = async (e) => {
     e.preventDefault();
-    if (!password.trim()) {
-      setError("Enter your password");
+    const email = String(unlockEmail || storedEmail || "").trim();
+    if (!email) {
+      setError("Enter your email to unlock");
       return;
     }
-    if (!email) {
-      setError("No email on this account. Please sign out and sign in again.");
+    if (!password.trim()) {
+      setError("Enter your password");
       return;
     }
 
@@ -166,7 +174,7 @@ export default function SessionLockGuard() {
       .filter(Boolean)
       .join(" ") ||
     user?.name ||
-    email ||
+    storedEmail ||
     "User";
 
   return (
@@ -188,17 +196,45 @@ export default function SessionLockGuard() {
             Session locked
           </h2>
           <p className="mt-1 text-sm text-white/80">
-            Enter your password to continue
+            {needsEmail
+              ? "Enter your email and password to continue"
+              : "Enter your password to continue"}
           </p>
         </div>
 
         <form onSubmit={handleUnlock} className="space-y-4 px-6 py-5">
           <div className="rounded-lg bg-slate-50 px-3 py-2 text-center">
             <p className="text-sm font-medium text-slate-900">{displayName}</p>
-            {email ? (
-              <p className="text-xs text-slate-500">{email}</p>
-            ) : null}
+            {storedEmail ? (
+              <p className="text-xs text-slate-500">{storedEmail}</p>
+            ) : (
+              <p className="text-xs text-slate-500">No email on this account</p>
+            )}
           </div>
+
+          {needsEmail ? (
+            <div className="space-y-1.5">
+              <label
+                htmlFor="session-unlock-email"
+                className="text-xs font-medium text-slate-600"
+              >
+                Email
+              </label>
+              <input
+                id="session-unlock-email"
+                type="email"
+                autoFocus
+                autoComplete="username"
+                value={unlockEmail}
+                onChange={(e) => {
+                  setUnlockEmail(e.target.value);
+                  if (error) setError("");
+                }}
+                className="h-11 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--aa-accent,#2c7be5)] focus:ring-1 focus:ring-[var(--aa-accent,#2c7be5)]"
+                placeholder="you@example.com"
+              />
+            </div>
+          ) : null}
 
           <div className="space-y-1.5">
             <label
@@ -211,7 +247,7 @@ export default function SessionLockGuard() {
               <input
                 id="session-unlock-password"
                 type={showPassword ? "text" : "password"}
-                autoFocus
+                autoFocus={!needsEmail}
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => {
