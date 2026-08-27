@@ -1440,12 +1440,13 @@ export default function ReceivePayment() {
       return;
     }
     const collected = Number(splitProgress?.collected_total) || 0;
+    const saleCode = selected.sale_code;
     setSubmitting(true);
     _postApi(
       "/api/v1/sale-workflows/send-credit-remainder",
       {
         facilityId: activeBusiness.id,
-        saleCode: selected.sale_code,
+        saleCode,
         updated_by: user?.id,
         note:
           collected <= 0.05
@@ -1453,18 +1454,59 @@ export default function ReceivePayment() {
             : `Credit ₦${remainingDue.toFixed(2)} confirmed after cash/transfer collection`,
       },
       (res) => {
-        setSubmitting(false);
-        if (res?.success) {
-          toast.success(
-            res.message ||
-              `Credit ₦${formatNumber1(remainingDue)} — approve on the Credit tab to continue`,
-          );
-          closeCollect();
-          setMethodTab("credit");
-          fetchDashboard();
-        } else {
+        if (!res?.success) {
+          setSubmitting(false);
           toast.error(res?.message || "Could not confirm credit amount");
+          return;
         }
+        // Approve credit immediately, then open invoice to print and move on
+        _postApi(
+          "/api/v1/sale-workflows/advance",
+          {
+            facilityId: activeBusiness.id,
+            saleCode,
+            action: "advance",
+            updated_by: user?.id,
+            note: "Credit confirmed at Verification Points — ready for separation",
+          },
+          (advRes) => {
+            setSubmitting(false);
+            if (advRes?.success) {
+              toast.success(
+                `Credit ₦${formatNumber1(remainingDue)} confirmed — opening invoice to print`,
+              );
+              closeCollect();
+              fetchDashboard();
+              navigate(
+                `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
+                  saleCode,
+                )}&doc=invoice`,
+              );
+            } else {
+              toast.success(
+                res.message ||
+                  `Credit ₦${formatNumber1(remainingDue)} sent for approval`,
+              );
+              closeCollect();
+              setMethodTab("credit");
+              fetchDashboard();
+            }
+          },
+          (err) => {
+            setSubmitting(false);
+            toast.success(
+              res.message ||
+                `Credit ₦${formatNumber1(remainingDue)} sent for approval`,
+            );
+            closeCollect();
+            setMethodTab("credit");
+            fetchDashboard();
+            toast.error(
+              err?.message ||
+                "Credit recorded but approval failed — finish on the Credit tab",
+            );
+          },
+        );
       },
       (err) => {
         setSubmitting(false);
@@ -2865,7 +2907,7 @@ export default function ReceivePayment() {
                           type="button"
                           onClick={sendCreditRemainder}
                           disabled={submitting}
-                          className="inline-flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                          className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
                         >
                           {submitting ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -2875,19 +2917,22 @@ export default function ReceivePayment() {
                           Confirm ₦{formatNumber1(remainingDue)} as Credit
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        onClick={confirmPayment}
-                        disabled={submitting}
-                        className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:opacity-50"
-                      >
-                        {submitting ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <CheckCircle2 className="h-4 w-4" />
-                        )}
-                        {confirmButtonLabel}
-                      </button>
+                      {normalizePaymentMode(paymentType) === "credit_split" &&
+                      splitHintTotal <= 0.05 ? null : (
+                        <button
+                          type="button"
+                          onClick={confirmPayment}
+                          disabled={submitting}
+                          className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:opacity-50"
+                        >
+                          {submitting ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4" />
+                          )}
+                          {confirmButtonLabel}
+                        </button>
+                      )}
                     </>
                   ) : null}
 

@@ -107,6 +107,7 @@ export default function PurchaseRequisitionList() {
   // Form state
   const [formItems, setFormItems] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [allMeasures, setAllMeasures] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [newExpense, setNewExpense] = useState({
     item: "",
@@ -287,6 +288,7 @@ export default function PurchaseRequisitionList() {
     setAttachments([]);
     getProductList();
     getCategories();
+    getAllMeasures();
     setIsFormModalOpen(true);
   };
 
@@ -345,6 +347,90 @@ export default function PurchaseRequisitionList() {
       toast.error(error.message);
     }
   }, [activeBusiness.id]);
+
+  const getAllMeasures = useCallback(() => {
+    if (!activeBusiness?.id) return;
+    _fetchApi(
+      `/inventory/get-all-measure/${activeBusiness.id}`,
+      (response) => {
+        if (response?.success) {
+          setAllMeasures(response.results || []);
+        } else {
+          setAllMeasures([]);
+        }
+      },
+      (err) => {
+        console.error("Error loading units of measure:", err);
+        setAllMeasures([]);
+      },
+    );
+  }, [activeBusiness?.id]);
+
+  /** Unique active UoM options for line-item dropdowns. */
+  const uomOptions = useMemo(() => {
+    const seen = new Set();
+    const opts = [];
+    for (const m of allMeasures || []) {
+      if (m.status && String(m.status).toLowerCase() !== "active") continue;
+      const unit = String(m.unit || "").trim();
+      if (!unit) continue;
+      const key = unit.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      opts.push({
+        unit,
+        category: m.category || "",
+        label: m.category ? `${unit} (${m.category})` : unit,
+      });
+    }
+    return opts.sort((a, b) => a.unit.localeCompare(b.unit));
+  }, [allMeasures]);
+
+  const resolveUomMeta = useCallback(
+    (uomValue) => {
+      const unit = String(uomValue || "").trim();
+      const fromMeasures = uomOptions.find(
+        (o) => o.unit.toLowerCase() === unit.toLowerCase(),
+      );
+      const categoryObj = categories?.find((cat) =>
+        cat.units?.includes(unit),
+      );
+      return {
+        uom: unit,
+        unit,
+        unit_code: unit,
+        category:
+          fromMeasures?.category ||
+          categoryObj?.category ||
+          "",
+        category_code:
+          fromMeasures?.category ||
+          categoryObj?.category ||
+          "",
+      };
+    },
+    [uomOptions, categories],
+  );
+
+  /** Options for a row: full list + current value if missing from catalog. */
+  const uomSelectOptionsFor = useCallback(
+    (currentUom) => {
+      const current = String(currentUom || "").trim();
+      if (
+        current &&
+        !uomOptions.some(
+          (o) => o.unit.toLowerCase() === current.toLowerCase(),
+        )
+      ) {
+        return [
+          { unit: current, category: "", label: current },
+          ...uomOptions,
+        ];
+      }
+      return uomOptions;
+    },
+    [uomOptions],
+  );
 
   // Form validation
   const validateForm = () => {
@@ -431,21 +517,29 @@ export default function PurchaseRequisitionList() {
       }));
       return;
     }
-    const unitOfMeasure = selected.unit_of_measure || "";
-    const categoryObj = categories?.find((cat) =>
-      cat.units?.includes(unitOfMeasure),
-    );
+    const unitOfMeasure = String(selected.unit_of_measure || "").trim();
+    const uomMeta = unitOfMeasure
+      ? resolveUomMeta(unitOfMeasure)
+      : {
+          uom: "",
+          unit: "",
+          unit_code: "",
+          category: "",
+          category_code: "",
+        };
     setNewExpense((prev) => ({
       ...prev,
       item: selected.name || "",
       item_code: selected.code || "",
       chart_code: selected.chart_code || "",
       subhead: selected.subhead || "",
-      uom: unitOfMeasure || prev.uom || "",
-      unit: unitOfMeasure || prev.unit || "",
-      unit_code: unitOfMeasure || prev.unit_code || "",
-      category: categoryObj?.category || prev.category || "",
-      category_code: categoryObj?.category || prev.category_code || "",
+      ...uomMeta,
+      // Keep previous UoM only if product has none configured
+      uom: uomMeta.uom || prev.uom || "",
+      unit: uomMeta.unit || prev.unit || "",
+      unit_code: uomMeta.unit_code || prev.unit_code || "",
+      category: uomMeta.category || prev.category || "",
+      category_code: uomMeta.category_code || prev.category_code || "",
       quantity: prev.quantity || formatNumberWithCommas("1"),
     }));
   };
@@ -994,7 +1088,7 @@ export default function PurchaseRequisitionList() {
                         <th className="min-w-[8.5rem] w-36 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
                           Quantity
                         </th>
-                        <th className="w-28 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
+                        <th className="min-w-[7.5rem] w-36 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
                           UoM
                         </th>
                         <th className="w-10 px-1 py-2.5" />
@@ -1032,24 +1126,26 @@ export default function PurchaseRequisitionList() {
                             />
                           </td>
                           <td className="px-2 py-3 align-top">
-                            <input
-                              type="text"
+                            <select
                               value={expense.uom || expense.unit || ""}
                               onChange={(e) => {
-                                const uomValue = e.target.value;
-                                const categoryObj = categories?.find((cat) =>
-                                  cat.units?.includes(uomValue),
+                                updateExpenseField(
+                                  index,
+                                  resolveUomMeta(e.target.value),
                                 );
-                                updateExpenseField(index, {
-                                  uom: uomValue,
-                                  unit: uomValue,
-                                  unit_code: uomValue,
-                                  category: categoryObj?.category || "",
-                                  category_code: categoryObj?.category || "",
-                                });
                               }}
-                              className="w-full min-w-[5rem] rounded border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                            />
+                              className="h-9 w-full min-w-[5.5rem] rounded border border-slate-300 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                              title="Unit of measure"
+                            >
+                              <option value="">Select UoM</option>
+                              {uomSelectOptionsFor(
+                                expense.uom || expense.unit,
+                              ).map((opt) => (
+                                <option key={opt.unit} value={opt.unit}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
                           </td>
                           <td className="px-1 py-3 text-center align-top">
                             <button
@@ -1136,11 +1232,9 @@ export default function PurchaseRequisitionList() {
                           />
                         </td>
                         <td className="px-2 py-3 align-top">
-                          <input
+                          <select
                             ref={uomInputRef}
-                            type="text"
                             value={newExpense.uom || ""}
-                            placeholder="kg, pcs…"
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
@@ -1148,21 +1242,21 @@ export default function PurchaseRequisitionList() {
                               }
                             }}
                             onChange={(e) => {
-                              const uomValue = e.target.value;
-                              const categoryObj = categories?.find((cat) =>
-                                cat.units?.includes(uomValue),
-                              );
-                              setNewExpense({
-                                ...newExpense,
-                                uom: uomValue,
-                                unit: uomValue,
-                                unit_code: uomValue,
-                                category: categoryObj?.category || "",
-                                category_code: categoryObj?.category || "",
-                              });
+                              setNewExpense((prev) => ({
+                                ...prev,
+                                ...resolveUomMeta(e.target.value),
+                              }));
                             }}
-                            className="w-full min-w-[5rem] rounded border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                          />
+                            className="h-9 w-full min-w-[5.5rem] rounded border border-slate-300 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                            title="Unit of measure"
+                          >
+                            <option value="">Select UoM</option>
+                            {uomSelectOptionsFor(newExpense.uom).map((opt) => (
+                              <option key={opt.unit} value={opt.unit}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
                         </td>
                         <td className="px-1 py-3 text-center align-top">
                           <button

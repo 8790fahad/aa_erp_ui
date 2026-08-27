@@ -152,7 +152,9 @@ export default function GoodsTransfer() {
   const activeTab = searchParams.get("subtab") || "goods-list";
   const handleSubTabChange = (value) => {
     const next = new URLSearchParams(searchParams);
-    if (value && value !== "new") next.set("subtab", value);
+    // Always persist the tab — including "new". Clearing "new" used to fall
+    // back to "goods-list", which left an empty panel when Goods List is hidden.
+    if (value) next.set("subtab", value);
     else next.delete("subtab");
     setSearchParams(next, { replace: true });
   };
