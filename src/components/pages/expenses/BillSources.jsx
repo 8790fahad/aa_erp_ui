@@ -9,7 +9,7 @@ import {
   ChevronsRight,
   Wallet,
   Search,
-  Receipt,
+  ScrollText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -284,7 +284,7 @@ export default function BillSources() {
       custom: true,
       component: (item) => (
         <span className="font-semibold tabular-nums text-slate-900">
-          {formatNumber1(item.amount || 0)}
+          ₦{formatNumber1(item.amount || 0)}
         </span>
       ),
     },
@@ -348,7 +348,7 @@ export default function BillSources() {
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-            <Receipt className="h-5 w-5 text-[var(--aa-navy)]" />
+            <ScrollText className="h-5 w-5 text-[var(--aa-navy)]" />
             Bill
           </h1>
           <p className="mt-0.5 text-xs text-slate-500">
@@ -431,7 +431,7 @@ export default function BillSources() {
                   <td colSpan={fields.length} className="px-4 py-12 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--aa-sidebar-active)] text-[var(--aa-navy)]">
-                        <Receipt className="h-5 w-5" />
+                        <ScrollText className="h-5 w-5" />
                       </div>
                       <p className="text-sm font-medium text-slate-700">
                         No bills found

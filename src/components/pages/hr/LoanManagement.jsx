@@ -314,7 +314,10 @@ const LoanManagement = () => {
     if (paymentMode === "cheque" && !String(chequeNumber || "").trim()) {
       return toast.error("Enter the cheque number");
     }
-    if (!/^\d{4}-\d{2}$/.test(String(formData.startMonth || ""))) {
+    if (
+      formData.repaymentMethod !== "Self" &&
+      !/^\d{4}-\d{2}$/.test(String(formData.startMonth || ""))
+    ) {
       return toast.error("Select the month when the loan starts applying");
     }
 
@@ -324,7 +327,10 @@ const LoanManagement = () => {
       purpose: formData.purpose || undefined,
       amount: parseFloat(formData.amount),
       durationMonths: parseInt(formData.durationMonths),
-      startMonth: formData.startMonth,
+      startMonth:
+        formData.repaymentMethod === "Self"
+          ? undefined
+          : formData.startMonth,
       employeeId: selectedEmployee.id,
       receivableHead,
       paymentMode,
@@ -587,7 +593,10 @@ const LoanManagement = () => {
     ) {
       return toast.error("Select a valid repayment method");
     }
-    if (!/^\d{4}-\d{2}$/.test(String(scheduleDraft.startMonth || ""))) {
+    if (
+      scheduleDraft.repaymentMethod !== "Self" &&
+      !/^\d{4}-\d{2}$/.test(String(scheduleDraft.startMonth || ""))
+    ) {
       return toast.error("Select the month when the loan starts applying");
     }
     if (!scheduleDirty) {
@@ -600,7 +609,9 @@ const LoanManagement = () => {
       {
         repaymentMethod: scheduleDraft.repaymentMethod,
         durationMonths: months,
-        startMonth: scheduleDraft.startMonth,
+        ...(scheduleDraft.repaymentMethod === "Self"
+          ? {}
+          : { startMonth: scheduleDraft.startMonth }),
         facilityId,
         userId: user?.id,
       },
@@ -998,18 +1009,6 @@ const LoanManagement = () => {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <label className={labelClass}>Applies From</label>
-                  <p className={hintClass}>First salary month to deduct</p>
-                  <input
-                    type="month"
-                    name="startMonth"
-                    required
-                    value={formData.startMonth || ""}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                  />
-                </div>
-                <div className="space-y-1.5">
                   <label className={labelClass}>Repayment Method</label>
                   <p className={hintClass}>How the staff will repay</p>
                   <select
@@ -1026,6 +1025,20 @@ const LoanManagement = () => {
                     <option value="Self">Self (Manual Payment)</option>
                   </select>
                 </div>
+                {formData.repaymentMethod !== "Self" && (
+                  <div className="space-y-1.5">
+                    <label className={labelClass}>Applies From</label>
+                    <p className={hintClass}>First salary month to deduct</p>
+                    <input
+                      type="month"
+                      name="startMonth"
+                      required
+                      value={formData.startMonth || ""}
+                      onChange={handleInputChange}
+                      className={inputClass}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="rounded-lg border border-[var(--aa-navy)]/15 bg-[var(--aa-sidebar-active)] p-3">
@@ -1529,29 +1542,31 @@ const LoanManagement = () => {
                            }
                          />
                        </div>
-                       <div className="space-y-1.5 sm:col-span-2">
-                         <label className={labelClass}>Applies From</label>
-                         <p className={hintClass}>
-                           First salary month deductions begin
-                         </p>
-                         <input
-                           type="month"
-                           className={`${inputClass} disabled:opacity-60 sm:max-w-xs`}
-                           value={scheduleDraft.startMonth || ""}
-                           disabled={
-                             savingSchedule ||
-                             ["Paid Off", "Rejected"].includes(
-                               viewLoanData.status,
-                             )
-                           }
-                           onChange={(e) =>
-                             setScheduleDraft((prev) => ({
-                               ...prev,
-                               startMonth: e.target.value,
-                             }))
-                           }
-                         />
-                       </div>
+                       {scheduleDraft.repaymentMethod !== "Self" && (
+                         <div className="space-y-1.5 sm:col-span-2">
+                           <label className={labelClass}>Applies From</label>
+                           <p className={hintClass}>
+                             First salary month deductions begin
+                           </p>
+                           <input
+                             type="month"
+                             className={`${inputClass} disabled:opacity-60 sm:max-w-xs`}
+                             value={scheduleDraft.startMonth || ""}
+                             disabled={
+                               savingSchedule ||
+                               ["Paid Off", "Rejected"].includes(
+                                 viewLoanData.status,
+                               )
+                             }
+                             onChange={(e) =>
+                               setScheduleDraft((prev) => ({
+                                 ...prev,
+                                 startMonth: e.target.value,
+                               }))
+                             }
+                           />
+                         </div>
+                       )}
                      </div>
 
                      <div className="flex justify-end gap-2 pt-1">

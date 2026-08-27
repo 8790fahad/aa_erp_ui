@@ -378,18 +378,9 @@ const BankAccountsList = ({ onAccountSelect, selectedAccount }) => {
                     </span>
                   </div>
 
-                  {/* <div className="flex justify-between items-center">
-                    <span className="text-[11px] text-slate-500 font-medium">Opening Bal</span>
-                    <span className="text-[11px] font-semibold text-slate-700">
-                      {account.currency === "NGN" ? "₦" : "$"}
-                      {(account.opening_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div> */}
-
                   <div className="flex justify-between items-center">
                     <span className="text-[11px] text-slate-500 font-medium">Current Bal</span>
                     <span className="text-[11px] font-semibold text-slate-900">
-                      {/* {account.currency === "NGN" ? "₦" : "$"} */}
                       {formatCurrency(account.balance)}
                     </span>
                   </div>

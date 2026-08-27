@@ -416,7 +416,7 @@ const ItemForm = ({ item, onSave, onCancel, isLoading = false }) => {
                           Price/Rate
                         </Label>
                         <InputGroup>
-                          <InputGroupText>$</InputGroupText>
+                          <InputGroupText>₦</InputGroupText>
                           <Controller
                             name="price_rate"
                             control={control}
@@ -520,7 +520,7 @@ const ItemForm = ({ item, onSave, onCancel, isLoading = false }) => {
                           Purchase Cost
                         </Label>
                         <InputGroup>
-                          <InputGroupText>$</InputGroupText>
+                          <InputGroupText>₦</InputGroupText>
                           <Controller
                             name="purchase_cost"
                             control={control}

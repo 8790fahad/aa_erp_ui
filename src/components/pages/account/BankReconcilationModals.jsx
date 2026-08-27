@@ -103,7 +103,7 @@ const TransactionsCard = () => {
           <div className="flex justify-between pt-1">
             <span>22 Jan</span>
             <span>Amount</span>
-            <span>$1.30</span>
+            <span>₦1.30</span>
           </div>
           <div className="flex justify-between pt-1">
             <span>31 Jan</span>
@@ -118,12 +118,12 @@ const TransactionsCard = () => {
           <div className="flex justify-between pt-1">
             <span>21 Jan</span>
             <span>Amount</span>
-            <span>$1.30</span>
+            <span>₦1.30</span>
           </div>
           <div className="flex justify-between pt-1">
             <span>31 Jan</span>
             <span>Unmatched</span>
-            <span>$1.43</span>
+            <span>₦1.43</span>
           </div>
         </div>
       </div>
@@ -159,16 +159,16 @@ const ReconciliationCard = () => {
       <div className="border rounded-md divide-y mt-2 mx-4">
         <div className="flex items-center justify-between text-sm text-gray-700 py-2 px-3">
           <span>21 Jan</span>
-          <span>$1.04</span>
+          <span>₦1.04</span>
           <span className="text-xl">—</span>
         </div>
 
         {/* Matched Transaction Row 2 */}
         <div className="flex items-center justify-between text-sm text-gray-700 py-2 px-3">
           <span>21 Jan</span>
-          <span>$1.04</span>
+          <span>₦1.04</span>
           <span className="text-xl">→</span>
-          <span>$1.04</span>
+          <span>₦1.04</span>
         </div>
       </div>
 

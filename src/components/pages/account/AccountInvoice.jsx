@@ -257,7 +257,7 @@ export default function Invoice() {
                                               defaultValue={5}
                                             />
                                           </td>
-                                          <td>$450</td>
+                                          <td>₦450</td>
                                           <td>
                                             <Link
                                               to="#"
@@ -290,7 +290,7 @@ export default function Invoice() {
                                               placeholder="4%"
                                             />
                                           </td>
-                                          <td>$300</td>
+                                          <td>₦300</td>
                                           <td>
                                             <Link
                                               to="#"
@@ -334,19 +334,19 @@ export default function Invoice() {
                               <ul>
                                 <li>
                                   <span>Subtotal</span>
-                                  <h6>${invoiceData.subtotal}</h6>
+                                  <h6>₦{invoiceData.subtotal}</h6>
                                 </li>
                                 <li>
                                   <span>Discount</span>
-                                  <h6>${invoiceData.discount}</h6>
+                                  <h6>₦{invoiceData.discount}</h6>
                                 </li>
                                 <li>
                                   <span>Tax</span>
-                                  <h6>${invoiceData.tax}</h6>
+                                  <h6>₦{invoiceData.tax}</h6>
                                 </li>
                                 <li>
                                   <h5>Total</h5>
-                                  <h5>${invoiceData.total}</h5>
+                                  <h5>₦{invoiceData.total}</h5>
                                 </li>
                               </ul>
                               <div className="mb-3">

@@ -19,7 +19,7 @@ export default function ProcessingTable({ data, onView, onProcess }) {
               <tr key={index}>
                 <td>{index + 1}</td>
                 <td>{item.productName}</td>
-                <td className="text-right">${item.totalCost.toFixed(2)}</td>
+                <td className="text-right">₦{item.totalCost.toFixed(2)}</td>
                 <td className="d-flex justify-content-center">
                   <Button
                     color="primary"
