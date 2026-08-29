@@ -35,6 +35,7 @@ import CashTransferPaymentFields, {
   parseMoneyInput,
 } from "@/components/common/CashTransferPaymentFields";
 import CreatableSelect from "react-select/creatable";
+import { isProductTaxable } from "@/utils/taxableStatus";
 
 const initialItemForm = {
   item_name: "",
@@ -312,14 +313,14 @@ export default function ProductSupplierBill() {
     }
     const qty = Number(quantity) > 0 ? Number(quantity) : 1;
     const cost = parseFloat(product.cost_price || 0) || 0;
-    const isTaxable = (product.taxable || "Taxable") === "Taxable";
+    const isTaxable = isProductTaxable(product.taxable || "Taxable");
     const lineTaxId = isTaxable ? defaultLineTaxId : null;
     const newItem = {
       _id: uuidv4(),
       item_name: product.name,
       sku: product.sku,
       item_type: product.item_type || "Resalable",
-      taxable: isTaxable ? "Taxable" : "Not Taxable",
+      taxable: isTaxable ? "Taxable" : "Non-Taxable",
       line_tax_id: lineTaxId,
       quantity: formatNumberWithCommas(String(qty)),
       cost: cost > 0 ? formatNumberWithCommas(String(cost)) : "",
@@ -514,7 +515,7 @@ export default function ProductSupplierBill() {
   };
 
   const getLineTaxAmount = (item) => {
-    if (item.taxable !== "Taxable") return 0;
+    if (!isProductTaxable(item.taxable)) return 0;
     const tax = getLineTax(item);
     if (!tax) return 0;
     return calculateTaxAmount(parseFloat(item.total || 0), tax);
@@ -524,7 +525,7 @@ export default function ProductSupplierBill() {
   useEffect(() => {
     const usedIds = new Set(
       items
-        .filter((i) => i.taxable === "Taxable" && i.line_tax_id)
+        .filter((i) => i.isProductTaxable(taxable) && i.line_tax_id)
         .map((i) => String(i.line_tax_id)),
     );
     setSelectedTaxes(lineTaxOptions.filter((t) => usedIds.has(String(t.id))));
@@ -533,7 +534,7 @@ export default function ProductSupplierBill() {
   // Calculate taxable subtotal (only from taxable items)
   const calculateTaxableSubtotal = () => {
     return items
-      .filter((item) => item.taxable === "Taxable" && item.line_tax_id)
+      .filter((item) => isProductTaxable(item.taxable) && item.line_tax_id)
       .reduce((sum, item) => sum + parseFloat(item.total || 0), 0);
   };
 
@@ -547,7 +548,7 @@ export default function ProductSupplierBill() {
     const subtotal = calculateTotal();
     let exclusiveVAT = 0;
     items.forEach((item) => {
-      if (item.taxable !== "Taxable") return;
+      if (!isProductTaxable(item.taxable)) return;
       const tax = getLineTax(item);
       if (!tax || isTaxInclusive(tax)) return;
       exclusiveVAT += calculateTaxAmount(parseFloat(item.total || 0), tax);
@@ -697,7 +698,7 @@ export default function ProductSupplierBill() {
     const taxAmount = calculateTotalTax();
     const taxTotals = new Map();
     items.forEach((item) => {
-      if (item.taxable !== "Taxable" || !item.line_tax_id) return;
+      if (!isProductTaxable(item.taxable) || !item.line_tax_id) return;
       const tax = getLineTax(item);
       if (!tax) return;
       const amount = calculateTaxAmount(parseFloat(item.total || 0), tax);
@@ -1023,7 +1024,7 @@ export default function ProductSupplierBill() {
             p.sku === (item.item_code || item.sku) || p.name === item.item_name,
         ) || null;
 
-      const taxable = matchedProduct?.taxable || item.taxable || "Not Taxable";
+      const taxable = matchedProduct?.taxable || item.taxable || "Non-Taxable";
       return {
         _id: uuidv4(),
         item_name: item.item_name || "",
@@ -1033,7 +1034,7 @@ export default function ProductSupplierBill() {
         total: parseFloat(quantity) * parseFloat(cost),
         item_type: item.item_type || matchedProduct?.item_type || "",
         taxable,
-        line_tax_id: taxable === "Taxable" ? defaultLineTaxId : null,
+        line_tax_id: isProductTaxable(taxable) ? defaultLineTaxId : null,
       };
     });
 
@@ -1578,7 +1579,7 @@ export default function ProductSupplierBill() {
                                   parseFloat(product.cost_price || 0) || 0;
                                 const total = qty * costNum;
                                 const isTaxable =
-                                  (product.taxable || "Taxable") === "Taxable";
+                                  isProductTaxable(product.taxable || "Taxable");
                                 const lineTaxId = isTaxable
                                   ? item.line_tax_id || defaultLineTaxId
                                   : null;
@@ -1592,7 +1593,7 @@ export default function ProductSupplierBill() {
                                           item_type: product.item_type,
                                           taxable: isTaxable
                                             ? "Taxable"
-                                            : "Not Taxable",
+                                            : "Non-Taxable",
                                           line_tax_id: lineTaxId,
                                           cost:
                                             costNum > 0
@@ -1653,10 +1654,10 @@ export default function ProductSupplierBill() {
                                   setItems((prev) =>
                                     prev.map((i) => {
                                       if (i._id !== item._id) return i;
-                                      if (i.taxable === "Taxable") {
+                                      if (i.isProductTaxable(taxable)) {
                                         return {
                                           ...i,
-                                          taxable: "Not Taxable",
+                                          taxable: "Non-Taxable",
                                           line_tax_id: null,
                                         };
                                       }
@@ -1670,12 +1671,12 @@ export default function ProductSupplierBill() {
                                   );
                                 }}
                                 className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                  item.taxable === "Taxable"
+                                  isProductTaxable(item.taxable)
                                     ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                 }`}
                               >
-                                {item.taxable === "Taxable"
+                                {isProductTaxable(item.taxable)
                                   ? "Taxable"
                                   : "Not taxable"}
                               </button>
@@ -1754,7 +1755,7 @@ export default function ProductSupplierBill() {
                         <td className="px-2 py-3 align-top">
                           <select
                             value={item.line_tax_id ?? ""}
-                            disabled={item.taxable !== "Taxable"}
+                            disabled={!isProductTaxable(item.taxable)}
                             onChange={(e) => {
                               const taxId = e.target.value || null;
                               setItems((prev) =>
@@ -1765,7 +1766,7 @@ export default function ProductSupplierBill() {
                                         line_tax_id: taxId,
                                         taxable: taxId
                                           ? "Taxable"
-                                          : "Not Taxable",
+                                          : "Non-Taxable",
                                       }
                                     : i,
                                 ),
@@ -1780,7 +1781,7 @@ export default function ProductSupplierBill() {
                               </option>
                             ))}
                           </select>
-                          {item.taxable === "Taxable" && lineVat > 0 && (
+                          {isProductTaxable(item.taxable) && lineVat > 0 && (
                             <div className="mt-1 text-[11px] tabular-nums text-slate-500">
                               ₦{formatNumber(lineVat)}
                             </div>
@@ -1918,7 +1919,7 @@ export default function ProductSupplierBill() {
                 selectedTaxes.map((tax) => {
                   const taxAmountForDisplay = items.reduce((sum, item) => {
                     if (
-                      item.taxable !== "Taxable" ||
+                      !isProductTaxable(item.taxable) ||
                       String(item.line_tax_id) !== String(tax.id)
                     ) {
                       return sum;

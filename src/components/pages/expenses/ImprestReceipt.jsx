@@ -9,6 +9,7 @@ import { Printer, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
+import { isProductTaxable } from "@/utils/taxableStatus";
 
 function numLike(v) {
   if (v == null || v === "") return 0;
@@ -330,7 +331,7 @@ export default function ImprestReceipt() {
     if (displayVatAmount > 0) return null;
     const hasTaxable = lines.some(
       (ln) =>
-        ln.taxable === "Taxable" ||
+        isProductTaxable(ln.taxable) ||
         ln.taxable === true ||
         String(ln.taxable || "").toLowerCase() === "taxable",
     );
@@ -488,7 +489,7 @@ export default function ImprestReceipt() {
                           ? Number(ln._amount)
                           : Number(q) * Number(unit);
                       const taxNote =
-                        ln.taxable === "Taxable" || ln.taxable === true
+                        isProductTaxable(ln.taxable) || ln.taxable === true
                           ? "Taxable"
                           : ln.tax_id
                             ? `Tax ID ${ln.tax_id}`

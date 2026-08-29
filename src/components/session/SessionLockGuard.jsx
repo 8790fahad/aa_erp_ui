@@ -31,8 +31,9 @@ export default function SessionLockGuard() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const user = useSelector((state) => state.auth.user);
+  const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const authenticated = useSelector((state) => state.auth.authenticated);
-  const userId = user?.id;
+  const facilityId = activeBusiness?.id;
   const storedEmail = String(user?.email || "").trim();
 
   const [locked, setLocked] = useState(() => isSessionLocked());
@@ -41,15 +42,21 @@ export default function SessionLockGuard() {
   const [showPassword, setShowPassword] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
   const [error, setError] = useState("");
-  const [prefs, setPrefs] = useState(() => getSessionPrefs(userId));
+  const [prefs, setPrefs] = useState(() =>
+    getSessionPrefs(facilityId, activeBusiness),
+  );
 
   const timerRef = useRef(null);
   const lastActivityRef = useRef(Date.now());
   const needsEmail = !storedEmail;
 
   useEffect(() => {
-    setPrefs(getSessionPrefs(userId));
-  }, [userId]);
+    setPrefs(getSessionPrefs(facilityId, activeBusiness));
+  }, [
+    facilityId,
+    activeBusiness?.session_lock_enabled,
+    activeBusiness?.session_lock_idle_minutes,
+  ]);
 
   useEffect(() => {
     if (storedEmail) setUnlockEmail(storedEmail);
@@ -57,12 +64,12 @@ export default function SessionLockGuard() {
 
   useEffect(() => {
     const onPrefs = (e) => {
-      if (e?.detail?.userId && e.detail.userId !== userId) return;
-      setPrefs(e?.detail?.prefs || getSessionPrefs(userId));
+      if (e?.detail?.facilityId && e.detail.facilityId !== facilityId) return;
+      setPrefs(e?.detail?.prefs || getSessionPrefs(facilityId, activeBusiness));
     };
     window.addEventListener(SESSION_PREFS_EVENT, onPrefs);
     return () => window.removeEventListener(SESSION_PREFS_EVENT, onPrefs);
-  }, [userId]);
+  }, [facilityId, activeBusiness]);
 
   const lockNow = useCallback(() => {
     setSessionLocked(true);

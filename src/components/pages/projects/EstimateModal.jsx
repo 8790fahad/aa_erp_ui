@@ -22,6 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { isProductTaxable } from "@/utils/taxableStatus";
 
 const EstimateModal = ({
   closeModal,
@@ -498,7 +499,7 @@ const EstimateModal = ({
               description: product.description || product.notes || "",
               rate: formatNumberWithCommas(String(rate)),
               amount: formatNumberWithCommas(String(total)),
-              taxable: product.taxable === "Taxable",
+              taxable: isProductTaxable(product.taxable),
             };
           }
           return item;

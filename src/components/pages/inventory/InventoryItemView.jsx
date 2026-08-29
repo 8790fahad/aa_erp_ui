@@ -19,7 +19,7 @@ import { formatNumber1 } from "@/components/router/utilities";
 import { _fetchApi } from "@/redux/actions/api";
 import { toast } from "sonner";
 import { useSelector } from "react-redux";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import moment from "moment";
 import {
   Card,
@@ -47,33 +47,73 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import useQuery from "@/hooks/useQuery";
+import { isProductTaxable, normalizeTaxableStatus } from "@/utils/taxableStatus";
 
 export default function InventoryItemView() {
   const { activeBusiness } = useSelector((state) => state.auth);
   const { id: productId } = useParams();
-  const query = useQuery()
-  const type = query.get('type')
+  const query = useQuery();
+  const location = useLocation();
+  const type = query.get("type");
+  const branchIdFromUrl = query.get("branchId") || "";
   const navigate = useNavigate();
-  
+
   const [item, setItem] = useState(null);
   const [transactionHistory, setTransactionHistory] = useState([]);
   const [filteredHistory, setFilteredHistory] = useState([]);
   const [summaryStats, setSummaryStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [branches, setBranches] = useState([]);
   const [filters, setFilters] = useState({
-    type: 'all',
-    searchTerm: '',
-    sortBy: 'date',
-    sortOrder: 'desc'
+    type: "all",
+    searchTerm: "",
+    sortBy: "date",
+    sortOrder: "desc",
+    fromDate: "",
+    toDate: "",
+    branchId: branchIdFromUrl || "all",
   });
+
+  useEffect(() => {
+    if (!activeBusiness?.id) return;
+    _fetchApi(
+      `/account/get/branches?facilityId=${activeBusiness.id}`,
+      (resp) => {
+        const rows = resp?.results || resp?.data || resp || [];
+        setBranches(Array.isArray(rows) ? rows : []);
+      },
+      () => setBranches([]),
+    );
+  }, [activeBusiness?.id]);
+
+  useEffect(() => {
+    if (branchIdFromUrl) {
+      setFilters((prev) =>
+        prev.branchId === branchIdFromUrl
+          ? prev
+          : { ...prev, branchId: branchIdFromUrl },
+      );
+    }
+  }, [branchIdFromUrl]);
 
   const fetchItemDetails = () => {
     if (!productId || !activeBusiness?.id) return;
-    
+
     setLoading(true);
-    const salesTypeParam = type || 'all';
+    const salesTypeParam = type || "all";
+    const params = new URLSearchParams({
+      productId,
+      facilityId: activeBusiness.id,
+      salesType: salesTypeParam,
+    });
+    if (filters.fromDate) params.set("fromDate", filters.fromDate);
+    if (filters.toDate) params.set("toDate", filters.toDate);
+    if (filters.branchId && filters.branchId !== "all") {
+      params.set("branchId", String(filters.branchId));
+    }
+
     _fetchApi(
-      `/inventory/store-entries/item-details?productId=${productId}&facilityId=${activeBusiness.id}&salesType=${salesTypeParam}`,
+      `/inventory/store-entries/item-details?${params.toString()}`,
       (resp) => {
         setLoading(false);
         if (resp.success) {
@@ -89,24 +129,35 @@ export default function InventoryItemView() {
         setLoading(false);
         console.error("API Error:", err);
         toast.error("Something went wrong while fetching item details.");
-      }
+      },
     );
   };
 
   useEffect(() => {
     fetchItemDetails();
-  }, [productId, activeBusiness?.id]);
-
-  // Set filtered history initially
-  useEffect(() => {
-    setFilteredHistory(transactionHistory);
-  }, [transactionHistory]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch on product/facility/date/warehouse
+  }, [
+    productId,
+    activeBusiness?.id,
+    filters.fromDate,
+    filters.toDate,
+    filters.branchId,
+  ]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({
       ...prev,
       [key]: value
     }));
+  };
+
+  const handleWarehouseChange = (value) => {
+    handleFilterChange("branchId", value);
+    const params = new URLSearchParams(location.search);
+    if (!value || value === "all") params.delete("branchId");
+    else params.set("branchId", value);
+    const qs = params.toString();
+    navigate(`${location.pathname}${qs ? `?${qs}` : ""}`, { replace: true });
   };
 
   const handleGoBack = () => {
@@ -123,9 +174,30 @@ export default function InventoryItemView() {
     let filtered = [...transactionHistory];
 
     // Filter by type
-    if (filters.type !== 'all') {
-      filtered = filtered.filter(tx => 
-        filters.type === 'in' ? tx.movement_type === 'IN' : tx.movement_type === 'OUT'
+    if (filters.type !== "all") {
+      filtered = filtered.filter((tx) =>
+        filters.type === "in"
+          ? tx.movement_type === "IN"
+          : tx.movement_type === "OUT",
+      );
+    }
+
+    // Filter by date range (client-side as well, using createdAt / inserted_time)
+    if (filters.fromDate || filters.toDate) {
+      filtered = filtered.filter((tx) => {
+        const raw = tx.createdAt || tx.inserted_time || tx.receive_date;
+        if (!raw) return false;
+        const day = moment(raw).format("YYYY-MM-DD");
+        if (filters.fromDate && day < filters.fromDate) return false;
+        if (filters.toDate && day > filters.toDate) return false;
+        return true;
+      });
+    }
+
+    // Filter by warehouse (branchId)
+    if (filters.branchId && filters.branchId !== "all") {
+      filtered = filtered.filter(
+        (tx) => String(tx.branchId ?? tx.branch_id ?? "") === String(filters.branchId),
       );
     }
 
@@ -136,6 +208,7 @@ export default function InventoryItemView() {
         (tx.reference_number && tx.reference_number.toLowerCase().includes(term)) ||
         (tx.source_info && tx.source_info.toLowerCase().includes(term)) ||
         (tx.destination_info && tx.destination_info.toLowerCase().includes(term)) ||
+        (tx.warehouse_name && tx.warehouse_name.toLowerCase().includes(term)) ||
         (tx.transaction_description && tx.transaction_description.toLowerCase().includes(term))
       );
     }
@@ -168,22 +241,18 @@ export default function InventoryItemView() {
   const exportToCSV = () => {
     // Create CSV content
     const headers = [
-      'Date', 'Type', 'Reference', 'Source', 'Destination', 
-      'Quantity In', 'Quantity Out', 'Unit Cost', 'Total Value'
+      'Date', 'Type', 'Reference',
+      'Quantity In', 'Quantity Out'
     ];
     
     const csvContent = [
       headers.join(','),
       ...filteredHistory.map(tx => [
-        `"${moment(tx.inserted_time).format('YYYY-MM-DD HH:mm')}"`,
+        `"${moment(tx.inserted_time || tx.createdAt).format('DD/MM/YYYY hh:mm A')}"`,
         `"${tx.movement_type}"`,
         `"${tx.reference_number || ''}"`,
-        `"${tx.source_info || ''}"`,
-        `"${tx.destination_info || ''}"`,
         `"${tx.qty_in || 0}"`,
-        `"${tx.qty_out || 0}"`,
-        `"${tx.unit_cost || 0}"`,
-        `"${tx.transaction_value || 0}"`
+        `"${tx.qty_out || 0}"`
       ].join(','))
     ].join('\n');
 
@@ -404,8 +473,8 @@ export default function InventoryItemView() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 mb-0.5">Taxable</p>
-                    <Badge variant={item.taxable === 'Taxable' ? 'default' : 'outline'} className="text-xs">
-                      {item.taxable || 'N/A'}
+                    <Badge variant={isProductTaxable(item.taxable) ? 'default' : 'outline'} className="text-xs">
+                      {normalizeTaxableStatus(item.taxable, item.taxable || 'N/A')}
                     </Badge>
                   </div>
                   <div>
@@ -414,7 +483,22 @@ export default function InventoryItemView() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 mb-0.5">Warehouse</p>
-                    <p className="text-sm text-gray-900">{item.warehouse_id || 'N/A'}</p>
+                    <Select
+                      value={filters.branchId || "all"}
+                      onValueChange={handleWarehouseChange}
+                    >
+                      <SelectTrigger className="h-8 w-full max-w-[220px] text-xs mt-0.5">
+                        <SelectValue placeholder="Warehouse" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All warehouses</SelectItem>
+                        {branches.map((b) => (
+                          <SelectItem key={b.id} value={String(b.id)}>
+                            {b.branch_name || `Warehouse ${b.id}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 mb-0.5">Tags</p>
@@ -454,6 +538,76 @@ export default function InventoryItemView() {
               <CardContent className="p-0">
                 {/* Filters */}
                 <div className="p-4 border-b flex flex-wrap gap-2 items-center">
+                  <div className="flex items-center gap-1.5">
+                    <label
+                      htmlFor="history-from-date"
+                      className="text-[11px] font-medium text-slate-500 whitespace-nowrap"
+                    >
+                      From
+                    </label>
+                    <Input
+                      id="history-from-date"
+                      type="date"
+                      value={filters.fromDate}
+                      onChange={(e) =>
+                        handleFilterChange("fromDate", e.target.value)
+                      }
+                      className="h-8 w-[9.5rem] text-xs"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <label
+                      htmlFor="history-to-date"
+                      className="text-[11px] font-medium text-slate-500 whitespace-nowrap"
+                    >
+                      To
+                    </label>
+                    <Input
+                      id="history-to-date"
+                      type="date"
+                      value={filters.toDate}
+                      min={filters.fromDate || undefined}
+                      onChange={(e) =>
+                        handleFilterChange("toDate", e.target.value)
+                      }
+                      className="h-8 w-[9.5rem] text-xs"
+                    />
+                  </div>
+                  {(filters.fromDate || filters.toDate) && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-xs text-slate-500"
+                      onClick={() =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          fromDate: "",
+                          toDate: "",
+                        }))
+                      }
+                    >
+                      Clear dates
+                    </Button>
+                  )}
+
+                  <Select
+                    value={filters.branchId || "all"}
+                    onValueChange={handleWarehouseChange}
+                  >
+                    <SelectTrigger className="w-44 h-8 text-xs">
+                      <SelectValue placeholder="Warehouse" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All warehouses</SelectItem>
+                      {branches.map((b) => (
+                        <SelectItem key={b.id} value={String(b.id)}>
+                          {b.branch_name || `Warehouse ${b.id}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
                   <Select 
                     value={filters.type} 
                     onValueChange={(value) => handleFilterChange('type', value)}
@@ -514,22 +668,16 @@ export default function InventoryItemView() {
                       <TableRow>
                         <TableHead className="text-xs py-2 whitespace-nowrap">Date</TableHead>
                         <TableHead className="text-xs py-2">Movement</TableHead>
-                        <TableHead className="text-xs py-2">Entry Type</TableHead>
                         <TableHead className="text-xs py-2">Reference</TableHead>
-                        <TableHead className="text-xs py-2">Source</TableHead>
-                        <TableHead className="text-xs py-2">Destination</TableHead>
                         <TableHead className="text-xs py-2">Warehouse</TableHead>
-                        <TableHead className="text-xs py-2 whitespace-nowrap">Expiry Date</TableHead>
                         <TableHead className="text-xs py-2 text-right">Qty In</TableHead>
                         <TableHead className="text-xs py-2 text-right">Qty Out</TableHead>
-                        <TableHead className="text-xs py-2 text-right">Unit Cost</TableHead>
-                        <TableHead className="text-xs py-2 text-right">Value</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredHistory.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={12} className="text-center py-8 text-gray-500">
+                          <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                             <FileText className="h-8 w-8 text-gray-300 mx-auto mb-2" />
                             No transaction history found
                           </TableCell>
@@ -539,7 +687,7 @@ export default function InventoryItemView() {
                           <TableRow key={index} className="text-xs hover:bg-gray-50">
                             <TableCell className="py-1.5 whitespace-nowrap">
                               <div className="font-medium">{moment(tx.createdAt).format('DD/MM/YYYY')}</div>
-                              <div className="text-gray-400">{moment(tx.createdAt).format('HH:mm')}</div>
+                              <div className="text-gray-400">{moment(tx.createdAt).format('hh:mm A')}</div>
                             </TableCell>
 
                             <TableCell className="py-1.5">
@@ -549,13 +697,6 @@ export default function InventoryItemView() {
                               >
                                 {tx.movement_type}
                               </Badge>
-                              <div className="text-gray-500 text-xs mt-0.5">{tx.transaction_description || '-'}</div>
-                            </TableCell>
-
-                            <TableCell className="py-1.5">
-                              <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600 text-xs">
-                                {tx.type || '-'}
-                              </span>
                             </TableCell>
 
                             <TableCell className="py-1.5">
@@ -565,25 +706,16 @@ export default function InventoryItemView() {
                               )}
                             </TableCell>
 
-                            <TableCell className="py-1.5 max-w-[100px] truncate" title={tx.source_info}>
-                              {tx.source_info || '-'}
-                            </TableCell>
-
-                            <TableCell className="py-1.5 max-w-[100px] truncate" title={tx.destination_info}>
-                              {tx.destination_info || '-'}
-                            </TableCell>
-
                             <TableCell className="py-1.5">
-                              {tx.location || tx.branch_name || '-'}
-                            </TableCell>
-
-                            <TableCell className="py-1.5 whitespace-nowrap">
-                              {tx.expiry_date
-                                ? <span className={moment(tx.expiry_date).isBefore(moment()) ? 'text-red-600 font-medium' : 'text-gray-700'}>
-                                    {moment(tx.expiry_date).format('DD/MM/YY')}
-                                  </span>
-                                : <span className="text-gray-300">-</span>
-                              }
+                              {tx.warehouse_name ||
+                                tx.branch_name ||
+                                (tx.branchId != null
+                                  ? branches.find(
+                                      (b) =>
+                                        String(b.id) === String(tx.branchId),
+                                    )?.branch_name
+                                  : null) ||
+                                "-"}
                             </TableCell>
 
                             <TableCell className="py-1.5 text-right">
@@ -596,14 +728,6 @@ export default function InventoryItemView() {
                               {parseFloat(tx.qty_out || 0) > 0 ? (
                                 <span className="text-red-600 font-medium">-{formatNumber1(tx.qty_out)}</span>
                               ) : <span className="text-gray-300">-</span>}
-                            </TableCell>
-
-                            <TableCell className="py-1.5 text-right text-gray-700">
-                              ₦{formatNumber1(tx.unit_cost || 0)}
-                            </TableCell>
-
-                            <TableCell className="py-1.5 text-right font-medium">
-                              ₦{formatNumber1(tx.transaction_value || 0)}
                             </TableCell>
                           </TableRow>
                         ))

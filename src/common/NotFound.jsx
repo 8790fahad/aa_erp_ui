@@ -10,7 +10,7 @@ export default function NotFound() {
   const goTo = () => {
     const isInsideApp = location.pathname.includes("/app");
     if (isInsideApp) {
-      navigate("/app");
+      navigate("/app/home");
     } else {
       navigate("/");
     }

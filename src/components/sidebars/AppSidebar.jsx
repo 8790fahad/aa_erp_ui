@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { getSidebarByAppType } from "./sidebarModules";
+import { canAccessDashboard } from "@/lib/access";
 import { useSelector } from "react-redux";
 import { NavLink } from "react-router-dom";
 import { Home, LayoutDashboard, PanelLeftClose } from "lucide-react";
@@ -21,10 +22,13 @@ export function AppSidebar(props) {
   const { className: sidebarClassName, ...sidebarProps } = props;
   const { toggleSidebar, state } = useSidebar();
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
+  const user = useSelector((state) => state.auth.user);
   const collapsed = state === "collapsed";
+  const showDashboard = canAccessDashboard(user, activeBusiness);
 
   const sidebarItems = useMemo(() => {
     return getSidebarByAppType("retailers")
+      .filter((module) => module.title !== "Dashboard")
       .map((module) => {
         if (!module.items?.length) return module;
         return {
@@ -68,17 +72,19 @@ export function AppSidebar(props) {
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              className="h-auto rounded-lg px-2.5 py-2 text-[13.5px] font-medium text-[#B4BACB] hover:bg-[#182642] hover:text-[#F1F2ED] data-[active=true]:bg-[var(--dash-primary,#1b7a5b)] data-[active=true]:font-semibold data-[active=true]:text-white"
-            >
-              <NavLink to="/app" end>
-                <LayoutDashboard className="size-4 shrink-0 opacity-85" />
-                <span>Dashboard</span>
-              </NavLink>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {showDashboard ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                className="h-auto rounded-lg px-2.5 py-2 text-[13.5px] font-medium text-[#B4BACB] hover:bg-[#182642] hover:text-[#F1F2ED] data-[active=true]:bg-[var(--dash-primary,#1b7a5b)] data-[active=true]:font-semibold data-[active=true]:text-white"
+              >
+                <NavLink to="/app" end>
+                  <LayoutDashboard className="size-4 shrink-0 opacity-85" />
+                  <span>Dashboard</span>
+                </NavLink>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2">

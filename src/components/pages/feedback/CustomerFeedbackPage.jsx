@@ -9,7 +9,7 @@ import yammusaLogo from "@/assets/yammusa-logo.png";
 const BRAND = {
   name: "ALH ALI MUHAMMAD YAMMUSA",
   address: "#52E Ado Bayero Road Singer Market, Kano.",
-  phones: "08036032541, 07032144609",
+  phones: "08036032541, 07032144609, 07077222277, 08081634455",
 };
 
 /**

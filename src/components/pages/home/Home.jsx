@@ -5,6 +5,7 @@ import { ArrowUpRight } from "lucide-react";
 import { getSidebarByAppType } from "@/components/sidebars/sidebarModules";
 import { cn } from "@/lib/utils";
 import {
+  canAccessDashboard,
   canAccessPrivileges,
   getUserFunctionalities,
   privilegeKeysForItem,
@@ -82,7 +83,7 @@ const CAT_ORDER = [
   "other",
 ];
 
-function collectGroupedActions(modules, functionalities) {
+function collectGroupedActions(modules, functionalities, user, activeBusiness) {
   const groups = [];
   const seen = new Set();
 
@@ -103,10 +104,11 @@ function collectGroupedActions(modules, functionalities) {
       });
     }
     if ((!mod.items || mod.items.length === 0) && mod.url && mod.url !== "#") {
-      if (
-        canAccessPrivileges(privilegeKeysForItem(mod), functionalities) &&
-        !seen.has(mod.url)
-      ) {
+      const allowed =
+        mod.title === "Dashboard"
+          ? canAccessDashboard(user, activeBusiness)
+          : canAccessPrivileges(privilegeKeysForItem(mod), functionalities);
+      if (allowed && !seen.has(mod.url)) {
         seen.add(mod.url);
         items.push({ title: mod.title, url: mod.url, icon: mod.icon });
       }
@@ -200,8 +202,8 @@ export default function Home() {
         };
       })
       .filter((module) => !module.items || module.items.length > 0);
-    return collectGroupedActions(modules, functionalities);
-  }, [activeBusiness, functionalities]);
+    return collectGroupedActions(modules, functionalities, user, activeBusiness);
+  }, [activeBusiness, functionalities, user]);
 
   const chips = useMemo(() => {
     return [

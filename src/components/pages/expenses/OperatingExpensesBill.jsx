@@ -34,6 +34,7 @@ import CashTransferPaymentFields, {
   isCashTransferSplitMode,
   parseMoneyInput,
 } from "@/components/common/CashTransferPaymentFields";
+import { isProductTaxable } from "@/utils/taxableStatus";
 
 const initialItemForm = {
   item_name: "",
@@ -42,7 +43,7 @@ const initialItemForm = {
   cost: "",
   total: 0,
   item_type: "",
-  taxable: "Not Taxable",
+  taxable: "Non-Taxable",
   line_tax_id: null,
 };
 
@@ -275,7 +276,7 @@ export default function OperatingExpenses() {
       quantity: "1",
       cost: "",
       total: 0,
-      taxable: "Not Taxable",
+      taxable: "Non-Taxable",
       line_tax_id: null,
     };
     setItems((prev) => [...prev, newItem]);
@@ -440,7 +441,7 @@ export default function OperatingExpenses() {
   };
 
   const getLineTaxAmount = (item) => {
-    if (item.taxable !== "Taxable") return 0;
+    if (!isProductTaxable(item.taxable)) return 0;
     const tax = getLineTax(item);
     if (!tax) return 0;
     const totalParsed = parseNumberFromFormatted(item.total?.toString() || "");
@@ -452,7 +453,7 @@ export default function OperatingExpenses() {
   useEffect(() => {
     const usedIds = new Set(
       items
-        .filter((i) => i.taxable === "Taxable" && i.line_tax_id)
+        .filter((i) => isProductTaxable(i.taxable) && i.line_tax_id)
         .map((i) => String(i.line_tax_id)),
     );
     setSelectedTaxes(lineTaxOptions.filter((t) => usedIds.has(String(t.id))));
@@ -468,7 +469,7 @@ export default function OperatingExpenses() {
     const subtotal = calculateTotal();
     let exclusiveVAT = 0;
     items.forEach((item) => {
-      if (item.taxable !== "Taxable") return;
+      if (!isProductTaxable(item.taxable)) return;
       const tax = getLineTax(item);
       if (!tax || isTaxInclusive(tax)) return;
       exclusiveVAT += getLineTaxAmount(item);
@@ -588,7 +589,7 @@ export default function OperatingExpenses() {
     const taxAmount = calculateTotalTax();
     const taxTotals = new Map();
     items.forEach((item) => {
-      if (item.taxable !== "Taxable" || !item.line_tax_id) return;
+      if (!isProductTaxable(item.taxable) || !item.line_tax_id) return;
       const tax = getLineTax(item);
       if (!tax) return;
       const totalParsed = parseNumberFromFormatted(
@@ -632,7 +633,7 @@ export default function OperatingExpenses() {
         cost: cost,
         quantity: qty,
         qty: qty,
-        taxable: item.taxable || "Not Taxable",
+        taxable: item.taxable || "Non-Taxable",
         line_tax_id: item.line_tax_id || null,
       };
     });
@@ -915,7 +916,7 @@ export default function OperatingExpenses() {
         parseFloat(item.quantity || 1) *
         parseFloat(item.unit_cost || item.cost || item.amount || 0),
       item_type: item.item_subhead || item.item_type || "",
-      taxable: item.taxable || "Not Taxable",
+      taxable: item.taxable || "Non-Taxable",
       line_tax_id: null,
     }));
 
@@ -1523,9 +1524,9 @@ export default function OperatingExpenses() {
                                 type="button"
                                 title="Click to toggle taxable"
                                 onClick={() => {
-                                  if (item.taxable === "Taxable") {
+                                  if (isProductTaxable(item.taxable)) {
                                     updateItemField(item._id, {
-                                      taxable: "Not Taxable",
+                                      taxable: "Non-Taxable",
                                       line_tax_id: null,
                                     });
                                   } else {
@@ -1537,12 +1538,12 @@ export default function OperatingExpenses() {
                                   }
                                 }}
                                 className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                  item.taxable === "Taxable"
+                                  isProductTaxable(item.taxable)
                                     ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                 }`}
                               >
-                                {item.taxable === "Taxable"
+                                {isProductTaxable(item.taxable)
                                   ? "Taxable"
                                   : "Not taxable"}
                               </button>
@@ -1620,12 +1621,12 @@ export default function OperatingExpenses() {
                         <td className="px-2 py-3 align-top">
                           <select
                             value={item.line_tax_id ?? ""}
-                            disabled={item.taxable !== "Taxable"}
+                            disabled={!isProductTaxable(item.taxable)}
                             onChange={(e) => {
                               const taxId = e.target.value || null;
                               updateItemField(item._id, {
                                 line_tax_id: taxId,
-                                taxable: taxId ? "Taxable" : "Not Taxable",
+                                taxable: taxId ? "Taxable" : "Non-Taxable",
                               });
                             }}
                             className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)] disabled:bg-slate-50"
@@ -1637,7 +1638,7 @@ export default function OperatingExpenses() {
                               </option>
                             ))}
                           </select>
-                          {item.taxable === "Taxable" &&
+                          {isProductTaxable(item.taxable) &&
                             getLineTaxAmount(item) > 0 && (
                               <div className="mt-1 text-[11px] tabular-nums text-slate-500">
                                 ₦{formatNumber(getLineTaxAmount(item))}
@@ -1773,7 +1774,7 @@ export default function OperatingExpenses() {
                 selectedTaxes.map((tax) => {
                   const taxAmountForDisplay = items.reduce((sum, item) => {
                     if (
-                      item.taxable !== "Taxable" ||
+                      !isProductTaxable(item.taxable) ||
                       String(item.line_tax_id) !== String(tax.id)
                     ) {
                       return sum;

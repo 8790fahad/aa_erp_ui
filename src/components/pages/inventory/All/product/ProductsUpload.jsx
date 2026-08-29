@@ -41,6 +41,7 @@ import { toast } from "sonner";
 import PropTypes from "prop-types";
 import { useSelector } from "react-redux";
 import { formatNumber1 } from "@/components/router/utilities";
+import { normalizeTaxableStatus, TAXABLE_STATUS_VALUES } from "@/utils/taxableStatus";
 
 const PRODUCT_TYPES = {
   FINISHED_GOOD: "Finished Good",
@@ -686,9 +687,21 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
       badColumns.add("quantity");
     }
 
-    if (type !== PRODUCT_TYPES.WIP && !product["Taxable"]) {
-      issues.push("Missing Taxable");
-      badColumns.add("Taxable");
+    if (type !== PRODUCT_TYPES.WIP) {
+      if (!product["Taxable"]) {
+        issues.push("Missing Taxable");
+        badColumns.add("Taxable");
+      } else {
+        const normalized = normalizeTaxableStatus(product["Taxable"], "");
+        if (!TAXABLE_STATUS_VALUES.includes(normalized)) {
+          issues.push(
+            'Taxable must be Taxable, Non-Taxable, Exempted, or Zero Rated'
+          );
+          badColumns.add("Taxable");
+        } else {
+          product["Taxable"] = normalized;
+        }
+      }
     }
 
     if (branchRequiresId(type)) {
@@ -766,7 +779,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
           item["Tags"] ||
           item["UOM Category"] ||
           "";
-        mapped.taxable = item["Taxable"] || "";
+        mapped.taxable = item["Taxable"] ? normalizeTaxableStatus(item["Taxable"], "Taxable") : "";
         mapped.status = item["Status"] || "Active";
         mapped.supplier_id = item["Supplier ID"] || "";
         mapped.tags = "";
@@ -794,7 +807,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
         mapped.purchase_description = item["Purchase Description"] || "";
         mapped.cost_price = item["Cost Price"] || 0;
         mapped.cogs_account = item["Expense Account"] || "";
-        mapped.taxable = item["Taxable"] || "";
+        mapped.taxable = item["Taxable"] ? normalizeTaxableStatus(item["Taxable"], "Taxable") : "";
         mapped.status = item["Status"] || "Active";
         mapped.unit_of_measure = item["Unit of Measurement"] || "";
         mapped.tags = item["Tags"] || "";
@@ -817,7 +830,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
         mapped.inventory_account = item["Inventory Account"] || "";
         mapped.unit_of_measure = item["Unit of Measurement"] || "";
         mapped.unit = item["Unit of Measurement"] || ""; // Backend expects unit
-        mapped.taxable = item["Taxable"] || "";
+        mapped.taxable = item["Taxable"] ? normalizeTaxableStatus(item["Taxable"], "Taxable") : "";
       } else if (selectedProductType === PRODUCT_TYPES.WIP) {
         mapped.sku = item.sku || "";
         mapped.item_name = item["Product Name"] || "";

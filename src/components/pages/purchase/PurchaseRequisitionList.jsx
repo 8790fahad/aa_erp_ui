@@ -18,6 +18,7 @@ import {
   Upload,
   Paperclip,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useSearchParams } from "react-router-dom";
@@ -39,14 +40,30 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
-const MAX_PO_ATTACHMENTS = 5;
 const MAX_PO_FILE_BYTES = 25 * 1024 * 1024;
 const PO_ALLOWED_TYPES = new Set([
   "application/pdf",
   "image/png",
   "image/jpeg",
+  "image/jpg",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
+const PO_ALLOWED_EXTS = new Set(["pdf", "png", "jpg", "jpeg", "docx"]);
+
+function isAllowedPoFile(file) {
+  if (file?.type && PO_ALLOWED_TYPES.has(file.type)) return true;
+  const ext = String(file?.name || "")
+    .split(".")
+    .pop()
+    ?.toLowerCase();
+  return PO_ALLOWED_EXTS.has(ext);
+}
+
+function attachmentHref(doc) {
+  if (doc?.url && /^https?:\/\//i.test(doc.url)) return doc.url;
+  if (doc?.file_path) return `${apiURL}/public/uploads/${doc.file_path}`;
+  return null;
+}
 
 const poInputClass =
   "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]";
@@ -101,6 +118,7 @@ export default function PurchaseRequisitionList() {
   const [formLoading, setFormLoading] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [viewAttachments, setViewAttachments] = useState([]);
+  const [attachmentUploading, setAttachmentUploading] = useState(false);
   const attachmentInputRef = useRef(null);
   const [allBranches, setAllBranches] = useState([]);
 
@@ -554,17 +572,14 @@ export default function PurchaseRequisitionList() {
     setExpenses((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleAttachmentPick = (e) => {
+  const handleAttachmentPick = async (e) => {
     const picked = Array.from(e.target.files || []);
     e.target.value = "";
     if (!picked.length) return;
-    const next = [...attachments];
+
+    const valid = [];
     for (const file of picked) {
-      if (next.length >= MAX_PO_ATTACHMENTS) {
-        toast.error(`You can upload a maximum of ${MAX_PO_ATTACHMENTS} files`);
-        break;
-      }
-      if (!PO_ALLOWED_TYPES.has(file.type)) {
+      if (!isAllowedPoFile(file)) {
         toast.error(`${file.name}: only PDF, PNG, JPG, or DOCX`);
         continue;
       }
@@ -572,9 +587,30 @@ export default function PurchaseRequisitionList() {
         toast.error(`${file.name}: exceeds 25MB limit`);
         continue;
       }
-      next.push(file);
+      valid.push(file);
     }
-    setAttachments(next);
+    if (!valid.length) return;
+
+    setAttachmentUploading(true);
+    try {
+      const response = await PurchaseRequisitionAPI.stagePurchaseOrderDocuments(
+        valid,
+      );
+      const uploaded = (response.data || []).map((doc) => ({
+        ...doc,
+        url: `${apiURL}/public/uploads/${doc.file_path}`,
+      }));
+      setAttachments((prev) => [...prev, ...uploaded]);
+      toast.success(
+        uploaded.length === 1
+          ? "Document uploaded"
+          : `${uploaded.length} documents uploaded`,
+      );
+    } catch (error) {
+      toast.error(error.message || "Failed to upload documents");
+    } finally {
+      setAttachmentUploading(false);
+    }
   };
 
   const handleSubmitForm = async () => {
@@ -1322,7 +1358,8 @@ export default function PurchaseRequisitionList() {
                     </p>
                   </div>
                   <span className="text-xs text-slate-500">
-                    {attachments.length}/{MAX_PO_ATTACHMENTS}
+                    {attachments.length}{" "}
+                    {attachments.length === 1 ? "file" : "files"}
                   </span>
                 </div>
                 <input
@@ -1338,34 +1375,67 @@ export default function PurchaseRequisitionList() {
                   variant="outline"
                   size="sm"
                   className="h-9 gap-1.5 border-slate-300"
-                  disabled={formLoading || attachments.length >= MAX_PO_ATTACHMENTS}
+                  disabled={formLoading || attachmentUploading}
                   onClick={() => attachmentInputRef.current?.click()}
                 >
-                  <Upload className="h-4 w-4" />
-                  Upload documents
+                  {attachmentUploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  {attachmentUploading ? "Uploading…" : "Upload documents"}
                 </Button>
                 <p className="mt-1.5 text-[11px] text-slate-500">
-                  Maximum {MAX_PO_ATTACHMENTS} files, 25MB each
+                  Files upload immediately. Click a name to open the file. 25MB each.
                 </p>
                 {attachments.length > 0 && (
                   <ul className="mt-3 space-y-1.5">
-                    {attachments.map((file, idx) => (
+                    {attachments.map((file, idx) => {
+                      const href = attachmentHref(file);
+                      const label =
+                        file.document_name ||
+                        file.original_name ||
+                        file.name;
+                      const sizeBytes = file.file_size || file.size;
+                      return (
                       <li
-                        key={`${file.name}-${idx}`}
+                        key={`${file.file_path || label}-${idx}`}
                         className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
                       >
                         <span className="flex min-w-0 items-center gap-1.5 truncate">
                           <Paperclip className="h-3.5 w-3.5 shrink-0 text-[var(--aa-accent)]" />
-                          <span className="truncate">
-                            {file.name}{" "}
-                            <span className="text-slate-400">
-                              ({(file.size / (1024 * 1024)).toFixed(1)} MB)
+                          {href ? (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="truncate text-[var(--aa-accent)] hover:text-[var(--aa-navy)] hover:underline"
+                            >
+                              {label}
+                              {sizeBytes != null && (
+                                <span className="text-slate-400">
+                                  {" "}
+                                  ({(sizeBytes / (1024 * 1024)).toFixed(1)} MB)
+                                </span>
+                              )}
+                            </a>
+                          ) : (
+                            <span className="truncate">
+                              {label}{" "}
+                              {sizeBytes != null && (
+                                <span className="text-slate-400">
+                                  ({(sizeBytes / (1024 * 1024)).toFixed(1)} MB)
+                                </span>
+                              )}
                             </span>
-                          </span>
+                          )}
+                          {href ? (
+                            <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
+                          ) : null}
                         </span>
                         <button
                           type="button"
-                          disabled={formLoading}
+                          disabled={formLoading || attachmentUploading}
                           onClick={() =>
                             setAttachments((prev) =>
                               prev.filter((_, i) => i !== idx),
@@ -1377,7 +1447,8 @@ export default function PurchaseRequisitionList() {
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 )}
               </div>
@@ -1399,7 +1470,7 @@ export default function PurchaseRequisitionList() {
                 size="sm"
                 onClick={handleSubmitForm}
                 className="h-9 bg-[var(--aa-accent)] text-white hover:opacity-90"
-                disabled={expenses.length === 0 || formLoading}
+                disabled={expenses.length === 0 || formLoading || attachmentUploading}
               >
                 {formLoading ? "Submitting…" : "Submit Purchase Order"}
               </Button>

@@ -23,6 +23,7 @@ import {
 } from "@/utils/imageUtils";
 import { getSidebarByAppType } from "./sidebars/sidebarModules";
 import { mergeReportPermissionsIntoSidebar } from "@/components/pages/report/utils/reportPermissions";
+import { EXPLICIT_ONLY_PRIVILEGES } from "@/lib/access";
 import { useSelector, useDispatch } from "react-redux";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -1205,12 +1206,9 @@ const StaffManagementDashboard = () => {
         subItem.subFunctionalities?.map((s) => s.title).filter(Boolean) || [];
       // Privileges that must be granted explicitly — not auto-enabled
       // when the parent module switch is turned on.
-      const EXPLICIT_ONLY = new Set([
-        "Switch Payment Mode",
-        "Approve Payment Mode Switch",
-        "Write-off (Scrap/Loss)",
-      ]);
-      const autoSubTitles = allSubTitles.filter((t) => !EXPLICIT_ONLY.has(t));
+      const autoSubTitles = allSubTitles.filter(
+        (t) => !EXPLICIT_ONLY_PRIVILEGES.includes(t),
+      );
 
       let updatedFunctionalities = isChecked
         ? prevForm.functionalities.filter(
@@ -2040,15 +2038,18 @@ const StaffManagementDashboard = () => {
                                 prev.functionalities || [];
 
                               if (checked) {
+                                const keysToAdd = [];
                                 const firstSub = module.items?.[0]?.title;
-                                if (firstSub) {
-                                  updatedFunctionalities = [
-                                    ...new Set([
-                                      ...updatedFunctionalities,
-                                      firstSub,
-                                    ]),
-                                  ];
-                                }
+                                if (firstSub) keysToAdd.push(firstSub);
+                                const fn = module.functionality;
+                                if (Array.isArray(fn)) keysToAdd.push(...fn);
+                                else if (fn) keysToAdd.push(fn);
+                                updatedFunctionalities = [
+                                  ...new Set([
+                                    ...updatedFunctionalities,
+                                    ...keysToAdd.filter(Boolean),
+                                  ]),
+                                ];
                               } else {
                                 const moduleFuncTitles = (
                                   module.items?.flatMap((item) => [
@@ -2057,6 +2058,10 @@ const StaffManagementDashboard = () => {
                                       []),
                                   ]) || []
                                 ).filter(Boolean);
+                                const fn = module.functionality;
+                                if (Array.isArray(fn)) moduleFuncTitles.push(...fn);
+                                else if (fn) moduleFuncTitles.push(fn);
+                                if (module.title) moduleFuncTitles.push(module.title);
                                 updatedFunctionalities =
                                   updatedFunctionalities.filter(
                                     (func) => !moduleFuncTitles.includes(func),
@@ -2108,9 +2113,13 @@ const StaffManagementDashboard = () => {
                                       <input
                                         type="checkbox"
                                         className="form-check-input"
-                                        checked={form.functionalities?.includes(
-                                          sub.title
-                                        )}
+                                  checked={
+                                    form.functionalities?.includes(sub.title) ||
+                                    (sub.title === "Goods" &&
+                                      form.functionalities?.includes(
+                                        "Goods List",
+                                      ))
+                                  }
                                         onChange={() =>
                                           handleChildChechBoxChange(sub)
                                         }

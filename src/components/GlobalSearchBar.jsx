@@ -12,39 +12,31 @@ import {
 } from "lucide-react";
 import { _fetchApi } from "@/redux/actions/api";
 import { getSidebarByAppType } from "@/components/sidebars/sidebarModules";
+import { canAccessPrivileges, getUserFunctionalities, privilegeKeysForItem } from "@/lib/access";
 
 const DEBOUNCE_MS = 280;
 const MIN_QUERY = 1;
-
-function parseFunctionalities(raw) {
-  if (Array.isArray(raw)) return raw.filter(Boolean);
-  if (typeof raw === "string" && raw.trim()) {
-    return raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-  return [];
-}
 
 function buildPageShortcuts(appType, functionalities) {
   const modules = getSidebarByAppType(appType || "retailers") || [];
   const pages = [];
   for (const mod of modules) {
-    for (const item of mod.items || []) {
+    const leafItems =
+      mod.items?.length > 0
+        ? mod.items
+        : mod.url && mod.url !== "#"
+          ? [mod]
+          : [];
+    for (const item of leafItems) {
       if (!item?.url || item.url === "#") continue;
-      const keys = Array.isArray(item.functionality)
-        ? item.functionality
-        : [item.functionality || item.title];
-      const allowed =
-        !functionalities.length ||
-        keys.some((k) => functionalities.includes(k));
-      if (!allowed) continue;
+      if (!canAccessPrivileges(privilegeKeysForItem(item), functionalities)) {
+        continue;
+      }
       pages.push({
         type: "page",
         id: item.url,
         title: item.title,
-        subtitle: mod.title,
+        subtitle: mod.title === item.title ? "Workspace" : mod.title,
         href: item.url,
       });
     }
@@ -82,13 +74,8 @@ export default function GlobalSearchBar() {
   });
 
   const functionalities = useMemo(
-    () => [
-      ...new Set([
-        ...parseFunctionalities(activeBusiness?.functionalities),
-        ...parseFunctionalities(user?.functionalities),
-      ]),
-    ],
-    [activeBusiness?.functionalities, user?.functionalities],
+    () => getUserFunctionalities(user, activeBusiness),
+    [user, activeBusiness],
   );
 
   const pageShortcuts = useMemo(

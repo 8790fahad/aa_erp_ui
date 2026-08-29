@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { AppTopBar, PageContextBar } from "@/components/Header";
 import AuthWrapper from "./AuthWrapper";
 import { AppSidebar } from "../sidebars/AppSidebar";
+import PageAccessGuard from "./PageAccessGuard";
 import SessionLockGuard from "@/components/session/SessionLockGuard";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +34,9 @@ export default function AppIndex() {
                   : "min-h-0 p-3",
               )}
             >
-              <Outlet />
+              <PageAccessGuard>
+                <Outlet />
+              </PageAccessGuard>
             </div>
           </SidebarInset>
         </div>

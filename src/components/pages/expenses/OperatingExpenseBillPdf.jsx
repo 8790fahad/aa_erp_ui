@@ -9,6 +9,7 @@ import { Printer, X } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
+import { isProductTaxable } from "@/utils/taxableStatus";
 
 const OperatingExpenseBillHTML = ({ billData, company, invoiceRef }) => {
   const formatDate = (date) => {
@@ -178,12 +179,12 @@ const OperatingExpenseBillHTML = ({ billData, company, invoiceRef }) => {
                           </strong>
                           <span
                             className={`inline-block px-2 py-0.5 rounded text-xs font-semibold w-fit ${
-                              item.taxable === "Taxable"
+                              isProductTaxable(item.taxable)
                                 ? "bg-green-100 text-green-800"
                                 : ""
                             }`}
                           >
-                            {item.taxable === "Taxable" ? "Taxable" : null}
+                            {isProductTaxable(item.taxable) ? "Taxable" : null}
                           </span>
                         </div>
                       </td>

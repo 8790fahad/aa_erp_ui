@@ -36,6 +36,7 @@ import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePayment
 import AdvancePaymentPaymentFields from "@/components/common/AdvancePaymentPaymentFields";
 import { v4 as uuidv4 } from "uuid";
 import moment from "moment";
+import { isProductTaxable } from "@/utils/taxableStatus";
 
 function parseNumberFromFormatted(value) {
   if (value === "" || value === null || value === undefined) return "";
@@ -88,7 +89,7 @@ function effectiveLineTax(line, draftTax) {
   if (!draftTax) return null;
   if (line?.tax) return line.tax;
   if (
-    (line?.taxable === "Taxable" || line?.taxable === true) &&
+    (isProductTaxable(line?.taxable) || line?.taxable === true) &&
     draftTax
   ) {
     return draftTax;
@@ -212,7 +213,7 @@ function resolveLineTaxForSubmit(line, draftSelectedTax) {
   if (!draftSelectedTax) return null;
   if (line?.tax) return line.tax;
   if (
-    (line?.taxable === "Taxable" || line?.taxable === true) &&
+    (isProductTaxable(line?.taxable) || line?.taxable === true) &&
     draftSelectedTax
   ) {
     return draftSelectedTax;
@@ -446,7 +447,7 @@ export default function CreateImprestDrawer({
         if (!checked) {
           return {
             ...ln,
-            taxable: "Not Taxable",
+            taxable: "Non-Taxable",
             tax: null,
           };
         }
@@ -497,7 +498,7 @@ export default function CreateImprestDrawer({
           unitCost: cost,
           tax: null,
           taxable:
-            prefillLine.taxable === "Taxable" ? "Taxable" : "Not Taxable",
+            isProductTaxable(prefillLine.taxable) ? "Taxable" : "Non-Taxable",
           transaction_date:
             prefillLine.transaction_date ||
             new Date().toISOString().slice(0, 10),
@@ -558,7 +559,7 @@ export default function CreateImprestDrawer({
       toast.error("Enter a valid quantity and unit cost");
       return;
     }
-    const taxableStatus = draft.taxableLine ? "Taxable" : "Not Taxable";
+    const taxableStatus = draft.taxableLine ? "Taxable" : "Non-Taxable";
     const lineTxDate = draft.linePaymentDate ?? paymentDate;
     setLines((prev) => [
       ...prev,
@@ -606,7 +607,7 @@ export default function CreateImprestDrawer({
     const data = lines.map((ln) => {
       const isTaxable =
         Boolean(ln.tax) ||
-        ln.taxable === "Taxable" ||
+        isProductTaxable(ln.taxable) ||
         ln.taxable === true;
       const row = {
         head: ln.expense.code,
@@ -614,7 +615,7 @@ export default function CreateImprestDrawer({
         quantity: ln.quantity,
         cost: ln.unitCost,
         item_name: ln.expense.name || ln.expense.code,
-        taxable: isTaxable ? "Taxable" : "Not Taxable",
+        taxable: isTaxable ? "Taxable" : "Non-Taxable",
         transaction_date: ln.transaction_date || paymentDate,
       };
       const taxForApi = resolveLineTaxForSubmit(ln, draft.selectedTax);
@@ -848,7 +849,7 @@ export default function CreateImprestDrawer({
                         <td className="px-1 py-2 align-middle text-center">
                           <input
                             type="checkbox"
-                            checked={ln.taxable === "Taxable"}
+                            checked={isProductTaxable(ln.taxable)}
                             onChange={(e) =>
                               setLineTaxableCheckbox(ln.id, e.target.checked)
                             }

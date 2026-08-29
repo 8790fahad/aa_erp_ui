@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { v4 as UUIDV4 } from "uuid";
 import moment from "moment";
+import { isProductTaxable } from "@/utils/taxableStatus";
 
 /** Remaining sales-limit qty for a product (facility-wide). null = unlimited. */
 function getSalesLimitRemaining(product) {
@@ -1468,7 +1469,7 @@ function MakeSale() {
     const saleItems = cart.filter(
       (item) =>
         item.status === "for sale" &&
-        item.taxable === "Taxable" &&
+        isProductTaxable(item.taxable) &&
         !item.proBono, // Exclude Pro-bono items from tax calculation
     );
     let totalTax = 0;
@@ -1817,7 +1818,7 @@ function MakeSale() {
 
         // Calculate taxable subtotal (only from taxable items, exclude Pro-bono)
         const taxableItems = saleItems.filter(
-          (item) => item.taxable === "Taxable" && !item.proBono,
+          (item) => isProductTaxable(item.taxable) && !item.proBono,
         );
         const taxableSubtotal = taxableItems.reduce(
           (sum, item) => sum + parseFloat(item.amount),
@@ -2748,7 +2749,7 @@ function MakeSale() {
     const saleItems = cart.filter(
       (item) =>
         item.status === "for sale" &&
-        item.taxable === "Taxable" &&
+        isProductTaxable(item.taxable) &&
         !item.proBono, // Exclude Pro-bono items
     );
     return saleItems.reduce((sum, item) => sum + parseFloat(item.amount), 0);
@@ -2758,7 +2759,7 @@ function MakeSale() {
     const saleItems = cart.filter(
       (item) =>
         item.status === "for sale" &&
-        item.taxable !== "Taxable" &&
+        !isProductTaxable(item.taxable) &&
         !item.proBono,
     );
     return saleItems.reduce(
@@ -2971,7 +2972,7 @@ function MakeSale() {
           ];
       if (
         !item.proBono &&
-        item.taxable === "Taxable" &&
+        isProductTaxable(item.taxable) &&
         appliedTaxes.length > 0
       ) {
         vatRate = appliedTaxes.reduce(
@@ -4744,9 +4745,9 @@ function MakeSale() {
                                         type="button"
                                         title="Click to toggle taxable"
                                         onClick={() => {
-                                          if (item.taxable === "Taxable") {
+                                          if (isProductTaxable(item.taxable)) {
                                             updateCartItem(item.id, {
-                                              taxable: "Not Taxable",
+                                              taxable: "Non-Taxable",
                                               line_tax_id: null,
                                             });
                                             return;
@@ -4762,12 +4763,12 @@ function MakeSale() {
                                           });
                                         }}
                                         className={`ml-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                          item.taxable === "Taxable"
+                                          isProductTaxable(item.taxable)
                                             ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                                             : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                         }`}
                                       >
-                                        {item.taxable === "Taxable"
+                                        {isProductTaxable(item.taxable)
                                           ? "Taxable"
                                           : "Not taxable"}
                                       </button>
@@ -5024,7 +5025,7 @@ function MakeSale() {
                               <select
                                 value={item.line_tax_id ?? ""}
                                 disabled={
-                                  !!item.proBono || item.taxable !== "Taxable"
+                                  !!item.proBono || !isProductTaxable(item.taxable)
                                 }
                                 onChange={(e) => {
                                   const taxId = e.target.value || null;
@@ -5032,7 +5033,7 @@ function MakeSale() {
                                     line_tax_id: taxId,
                                     taxable: taxId
                                       ? "Taxable"
-                                      : "Not Taxable",
+                                      : "Non-Taxable",
                                   });
                                   if (taxId) {
                                     const tax = lineTaxOptions.find(
@@ -5060,7 +5061,7 @@ function MakeSale() {
                                 ))}
                               </select>
                               {!item.proBono &&
-                                item.taxable === "Taxable" &&
+                                isProductTaxable(item.taxable) &&
                                 money.lineVat > 0 && (
                                   <div className="mt-1 text-[11px] text-slate-500">
                                     NGN {formatNumber1(money.lineVat)}
@@ -5646,12 +5647,12 @@ function MakeSale() {
                                   </span>
                                 )}
                               </h4>
-                              {item.taxable === "Taxable" && (
+                              {isProductTaxable(item.taxable) && (
                                 <span className="px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">
                                   Taxable
                                 </span>
                               )}
-                              {item.taxable !== "Taxable" && !item.proBono && (
+                              {!isProductTaxable(item.taxable) && !item.proBono && (
                                 <span className="px-1.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded">
                                   Not taxable
                                 </span>

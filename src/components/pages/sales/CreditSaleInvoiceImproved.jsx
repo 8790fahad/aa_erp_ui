@@ -8,6 +8,7 @@ import { useSelector } from "react-redux";
 import PropTypes from "prop-types";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 import Barcode from "react-barcode";
+import { isProductTaxable } from "@/utils/taxableStatus";
 
 export default function CreditSaleInvoice({
   invoiceData: propInvoiceData,
@@ -551,7 +552,7 @@ export default function CreditSaleInvoice({
   const customerCopyTaxableSubtotal = customerCopyPriceList.reduce(
     (sum, price, index) => {
       const item = items[index];
-      const isTaxable = item?.taxable === "Taxable";
+      const isTaxable = isProductTaxable(item?.taxable);
       if (!isTaxable) return sum;
       const quantity = item?.quantity_sold || 0;
       return sum + price * quantity;
