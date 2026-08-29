@@ -1,8 +1,11 @@
 /** Business-wide idle lock preferences (one setup per facility). */
 
+import { useEffect, useState } from "react";
+
 const PREFS_KEY = "aa_erp_session_prefs";
 const LOCKED_KEY = "aa_erp_session_locked";
 export const SESSION_PREFS_EVENT = "aa-erp-session-prefs-changed";
+export const SESSION_LOCK_EVENT = "aa-erp-session-locked-changed";
 
 /** Min / max idle minutes admins can set. */
 export const MIN_IDLE_MINUTES = 1;
@@ -78,11 +81,47 @@ export function isSessionLocked() {
   return sessionStorage.getItem(LOCKED_KEY) === "1";
 }
 
+export function useSessionLocked() {
+  const [locked, setLocked] = useState(() =>
+    typeof window === "undefined" ? false : isSessionLocked(),
+  );
+  useEffect(() => {
+    const sync = (event) =>
+      setLocked(Boolean(event?.detail?.locked ?? isSessionLocked()));
+    window.addEventListener(SESSION_LOCK_EVENT, sync);
+    return () => window.removeEventListener(SESSION_LOCK_EVENT, sync);
+  }, []);
+  return locked;
+}
+
+function emitSessionLock(locked) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(SESSION_LOCK_EVENT, { detail: { locked: Boolean(locked) } }),
+  );
+}
+
+/**
+ * Radix Dialog/Sheet treat the lock overlay as an outside click/focus.
+ * Prevent dismiss so open forms stay put until the user unlocks.
+ */
+export function guardDismissWhileLocked(handler) {
+  return (event) => {
+    if (isSessionLocked()) {
+      event.preventDefault();
+      return;
+    }
+    handler?.(event);
+  };
+}
+
 export function setSessionLocked(locked) {
   if (locked) sessionStorage.setItem(LOCKED_KEY, "1");
   else sessionStorage.removeItem(LOCKED_KEY);
+  emitSessionLock(Boolean(locked));
 }
 
 export function clearSessionLockState() {
   sessionStorage.removeItem(LOCKED_KEY);
+  emitSessionLock(false);
 }

@@ -2,13 +2,22 @@ import * as React from "react"
 import { Drawer as DrawerPrimitive } from "vaul"
 
 import { cn } from "@/lib/utils"
+import { guardDismissWhileLocked, useSessionLocked } from "@/lib/sessionLock"
 
 const Drawer = ({
   shouldScaleBackground = true,
+  modal = true,
   ...props
-}) => (
-  <DrawerPrimitive.Root shouldScaleBackground={shouldScaleBackground} {...props} />
-)
+}) => {
+  const locked = useSessionLocked();
+  return (
+    <DrawerPrimitive.Root
+      shouldScaleBackground={shouldScaleBackground}
+      modal={locked ? false : modal}
+      {...props}
+    />
+  );
+}
 Drawer.displayName = "Drawer"
 
 const DrawerTrigger = DrawerPrimitive.Trigger
@@ -25,7 +34,16 @@ const DrawerOverlay = React.forwardRef(({ className, ...props }, ref) => (
 ))
 DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
 
-const DrawerContent = React.forwardRef(({ className, children, side = "bottom", ...props }, ref) => {
+const DrawerContent = React.forwardRef(({
+  className,
+  children,
+  side = "bottom",
+  onPointerDownOutside,
+  onInteractOutside,
+  onFocusOutside,
+  onEscapeKeyDown,
+  ...props
+}, ref) => {
   const sideClasses = {
     bottom: "inset-x-0 bottom-0 rounded-t-[10px]",
     top: "inset-x-0 top-0 rounded-b-[10px]",
@@ -47,7 +65,11 @@ const DrawerContent = React.forwardRef(({ className, children, side = "bottom", 
           (side === "left" || side === "right") && "h-full",
           className
         )}
-        {...props}>
+        {...props}
+        onPointerDownOutside={guardDismissWhileLocked(onPointerDownOutside)}
+        onInteractOutside={guardDismissWhileLocked(onInteractOutside)}
+        onFocusOutside={guardDismissWhileLocked(onFocusOutside)}
+        onEscapeKeyDown={guardDismissWhileLocked(onEscapeKeyDown)}>
         {side === "bottom" && (
           <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-slate-100 dark:bg-slate-800" />
         )}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { Lock, LogOut, Eye, EyeOff } from "lucide-react";
@@ -48,6 +49,8 @@ export default function SessionLockGuard() {
 
   const timerRef = useRef(null);
   const lastActivityRef = useRef(Date.now());
+  const passwordInputRef = useRef(null);
+  const emailInputRef = useRef(null);
   const needsEmail = !storedEmail;
 
   useEffect(() => {
@@ -120,7 +123,6 @@ export default function SessionLockGuard() {
     };
   }, [authenticated, prefs.enabled, locked, resetIdleTimer]);
 
-  // If prefs turned off while locked, stay locked until unlock — only stop new timers.
   useEffect(() => {
     if (!prefs.enabled && !locked) {
       clearSessionLockState();
@@ -136,6 +138,7 @@ export default function SessionLockGuard() {
     }
     if (!password.trim()) {
       setError("Enter your password");
+      passwordInputRef.current?.focus();
       return;
     }
 
@@ -151,6 +154,7 @@ export default function SessionLockGuard() {
       if (data.success === false) {
         setError(data.message || "Incorrect password");
         setUnlocking(false);
+        passwordInputRef.current?.focus();
         return;
       }
       if (data.token) {
@@ -174,8 +178,6 @@ export default function SessionLockGuard() {
     );
   };
 
-  if (!locked) return null;
-
   const displayName =
     [user?.firstName || user?.firstname, user?.lastName || user?.lastname]
       .filter(Boolean)
@@ -185,124 +187,135 @@ export default function SessionLockGuard() {
     "User";
 
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="session-lock-title"
-      onKeyDown={(e) => {
-        if (e.key === "Escape") e.preventDefault();
-      }}
-    >
-      <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-        <div className="bg-[var(--aa-navy,#1a2d5e)] px-6 py-5 text-center text-white">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/15">
-            <Lock className="h-6 w-6" />
+    <DialogPrimitive.Root open={locked} modal>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[9999] bg-slate-900/70 backdrop-blur-sm" />
+        <DialogPrimitive.Content
+          aria-describedby={undefined}
+          className="fixed left-1/2 top-1/2 z-[10000] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl outline-none"
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            const target = needsEmail
+              ? emailInputRef.current
+              : passwordInputRef.current;
+            requestAnimationFrame(() => target?.focus());
+          }}
+        >
+          <div className="bg-[var(--aa-navy,#1a2d5e)] px-6 py-5 text-center text-white">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/15">
+              <Lock className="h-6 w-6" />
+            </div>
+            <DialogPrimitive.Title
+              id="session-lock-title"
+              className="text-lg font-semibold"
+            >
+              Session locked
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Description className="mt-1 text-sm text-white/80">
+              {needsEmail
+                ? "Enter your email and password to continue"
+                : "Enter your password to continue"}
+            </DialogPrimitive.Description>
           </div>
-          <h2 id="session-lock-title" className="text-lg font-semibold">
-            Session locked
-          </h2>
-          <p className="mt-1 text-sm text-white/80">
-            {needsEmail
-              ? "Enter your email and password to continue"
-              : "Enter your password to continue"}
-          </p>
-        </div>
 
-        <form onSubmit={handleUnlock} className="space-y-4 px-6 py-5">
-          <div className="rounded-lg bg-slate-50 px-3 py-2 text-center">
-            <p className="text-sm font-medium text-slate-900">{displayName}</p>
-            {storedEmail ? (
-              <p className="text-xs text-slate-500">{storedEmail}</p>
-            ) : (
-              <p className="text-xs text-slate-500">No email on this account</p>
-            )}
-          </div>
+          <form onSubmit={handleUnlock} className="space-y-4 px-6 py-5">
+            <div className="rounded-lg bg-slate-50 px-3 py-2 text-center">
+              <p className="text-sm font-medium text-slate-900">{displayName}</p>
+              {storedEmail ? (
+                <p className="text-xs text-slate-500">{storedEmail}</p>
+              ) : (
+                <p className="text-xs text-slate-500">No email on this account</p>
+              )}
+            </div>
 
-          {needsEmail ? (
+            {needsEmail ? (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="session-unlock-email"
+                  className="text-xs font-medium text-slate-600"
+                >
+                  Email
+                </label>
+                <input
+                  id="session-unlock-email"
+                  ref={emailInputRef}
+                  type="email"
+                  autoComplete="username"
+                  value={unlockEmail}
+                  onChange={(e) => {
+                    setUnlockEmail(e.target.value);
+                    if (error) setError("");
+                  }}
+                  className="h-11 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--aa-accent,#2c7be5)] focus:ring-1 focus:ring-[var(--aa-accent,#2c7be5)]"
+                  placeholder="you@example.com"
+                />
+              </div>
+            ) : null}
+
             <div className="space-y-1.5">
               <label
-                htmlFor="session-unlock-email"
+                htmlFor="session-unlock-password"
                 className="text-xs font-medium text-slate-600"
               >
-                Email
+                Password
               </label>
-              <input
-                id="session-unlock-email"
-                type="email"
-                autoFocus
-                autoComplete="username"
-                value={unlockEmail}
-                onChange={(e) => {
-                  setUnlockEmail(e.target.value);
-                  if (error) setError("");
-                }}
-                className="h-11 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--aa-accent,#2c7be5)] focus:ring-1 focus:ring-[var(--aa-accent,#2c7be5)]"
-                placeholder="you@example.com"
-              />
+              <div className="relative">
+                <input
+                  id="session-unlock-password"
+                  ref={passwordInputRef}
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (error) setError("");
+                  }}
+                  className="h-11 w-full rounded-md border border-slate-300 py-2 pl-3 pr-10 text-sm outline-none focus:border-[var(--aa-accent,#2c7be5)] focus:ring-1 focus:ring-[var(--aa-accent,#2c7be5)]"
+                  placeholder="Your account password"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400 hover:text-slate-700"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+              {error ? (
+                <p className="text-xs text-red-600" role="alert">
+                  {error}
+                </p>
+              ) : null}
             </div>
-          ) : null}
 
-          <div className="space-y-1.5">
-            <label
-              htmlFor="session-unlock-password"
-              className="text-xs font-medium text-slate-600"
+            <Button
+              type="submit"
+              disabled={unlocking}
+              className="h-11 w-full bg-[var(--aa-navy,#1a2d5e)] text-white hover:opacity-90"
             >
-              Password
-            </label>
-            <div className="relative">
-              <input
-                id="session-unlock-password"
-                type={showPassword ? "text" : "password"}
-                autoFocus={!needsEmail}
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (error) setError("");
-                }}
-                className="h-11 w-full rounded-md border border-slate-300 py-2 pl-3 pr-10 text-sm outline-none focus:border-[var(--aa-accent,#2c7be5)] focus:ring-1 focus:ring-[var(--aa-accent,#2c7be5)]"
-                placeholder="Your account password"
-              />
-              <button
-                type="button"
-                tabIndex={-1}
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400 hover:text-slate-700"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-            {error ? (
-              <p className="text-xs text-red-600" role="alert">
-                {error}
-              </p>
-            ) : null}
-          </div>
+              {unlocking ? "Checking..." : "Unlock"}
+            </Button>
 
-          <Button
-            type="submit"
-            disabled={unlocking}
-            className="h-11 w-full bg-[var(--aa-navy,#1a2d5e)] text-white hover:opacity-90"
-          >
-            {unlocking ? "Checking..." : "Unlock"}
-          </Button>
-
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="flex w-full items-center justify-center gap-1.5 py-1 text-xs text-slate-500 hover:text-slate-800"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            Sign out instead
-          </button>
-        </form>
-      </div>
-    </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="flex w-full items-center justify-center gap-1.5 py-1 text-xs text-slate-500 hover:text-slate-800"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out instead
+            </button>
+          </form>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

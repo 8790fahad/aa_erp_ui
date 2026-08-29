@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -38,6 +38,7 @@ const STATUS_ALL = "all";
 const STATUS_PAID = "paid";
 const STATUS_UNPAID = "unpaid";
 const STATUS_PARTIALLY_PAID = "partially_paid";
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
 
 const primaryBtn =
   "border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90 shadow-none";
@@ -54,30 +55,22 @@ export default function BillSources() {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
   const [bills, setBills] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [imprestOpen, setImprestOpen] = useState(false);
   const [createBillOpen, setCreateBillOpen] = useState(false);
   const [expenseList, setExpenseList] = useState([]);
   const searchFromUrl = searchParams.get("search") || "";
   const pageFromUrl = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-  const pageSizeFromUrl = Math.max(1, Math.min(100, parseInt(searchParams.get("pageSize") || "10", 10)));
+  const pageSizeFromUrl = Math.max(
+    1,
+    Math.min(50, parseInt(searchParams.get("pageSize") || "10", 10)),
+  );
   const statusFromUrl = searchParams.get("status") || STATUS_ALL;
   const [searchInput, setSearchInput] = useState(searchFromUrl);
   const searchDebounceRef = useRef(null);
 
-  const searchText = searchFromUrl;
-  const pageIndex = pageFromUrl - 1;
   const pageSize = pageSizeFromUrl;
-  const statusFilter =
-    statusFromUrl === STATUS_ALL
-      ? null
-      : statusFromUrl === STATUS_PAID
-        ? "paid"
-        : statusFromUrl === STATUS_PARTIALLY_PAID
-          ? "partially_paid"
-          : statusFromUrl === STATUS_UNPAID
-            ? "unpaid"
-            : null;
 
   useEffect(() => {
     setSearchInput(searchFromUrl);
@@ -87,28 +80,44 @@ export default function BillSources() {
     if (!activeBusiness?.id) return;
 
     setLoading(true);
-    // Request a large page so the register is not silently capped at API default (10)
     const params = new URLSearchParams({
       facilityId: String(activeBusiness.id),
-      page: "1",
-      limit: "1000",
+      page: String(pageFromUrl),
+      limit: String(pageSizeFromUrl),
     });
+    if (searchFromUrl.trim()) {
+      params.set("search", searchFromUrl.trim());
+    }
+    if (statusFromUrl && statusFromUrl !== STATUS_ALL) {
+      params.set("status", statusFromUrl);
+    }
     _fetchApi(
       `/api/supplier/bills?${params.toString()}`,
       (resp) => {
         if (resp.success) {
           setBills(resp.data || []);
+          setTotalCount(Number(resp.pagination?.total) || 0);
         } else {
           console.error("Failed to load supplier bills");
+          setBills([]);
+          setTotalCount(0);
         }
         setLoading(false);
       },
       (err) => {
         console.error("Error fetching supplier bills:", err);
+        setBills([]);
+        setTotalCount(0);
         setLoading(false);
       }
     );
-  }, [activeBusiness?.id]);
+  }, [
+    activeBusiness?.id,
+    pageFromUrl,
+    pageSizeFromUrl,
+    searchFromUrl,
+    statusFromUrl,
+  ]);
 
   useEffect(() => {
     getSupplierBills();
@@ -139,39 +148,10 @@ export default function BillSources() {
     loadExpenseListForImprest();
   }, [loadExpenseListForImprest]);
 
-  const filteredData = useMemo(() => {
-    const q = String(searchText || "").trim().toLowerCase();
-    const hay = (v) =>
-      v != null && String(v).toLowerCase().includes(q);
-    return bills.filter((item) => {
-      // Search filter (safe when supplier_name / description are undefined)
-      const matchesSearch =
-        !q ||
-        hay(item.supplier_name) ||
-        hay(item.invoice_ref) ||
-        hay(item.description);
-
-      // Status filter - normalize both item status and filter to compare
-      if (statusFilter === null) {
-        return matchesSearch;
-      }
-
-      const itemStatusNormalized = (item.status || "")
-        .toLowerCase()
-        .replace(/\s+/g, "_");
-      const filterNormalized = statusFilter.toLowerCase().replace(/\s+/g, "_");
-      const matchesStatus = itemStatusNormalized === filterNormalized;
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [bills, searchText, statusFilter]);
-
-  // Pagination calculations (clamp page to valid range)
-  const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
-  const safePageIndex = Math.min(Math.max(0, pageIndex), totalPages - 1);
-  const startIndex = safePageIndex * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedData = filteredData.slice(startIndex, endIndex);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize) || 1);
+  const safePage = Math.min(pageFromUrl, totalPages);
+  const showingFrom = totalCount === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const showingTo = Math.min(safePage * pageSize, totalCount);
 
   const updateUrl = useCallback(
     (updates) => {

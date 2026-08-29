@@ -1,8 +1,16 @@
 /* eslint-disable no-unused-vars */
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Col, Input, Label, Row } from "reactstrap";
 import { useSelector } from "react-redux";
-import { ClipboardList, FileText, Search } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ClipboardList,
+  FileText,
+  Search,
+} from "lucide-react";
 import moment from "moment";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { toast } from "sonner";
@@ -10,11 +18,22 @@ import CustomButton from "@/common/Custom/CustomButton";
 import CustomModal from "@/common/Custom/CustomModal";
 import { Button as UIButton } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import CustomRequisitionModal from "@/common/Custom/CustomRequisitionModal";
 import { useNavigate } from "react-router-dom";
 import PurchaseOrderNav, {
   usePurchaseOrderPermissions,
 } from "./PurchaseOrderNav";
+import PurchaseRequisitionAPI from "./purchaseRequisitionApi";
+
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
+const todayDate = () => moment().format("YYYY-MM-DD");
 
 function statusBadgeClass(status) {
   const s = String(status || "").toLowerCase();
@@ -29,6 +48,15 @@ function RequisitionApproval() {
   const [pr, setPr] = useState([]);
   const [remark, setRemark] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [fromDate, setFromDate] = useState(todayDate);
+  const [toDate, setToDate] = useState(todayDate);
+  const [appliedFromDate, setAppliedFromDate] = useState(todayDate);
+  const [appliedToDate, setAppliedToDate] = useState(todayDate);
+  const appliedDatesRef = useRef({ from: todayDate(), to: todayDate() });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [itemList, setItemList] = useState([]);
   const [logs, setLogs] = useState([]);
   const [loading2, setLoading2] = useState(false);
@@ -99,26 +127,43 @@ function RequisitionApproval() {
   //   );
   // }, [activeBusiness.id, user.id]);
 
-  const getPR = useCallback(() => {
-    _postApi(
-      `/account/get-purchase-requisition`,
-      {
-        query_type: "select-pending",
-        requisitor: user.fullname,
-        facilityId: activeBusiness.id,
-      },
-      (data) => {
-        setLoading(false);
-        if (data.success) {
-          setPr(data.results);
-        }
-      },
-      (err) => {
-        setLoading(false);
-        console.log(err);
-      }
-    );
-  }, [activeBusiness.id, user.id]);
+  const getPR = useCallback(
+    (from, to, pageOverride) => {
+      const from_date =
+        from !== undefined ? from : appliedDatesRef.current.from;
+      const to_date = to !== undefined ? to : appliedDatesRef.current.to;
+      const page = pageOverride !== undefined ? pageOverride : currentPage;
+      _postApi(
+        `/account/get-purchase-requisition`,
+        {
+          query_type: "select-pending",
+          requisitor: user.fullname,
+          facilityId: activeBusiness.id,
+          from_date: from_date || undefined,
+          to_date: to_date || undefined,
+          page,
+          pageSize,
+          search: debouncedSearch || undefined,
+        },
+        (data) => {
+          setLoading(false);
+          if (data.success) {
+            setPr(data.results || []);
+            setTotalCount(
+              typeof data.total === "number"
+                ? data.total
+                : (data.results || []).length,
+            );
+          }
+        },
+        (err) => {
+          setLoading(false);
+          console.log(err);
+        },
+      );
+    },
+    [activeBusiness.id, user.fullname, currentPage, pageSize, debouncedSearch],
+  );
   const [loading1, setLoading1] = useState(false);
 
   const returnMemo = () => {
@@ -197,6 +242,7 @@ function RequisitionApproval() {
   }, [getPR]);
   const [isOpen, setIsOpen] = useState(false);
   const [items, setItems] = useState({});
+  const [attachments, setAttachments] = useState([]);
   const toggle = (item) => {
     setItems(item);
     setIsOpen(!isOpen);
@@ -214,6 +260,7 @@ function RequisitionApproval() {
   };
   const cancel = () => {
     setItems({});
+    setAttachments([]);
     setIsOpen(!isOpen);
   };
 
@@ -236,14 +283,14 @@ function RequisitionApproval() {
 
   const viewList = (item) => {
     toggle(item);
+    setAttachments([]);
     getLogs(item.memo_id);
     _postApi(
       "/account/purchase/getPr",
       {
         query_type: "select-exp",
         pr_no: item.pr_no,
-        // date: moment().format("YYYY-MM-DD"),
-        // user_id: user.id,
+        facilityId: activeBusiness.id,
       },
       (res) => {
         if (res.success) {
@@ -254,18 +301,55 @@ function RequisitionApproval() {
         toast.error("Error Occurred");
       }
     );
+    if (activeBusiness?.id && item?.pr_no) {
+      PurchaseRequisitionAPI.getPurchaseOrderDocuments(activeBusiness.id, {
+        pr_no: item.pr_no,
+        po_no: item.po_no,
+      })
+        .then((res) => setAttachments(res.data || []))
+        .catch(() => setAttachments([]));
+    }
   };
 
-  const filteredMemos = (pr || []).filter((row) => {
-    if (!searchTerm) return true;
-    const q = searchTerm.toLowerCase();
-    return (
-      String(row.branch || "").toLowerCase().includes(q) ||
-      String(row.pr_no || "").toLowerCase().includes(q) ||
-      String(row.reason || "").toLowerCase().includes(q) ||
-      String(row.supplier_name || "").toLowerCase().includes(q)
-    );
-  });
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const pendingCount = totalCount;
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize) || 1);
+  const safePage = Math.min(currentPage, totalPages);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, appliedFromDate, appliedToDate]);
+
+  const showingFrom =
+    totalCount === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const showingTo = Math.min(safePage * pageSize, totalCount);
+  const hasActiveFilters = Boolean(
+    searchTerm.trim() || appliedFromDate || appliedToDate,
+  );
+
+  const runDateFilter = () => {
+    appliedDatesRef.current = { from: fromDate, to: toDate };
+    setAppliedFromDate(fromDate);
+    setAppliedToDate(toDate);
+    setCurrentPage(1);
+    getPR(fromDate, toDate, 1);
+  };
+
+  const resetDates = () => {
+    const day = todayDate();
+    appliedDatesRef.current = { from: day, to: day };
+    setFromDate(day);
+    setToDate(day);
+    setAppliedFromDate(day);
+    setAppliedToDate(day);
+    setCurrentPage(1);
+    getPR(day, day, 1);
+  };
 
   const renderSkeletonFrame = () => (
     <div className="h-fit w-full">
@@ -302,9 +386,7 @@ function RequisitionApproval() {
                 </h1>
                 <p className="mt-0.5 text-xs text-slate-500">
                   Review and approve pending purchase requisitions
-                  {filteredMemos?.length
-                    ? ` · ${filteredMemos.length} waiting`
-                    : ""}
+                  {pendingCount ? ` · ${pendingCount} waiting` : ""}
                 </p>
               </div>
               <div className="relative">
@@ -320,6 +402,67 @@ function RequisitionApproval() {
             </div>
 
             <PurchaseOrderNav />
+
+            <div className="flex flex-wrap items-end gap-2 border-b border-slate-100 bg-slate-50/50 px-4 py-2.5">
+              <div>
+                <label
+                  htmlFor="approval-from-date"
+                  className="mb-1 block text-[11px] font-medium text-slate-500"
+                >
+                  From
+                </label>
+                <input
+                  id="approval-from-date"
+                  type="date"
+                  title="yyyy/mm/dd"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") runDateFilter();
+                  }}
+                  className="h-9 w-[9.5rem] rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="approval-to-date"
+                  className="mb-1 block text-[11px] font-medium text-slate-500"
+                >
+                  To
+                </label>
+                <input
+                  id="approval-to-date"
+                  type="date"
+                  title="yyyy/mm/dd"
+                  value={toDate}
+                  min={fromDate || undefined}
+                  onChange={(e) => setToDate(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") runDateFilter();
+                  }}
+                  className="h-9 w-[9.5rem] rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                />
+              </div>
+              <UIButton
+                type="button"
+                size="sm"
+                onClick={runDateFilter}
+                className="h-9 border-0 bg-[var(--aa-navy)] px-4 text-white hover:bg-[var(--aa-navy)]/90"
+              >
+                Run
+              </UIButton>
+              {(fromDate || toDate || appliedFromDate || appliedToDate) && (
+                <UIButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 px-2 text-xs text-slate-500"
+                  onClick={resetDates}
+                >
+                  Reset dates
+                </UIButton>
+              )}
+            </div>
 
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] border-collapse text-left text-sm">
@@ -337,7 +480,7 @@ function RequisitionApproval() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredMemos.length === 0 ? (
+                  {pr.length === 0 ? (
                     <tr>
                       <td
                         colSpan={7}
@@ -345,15 +488,19 @@ function RequisitionApproval() {
                       >
                         <FileText className="mx-auto mb-2 h-8 w-8 text-slate-300" />
                         <p className="text-sm font-medium text-slate-600">
-                          No pending requisitions to approve
+                          {hasActiveFilters
+                            ? "No requisitions match these filters"
+                            : "No pending requisitions to approve"}
                         </p>
                         <p className="mt-1 text-xs text-slate-400">
-                          New purchase orders will appear here for review
+                          {hasActiveFilters
+                            ? "Try a different date range or status"
+                            : "New purchase orders will appear here for review"}
                         </p>
                       </td>
                     </tr>
                   ) : (
-                    filteredMemos.map((row) => (
+                    pr.map((row) => (
                       <tr
                         key={row.pr_no}
                         className="border-b border-slate-100/80 bg-white hover:bg-slate-50/60"
@@ -391,7 +538,10 @@ function RequisitionApproval() {
                             onClick={() => viewList(row)}
                             className="h-8 px-2 text-sm font-medium text-[var(--aa-accent)] hover:bg-slate-100 hover:text-[var(--aa-navy)]"
                           >
-                            Review
+                            {String(row.status || "").toLowerCase() ===
+                            "pending"
+                              ? "Review"
+                              : "View"}
                           </UIButton>
                         </td>
                       </tr>
@@ -399,6 +549,89 @@ function RequisitionApproval() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/40 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-slate-500">
+                Showing{" "}
+                <span className="font-medium text-slate-700">
+                  {showingFrom}–{showingTo}
+                </span>{" "}
+                of{" "}
+                <span className="font-medium text-slate-700">
+                  {totalCount}
+                </span>
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">Rows</span>
+                  <Select
+                    value={String(pageSize)}
+                    onValueChange={(v) => {
+                      setPageSize(Number(v));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[72px] border-slate-200 bg-white text-xs shadow-none">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAGE_SIZE_OPTIONS.map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <UIButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 border-slate-200 p-0"
+                    disabled={safePage <= 1}
+                    onClick={() => setCurrentPage(1)}
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </UIButton>
+                  <UIButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 border-slate-200 p-0"
+                    disabled={safePage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </UIButton>
+                  <span className="min-w-[4.5rem] text-center text-xs text-slate-600">
+                    {safePage} / {totalPages}
+                  </span>
+                  <UIButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 border-slate-200 p-0"
+                    disabled={safePage >= totalPages}
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </UIButton>
+                  <UIButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 border-slate-200 p-0"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setCurrentPage(totalPages)}
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </UIButton>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -481,6 +714,7 @@ function RequisitionApproval() {
         logs={logs}
         mode="review"
         loading2={loading2}
+        attachments={attachments}
       />
     </>
   );

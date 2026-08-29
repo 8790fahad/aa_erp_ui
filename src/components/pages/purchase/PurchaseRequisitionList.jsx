@@ -18,11 +18,23 @@ import {
   Upload,
   Paperclip,
   ExternalLink,
+  Download,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Modal, ModalBody, ModalHeader } from "reactstrap";
 import { toast } from "sonner";
 import SearchSupplierInput from "./SearchSuppliers";
@@ -39,7 +51,17 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { isSessionLocked } from "@/lib/sessionLock";
 
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
+const HISTORY_STATUS_FILTERS = [
+  { value: "all", label: "All statuses" },
+  { value: "Pending", label: "Pending" },
+  { value: "Approved", label: "Approved" },
+  { value: "Pending Payment", label: "Pending payment" },
+  { value: "Converted", label: "Converted" },
+];
+const todayDate = () => moment().format("YYYY-MM-DD");
 const MAX_PO_FILE_BYTES = 25 * 1024 * 1024;
 const PO_ALLOWED_TYPES = new Set([
   "application/pdf",
@@ -60,9 +82,15 @@ function isAllowedPoFile(file) {
 }
 
 function attachmentHref(doc) {
-  if (doc?.url && /^https?:\/\//i.test(doc.url)) return doc.url;
-  if (doc?.file_path) return `${apiURL}/public/uploads/${doc.file_path}`;
-  return null;
+  const path = doc?.url || doc?.file_path;
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${apiURL}/public/uploads/${path}`;
+}
+
+function attachmentDownloadHref(doc) {
+  if (doc?.download_url) return doc.download_url;
+  return attachmentHref(doc);
 }
 
 const poInputClass =
@@ -89,8 +117,37 @@ function displayFormattedAmount(value) {
   return String(value);
 }
 
+function productLabelKey(item) {
+  return `${item?.name || ""} (${item?.code || ""})`;
+}
+
 function parseQty(value) {
   return parseFloat(parseNumberFromFormatted(value)) || 0;
+}
+
+function isCompletePoLine(row) {
+  return Boolean(row?.item && parseQty(row.quantity) > 0 && row.uom);
+}
+
+function lineItemKey(row) {
+  return String(row?.item_code || row?.code || row?.item || "")
+    .trim()
+    .toLowerCase();
+}
+
+function isDraftDirty(row) {
+  if (!row) return false;
+  return Boolean(
+    String(row.item || "").trim() ||
+      String(row.quantity || "").replace(/,/g, "").trim() ||
+      String(row.uom || "").trim(),
+  );
+}
+
+function findDuplicateItem(row, lines = []) {
+  const key = lineItemKey(row);
+  if (!key) return null;
+  return lines.find((line) => lineItemKey(line) === key) || null;
 }
 
 function statusBadgeClass(status) {
@@ -98,6 +155,7 @@ function statusBadgeClass(status) {
   if (s === "approved") return "bg-emerald-100 text-emerald-800 border-emerald-200";
   if (s === "pending payment") return "bg-amber-100 text-amber-800 border-amber-200";
   if (s === "pending") return "bg-slate-100 text-slate-700 border-slate-200";
+  if (s === "converted") return "bg-violet-100 text-violet-800 border-violet-200";
   return "bg-slate-100 text-slate-600 border-slate-200";
 }
 
@@ -107,6 +165,16 @@ export default function PurchaseRequisitionList() {
   const isHistory = searchParams.get("tab") === "history";
   const { canCreate } = usePurchaseOrderPermissions();
   const [searchTerm, setSearchTerm] = useState("");
+  const [fromDate, setFromDate] = useState(todayDate);
+  const [toDate, setToDate] = useState(todayDate);
+  const [appliedFromDate, setAppliedFromDate] = useState(todayDate);
+  const [appliedToDate, setAppliedToDate] = useState(todayDate);
+  const appliedDatesRef = useRef({ from: todayDate(), to: todayDate() });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [itemList, setItemList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -118,8 +186,9 @@ export default function PurchaseRequisitionList() {
   const [formLoading, setFormLoading] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [viewAttachments, setViewAttachments] = useState([]);
-  const [attachmentUploading, setAttachmentUploading] = useState(false);
+  const [viewAttachmentsLoading, setViewAttachmentsLoading] = useState(false);
   const attachmentInputRef = useRef(null);
+  const formSubmittedRef = useRef(false);
   const [allBranches, setAllBranches] = useState([]);
 
   // Form state
@@ -139,6 +208,7 @@ export default function PurchaseRequisitionList() {
   const productDescriptionRef = useRef(null);
   const quantityInputRef = useRef(null);
   const uomInputRef = useRef(null);
+  const focusQtyAfterSelectRef = useRef(false);
 
   /** Branch ids assigned to the logged-in staff. */
   const userBranchIds = useMemo(() => {
@@ -208,6 +278,7 @@ export default function PurchaseRequisitionList() {
   const viewList = (item) => {
     toggle(item);
     setViewAttachments([]);
+    setViewAttachmentsLoading(true);
     _postApi(
       "/account/purchase/getPr",
       {
@@ -230,36 +301,69 @@ export default function PurchaseRequisitionList() {
       po_no: item.po_no,
     })
       .then((res) => setViewAttachments(res.data || []))
-      .catch(() => setViewAttachments([]));
+      .catch(() => setViewAttachments([]))
+      .finally(() => setViewAttachmentsLoading(false));
   };
 
-  const getPR = useCallback(() => {
-    if (!activeBusiness?.id) return;
-    setLoading(true);
-    _postApi(
-      `/account/get-purchase-requisition`,
-      {
-        query_type: isHistory ? "select-history" : "select",
-        requisitor: `${user.firstname} ${user.lastname}`,
-        facilityId: activeBusiness.id,
-      },
-      (data) => {
-        setLoading(false);
-        if (data.success) {
-          setPr(data.results || []);
-        } else {
-          toast.error(data.message || "Failed to load purchase orders");
+  const getPR = useCallback(
+    (from, to, pageOverride) => {
+      if (!activeBusiness?.id) return;
+      const from_date =
+        from !== undefined ? from : appliedDatesRef.current.from;
+      const to_date = to !== undefined ? to : appliedDatesRef.current.to;
+      const page = pageOverride !== undefined ? pageOverride : currentPage;
+      setLoading(true);
+      _postApi(
+        `/account/get-purchase-requisition`,
+        {
+          query_type: isHistory ? "select-history" : "select",
+          requisitor: `${user.firstname} ${user.lastname}`,
+          facilityId: activeBusiness.id,
+          from_date: from_date || undefined,
+          to_date: to_date || undefined,
+          page,
+          pageSize,
+          search: debouncedSearch || undefined,
+          status:
+            isHistory && statusFilter && statusFilter !== "all"
+              ? statusFilter
+              : undefined,
+        },
+        (data) => {
+          setLoading(false);
+          if (data.success) {
+            setPr(data.results || []);
+            setTotalCount(
+              typeof data.total === "number"
+                ? data.total
+                : (data.results || []).length,
+            );
+          } else {
+            toast.error(data.message || "Failed to load purchase orders");
+            setPr([]);
+            setTotalCount(0);
+          }
+        },
+        (err) => {
+          setLoading(false);
+          console.log(err);
+          toast.error(err?.message || "Failed to load purchase orders");
           setPr([]);
-        }
-      },
-      (err) => {
-        setLoading(false);
-        console.log(err);
-        toast.error(err?.message || "Failed to load purchase orders");
-        setPr([]);
-      },
-    );
-  }, [activeBusiness.id, user.firstname, user.lastname, isHistory]);
+          setTotalCount(0);
+        },
+      );
+    },
+    [
+      activeBusiness.id,
+      user.firstname,
+      user.lastname,
+      isHistory,
+      currentPage,
+      pageSize,
+      debouncedSearch,
+      statusFilter,
+    ],
+  );
 
   useEffect(() => {
     getPR();
@@ -303,6 +407,7 @@ export default function PurchaseRequisitionList() {
       unit: "",
     });
     setErrors({ reason: "", supplier: "", branch: "" });
+    formSubmittedRef.current = false;
     setAttachments([]);
     getProductList();
     getCategories();
@@ -311,11 +416,21 @@ export default function PurchaseRequisitionList() {
   };
 
   const closeFormModal = () => {
+    const storedCount = attachments.filter((doc) => doc?.file_path).length;
+    if (!formSubmittedRef.current && storedCount > 0) {
+      toast.info(
+        storedCount === 1
+          ? "The document was uploaded and stored. Submit the purchase order to attach it."
+          : `${storedCount} documents were uploaded and stored. Submit the purchase order to attach them.`,
+      );
+    }
+    formSubmittedRef.current = false;
     setIsFormModalOpen(false);
     setAttachments([]);
   };
 
   const handleFormSheetChange = (open) => {
+    if (!open && isSessionLocked()) return;
     if (open) openFormModal();
     else closeFormModal();
   };
@@ -451,7 +566,7 @@ export default function PurchaseRequisitionList() {
   );
 
   // Form validation
-  const validateForm = () => {
+  const validateForm = (lines) => {
     const newErrors = {
       reason: "",
       supplier: "",
@@ -460,7 +575,7 @@ export default function PurchaseRequisitionList() {
 
     let isValid = true;
 
-    if (!form.supplier_name || !form.supplier_code) {
+    if (!form.supplier_name) {
       toast.error("Preferred vendor/supplier is required");
       newErrors.supplier = "Preferred vendor/supplier is required";
       isValid = false;
@@ -478,9 +593,21 @@ export default function PurchaseRequisitionList() {
       isValid = false;
     }
 
-    if (expenses.length === 0) {
+    if (!lines.length) {
       isValid = false;
-      toast.error("Requisition details is required");
+      toast.error("Add at least one line item");
+    }
+
+    const seen = new Set();
+    for (const line of lines) {
+      const key = lineItemKey(line);
+      if (!key) continue;
+      if (seen.has(key)) {
+        isValid = false;
+        toast.error(`${line.item || "This item"} is already on this order`);
+        break;
+      }
+      seen.add(key);
     }
 
     setErrors(newErrors);
@@ -494,34 +621,36 @@ export default function PurchaseRequisitionList() {
   };
 
   const handleAddExpense = () => {
-    if (newExpense.item && parseQty(newExpense.quantity) > 0 && newExpense.uom) {
-      setExpenses((prev) => [
-        ...prev,
-        {
-          ...newExpense,
-          quantity: displayFormattedAmount(newExpense.quantity) || "1",
-        },
-      ]);
-      setNewExpense({
-        item: "",
-        quantity: "",
-        uom: "",
-        category: "",
-        unit: "",
-      });
-
-      // Focus back on Product Description after adding
-      setTimeout(() => {
-        if (productDescriptionRef.current) {
-          // Clear typeahead selection + input, then focus
-          productDescriptionRef.current.clear();
-          const input = productDescriptionRef.current.getInput();
-          if (input) input.focus();
-        }
-      }, 100);
-    } else {
+    if (!isCompletePoLine(newExpense)) {
       toast.error("Please fill in all required fields");
+      return;
     }
+    if (findDuplicateItem(newExpense, expenses)) {
+      toast.error(`${newExpense.item} is already on this order`);
+      return;
+    }
+    setExpenses((prev) => [
+      ...prev,
+      {
+        ...newExpense,
+        quantity: displayFormattedAmount(newExpense.quantity) || "1",
+      },
+    ]);
+    setNewExpense({
+      item: "",
+      quantity: "",
+      uom: "",
+      category: "",
+      unit: "",
+    });
+
+    setTimeout(() => {
+      if (productDescriptionRef.current) {
+        productDescriptionRef.current.clear();
+        const input = productDescriptionRef.current.getInput();
+        if (input) input.focus();
+      }
+    }, 100);
   };
 
   const applyProductToDraft = (selected) => {
@@ -533,6 +662,15 @@ export default function PurchaseRequisitionList() {
         chart_code: "",
         subhead: "",
       }));
+      return;
+    }
+    const already = findDuplicateItem(
+      { item: selected.name, item_code: selected.code },
+      expenses,
+    );
+    if (already) {
+      toast.error(`${selected.name} is already on this order`);
+      productDescriptionRef.current?.clear?.();
       return;
     }
     const unitOfMeasure = String(selected.unit_of_measure || "").trim();
@@ -558,9 +696,26 @@ export default function PurchaseRequisitionList() {
       unit_code: uomMeta.unit_code || prev.unit_code || "",
       category: uomMeta.category || prev.category || "",
       category_code: uomMeta.category_code || prev.category_code || "",
-      quantity: prev.quantity || formatNumberWithCommas("1"),
+      quantity:
+        parseQty(prev.quantity) > 0
+          ? prev.quantity
+          : formatNumberWithCommas("1"),
     }));
+    focusQtyAfterSelectRef.current = true;
   };
+
+  useEffect(() => {
+    if (!focusQtyAfterSelectRef.current || !newExpense.item) return;
+    focusQtyAfterSelectRef.current = false;
+    const timer = window.setTimeout(() => {
+      productDescriptionRef.current?.getInput?.()?.blur?.();
+      const qty = quantityInputRef.current;
+      if (!qty) return;
+      qty.focus();
+      qty.select();
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [newExpense.item, newExpense.item_code]);
 
   const updateExpenseField = (index, updates) => {
     setExpenses((prev) =>
@@ -591,35 +746,67 @@ export default function PurchaseRequisitionList() {
     }
     if (!valid.length) return;
 
-    setAttachmentUploading(true);
-    try {
-      const response = await PurchaseRequisitionAPI.stagePurchaseOrderDocuments(
-        valid,
-      );
-      const uploaded = (response.data || []).map((doc) => ({
-        ...doc,
-        url: `${apiURL}/public/uploads/${doc.file_path}`,
-      }));
-      setAttachments((prev) => [...prev, ...uploaded]);
-      toast.success(
-        uploaded.length === 1
-          ? "Document uploaded"
-          : `${uploaded.length} documents uploaded`,
-      );
-    } catch (error) {
-      toast.error(error.message || "Failed to upload documents");
-    } finally {
-      setAttachmentUploading(false);
-    }
+    const pending = valid.map((file) => ({
+      clientId: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
+      name: file.name,
+      original_name: file.name,
+      document_name: file.name,
+      size: file.size,
+      file_size: file.size,
+      mime_type: file.type,
+      uploading: true,
+      file,
+    }));
+    setAttachments((prev) => [...prev, ...pending]);
+
+    await Promise.all(
+      pending.map(async (item) => {
+        try {
+          const response =
+            await PurchaseRequisitionAPI.stagePurchaseOrderDocument(item.file);
+          const doc = (response.data || [])[0];
+          if (!doc?.file_path) {
+            throw new Error("Upload failed");
+          }
+          setAttachments((prev) =>
+            prev.map((row) =>
+              row.clientId === item.clientId
+                ? {
+                    ...doc,
+                    clientId: item.clientId,
+                    url: doc.url || attachmentHref(doc),
+                    uploading: false,
+                  }
+                : row,
+            ),
+          );
+          toast.success(`${item.name} uploaded`);
+        } catch (error) {
+          setAttachments((prev) =>
+            prev.filter((row) => row.clientId !== item.clientId),
+          );
+          toast.error(
+            `${item.name}: ${error.message || "Failed to upload"}`,
+          );
+        }
+      }),
+    );
   };
 
   const handleSubmitForm = async () => {
-    if (!validateForm()) {
+    if (isDraftDirty(newExpense)) {
+      toast.error(
+        "Finish adding the line item or clear it before submitting.",
+      );
       return;
     }
 
-    if (expenses.length === 0) {
-      toast.error("Please add at least one expense before submitting.");
+    if (!validateForm(expenses)) {
+      return;
+    }
+
+    if (attachments.some((doc) => doc.uploading)) {
+      toast.error("Wait for documents to finish uploading.");
       return;
     }
 
@@ -628,6 +815,8 @@ export default function PurchaseRequisitionList() {
     try {
       const requisitionData = {
         ...form,
+        supplier_code:
+          form.supplier_code || form.supplier_name || "",
         prefix: activeBusiness.prefix,
         expenses: expenses.map((row) => ({
           ...row,
@@ -643,35 +832,64 @@ export default function PurchaseRequisitionList() {
       );
       toast.success(response.message);
 
-      // Close modal and refresh list
-      setIsFormModalOpen(false);
+      formSubmittedRef.current = true;
       setAttachments([]);
+      setNewExpense({
+        item: "",
+        quantity: "",
+        uom: "",
+        category: "",
+        unit: "",
+      });
+      setIsFormModalOpen(false);
       getPR();
     } catch (error) {
-      toast.error(error.message);
+      toast.error(error.message || "Failed to submit purchase order");
     } finally {
       setFormLoading(false);
     }
   };
 
-  const filteredPr = (pr || []).filter((row) => {
-    if (!searchTerm) return true;
-    const q = searchTerm.toLowerCase();
-    return (
-      String(row.branch || "")
-        .toLowerCase()
-        .includes(q) ||
-      String(row.pr_no || "")
-        .toLowerCase()
-        .includes(q) ||
-      String(row.reason || "")
-        .toLowerCase()
-        .includes(q) ||
-      String(row.supplier_name || "")
-        .toLowerCase()
-        .includes(q)
-    );
-  });
+  const attachmentUploading = attachments.some((doc) => doc.uploading);
+  const productTypeaheadSelected = useMemo(() => {
+    if (!newExpense.item) return [];
+    return formItems.filter((item) => item.name === newExpense.item);
+  }, [newExpense.item, formItems]);
+
+  const runDateFilter = () => {
+    appliedDatesRef.current = { from: fromDate, to: toDate };
+    setAppliedFromDate(fromDate);
+    setAppliedToDate(toDate);
+    setCurrentPage(1);
+    getPR(fromDate, toDate, 1);
+  };
+
+  const resetDates = () => {
+    const day = todayDate();
+    appliedDatesRef.current = { from: day, to: day };
+    setFromDate(day);
+    setToDate(day);
+    setAppliedFromDate(day);
+    setAppliedToDate(day);
+    setCurrentPage(1);
+    getPR(day, day, 1);
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize) || 1);
+  const safePage = Math.min(currentPage, totalPages);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, appliedFromDate, appliedToDate, isHistory, statusFilter]);
+
+  const showingFrom =
+    totalCount === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const showingTo = Math.min(safePage * pageSize, totalCount);
   return (
     <>
       <div className="h-fit w-full">
@@ -714,6 +932,92 @@ export default function PurchaseRequisitionList() {
 
             <PurchaseOrderNav />
 
+            <div className="flex flex-wrap items-end gap-2 border-b border-slate-100 bg-slate-50/50 px-4 py-2.5">
+              <div>
+                <label
+                  htmlFor="po-from-date"
+                  className="mb-1 block text-[11px] font-medium text-slate-500"
+                >
+                  From
+                </label>
+                <input
+                  id="po-from-date"
+                  type="date"
+                  title="yyyy/mm/dd"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") runDateFilter();
+                  }}
+                  className="h-9 w-[9.5rem] rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="po-to-date"
+                  className="mb-1 block text-[11px] font-medium text-slate-500"
+                >
+                  To
+                </label>
+                <input
+                  id="po-to-date"
+                  type="date"
+                  title="yyyy/mm/dd"
+                  value={toDate}
+                  min={fromDate || undefined}
+                  onChange={(e) => setToDate(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") runDateFilter();
+                  }}
+                  className="h-9 w-[9.5rem] rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                />
+              </div>
+              {isHistory ? (
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-slate-500">
+                    Status
+                  </label>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={(value) => {
+                      setStatusFilter(value);
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-9 w-44 border-slate-200 bg-white text-sm shadow-none">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {HISTORY_STATUS_FILTERS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                onClick={runDateFilter}
+                className="h-9 border-0 bg-[var(--aa-navy)] px-4 text-white hover:bg-[var(--aa-navy)]/90"
+              >
+                Run
+              </Button>
+              {(fromDate || toDate || appliedFromDate || appliedToDate) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 px-2 text-xs text-slate-500"
+                  onClick={resetDates}
+                >
+                  Reset dates
+                </Button>
+              )}
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] border-collapse text-left text-sm">
                 <thead>
@@ -735,7 +1039,7 @@ export default function PurchaseRequisitionList() {
                         </td>
                       </tr>
                     ))
-                  ) : filteredPr.length === 0 ? (
+                  ) : pr.length === 0 ? (
                     <tr>
                       <td
                         colSpan={6}
@@ -748,7 +1052,7 @@ export default function PurchaseRequisitionList() {
                       </td>
                     </tr>
                   ) : (
-                    filteredPr.map((row) => (
+                    pr.map((row) => (
                       <tr
                         key={row.pr_no}
                         className="border-b border-slate-100/80 bg-white hover:bg-slate-50/60"
@@ -791,6 +1095,89 @@ export default function PurchaseRequisitionList() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/40 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-slate-500">
+                Showing{" "}
+                <span className="font-medium text-slate-700">
+                  {showingFrom}–{showingTo}
+                </span>{" "}
+                of{" "}
+                <span className="font-medium text-slate-700">
+                  {totalCount}
+                </span>
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">Rows</span>
+                  <Select
+                    value={String(pageSize)}
+                    onValueChange={(v) => {
+                      setPageSize(Number(v));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[72px] border-slate-200 bg-white text-xs shadow-none">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAGE_SIZE_OPTIONS.map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 border-slate-200 p-0"
+                    disabled={safePage <= 1}
+                    onClick={() => setCurrentPage(1)}
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 border-slate-200 p-0"
+                    disabled={safePage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="min-w-[4.5rem] text-center text-xs text-slate-600">
+                    {safePage} / {totalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 border-slate-200 p-0"
+                    disabled={safePage >= totalPages}
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 border-slate-200 p-0"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setCurrentPage(totalPages)}
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -944,26 +1331,60 @@ export default function PurchaseRequisitionList() {
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   Attachments (waybills / delivery docs)
                 </p>
-                {viewAttachments.length === 0 ? (
+                {viewAttachmentsLoading ? (
+                  <p className="text-xs text-slate-500">Loading documents…</p>
+                ) : viewAttachments.length === 0 ? (
                   <p className="text-xs text-slate-500">No documents attached</p>
                 ) : (
                   <ul className="space-y-1.5">
-                    {viewAttachments.map((doc) => (
-                      <li key={doc.id || doc.file_path}>
+                    {viewAttachments.map((doc) => {
+                      const href = attachmentHref(doc);
+                      const downloadHref = attachmentDownloadHref(doc);
+                      const label = doc.document_name || doc.original_name;
+                      return (
+                      <li
+                        key={doc.id || doc.file_path}
+                        className="flex items-center justify-between gap-2"
+                      >
                         <a
-                          href={`${apiURL}/public/uploads/${doc.file_path}`}
+                          href={href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-sm text-[var(--aa-accent)] hover:text-[var(--aa-navy)] hover:underline"
+                          className="inline-flex min-w-0 items-center gap-1.5 text-sm text-[var(--aa-accent)] hover:text-[var(--aa-navy)] hover:underline"
                         >
-                          <Paperclip className="h-3.5 w-3.5" />
-                          <span className="truncate">
-                            {doc.document_name || doc.original_name}
-                          </span>
-                          <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
+                          <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{label}</span>
                         </a>
+                        <span className="flex shrink-0 items-center gap-1">
+                          {href ? (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="View"
+                              aria-label={`View ${label}`}
+                              className="rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-[var(--aa-navy)]"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </a>
+                          ) : null}
+                          {downloadHref ? (
+                            <a
+                              href={downloadHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download={label}
+                              title="Download"
+                              aria-label={`Download ${label}`}
+                              className="rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-[var(--aa-navy)]"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </a>
+                          ) : null}
+                        </span>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 )}
               </div>
@@ -1010,8 +1431,21 @@ export default function PurchaseRequisitionList() {
                   label=""
                   edge
                   placeholder="Search and select supplier..."
+                  selected={
+                    form.supplier_name
+                      ? [
+                          {
+                            supplier_name: form.supplier_name,
+                            supplier_number: form.supplier_code,
+                            supplier_code: form.supplier_code,
+                          },
+                        ]
+                      : []
+                  }
                   style={{
-                    border: "1px solid #cbd5e1",
+                    border: errors.supplier
+                      ? "1px solid #ef4444"
+                      : "1px solid #cbd5e1",
                     borderRadius: "0.375rem",
                   }}
                   inputProps={{
@@ -1025,9 +1459,14 @@ export default function PurchaseRequisitionList() {
                   onChange={(s) => {
                     setForm((p) => ({
                       ...p,
-                      supplier_name: s?.supplier_name || "",
-                      supplier_code: s?.supplier_number || "",
-                      account_code: s?.supplier_subhead || "",
+                      supplier_name:
+                        s?.supplier_name || s?.company_name || s?.name || "",
+                      supplier_code:
+                        s?.supplier_number ||
+                        s?.supplier_code ||
+                        s?.id ||
+                        "",
+                      account_code: s?.supplier_subhead || s?.payable_code || "",
                     }));
                     setErrors((prev) => ({ ...prev, supplier: "" }));
                   }}
@@ -1200,32 +1639,19 @@ export default function PurchaseRequisitionList() {
                       <tr className="bg-white hover:bg-slate-50/80">
                         <td className="px-3 py-3 align-top">
                           <TypeaheadCustom
+                            id="po-product-typeahead"
                             _ref={productDescriptionRef}
                             options={formItems}
                             placeholder="Search and select product..."
-                            labelKey={(item) =>
-                              `${item.name} (${item.code})`
-                            }
+                            labelKey={productLabelKey}
                             onChange={(selectedItems) => {
                               applyProductToDraft(
                                 selectedItems.length
                                   ? selectedItems[0]
                                   : null,
                               );
-                              if (selectedItems.length) {
-                                setTimeout(() => {
-                                  quantityInputRef.current?.focus();
-                                  quantityInputRef.current?.select();
-                                }, 100);
-                              }
                             }}
-                            selected={
-                              newExpense.item
-                                ? formItems.filter(
-                                    (item) => item.name === newExpense.item,
-                                  )
-                                : []
-                            }
+                            selected={productTypeaheadSelected}
                             renderMenuItemChildren={(option) => (
                               <div className="py-1">
                                 <div className="text-sm font-medium text-slate-800">
@@ -1375,7 +1801,7 @@ export default function PurchaseRequisitionList() {
                   variant="outline"
                   size="sm"
                   className="h-9 gap-1.5 border-slate-300"
-                  disabled={formLoading || attachmentUploading}
+                  disabled={formLoading}
                   onClick={() => attachmentInputRef.current?.click()}
                 >
                   {attachmentUploading ? (
@@ -1386,12 +1812,14 @@ export default function PurchaseRequisitionList() {
                   {attachmentUploading ? "Uploading…" : "Upload documents"}
                 </Button>
                 <p className="mt-1.5 text-[11px] text-slate-500">
-                  Files upload immediately. Click a name to open the file. 25MB each.
+                  Each file uploads as soon as you select it, separately from
+                  this form. Closing without submitting still keeps the files.
+                  25MB each.
                 </p>
                 {attachments.length > 0 && (
                   <ul className="mt-3 space-y-1.5">
                     {attachments.map((file, idx) => {
-                      const href = attachmentHref(file);
+                      const href = file.uploading ? null : attachmentHref(file);
                       const label =
                         file.document_name ||
                         file.original_name ||
@@ -1399,11 +1827,15 @@ export default function PurchaseRequisitionList() {
                       const sizeBytes = file.file_size || file.size;
                       return (
                       <li
-                        key={`${file.file_path || label}-${idx}`}
+                        key={file.clientId || `${file.file_path || label}-${idx}`}
                         className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
                       >
                         <span className="flex min-w-0 items-center gap-1.5 truncate">
-                          <Paperclip className="h-3.5 w-3.5 shrink-0 text-[var(--aa-accent)]" />
+                          {file.uploading ? (
+                            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--aa-accent)]" />
+                          ) : (
+                            <Paperclip className="h-3.5 w-3.5 shrink-0 text-[var(--aa-accent)]" />
+                          )}
                           {href ? (
                             <a
                               href={href}
@@ -1432,10 +1864,19 @@ export default function PurchaseRequisitionList() {
                           {href ? (
                             <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
                           ) : null}
+                          {file.uploading ? (
+                            <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                              Uploading
+                            </span>
+                          ) : (
+                            <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                              Uploaded
+                            </span>
+                          )}
                         </span>
                         <button
                           type="button"
-                          disabled={formLoading || attachmentUploading}
+                          disabled={formLoading || file.uploading}
                           onClick={() =>
                             setAttachments((prev) =>
                               prev.filter((_, i) => i !== idx),
@@ -1470,7 +1911,12 @@ export default function PurchaseRequisitionList() {
                 size="sm"
                 onClick={handleSubmitForm}
                 className="h-9 bg-[var(--aa-accent)] text-white hover:opacity-90"
-                disabled={expenses.length === 0 || formLoading || attachmentUploading}
+                disabled={
+                  expenses.length === 0 ||
+                  isDraftDirty(newExpense) ||
+                  formLoading ||
+                  attachmentUploading
+                }
               >
                 {formLoading ? "Submitting…" : "Submit Purchase Order"}
               </Button>

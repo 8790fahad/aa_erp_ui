@@ -7,9 +7,13 @@ import {
   Building2,
   CheckCircle2,
   ClipboardCheck,
+  Download,
+  ExternalLink,
   Package,
+  Paperclip,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { apiURL } from "@/redux/actions/api";
 import {
   Sheet,
   SheetContent,
@@ -27,6 +31,26 @@ const thClass =
   "px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500";
 const tdClass = "border-b border-slate-100 px-3 py-2.5 text-sm text-slate-700";
 const trClass = "bg-white transition-colors hover:bg-slate-50/80";
+
+function attachmentHref(doc) {
+  const path = doc?.url || doc?.file_path;
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${apiURL}/public/uploads/${path}`;
+}
+
+function attachmentDownloadHref(doc) {
+  if (doc?.download_url) return doc.download_url;
+  return attachmentHref(doc);
+}
+
+function formatFileSize(bytes) {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size <= 0) return "";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const DetailItem = ({ label, value, className = "" }) => (
   <div className={className}>
@@ -67,6 +91,7 @@ const CustomRequisitionModal = ({
   truckNumber,
   setWaybillNumber,
   setTruckNumber,
+  attachments = [],
 }) => {
   const [isOpen3, setIsOpen3] = useState(false);
   const [itemList, setItemList] = useState([]);
@@ -497,6 +522,88 @@ const CustomRequisitionModal = ({
     </>
   );
 
+  const renderAttachments = () => (
+    <div className="mt-6">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <Paperclip className="h-3.5 w-3.5" />
+          Attachments
+        </p>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+          {attachments.length} file{attachments.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+      {attachments.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+          No documents attached to this requisition
+        </p>
+      ) : (
+        <ul className="space-y-1.5 rounded-xl border border-slate-200 bg-white p-2">
+          {attachments.map((doc, idx) => {
+            const href = attachmentHref(doc);
+            const downloadHref = attachmentDownloadHref(doc);
+            const label =
+              doc.document_name ||
+              doc.original_name ||
+              doc.name ||
+              `Document ${idx + 1}`;
+            const sizeLabel = formatFileSize(doc.file_size || doc.size);
+            return (
+              <li
+                key={doc.id || doc.file_path || `${label}-${idx}`}
+                className="flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <Paperclip className="h-3.5 w-3.5 shrink-0 text-[var(--aa-accent)]" />
+                  {href ? (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="truncate font-medium text-[var(--aa-accent)] hover:text-[var(--aa-navy)] hover:underline"
+                    >
+                      {label}
+                    </a>
+                  ) : (
+                    <span className="truncate">{label}</span>
+                  )}
+                </span>
+                <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-slate-400">
+                  {sizeLabel ? <span className="mr-1">{sizeLabel}</span> : null}
+                  {href ? (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="View"
+                      aria-label={`View ${label}`}
+                      className="rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-[var(--aa-navy)]"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  ) : null}
+                  {downloadHref ? (
+                    <a
+                      href={downloadHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download={label}
+                      title="Download"
+                      aria-label={`Download ${label}`}
+                      className="rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-[var(--aa-navy)]"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </a>
+                  ) : null}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+
   const renderDefaultContent = () => (
     <div>
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -667,6 +774,8 @@ const CustomRequisitionModal = ({
 
               {(mode === "review" || mode === "approve") &&
                 renderReviewApproveContent()}
+
+              {mode !== "receive" ? renderAttachments() : null}
             </div>
           )}
         </div>
@@ -791,6 +900,7 @@ CustomRequisitionModal.propTypes = {
   truckNumber: PropTypes.string,
   setWaybillNumber: PropTypes.func,
   setTruckNumber: PropTypes.func,
+  attachments: PropTypes.array,
 };
 
 export default CustomRequisitionModal;

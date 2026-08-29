@@ -4,8 +4,12 @@ import * as SheetPrimitive from "@radix-ui/react-dialog"
 import { cva } from "class-variance-authority";
 import { cn } from "@/lib/utils"
 import { Cross2Icon } from "@radix-ui/react-icons"
+import { guardDismissWhileLocked, useSessionLocked } from "@/lib/sessionLock"
 
-const Sheet = SheetPrimitive.Root
+const Sheet = ({ modal = true, ...props }) => {
+  const locked = useSessionLocked();
+  return <SheetPrimitive.Root {...props} modal={locked ? false : modal} />;
+};
 
 const SheetTrigger = SheetPrimitive.Trigger
 
@@ -43,10 +47,27 @@ const sheetVariants = cva(
   }
 )
 
-const SheetContent = React.forwardRef(({ side = "right", className, children, ...props }, ref) => (
+const SheetContent = React.forwardRef(({
+  side = "right",
+  className,
+  children,
+  onPointerDownOutside,
+  onInteractOutside,
+  onFocusOutside,
+  onEscapeKeyDown,
+  ...props
+}, ref) => (
   <SheetPortal>
     <SheetOverlay />
-    <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
+    <SheetPrimitive.Content
+      ref={ref}
+      className={cn(sheetVariants({ side }), className)}
+      {...props}
+      onPointerDownOutside={guardDismissWhileLocked(onPointerDownOutside)}
+      onInteractOutside={guardDismissWhileLocked(onInteractOutside)}
+      onFocusOutside={guardDismissWhileLocked(onFocusOutside)}
+      onEscapeKeyDown={guardDismissWhileLocked(onEscapeKeyDown)}
+    >
       <SheetPrimitive.Close
         className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-slate-100 dark:ring-offset-slate-950 dark:focus:ring-slate-300 dark:data-[state=open]:bg-slate-800">
         <Cross2Icon className="h-4 w-4" />

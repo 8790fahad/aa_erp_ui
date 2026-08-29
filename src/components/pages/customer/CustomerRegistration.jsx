@@ -798,25 +798,6 @@ const CustomerRegistartion = ({
               )}
             </div>
 
-            <div>
-              <ShadcnLabel htmlFor="language" className={labelClass}>
-                Customer Language
-              </ShadcnLabel>
-              <select
-                id="language"
-                name="language"
-                value={form.language}
-                onChange={handleChange}
-                className={inputClass}
-              >
-                <option value="English">English</option>
-                <option value="French">French</option>
-                <option value="Hausa">Hausa</option>
-                <option value="Yoruba">Yoruba</option>
-                <option value="Igbo">Igbo</option>
-              </select>
-            </div>
-
             {/* Tabs */}
             <Tabs
               value={activeTab}
@@ -868,23 +849,6 @@ const CustomerRegistartion = ({
                     placeholder="Tax identification number"
                     className={inputClass}
                   />
-                </div>
-                <div>
-                  <ShadcnLabel htmlFor="currency" className={labelClass}>
-                    Currency
-                  </ShadcnLabel>
-                  <select
-                    id="currency"
-                    name="currency"
-                    value={form.currency}
-                    onChange={handleChange}
-                    className={inputClass}
-                  >
-                    <option value="NGN - Nigerian Naira">
-                      NGN - Nigerian Naira
-                    </option>
-                    <option value="USD - US Dollar">USD - US Dollar</option>
-                  </select>
                 </div>
                 <div>
                   <ShadcnLabel htmlFor="credit_limit" className={labelClass}>
@@ -1022,21 +986,6 @@ const CustomerRegistartion = ({
                     </div>
                   </div>
                 )}
-                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    name="enable_portal"
-                    checked={Boolean(form.enable_portal)}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        enable_portal: e.target.checked,
-                      }))
-                    }
-                    className="accent-[var(--aa-accent)]"
-                  />
-                  Allow portal access for this customer
-                </label>
               </TabsContent>
 
               <TabsContent value="address" className="mt-4 space-y-5">

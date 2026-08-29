@@ -96,6 +96,17 @@ export class PurchaseRequisitionAPI {
   }
 
   /**
+   * Upload one document immediately (before the PO is created).
+   * Returns the stored file record to link on submit.
+   */
+  static stagePurchaseOrderDocument(file) {
+    if (!file) {
+      return Promise.reject(new Error("No file selected"));
+    }
+    return this.stagePurchaseOrderDocuments([file]);
+  }
+
+  /**
    * Upload documents immediately (before the PO is created).
    * Returns file paths to link on submit.
    */
@@ -130,6 +141,7 @@ export class PurchaseRequisitionAPI {
 
   /**
    * Submit purchase requisition. Pass already-uploaded document records to link.
+   * Files are not sent with this request.
    * @param {Object} requisitionData - Purchase requisition data
    * @param {Array} [linkedDocuments] - Staged files `{ file_path, original_name, ... }`
    */
@@ -187,7 +199,7 @@ export class PurchaseRequisitionAPI {
     return new Promise((resolve, reject) => {
       const params = new URLSearchParams({ facilityId });
       if (pr_no) params.set("pr_no", pr_no);
-      if (po_no) params.set("po_no", po_no);
+      else if (po_no) params.set("po_no", po_no);
       _fetchApi(
         `/account/purchase-order-documents?${params}`,
         (data) => {
