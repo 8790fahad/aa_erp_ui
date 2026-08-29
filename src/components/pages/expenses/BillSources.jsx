@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -9,7 +9,7 @@ import {
   ChevronsRight,
   Wallet,
   Search,
-  Receipt,
+  ScrollText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +38,7 @@ const STATUS_ALL = "all";
 const STATUS_PAID = "paid";
 const STATUS_UNPAID = "unpaid";
 const STATUS_PARTIALLY_PAID = "partially_paid";
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
 
 const primaryBtn =
   "border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90 shadow-none";
@@ -54,30 +55,22 @@ export default function BillSources() {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
   const [bills, setBills] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [imprestOpen, setImprestOpen] = useState(false);
   const [createBillOpen, setCreateBillOpen] = useState(false);
   const [expenseList, setExpenseList] = useState([]);
   const searchFromUrl = searchParams.get("search") || "";
   const pageFromUrl = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-  const pageSizeFromUrl = Math.max(1, Math.min(100, parseInt(searchParams.get("pageSize") || "10", 10)));
+  const rawPageSize = parseInt(searchParams.get("pageSize") || "10", 10);
+  const pageSizeFromUrl = PAGE_SIZE_OPTIONS.includes(rawPageSize)
+    ? rawPageSize
+    : 10;
   const statusFromUrl = searchParams.get("status") || STATUS_ALL;
   const [searchInput, setSearchInput] = useState(searchFromUrl);
   const searchDebounceRef = useRef(null);
 
-  const searchText = searchFromUrl;
-  const pageIndex = pageFromUrl - 1;
   const pageSize = pageSizeFromUrl;
-  const statusFilter =
-    statusFromUrl === STATUS_ALL
-      ? null
-      : statusFromUrl === STATUS_PAID
-        ? "paid"
-        : statusFromUrl === STATUS_PARTIALLY_PAID
-          ? "partially_paid"
-          : statusFromUrl === STATUS_UNPAID
-            ? "unpaid"
-            : null;
 
   useEffect(() => {
     setSearchInput(searchFromUrl);
@@ -87,28 +80,44 @@ export default function BillSources() {
     if (!activeBusiness?.id) return;
 
     setLoading(true);
-    // Request a large page so the register is not silently capped at API default (10)
     const params = new URLSearchParams({
       facilityId: String(activeBusiness.id),
-      page: "1",
-      limit: "1000",
+      page: String(pageFromUrl),
+      limit: String(pageSizeFromUrl),
     });
+    if (searchFromUrl.trim()) {
+      params.set("search", searchFromUrl.trim());
+    }
+    if (statusFromUrl && statusFromUrl !== STATUS_ALL) {
+      params.set("status", statusFromUrl);
+    }
     _fetchApi(
       `/api/supplier/bills?${params.toString()}`,
       (resp) => {
         if (resp.success) {
           setBills(resp.data || []);
+          setTotalCount(Number(resp.pagination?.total) || 0);
         } else {
           console.error("Failed to load supplier bills");
+          setBills([]);
+          setTotalCount(0);
         }
         setLoading(false);
       },
       (err) => {
         console.error("Error fetching supplier bills:", err);
+        setBills([]);
+        setTotalCount(0);
         setLoading(false);
       }
     );
-  }, [activeBusiness?.id]);
+  }, [
+    activeBusiness?.id,
+    pageFromUrl,
+    pageSizeFromUrl,
+    searchFromUrl,
+    statusFromUrl,
+  ]);
 
   useEffect(() => {
     getSupplierBills();
@@ -139,39 +148,10 @@ export default function BillSources() {
     loadExpenseListForImprest();
   }, [loadExpenseListForImprest]);
 
-  const filteredData = useMemo(() => {
-    const q = String(searchText || "").trim().toLowerCase();
-    const hay = (v) =>
-      v != null && String(v).toLowerCase().includes(q);
-    return bills.filter((item) => {
-      // Search filter (safe when supplier_name / description are undefined)
-      const matchesSearch =
-        !q ||
-        hay(item.supplier_name) ||
-        hay(item.invoice_ref) ||
-        hay(item.description);
-
-      // Status filter - normalize both item status and filter to compare
-      if (statusFilter === null) {
-        return matchesSearch;
-      }
-
-      const itemStatusNormalized = (item.status || "")
-        .toLowerCase()
-        .replace(/\s+/g, "_");
-      const filterNormalized = statusFilter.toLowerCase().replace(/\s+/g, "_");
-      const matchesStatus = itemStatusNormalized === filterNormalized;
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [bills, searchText, statusFilter]);
-
-  // Pagination calculations (clamp page to valid range)
-  const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
-  const safePageIndex = Math.min(Math.max(0, pageIndex), totalPages - 1);
-  const startIndex = safePageIndex * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedData = filteredData.slice(startIndex, endIndex);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize) || 1);
+  const safePage = Math.min(pageFromUrl, totalPages);
+  const showingFrom = totalCount === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const showingTo = Math.min(safePage * pageSize, totalCount);
 
   const updateUrl = useCallback(
     (updates) => {
@@ -190,6 +170,12 @@ export default function BillSources() {
     },
     [searchParams, setSearchParams]
   );
+
+  useEffect(() => {
+    if (pageFromUrl > totalPages) {
+      updateUrl({ page: totalPages });
+    }
+  }, [pageFromUrl, totalPages, updateUrl]);
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
@@ -284,7 +270,7 @@ export default function BillSources() {
       custom: true,
       component: (item) => (
         <span className="font-semibold tabular-nums text-slate-900">
-          {formatNumber1(item.amount || 0)}
+          ₦{formatNumber1(item.amount || 0)}
         </span>
       ),
     },
@@ -348,7 +334,7 @@ export default function BillSources() {
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-            <Receipt className="h-5 w-5 text-[var(--aa-navy)]" />
+            <ScrollText className="h-5 w-5 text-[var(--aa-navy)]" />
             Bill
           </h1>
           <p className="mt-0.5 text-xs text-slate-500">
@@ -426,12 +412,12 @@ export default function BillSources() {
                     ))}
                   </tr>
                 ))
-              ) : filteredData.length === 0 ? (
+              ) : bills.length === 0 ? (
                 <tr>
                   <td colSpan={fields.length} className="px-4 py-12 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--aa-sidebar-active)] text-[var(--aa-navy)]">
-                        <Receipt className="h-5 w-5" />
+                        <ScrollText className="h-5 w-5" />
                       </div>
                       <p className="text-sm font-medium text-slate-700">
                         No bills found
@@ -444,7 +430,7 @@ export default function BillSources() {
                   </td>
                 </tr>
               ) : (
-                paginatedData.map((item) => (
+                bills.map((item) => (
                   <tr
                     key={item.invoice_id}
                     className="transition-colors hover:bg-slate-50/80"
@@ -466,87 +452,87 @@ export default function BillSources() {
           </table>
         </div>
 
-        {!loading && filteredData.length > 0 && (
-          <div className="flex items-center justify-end border-t border-slate-100 px-4 py-3">
-            <div className="flex w-full items-center gap-8 lg:w-fit">
-              <div className="hidden items-center gap-2 lg:flex">
-                <Label
-                  htmlFor="rows-per-page"
-                  className="text-sm font-medium text-slate-600"
-                >
-                  Rows per page
-                </Label>
-                <Select
-                  value={`${pageSize}`}
-                  onValueChange={(value) =>
-                    handlePageSizeChange(Number(value))
-                  }
-                >
-                  <SelectTrigger
-                    className="h-8 w-20 border-slate-200"
-                    id="rows-per-page"
-                  >
-                    <SelectValue placeholder={pageSize} />
-                  </SelectTrigger>
-                  <SelectContent side="top">
-                    {[10, 20, 30, 40, 50, 100].map((size) => (
-                      <SelectItem key={size} value={`${size}`}>
-                        {size}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex w-fit items-center justify-center text-sm font-medium text-slate-600">
-                Page {safePageIndex + 1} of {totalPages}
-              </div>
-              <div className="ml-auto flex items-center gap-2 lg:ml-0">
-                <Button
-                  variant="outline"
-                  className="hidden h-8 w-8 border-slate-200 p-0 lg:flex"
-                  onClick={() => handlePageChange(0)}
-                  disabled={safePageIndex === 0}
-                >
-                  <span className="sr-only">Go to first page</span>
-                  <ChevronsLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-8 w-8 border-slate-200 p-0"
-                  onClick={() =>
-                    handlePageChange(Math.max(0, safePageIndex - 1))
-                  }
-                  disabled={safePageIndex === 0}
-                >
-                  <span className="sr-only">Go to previous page</span>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-8 w-8 border-slate-200 p-0"
-                  onClick={() =>
-                    handlePageChange(
-                      Math.min(totalPages - 1, safePageIndex + 1),
-                    )
-                  }
-                  disabled={safePageIndex >= totalPages - 1}
-                >
-                  <span className="sr-only">Go to next page</span>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="hidden h-8 w-8 border-slate-200 p-0 lg:flex"
-                  onClick={() => handlePageChange(totalPages - 1)}
-                  disabled={safePageIndex >= totalPages - 1}
-                >
-                  <span className="sr-only">Go to last page</span>
-                  <ChevronsRight className="h-4 w-4" />
-                </Button>
-              </div>
+        <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/40 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-slate-500">
+            Showing{" "}
+            <span className="font-medium text-slate-700">
+              {showingFrom}–{showingTo}
+            </span>{" "}
+            of{" "}
+            <span className="font-medium text-slate-700">{totalCount}</span>
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Rows</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(value) => handlePageSizeChange(Number(value))}
+              >
+                <SelectTrigger className="h-8 w-[72px] border-slate-200 bg-white text-xs shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-8 border-slate-200 p-0"
+                disabled={safePage <= 1 || loading}
+                onClick={() => handlePageChange(0)}
+              >
+                <span className="sr-only">Go to first page</span>
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-8 border-slate-200 p-0"
+                disabled={safePage <= 1 || loading}
+                onClick={() => handlePageChange(Math.max(0, safePage - 2))}
+              >
+                <span className="sr-only">Go to previous page</span>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="min-w-[4.5rem] text-center text-xs text-slate-600">
+                {safePage} / {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-8 border-slate-200 p-0"
+                disabled={safePage >= totalPages || loading}
+                onClick={() =>
+                  handlePageChange(Math.min(totalPages - 1, safePage))
+                }
+              >
+                <span className="sr-only">Go to next page</span>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-8 border-slate-200 p-0"
+                disabled={safePage >= totalPages || loading}
+                onClick={() => handlePageChange(totalPages - 1)}
+              >
+                <span className="sr-only">Go to last page</span>
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       <Dialog open={createBillOpen} onOpenChange={setCreateBillOpen}>

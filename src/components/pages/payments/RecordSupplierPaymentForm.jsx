@@ -12,13 +12,16 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { Typeahead } from "react-bootstrap-typeahead";
-import "react-bootstrap-typeahead/css/Typeahead.css";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import CustomButton from "@/common/Custom/CustomButton";
 import SearchSupplierInput from "@/components/pages/purchase/SearchSuppliers";
 import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
+import CashTransferPaymentFields, {
+  buildPaymentSplits,
+  isCashTransferSplitMode,
+  parseMoneyInput,
+} from "@/components/common/CashTransferPaymentFields";
 import {
   POSTING_DATE_MIN,
   getPostingDateMax,
@@ -26,6 +29,16 @@ import {
 } from "@/utilities";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 function parseNumberFromFormatted(value) {
   if (value === "" || value === null || value === undefined) return "";
@@ -99,6 +112,8 @@ export default function RecordSupplierPaymentForm() {
   const [paymentNumber, setPaymentNumber] = useState("");
   const [modeOfPayment, setModeOfPayment] = useState("cash");
   const [chequeNumber, setChequeNumber] = useState("");
+  const [cashAmount, setCashAmount] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
   const [selectedBranch, setSelectedBranch] = useState("");
   const [branches, setBranches] = useState([]);
   const [notes, setNotes] = useState("");
@@ -108,11 +123,14 @@ export default function RecordSupplierPaymentForm() {
   const [invoicePayments, setInvoicePayments] = useState({});
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingSave, setPendingSave] = useState(null);
   const [errors, setErrors] = useState({});
   const isSubmittingRef = useRef(false);
   const skipAutoAllocateRef = useRef(false);
   const manualAllocationRef = useRef(false);
   const cashTypeaheadRef = useRef();
+  const isSplitPayment = isCashTransferSplitMode(modeOfPayment);
 
   const {
     accountHead,
@@ -359,14 +377,31 @@ export default function RecordSupplierPaymentForm() {
       if (dateErr) next.date = dateErr;
     }
     if (!modeOfPayment) next.mode = "Payment mode is required";
-    if (modeOfPayment === "cash" && !accountHead?.head) {
-      next.paidThrough = "Paid Through is required";
-    }
-    if (["bank", "cheque"].includes(modeOfPayment) && !bankAccount?.id) {
-      next.paidThrough = "Paid Through is required";
-    }
-    if (modeOfPayment === "cheque" && !String(chequeNumber || "").trim()) {
-      next.cheque = "Cheque number is required";
+    if (isSplitPayment) {
+      const cash = parseMoneyInput(cashAmount);
+      const transfer = parseMoneyInput(transferAmount);
+      if (cash <= 0 || transfer <= 0) {
+        next.paidThrough = "Enter both cash and transfer amounts";
+      } else if (Math.abs(cash + transfer - amt) > 0.02) {
+        next.paidThrough = `Cash + Transfer must equal payment made (${formatNumber1(amt)})`;
+      } else {
+        if (!accountHead?.head) {
+          next.paidThrough = "Cash account is required";
+        }
+        if (!bankAccount?.id) {
+          next.paidThrough = next.paidThrough || "Bank account is required";
+        }
+      }
+    } else {
+      if (modeOfPayment === "cash" && !accountHead?.head) {
+        next.paidThrough = "Paid Through is required";
+      }
+      if (["bank", "cheque"].includes(modeOfPayment) && !bankAccount?.id) {
+        next.paidThrough = "Paid Through is required";
+      }
+      if (modeOfPayment === "cheque" && !String(chequeNumber || "").trim()) {
+        next.cheque = "Cheque number is required";
+      }
     }
     if (
       activeBusiness?.payable_code === "" ||
@@ -431,9 +466,6 @@ export default function RecordSupplierPaymentForm() {
         ? `${baseDesc} [Cheque: ${String(chequeNumber).trim()}]`
         : baseDesc;
 
-    isSubmittingRef.current = true;
-    setSaving(true);
-
     const basePayload = {
       transaction_date: paymentDate,
       amount_paid: amountPaidNum,
@@ -451,14 +483,30 @@ export default function RecordSupplierPaymentForm() {
           ? parseInt(selectedBranch, 10) || null
           : null,
     };
-    if (modeOfPayment === "cash" && accountHead?.head) {
+    if (
+      (modeOfPayment === "cash" || isSplitPayment) &&
+      accountHead?.head
+    ) {
       basePayload.accountHead = {
         head: accountHead.head,
         description: accountHead.description,
       };
     }
-    if (["bank", "cheque"].includes(modeOfPayment) && bankAccount?.id) {
+    if (
+      (["bank", "cheque"].includes(modeOfPayment) || isSplitPayment) &&
+      bankAccount?.id
+    ) {
       basePayload.bankAccount = { id: bankAccount.id };
+    }
+    const paymentSplits = buildPaymentSplits({
+      mode: modeOfPayment,
+      cashAmount,
+      transferAmount,
+      accountHead,
+      bankAccount,
+    });
+    if (paymentSplits?.length) {
+      basePayload.payment_splits = paymentSplits;
     }
 
     const payload =
@@ -466,12 +514,32 @@ export default function RecordSupplierPaymentForm() {
         ? { ...basePayload, invoices: invoicesPayload }
         : { ...basePayload, allocation_order: "fifo" };
 
+    const advancePortion = Math.max(
+      0,
+      +(
+        amountPaidNum -
+        invoicesPayload.reduce((s, x) => s + (x.amount_paid || 0), 0)
+      ).toFixed(2),
+    );
+
+    setPendingSave({ payload, advancePortion, amountPaidNum });
+    setConfirmOpen(true);
+  };
+
+  const executeSave = () => {
+    if (!pendingSave || isSubmittingRef.current || saving) return;
+    const { payload } = pendingSave;
+    setConfirmOpen(false);
+    isSubmittingRef.current = true;
+    setSaving(true);
+
     _postApi(
       "/api/v1/supplier-advance-payment",
       payload,
       (res) => {
         setSaving(false);
         isSubmittingRef.current = false;
+        setPendingSave(null);
         if (res?.error) {
           toast.error(String(res.error));
           return;
@@ -495,6 +563,7 @@ export default function RecordSupplierPaymentForm() {
       (error) => {
         setSaving(false);
         isSubmittingRef.current = false;
+        setPendingSave(null);
         toast.error(
           error?.error || error?.message || "Failed to save payment",
         );
@@ -516,6 +585,48 @@ export default function RecordSupplierPaymentForm() {
 
   return (
     <div className="bg-white">
+      <AlertDialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          if (!open && !saving) {
+            setConfirmOpen(false);
+            setPendingSave(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="z-[200] border border-slate-200 bg-white text-slate-900 shadow-2xl sm:rounded-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-600">
+              {pendingSave?.advancePortion > 0.02 ? (
+                <>
+                  Excess {currency} {formatNumber1(pendingSave.advancePortion)}{" "}
+                  will be kept as vendor advance / credit. Continue?
+                </>
+              ) : (
+                <>
+                  Record payment of {currency}{" "}
+                  {formatNumber1(pendingSave?.amountPaidNum || 0)}. Continue?
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                executeSave();
+              }}
+              disabled={saving}
+              className="bg-[var(--aa-accent)] text-white hover:opacity-90"
+            >
+              {saving ? "Saving…" : "Yes, continue"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="mx-auto max-w-8xl">
         <div className="mb-1.5 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-gray-900">
@@ -626,109 +737,70 @@ export default function RecordSupplierPaymentForm() {
           </div>
         </Row>
 
-        <Row label="Payment Mode" error={errors.mode}>
-          <select
-            value={modeOfPayment}
-            onChange={(e) => {
-              setModeOfPayment(e.target.value);
-              setAccountHead({});
-              setBankAccount(null);
-              setChequeNumber("");
-              setErrors((prev) => ({
-                ...prev,
-                mode: undefined,
-                paidThrough: undefined,
-                cheque: undefined,
-              }));
-            }}
-            disabled={saving}
-            className={inputClass}
-          >
-            <option value="cash">Cash</option>
-            <option value="bank">Bank Transfer</option>
-            <option value="cheque">Cheque</option>
-          </select>
-        </Row>
-
-        <Row label="Paid Through" required error={errors.paidThrough}>
-          {modeOfPayment === "cash" ? (
-            <Typeahead
-              ref={cashTypeaheadRef}
-              id="supplier-payment-cash-head"
-              labelKey={(option) =>
-                `${option.head || ""} ${option.description || ""}`.trim()
+        <CashTransferPaymentFields
+          Row={({ label, required, children }) => (
+            <Row
+              label={label}
+              required={required}
+              error={
+                label === "Payment Mode"
+                  ? errors.mode
+                  : label === "Cheque Number"
+                    ? errors.cheque
+                    : errors.paidThrough
               }
-              options={headList}
-              placeholder="Select an account…"
-              disabled={saving}
-              onChange={(selectedItems) => {
-                if (selectedItems?.length) {
-                  const cash = selectedItems[0];
-                  setAccountHead({
-                    head: cash.head || "",
-                    description: cash.description || "",
-                  });
-                } else {
-                  setAccountHead({});
-                }
-                setErrors((prev) => ({ ...prev, paidThrough: undefined }));
-              }}
-              selected={
-                accountHead?.head
-                  ? headList.filter((c) => c.head === accountHead.head)
-                  : []
-              }
-              clearButton
-              inputProps={{
-                style: {
-                  height: "2.125rem",
-                  padding: "0.375rem 0.75rem",
-                  fontSize: "0.875rem",
-                  border: "1px solid rgb(209 213 219)",
-                  borderRadius: "0.25rem",
-                },
-              }}
-            />
-          ) : (
-            <select
-              value={bankAccount?.id?.toString() || ""}
-              onChange={(e) => {
-                const acc = accountList.find(
-                  (a) => String(a.id) === e.target.value,
-                );
-                setBankAccount(acc || null);
-                setErrors((prev) => ({ ...prev, paidThrough: undefined }));
-              }}
-              disabled={saving}
-              className={inputClass}
             >
-              <option value="">Select an account…</option>
-              {accountList.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.account_name}
-                  {account.account_number
-                    ? ` (${account.account_number})`
-                    : ""}
-                </option>
-              ))}
-            </select>
+              {children}
+            </Row>
           )}
-        </Row>
-
-        {modeOfPayment === "cheque" ? (
-          <Row label="Cheque Number" required error={errors.cheque}>
-            <input
-              type="text"
-              value={chequeNumber}
-              onChange={(e) => {
-                setChequeNumber(e.target.value);
-                setErrors((prev) => ({ ...prev, cheque: undefined }));
-              }}
-              disabled={saving}
-              className={inputClass}
-            />
-          </Row>
-        ) : null}
+          modeOfPayment={modeOfPayment}
+          onModeChange={(value) => {
+            setModeOfPayment(value);
+            setAccountHead({});
+            setBankAccount(null);
+            setChequeNumber("");
+            setCashAmount("");
+            setTransferAmount("");
+            setErrors((prev) => ({
+              ...prev,
+              mode: undefined,
+              paidThrough: undefined,
+              cheque: undefined,
+            }));
+          }}
+          cashAmount={cashAmount}
+          onCashAmountChange={(v) => {
+            setCashAmount(v);
+            setErrors((prev) => ({ ...prev, paidThrough: undefined }));
+          }}
+          transferAmount={transferAmount}
+          onTransferAmountChange={(v) => {
+            setTransferAmount(v);
+            setErrors((prev) => ({ ...prev, paidThrough: undefined }));
+          }}
+          expectedTotal={
+            parseFloat(parseNumberFromFormatted(amountPaid)) || 0
+          }
+          accountHead={accountHead}
+          onAccountHeadChange={(v) => {
+            setAccountHead(v || {});
+            setErrors((prev) => ({ ...prev, paidThrough: undefined }));
+          }}
+          bankAccount={bankAccount}
+          onBankAccountChange={(acc) => {
+            setBankAccount(acc || null);
+            setErrors((prev) => ({ ...prev, paidThrough: undefined }));
+          }}
+          accountList={accountList}
+          headList={headList}
+          chequeNumber={chequeNumber}
+          onChequeNumberChange={(v) => {
+            setChequeNumber(v);
+            setErrors((prev) => ({ ...prev, cheque: undefined }));
+          }}
+          cashTypeaheadRef={cashTypeaheadRef}
+          disabled={saving}
+        />
 
         {visibleBranches.length > 1 && (
           <Row label="Warehouse">

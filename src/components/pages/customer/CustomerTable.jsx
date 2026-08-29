@@ -93,7 +93,7 @@ export default function CustomerTable() {
           "";
         if (name) params.set("customerName", name);
       }
-      navigate(`/app/payments/collection-points?${params.toString()}`);
+      navigate(`/app/payments/verification-points?${params.toString()}`);
     },
     [navigate],
   );

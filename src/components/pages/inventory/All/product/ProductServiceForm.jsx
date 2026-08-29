@@ -26,7 +26,6 @@ import {
   Check,
   Loader2,
   Package,
-  DollarSign,
   ShoppingCart,
   Settings,
   Image as ImageIcon,
@@ -211,8 +210,6 @@ const ProductServiceForm = () => {
         price: "",
         revenueAccount: "",
         description: "",
-        limitPeriod: "none",
-        limitQuantity: "",
       },
       purchase: {
         isPurchased: false,
@@ -248,7 +245,6 @@ const ProductServiceForm = () => {
   });
 
   const watchedItemType = watch("itemType");
-  const watchedSalesLimitPeriod = watch("sales.limitPeriod");
   const isServicePurchaseEnabled = watch("purchase.isPurchased");
   const watchedBranchId = watch("settings.branchId");
 
@@ -492,18 +488,6 @@ const ProductServiceForm = () => {
         setCurrentStockQty(
           Number.isFinite(stockBal) ? stockBal : null,
         );
-        let limitPeriod = "none";
-        let limitQuantity = "";
-        if (p.daily_sales_limit) {
-          limitPeriod = "daily";
-          limitQuantity = formatNumberWithCommas(String(p.daily_sales_limit));
-        } else if (p.weekly_sales_limit) {
-          limitPeriod = "weekly";
-          limitQuantity = formatNumberWithCommas(String(p.weekly_sales_limit));
-        } else if (p.monthly_sales_limit) {
-          limitPeriod = "monthly";
-          limitQuantity = formatNumberWithCommas(String(p.monthly_sales_limit));
-        }
 
         const itemType =
           p.item_type === "Finished Good" ? "Resalable" : p.item_type || "Resalable";
@@ -520,8 +504,6 @@ const ProductServiceForm = () => {
                 : "",
             revenueAccount: p.revenue_account || "",
             description: p.sales_description || "",
-            limitPeriod,
-            limitQuantity,
           },
           purchase: {
             isPurchased: !!p.is_purchased,
@@ -884,9 +866,6 @@ const ProductServiceForm = () => {
         : 0,
       sales_description: data.sales?.description || "",
       revenue_account: data.sales?.revenueAccount || "",
-      daily_sales_limit: null,
-      weekly_sales_limit: null,
-      monthly_sales_limit: null,
       // Purchase info - parse formatted values
       cost_price: data.purchase?.costPrice
         ? parseFloat(parseNumberFromFormatted(data.purchase.costPrice)) || 0
@@ -938,19 +917,6 @@ const ProductServiceForm = () => {
       as_of_date: data.inventory?.asOfDate || moment().format("YYYY-MM-DD"),
     };
 
-    const limitPeriod = data.sales?.limitPeriod || "none";
-    const limitQty = data.sales?.limitQuantity
-      ? parseInt(
-          parseNumberFromFormatted(String(data.sales.limitQuantity)),
-          10,
-        )
-      : null;
-    if (limitPeriod !== "none" && limitQty && limitQty > 0) {
-      if (limitPeriod === "daily") payload.daily_sales_limit = limitQty;
-      if (limitPeriod === "weekly") payload.weekly_sales_limit = limitQty;
-      if (limitPeriod === "monthly") payload.monthly_sales_limit = limitQty;
-    }
-
     console.log("Payload created:", payload);
 
     if (isEditMode && id) {
@@ -962,9 +928,6 @@ const ProductServiceForm = () => {
         selling_price: payload.selling_price,
         sales_description: payload.sales_description,
         revenue_account: payload.revenue_account,
-        daily_sales_limit: payload.daily_sales_limit,
-        weekly_sales_limit: payload.weekly_sales_limit,
-        monthly_sales_limit: payload.monthly_sales_limit,
         cost_price: payload.cost_price,
         purchase_description: payload.purchase_description,
         is_purchased: payload.is_purchased,
@@ -1404,7 +1367,35 @@ const ProductServiceForm = () => {
                         </label>
                         <input
                           type="text"
-                          {...register("name", { required: "Name is required" })}
+                          {...register("name", {
+                            required: "Name is required",
+                            validate: async (value) => {
+                              const trimmed = String(value || "").trim();
+                              if (!trimmed) return "Name is required";
+                              if (!facilityId) return true;
+                              const params = new URLSearchParams({
+                                name: trimmed,
+                              });
+                              if (isEditMode && id) {
+                                params.set("excludeId", String(id));
+                              }
+                              return new Promise((resolve) => {
+                                _fetchApi(
+                                  `/api/products/check-name/${facilityId}?${params.toString()}`,
+                                  (res) => {
+                                    if (res?.exists) {
+                                      resolve(
+                                        "Product name already exists — use a unique name",
+                                      );
+                                    } else {
+                                      resolve(true);
+                                    }
+                                  },
+                                  () => resolve(true),
+                                );
+                              });
+                            },
+                          })}
                           placeholder={
                             watchedItemType === "Service"
                               ? "e.g. Consulting, Delivery"
@@ -1484,7 +1475,12 @@ const ProductServiceForm = () => {
               <AccordionItem value="sales-info" className="border rounded-lg">
                 <AccordionTrigger className="px-6 py-4 hover:no-underline">
                   <div className="flex items-center gap-3">
-                    <DollarSign className="w-5 h-5 text-green-600" />
+                    <span
+                      className="inline-flex h-5 w-5 items-center justify-center text-lg font-bold leading-none text-green-600"
+                      aria-hidden
+                    >
+                      ₦
+                    </span>
                     <span className="text-lg font-semibold">
                       Sales Information
                     </span>
@@ -1671,153 +1667,6 @@ const ProductServiceForm = () => {
                           {errors.sales.revenueAccount.message}
                         </p>
                       )}
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <p className="text-sm font-medium text-gray-700 mb-1">
-                        Sales Target / Limit Control
-                      </p>
-                      <p className="text-xs text-gray-500 mb-3">
-                        Choose one period and set a quantity. Example: Daily 100,
-                        or Weekly 2900. Leave as Unlimited to allow any quantity.
-                        When the limit is reached, further sales are blocked even
-                        if stock remains.
-                      </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Limit period
-                          </label>
-                          <Controller
-                            name="sales.limitPeriod"
-                            control={control}
-                            render={({ field }) => (
-                              <Select
-                                options={[
-                                  { value: "none", label: "Unlimited" },
-                                  {
-                                    value: "daily",
-                                    label: "Daily (e.g. 100)",
-                                  },
-                                  {
-                                    value: "weekly",
-                                    label: "Weekly (e.g. 2900)",
-                                  },
-                                  {
-                                    value: "monthly",
-                                    label: "Monthly (e.g. 10000)",
-                                  },
-                                ]}
-                                value={
-                                  [
-                                    { value: "none", label: "Unlimited" },
-                                    {
-                                      value: "daily",
-                                      label: "Daily (e.g. 100)",
-                                    },
-                                    {
-                                      value: "weekly",
-                                      label: "Weekly (e.g. 2900)",
-                                    },
-                                    {
-                                      value: "monthly",
-                                      label: "Monthly (e.g. 10000)",
-                                    },
-                                  ].find((o) => o.value === field.value) ||
-                                  null
-                                }
-                                onChange={(option) => {
-                                  field.onChange(option?.value || "none");
-                                  if (!option || option.value === "none") {
-                                    setValue("sales.limitQuantity", "");
-                                  }
-                                }}
-                                placeholder="Select period"
-                                isSearchable={false}
-                                styles={customSelectStyles}
-                                menuPortalTarget={document.body}
-                                menuPosition="fixed"
-                              />
-                            )}
-                          />
-                        </div>
-                        {watchedSalesLimitPeriod &&
-                          watchedSalesLimitPeriod !== "none" && (
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">
-                                {watchedSalesLimitPeriod === "daily" &&
-                                  "Daily limit quantity"}
-                                {watchedSalesLimitPeriod === "weekly" &&
-                                  "Weekly limit quantity"}
-                                {watchedSalesLimitPeriod === "monthly" &&
-                                  "Monthly limit quantity"}{" "}
-                                <span className="text-red-500">*</span>
-                              </label>
-                              <Controller
-                                name="sales.limitQuantity"
-                                control={control}
-                                rules={{
-                                  validate: (value) => {
-                                    const period = watch("sales.limitPeriod");
-                                    if (!period || period === "none")
-                                      return true;
-                                    if (value === "" || value == null) {
-                                      return "Enter a limit quantity";
-                                    }
-                                    const parsed = parseNumberFromFormatted(
-                                      value || "",
-                                    );
-                                    const n =
-                                      parsed === ""
-                                        ? NaN
-                                        : parseInt(parsed, 10);
-                                    if (!Number.isInteger(n) || n < 1) {
-                                      return "Enter a whole number ≥ 1";
-                                    }
-                                    return true;
-                                  },
-                                }}
-                                render={({ field }) => (
-                                  <>
-                                    <input
-                                      type="text"
-                                      inputMode="numeric"
-                                      value={field.value || ""}
-                                      onChange={(e) => {
-                                        const withoutCommas =
-                                          e.target.value.replace(/,/g, "");
-                                        // Whole units only (no decimals)
-                                        const numericValue =
-                                          withoutCommas.replace(/[^0-9]/g, "");
-                                        field.onChange(
-                                          formatNumberWithCommas(numericValue),
-                                        );
-                                      }}
-                                      onBlur={field.onBlur}
-                                      placeholder={
-                                        watchedSalesLimitPeriod === "daily"
-                                          ? "e.g. 100"
-                                          : watchedSalesLimitPeriod === "weekly"
-                                            ? "e.g. 2,900"
-                                            : "e.g. 10,000"
-                                      }
-                                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent ${
-                                        errors.sales?.limitQuantity
-                                          ? "border-red-500"
-                                          : "border-gray-300"
-                                      }`}
-                                    />
-                                    {errors.sales?.limitQuantity && (
-                                      <p className="text-sm text-red-600 mt-1">
-                                        {errors.sales.limitQuantity.message}
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              />
-                            </div>
-                          )}
-                      </div>
                     </div>
 
                     {watchedItemType === "Returnable Assets" && (
@@ -2931,7 +2780,9 @@ const ProductServiceForm = () => {
                           >
                             <option value="">Select Taxable Status</option>
                             <option value="Taxable">Taxable</option>
-                            <option value="Not Taxable">Not Taxable</option>
+                            <option value="Non-Taxable">Non-Taxable</option>
+                            <option value="Exempted">Exempted</option>
+                            <option value="Zero Rated">Zero Rated</option>
                           </select>
                         )}
                       />

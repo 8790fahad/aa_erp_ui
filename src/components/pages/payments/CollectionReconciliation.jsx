@@ -42,6 +42,7 @@ export default function CollectionReconciliation() {
   const [cashierFilter, setCashierFilter] = useState("all");
   const [loading, setLoading] = useState(false);
   const [cashiers, setCashiers] = useState([]);
+  const [cashierOptions, setCashierOptions] = useState([]);
   const [summary, setSummary] = useState(null);
   const [drafts, setDrafts] = useState({});
   const [confirmingId, setConfirmingId] = useState(null);
@@ -63,11 +64,18 @@ export default function CollectionReconciliation() {
         setLoading(false);
         if (res?.success) {
           const list = Array.isArray(res.cashiers) ? res.cashiers : [];
+          const options = Array.isArray(res.cashier_options)
+            ? res.cashier_options
+            : list.map((c) => ({
+                cashier_user_id: c.cashier_user_id,
+                cashier_name: c.cashier_name,
+              }));
           setCashiers(list);
+          setCashierOptions(options);
           setSummary(res.summary || null);
           setCashierFilter((prev) => {
             if (prev === "all") return prev;
-            const stillThere = list.some(
+            const stillThere = options.some(
               (c) => String(c.cashier_user_id) === String(prev),
             );
             return stillThere ? prev : "all";
@@ -90,6 +98,7 @@ export default function CollectionReconciliation() {
         } else {
           toast.error(res?.message || "Failed to load reconciliation");
           setCashiers([]);
+          setCashierOptions([]);
           setSummary(null);
         }
       },
@@ -97,6 +106,7 @@ export default function CollectionReconciliation() {
         setLoading(false);
         toast.error(err?.message || "Failed to load reconciliation");
         setCashiers([]);
+        setCashierOptions([]);
         setSummary(null);
       },
     );
@@ -323,11 +333,11 @@ export default function CollectionReconciliation() {
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
             <Link
-              to="/app/payments/collection-points"
+              to="/app/payments/verification-points"
               className="mb-2 inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-[var(--aa-accent)]"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Collection Points
+              Verification Points
             </Link>
             <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
               <ClipboardCheck className="h-7 w-7 text-[var(--aa-accent)]" />
@@ -386,7 +396,7 @@ export default function CollectionReconciliation() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All cashiers</SelectItem>
-                {cashiers.map((c) => (
+                {cashierOptions.map((c) => (
                   <SelectItem
                     key={c.cashier_user_id}
                     value={String(c.cashier_user_id)}
@@ -426,8 +436,11 @@ export default function CollectionReconciliation() {
             </div>
           ) : filteredCashiers.length === 0 ? (
             <div className="px-4 py-12 text-center text-sm text-slate-500">
-              No collections found for this date
-              {cashierFilter !== "all" ? " / cashier" : ""}.
+              {cashierOptions.length === 0
+                ? "No Cashier users found for this business."
+                : `No collections found for this date${
+                    cashierFilter !== "all" ? " / cashier" : ""
+                  }.`}
             </div>
           ) : (
             <div className="overflow-x-auto">

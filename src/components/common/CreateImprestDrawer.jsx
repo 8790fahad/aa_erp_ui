@@ -17,6 +17,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { _postApi, _fetchApi } from "@/redux/actions/api";
 import { toast } from "sonner";
 import {
@@ -30,12 +37,19 @@ import {
   Package,
   ListOrdered,
   Printer,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { formatNumber1 } from "@/components/router/utilities";
 import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
 import AdvancePaymentPaymentFields from "@/components/common/AdvancePaymentPaymentFields";
 import { v4 as uuidv4 } from "uuid";
 import moment from "moment";
+import { isProductTaxable } from "@/utils/taxableStatus";
+
+const HISTORY_PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
 
 function parseNumberFromFormatted(value) {
   if (value === "" || value === null || value === undefined) return "";
@@ -88,7 +102,7 @@ function effectiveLineTax(line, draftTax) {
   if (!draftTax) return null;
   if (line?.tax) return line.tax;
   if (
-    (line?.taxable === "Taxable" || line?.taxable === true) &&
+    (isProductTaxable(line?.taxable) || line?.taxable === true) &&
     draftTax
   ) {
     return draftTax;
@@ -212,7 +226,7 @@ function resolveLineTaxForSubmit(line, draftSelectedTax) {
   if (!draftSelectedTax) return null;
   if (line?.tax) return line.tax;
   if (
-    (line?.taxable === "Taxable" || line?.taxable === true) &&
+    (isProductTaxable(line?.taxable) || line?.taxable === true) &&
     draftSelectedTax
   ) {
     return draftSelectedTax;
@@ -304,6 +318,9 @@ export default function CreateImprestDrawer({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [impressRows, setImpressRows] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(10);
+  const [historyTotal, setHistoryTotal] = useState(0);
 
   const navigate = useNavigate();
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
@@ -333,29 +350,60 @@ export default function CreateImprestDrawer({
       return;
     }
     setLoadingHistory(true);
+    const params = new URLSearchParams({
+      facilityId: String(fid),
+      page: String(historyPage),
+      limit: String(historyPageSize),
+    });
     _fetchApi(
-      `/account/impress?facilityId=${encodeURIComponent(fid)}&limit=50&offset=0`,
+      `/account/impress?${params.toString()}`,
       (res) => {
         setLoadingHistory(false);
         if (res?.success && Array.isArray(res.results)) {
           setImpressRows(res.results);
+          setHistoryTotal(Number(res.total) || 0);
         } else {
           setImpressRows([]);
+          setHistoryTotal(0);
           toast.error(res?.message || "Could not load imprest history");
         }
       },
       () => {
         setLoadingHistory(false);
         setImpressRows([]);
+        setHistoryTotal(0);
         toast.error("Could not load imprest history");
       }
     );
-  }, [facilityId, activeBusiness?.id]);
+  }, [facilityId, activeBusiness?.id, historyPage, historyPageSize]);
+
+  useEffect(() => {
+    if (!historyOpen) return;
+    fetchImpressHistory();
+  }, [historyOpen, fetchImpressHistory]);
+
+  const historyTotalPages = Math.max(
+    1,
+    Math.ceil(historyTotal / historyPageSize) || 1,
+  );
+  const safeHistoryPage = Math.min(historyPage, historyTotalPages);
+  const historyShowingFrom =
+    historyTotal === 0 ? 0 : (safeHistoryPage - 1) * historyPageSize + 1;
+  const historyShowingTo = Math.min(
+    safeHistoryPage * historyPageSize,
+    historyTotal,
+  );
+
+  useEffect(() => {
+    if (historyPage > historyTotalPages) {
+      setHistoryPage(historyTotalPages);
+    }
+  }, [historyPage, historyTotalPages]);
 
   const openImpressHistory = useCallback(() => {
+    setHistoryPage(1);
     setHistoryOpen(true);
-    fetchImpressHistory();
-  }, [fetchImpressHistory]);
+  }, []);
 
   const goToImprestReceipt = useCallback(
     (refNumber) => {
@@ -446,7 +494,7 @@ export default function CreateImprestDrawer({
         if (!checked) {
           return {
             ...ln,
-            taxable: "Not Taxable",
+            taxable: "Non-Taxable",
             tax: null,
           };
         }
@@ -497,7 +545,7 @@ export default function CreateImprestDrawer({
           unitCost: cost,
           tax: null,
           taxable:
-            prefillLine.taxable === "Taxable" ? "Taxable" : "Not Taxable",
+            isProductTaxable(prefillLine.taxable) ? "Taxable" : "Non-Taxable",
           transaction_date:
             prefillLine.transaction_date ||
             new Date().toISOString().slice(0, 10),
@@ -558,7 +606,7 @@ export default function CreateImprestDrawer({
       toast.error("Enter a valid quantity and unit cost");
       return;
     }
-    const taxableStatus = draft.taxableLine ? "Taxable" : "Not Taxable";
+    const taxableStatus = draft.taxableLine ? "Taxable" : "Non-Taxable";
     const lineTxDate = draft.linePaymentDate ?? paymentDate;
     setLines((prev) => [
       ...prev,
@@ -606,7 +654,7 @@ export default function CreateImprestDrawer({
     const data = lines.map((ln) => {
       const isTaxable =
         Boolean(ln.tax) ||
-        ln.taxable === "Taxable" ||
+        isProductTaxable(ln.taxable) ||
         ln.taxable === true;
       const row = {
         head: ln.expense.code,
@@ -614,7 +662,7 @@ export default function CreateImprestDrawer({
         quantity: ln.quantity,
         cost: ln.unitCost,
         item_name: ln.expense.name || ln.expense.code,
-        taxable: isTaxable ? "Taxable" : "Not Taxable",
+        taxable: isTaxable ? "Taxable" : "Non-Taxable",
         transaction_date: ln.transaction_date || paymentDate,
       };
       const taxForApi = resolveLineTaxForSubmit(ln, draft.selectedTax);
@@ -748,6 +796,7 @@ export default function CreateImprestDrawer({
               headList={headList}
               chequeNumber={chequeNumber}
               onChequeNumberChange={setChequeNumber}
+              allowCashTransfer={false}
             />
 
             <div className="space-y-2">
@@ -847,7 +896,7 @@ export default function CreateImprestDrawer({
                         <td className="px-1 py-2 align-middle text-center">
                           <input
                             type="checkbox"
-                            checked={ln.taxable === "Taxable"}
+                            checked={isProductTaxable(ln.taxable)}
                             onChange={(e) =>
                               setLineTaxableCheckbox(ln.id, e.target.checked)
                             }
@@ -1244,6 +1293,96 @@ export default function CreateImprestDrawer({
                 ))}
               </ul>
             )}
+          </div>
+          <div className="flex shrink-0 flex-col gap-3 border-t border-slate-100 bg-slate-50/40 px-4 py-2.5">
+            <p className="text-xs text-slate-500">
+              Showing{" "}
+              <span className="font-medium text-slate-700">
+                {historyShowingFrom}–{historyShowingTo}
+              </span>{" "}
+              of{" "}
+              <span className="font-medium text-slate-700">{historyTotal}</span>
+            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">Rows</span>
+                <Select
+                  value={String(historyPageSize)}
+                  onValueChange={(value) => {
+                    setHistoryPageSize(Number(value));
+                    setHistoryPage(1);
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[72px] border-slate-200 bg-white text-xs shadow-none">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {HISTORY_PAGE_SIZE_OPTIONS.map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-8 border-slate-200 p-0"
+                  disabled={safeHistoryPage <= 1 || loadingHistory}
+                  onClick={() => setHistoryPage(1)}
+                >
+                  <span className="sr-only">Go to first page</span>
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-8 border-slate-200 p-0"
+                  disabled={safeHistoryPage <= 1 || loadingHistory}
+                  onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                >
+                  <span className="sr-only">Go to previous page</span>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="min-w-[4.5rem] text-center text-xs text-slate-600">
+                  {safeHistoryPage} / {historyTotalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-8 border-slate-200 p-0"
+                  disabled={
+                    safeHistoryPage >= historyTotalPages || loadingHistory
+                  }
+                  onClick={() =>
+                    setHistoryPage((p) =>
+                      Math.min(historyTotalPages, p + 1),
+                    )
+                  }
+                >
+                  <span className="sr-only">Go to next page</span>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-8 border-slate-200 p-0"
+                  disabled={
+                    safeHistoryPage >= historyTotalPages || loadingHistory
+                  }
+                  onClick={() => setHistoryPage(historyTotalPages)}
+                >
+                  <span className="sr-only">Go to last page</span>
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </div>
         </DrawerContent>
       </Drawer>

@@ -29,6 +29,12 @@ import { Button } from "@/components/ui/button";
 import CreatableSelect from "react-select/creatable";
 import { Typeahead } from "react-bootstrap-typeahead";
 import CreateImprestDrawer from "@/components/common/CreateImprestDrawer";
+import CashTransferPaymentFields, {
+  buildPaymentSplits,
+  isCashTransferSplitMode,
+  parseMoneyInput,
+} from "@/components/common/CashTransferPaymentFields";
+import { isProductTaxable } from "@/utils/taxableStatus";
 
 const initialItemForm = {
   item_name: "",
@@ -37,7 +43,7 @@ const initialItemForm = {
   cost: "",
   total: 0,
   item_type: "",
-  taxable: "Not Taxable",
+  taxable: "Non-Taxable",
   line_tax_id: null,
 };
 
@@ -78,9 +84,12 @@ export default function OperatingExpenses() {
   const [headList, setHeadList] = useState([]);
   const [bankAccount, setBankAccount] = useState({});
   const [accountHead, setAccountHead] = useState({});
+  const [cashAmount, setCashAmount] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
   const cashAccountTypeaheadRef = useRef();
   const hasAutoSelectedSupplier = useRef(false);
   const isCashPayment = form.payment_type === "cash";
+  const isSplitPayment = isCashTransferSplitMode(form.mode_of_payment);
 
 
   // Tax-related state
@@ -267,7 +276,7 @@ export default function OperatingExpenses() {
       quantity: "1",
       cost: "",
       total: 0,
-      taxable: "Not Taxable",
+      taxable: "Non-Taxable",
       line_tax_id: null,
     };
     setItems((prev) => [...prev, newItem]);
@@ -432,7 +441,7 @@ export default function OperatingExpenses() {
   };
 
   const getLineTaxAmount = (item) => {
-    if (item.taxable !== "Taxable") return 0;
+    if (!isProductTaxable(item.taxable)) return 0;
     const tax = getLineTax(item);
     if (!tax) return 0;
     const totalParsed = parseNumberFromFormatted(item.total?.toString() || "");
@@ -444,7 +453,7 @@ export default function OperatingExpenses() {
   useEffect(() => {
     const usedIds = new Set(
       items
-        .filter((i) => i.taxable === "Taxable" && i.line_tax_id)
+        .filter((i) => isProductTaxable(i.taxable) && i.line_tax_id)
         .map((i) => String(i.line_tax_id)),
     );
     setSelectedTaxes(lineTaxOptions.filter((t) => usedIds.has(String(t.id))));
@@ -460,7 +469,7 @@ export default function OperatingExpenses() {
     const subtotal = calculateTotal();
     let exclusiveVAT = 0;
     items.forEach((item) => {
-      if (item.taxable !== "Taxable") return;
+      if (!isProductTaxable(item.taxable)) return;
       const tax = getLineTax(item);
       if (!tax || isTaxInclusive(tax)) return;
       exclusiveVAT += getLineTaxAmount(item);
@@ -521,26 +530,58 @@ export default function OperatingExpenses() {
         isSavingRef.current = false;
         return;
       }
-      if (form.mode_of_payment === "cash" && !accountHead?.head) {
-        toast.error("Please select a cash account");
-        setLoading(false);
-        isSavingRef.current = false;
-        return;
-      }
-      if (
-        ["bank", "cheque"].includes(form.mode_of_payment) &&
-        !bankAccount?.id
-      ) {
-        toast.error("Please select a bank account");
-        setLoading(false);
-        isSavingRef.current = false;
-        return;
-      }
-      if (form.mode_of_payment === "cheque" && !form.cheque_number) {
-        toast.error("Please enter a cheque number");
-        setLoading(false);
-        isSavingRef.current = false;
-        return;
+      if (isSplitPayment) {
+        const cash = parseMoneyInput(cashAmount);
+        const transfer = parseMoneyInput(transferAmount);
+        const billTotal = getTotal();
+        if (cash <= 0 || transfer <= 0) {
+          toast.error("Enter both cash and transfer amounts");
+          setLoading(false);
+          isSavingRef.current = false;
+          return;
+        }
+        if (Math.abs(cash + transfer - billTotal) > 0.02) {
+          toast.error(
+            `Cash + Transfer must equal bill total (₦${billTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })})`,
+          );
+          setLoading(false);
+          isSavingRef.current = false;
+          return;
+        }
+        if (!accountHead?.head) {
+          toast.error("Please select a cash account");
+          setLoading(false);
+          isSavingRef.current = false;
+          return;
+        }
+        if (!bankAccount?.id) {
+          toast.error("Please select a bank account");
+          setLoading(false);
+          isSavingRef.current = false;
+          return;
+        }
+      } else {
+        if (form.mode_of_payment === "cash" && !accountHead?.head) {
+          toast.error("Please select a cash account");
+          setLoading(false);
+          isSavingRef.current = false;
+          return;
+        }
+        if (
+          ["bank", "cheque"].includes(form.mode_of_payment) &&
+          !bankAccount?.id
+        ) {
+          toast.error("Please select a bank account");
+          setLoading(false);
+          isSavingRef.current = false;
+          return;
+        }
+        if (form.mode_of_payment === "cheque" && !form.cheque_number) {
+          toast.error("Please enter a cheque number");
+          setLoading(false);
+          isSavingRef.current = false;
+          return;
+        }
       }
     }
 
@@ -548,7 +589,7 @@ export default function OperatingExpenses() {
     const taxAmount = calculateTotalTax();
     const taxTotals = new Map();
     items.forEach((item) => {
-      if (item.taxable !== "Taxable" || !item.line_tax_id) return;
+      if (!isProductTaxable(item.taxable) || !item.line_tax_id) return;
       const tax = getLineTax(item);
       if (!tax) return;
       const totalParsed = parseNumberFromFormatted(
@@ -592,7 +633,7 @@ export default function OperatingExpenses() {
         cost: cost,
         quantity: qty,
         qty: qty,
-        taxable: item.taxable || "Not Taxable",
+        taxable: item.taxable || "Non-Taxable",
         line_tax_id: item.line_tax_id || null,
       };
     });
@@ -620,6 +661,15 @@ export default function OperatingExpenses() {
         bankAccount: isCashPayment ? bankAccount : undefined,
         accountHead: isCashPayment ? accountHead : undefined,
         cheque_number: isCashPayment ? form.cheque_number : undefined,
+        payment_splits: isCashPayment
+          ? buildPaymentSplits({
+              mode: form.mode_of_payment,
+              cashAmount,
+              transferAmount,
+              accountHead,
+              bankAccount,
+            })
+          : undefined,
       },
       (res) => {
         if (res.success) {
@@ -866,7 +916,7 @@ export default function OperatingExpenses() {
         parseFloat(item.quantity || 1) *
         parseFloat(item.unit_cost || item.cost || item.amount || 0),
       item_type: item.item_subhead || item.item_type || "",
-      taxable: item.taxable || "Not Taxable",
+      taxable: item.taxable || "Non-Taxable",
       line_tax_id: null,
     }));
 
@@ -983,7 +1033,15 @@ export default function OperatingExpenses() {
 
     if (!isCashPayment || !activeBusiness?.id) return;
 
-    if (form.mode_of_payment === "cash") {
+    const needCash =
+      form.mode_of_payment === "cash" ||
+      isCashTransferSplitMode(form.mode_of_payment);
+    const needBank =
+      form.mode_of_payment === "cheque" ||
+      form.mode_of_payment === "bank" ||
+      isCashTransferSplitMode(form.mode_of_payment);
+
+    if (needCash) {
       _postApi(
         `/inventory/product-list?query_type=cash`,
         { facilityId: activeBusiness.id },
@@ -999,10 +1057,8 @@ export default function OperatingExpenses() {
           toast.error("Something went wrong while fetching cash accounts.");
         },
       );
-    } else if (
-      form.mode_of_payment === "cheque" ||
-      form.mode_of_payment === "bank"
-    ) {
+    }
+    if (needBank) {
       _fetchApi(
         `/api/get/bank-accounts?facilityId=${activeBusiness.id}`,
         (data) => {
@@ -1314,97 +1370,34 @@ export default function OperatingExpenses() {
               />
             </div>
           ) : (
-            <>
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
-                <label className="text-sm font-medium text-slate-600 lg:text-right">
-                  Mode of Payment <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="mode_of_payment"
-                  value={form.mode_of_payment}
-                  onChange={handleFormChange}
-                  className="h-9 w-full max-w-xs rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                >
-                  <option value="">Select mode...</option>
-                  <option value="cash">Cash</option>
-                  <option value="bank">Bank Transfer</option>
-                  <option value="cheque">Cheque</option>
-                </select>
-              </div>
-              {(form.mode_of_payment === "bank" ||
-                form.mode_of_payment === "cheque") && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
-                  <label className="text-sm font-medium text-slate-600 lg:text-right">
-                    Bank Account <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={bankAccount?.id || ""}
-                    onChange={(e) => {
-                      const selectedAccount = accountList.find(
-                        (account) => account.id === Number(e.target.value),
-                      );
-                      setBankAccount(selectedAccount || {});
-                    }}
-                    className="h-9 w-full max-w-md rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                  >
-                    <option value="">Select bank account...</option>
-                    {accountList.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.account_name} ({account.id})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {form.mode_of_payment === "cash" && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
-                  <label className="text-sm font-medium text-slate-600 lg:text-right">
-                    Cash Account <span className="text-red-500">*</span>
-                  </label>
-                  <Typeahead
-                    ref={cashAccountTypeaheadRef}
-                    id="expense-bill-cash-account"
-                    labelKey={(option) =>
-                      `${option.head || ""} ${option.description || ""}`
-                    }
-                    options={headList}
-                    placeholder="Select cash account..."
-                    onChange={(selectedItems) => {
-                      if (selectedItems?.length) {
-                        const cash = selectedItems[0];
-                        setAccountHead({
-                          head: cash.head || "",
-                          description: cash.description || "",
-                        });
-                      } else {
-                        setAccountHead({});
-                      }
-                    }}
-                    selected={
-                      accountHead?.head
-                        ? headList.filter((c) => c.head === accountHead.head)
-                        : []
-                    }
-                    clearButton
-                  />
-                </div>
-              )}
-              {form.mode_of_payment === "cheque" && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
-                  <label className="text-sm font-medium text-slate-600 lg:text-right">
-                    Cheque No <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="cheque_number"
-                    value={form.cheque_number}
-                    onChange={handleFormChange}
-                    placeholder="Enter cheque number..."
-                    className="h-9 w-full max-w-xs rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                  />
-                </div>
-              )}
-            </>
+            <CashTransferPaymentFields
+              modeOfPayment={form.mode_of_payment}
+              onModeChange={(value) => {
+                setForm((p) => ({
+                  ...p,
+                  mode_of_payment: value,
+                  cheque_number: value === "cheque" ? p.cheque_number : "",
+                }));
+                setCashAmount("");
+                setTransferAmount("");
+              }}
+              cashAmount={cashAmount}
+              onCashAmountChange={setCashAmount}
+              transferAmount={transferAmount}
+              onTransferAmountChange={setTransferAmount}
+              expectedTotal={getTotal()}
+              accountHead={accountHead}
+              onAccountHeadChange={setAccountHead}
+              bankAccount={bankAccount}
+              onBankAccountChange={(acc) => setBankAccount(acc || {})}
+              accountList={accountList}
+              headList={headList}
+              chequeNumber={form.cheque_number}
+              onChequeNumberChange={(v) =>
+                setForm((p) => ({ ...p, cheque_number: v }))
+              }
+              cashTypeaheadRef={cashAccountTypeaheadRef}
+            />
           )}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-start">
@@ -1531,9 +1524,9 @@ export default function OperatingExpenses() {
                                 type="button"
                                 title="Click to toggle taxable"
                                 onClick={() => {
-                                  if (item.taxable === "Taxable") {
+                                  if (isProductTaxable(item.taxable)) {
                                     updateItemField(item._id, {
-                                      taxable: "Not Taxable",
+                                      taxable: "Non-Taxable",
                                       line_tax_id: null,
                                     });
                                   } else {
@@ -1545,12 +1538,12 @@ export default function OperatingExpenses() {
                                   }
                                 }}
                                 className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                  item.taxable === "Taxable"
+                                  isProductTaxable(item.taxable)
                                     ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                 }`}
                               >
-                                {item.taxable === "Taxable"
+                                {isProductTaxable(item.taxable)
                                   ? "Taxable"
                                   : "Not taxable"}
                               </button>
@@ -1628,12 +1621,12 @@ export default function OperatingExpenses() {
                         <td className="px-2 py-3 align-top">
                           <select
                             value={item.line_tax_id ?? ""}
-                            disabled={item.taxable !== "Taxable"}
+                            disabled={!isProductTaxable(item.taxable)}
                             onChange={(e) => {
                               const taxId = e.target.value || null;
                               updateItemField(item._id, {
                                 line_tax_id: taxId,
-                                taxable: taxId ? "Taxable" : "Not Taxable",
+                                taxable: taxId ? "Taxable" : "Non-Taxable",
                               });
                             }}
                             className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)] disabled:bg-slate-50"
@@ -1645,7 +1638,7 @@ export default function OperatingExpenses() {
                               </option>
                             ))}
                           </select>
-                          {item.taxable === "Taxable" &&
+                          {isProductTaxable(item.taxable) &&
                             getLineTaxAmount(item) > 0 && (
                               <div className="mt-1 text-[11px] tabular-nums text-slate-500">
                                 ₦{formatNumber(getLineTaxAmount(item))}
@@ -1781,7 +1774,7 @@ export default function OperatingExpenses() {
                 selectedTaxes.map((tax) => {
                   const taxAmountForDisplay = items.reduce((sum, item) => {
                     if (
-                      item.taxable !== "Taxable" ||
+                      !isProductTaxable(item.taxable) ||
                       String(item.line_tax_id) !== String(tax.id)
                     ) {
                       return sum;

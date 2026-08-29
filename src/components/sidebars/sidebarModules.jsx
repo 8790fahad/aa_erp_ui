@@ -18,6 +18,14 @@ export const modules = [
     title: "Dashboard",
     url: "/app",
     icon: LayoutDashboard,
+    functionality: ["Dashboard"],
+    access: [
+      "services",
+      "retailers",
+      "recycling",
+      "manufacturing",
+      "contractors",
+    ],
   },
   // Customers moved under Sales
   // {
@@ -72,6 +80,13 @@ export const modules = [
           "recycling",
           "manufacturing",
           "contractors",
+        ],
+        functionality: [
+          "Goods",
+          "Goods List",
+          "New Goods Transfer",
+          "Transfer History",
+          "Pending Approvals",
         ],
         subFunctionalities: [
           { title: "Goods" },
@@ -294,9 +309,10 @@ export const modules = [
         ],
       },
       {
-        title: "Collection Points",
-        url: "/app/payments/collection-points",
+        title: "Verification Points",
+        url: "/app/payments/verification-points",
         functionality: [
+          "Verification Points",
           "Collection Points",
           "Cash Collection",
           "Transfer Collection",
@@ -332,6 +348,7 @@ export const modules = [
           "Payments",
           "Customer Deposit",
           "Credit & Debit Note",
+          "Verification Points",
           "Collection Points",
         ],
         access: [
@@ -686,6 +703,11 @@ export const modules = [
       "Assets",
       "Fixed Assets",
       "Asset Management",
+      // Privilege names used on Manage Staff / membership for this module
+      "Asset List",
+      "Add Asset",
+      "Asset Disposal",
+      "Asset Dashboard",
     ],
     access: [
       "services",

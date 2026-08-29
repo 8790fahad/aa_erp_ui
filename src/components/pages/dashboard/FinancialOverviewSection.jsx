@@ -1766,11 +1766,11 @@ export default function FinancialOverviewSection({
             </div>
             <button
               type="button"
-              onClick={() => navigate("/app/payments/collection-points")}
+              onClick={() => navigate("/app/payments/verification-points")}
               className="text-xs font-medium hover:underline"
               style={{ color: PL_COLORS.grossProfit }}
             >
-              Collection Points
+              Verification Points
             </button>
           </div>
           <div

@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Calculator, Package, DollarSign, Tag } from "lucide-react";
 import { formatNumber1 } from "@/components/router/utilities";
+import { isProductTaxable } from "@/utils/taxableStatus";
 
 export function EditItemDialog({ isOpen, onOpenChange, selectedItem, onSave }) {
   const [markup, setMarkup] = useState(10); // Default to 10%
@@ -48,7 +49,7 @@ export function EditItemDialog({ isOpen, onOpenChange, selectedItem, onSave }) {
         storedMode === "percentage"
           ? cost + (cost * storedMarkup) / 100
           : cost + storedMarkup;
-      const isTaxable = selectedItem.taxable === "Taxable";
+      const isTaxable = isProductTaxable(selectedItem.taxable);
       const priceWithVat = isTaxable
         ? priceAfterMarkup * (1 + storedVat / 100)
         : priceAfterMarkup;
@@ -74,7 +75,7 @@ export function EditItemDialog({ isOpen, onOpenChange, selectedItem, onSave }) {
         : cost + safeMarkup;
 
     // Add VAT to the price after markup (only if taxable)
-    const isTaxable = selectedItem?.taxable === "Taxable";
+    const isTaxable = isProductTaxable(selectedItem?.taxable);
     const newSellingPrice = isTaxable
       ? priceAfterMarkup * (1 + safeVat / 100)
       : priceAfterMarkup;
@@ -188,7 +189,7 @@ export function EditItemDialog({ isOpen, onOpenChange, selectedItem, onSave }) {
                     <div className="mt-2">
                       <span
                         className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${
-                          selectedItem?.taxable === "Taxable"
+                          isProductTaxable(selectedItem?.taxable)
                             ? "bg-green-100 text-green-700"
                             : "bg-gray-100 text-gray-700"
                         }`}
@@ -197,7 +198,7 @@ export function EditItemDialog({ isOpen, onOpenChange, selectedItem, onSave }) {
                       </span>
                     </div>
                   </div>
-                  {selectedItem?.taxable === "Taxable" && (
+                  {isProductTaxable(selectedItem?.taxable) && (
                     <div>
                       <Label
                         htmlFor="vat"
@@ -328,7 +329,7 @@ export function EditItemDialog({ isOpen, onOpenChange, selectedItem, onSave }) {
                         ₦{formatNumber1(sellingPrice)}
                       </p>
                       <p className="text-xs text-green-600 mt-1">
-                        {selectedItem?.taxable === "Taxable" ? (
+                        {isProductTaxable(selectedItem?.taxable) ? (
                           <>
                             Final price customers will pay (includes {vat}% VAT)
                           </>

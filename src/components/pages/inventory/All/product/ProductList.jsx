@@ -1,4 +1,4 @@
-import { Input, Modal } from "antd";
+import { Input, Modal, Select as AntSelect } from "antd";
 import { toast } from "sonner";
 import {
   MoreVerticalIcon,
@@ -13,15 +13,25 @@ import {
   ImageIcon,
   FileText,
   Target,
+  Ban,
+  Search,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import ProductsUpload from "./ProductsUpload";
+import {
+  normalizeTaxableStatus,
+  TAXABLE_STATUS_OPTIONS,
+  taxableStatusStyle,
+} from "@/utils/taxableStatus";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,16 +42,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiURL } from "@/redux/actions/api";
+import { apiURL, _fetchApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 
-const salesTargetFromProduct = (item) => {
+const legacySalesTargetFromProduct = (item) => {
   if (!item) return { period: "none", quantity: "" };
   if (item.daily_sales_limit)
     return { period: "daily", quantity: String(item.daily_sales_limit) };
@@ -50,6 +65,61 @@ const salesTargetFromProduct = (item) => {
   if (item.monthly_sales_limit)
     return { period: "monthly", quantity: String(item.monthly_sales_limit) };
   return { period: "none", quantity: "" };
+};
+
+const warehouseTargetsFromProduct = (item) =>
+  Array.isArray(item?.sales_targets) ? item.sales_targets : [];
+
+const warehouseStopsFromProduct = (item) =>
+  Array.isArray(item?.sales_stops) ? item.sales_stops : [];
+
+const displayStopsForProduct = (item, allBranches = []) => {
+  const stops = warehouseStopsFromProduct(item);
+  if (stops.length) return stops;
+  if (item?.sales_stopped) {
+    return (allBranches || []).map((b) => ({
+      branch_id: b.id,
+      branch_name: b.branch_name || `Warehouse ${b.id}`,
+    }));
+  }
+  return [];
+};
+
+const displayTargetsForProduct = (item) => {
+  const warehouse = warehouseTargetsFromProduct(item);
+  if (warehouse.length) return warehouse;
+  const legacy = legacySalesTargetFromProduct(item);
+  if (legacy.period === "none") return [];
+  return [{ branch_id: "legacy", branch_name: "", ...legacy }];
+};
+
+const EMPTY_SALES_TARGET_MODAL = {
+  open: false,
+  productId: null,
+  productName: "",
+  period: "daily",
+  quantity: "",
+  quantities: {},
+  periods: {},
+  branchIds: [],
+  sales_targets: [],
+  legacyPeriod: "none",
+  legacyQuantity: "",
+};
+
+const SALES_TARGET_PERIOD_OPTIONS = [
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+];
+
+const EMPTY_STOP_SALES_MODAL = {
+  open: false,
+  productId: null,
+  productName: "",
+  branchIds: [],
+  sales_stops: [],
+  legacyStopped: false,
 };
 
 const ONLINE_ELIGIBLE_ITEM_TYPES = [
@@ -121,6 +191,174 @@ const resolveProductImageUrl = (src) => {
 const isOnlineEligible = (itemType) =>
   ONLINE_ELIGIBLE_ITEM_TYPES.includes(itemType);
 
+const compareText = (a, b) =>
+  String(a || "").localeCompare(String(b || ""), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+
+function WarehouseStatusBadge({
+  item,
+  branches,
+  onToggleStop,
+  togglingKey,
+  onEditTargets,
+}) {
+  const stops = displayStopsForProduct(item, branches);
+  const targets = displayTargetsForProduct(item);
+  if (!stops.length && !targets.length) return null;
+
+  const stoppedIds = new Set(stops.map((s) => String(s.branch_id)));
+  const rows = branches.length
+    ? branches
+    : stops.map((s) => ({
+        id: s.branch_id,
+        branch_name: s.branch_name,
+      }));
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-1.5 py-0.5 shadow-sm hover:bg-slate-50"
+          title="View stop sales and targets by store"
+        >
+          {stops.length ? (
+            <span className="inline-flex items-center gap-1 text-red-600">
+              <Ban className="h-3.5 w-3.5" />
+              <span className="sr-only">Sales stopped</span>
+              <span className="text-xs font-semibold text-slate-600">
+                +{stops.length}
+              </span>
+            </span>
+          ) : null}
+          {stops.length && targets.length ? (
+            <span className="h-3 w-px bg-slate-200" />
+          ) : null}
+          {targets.length ? (
+            <span className="inline-flex items-center gap-1 text-amber-700">
+              <Target className="h-3.5 w-3.5" />
+              <span className="sr-only">Sales target</span>
+              <span className="text-xs font-semibold text-slate-600">
+                +{targets.length}
+              </span>
+            </span>
+          ) : null}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-80 p-0"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        {stops.length ? (
+          <>
+            <div className="border-b border-slate-100 px-3 py-2">
+              <p className="text-xs font-semibold text-slate-700">
+                Stop sales by warehouse
+              </p>
+              <p className="text-[11px] text-slate-500">
+                On blocks invoices at that store. Off resumes sales.
+              </p>
+            </div>
+            <div className="max-h-48 overflow-y-auto py-1">
+              {rows.map((b) => {
+                const id = String(b.id);
+                const stopped = stoppedIds.has(id);
+                const busy = togglingKey === `${item.id}-${id}`;
+                return (
+                  <div
+                    key={`stop-${id}`}
+                    className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50"
+                  >
+                    <span className="text-sm text-slate-800">
+                      {b.branch_name || `Warehouse ${b.id}`}
+                    </span>
+                    <Switch
+                      checked={stopped}
+                      disabled={busy}
+                      onCheckedChange={(on) => onToggleStop(item, id, on)}
+                      className="data-[state=checked]:bg-red-600"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : null}
+        {targets.length ? (
+          <>
+            <div
+              className={`border-b border-slate-100 px-3 py-2 ${
+                stops.length ? "border-t" : ""
+              }`}
+            >
+              <p className="text-xs font-semibold text-slate-700">
+                Sales targets
+              </p>
+            </div>
+            <div className="max-h-48 overflow-y-auto py-1">
+              {targets.map((t, i) => (
+                <div
+                  key={`${t.branch_id}-${t.period}-${i}`}
+                  className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                >
+                  <span className="text-slate-800">
+                    {t.branch_name || "All warehouses"}
+                  </span>
+                  <span className="text-amber-800">
+                    {formatNumber1(t.quantity)}/{t.period}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-slate-100 px-3 py-2">
+              <button
+                type="button"
+                className="text-xs font-medium text-[var(--aa-accent)] hover:underline"
+                onClick={onEditTargets}
+              >
+                Edit targets
+              </button>
+            </div>
+          </>
+        ) : null}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function SortTh({ label, column, sortKey, sortDir, onSort, align = "left" }) {
+  const active = sortKey === column;
+  return (
+    <th
+      className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 ${
+        align === "right" ? "text-right" : "text-left"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className={`inline-flex items-center gap-1 text-slate-600 hover:text-slate-900 ${
+          align === "right" ? "w-full justify-end" : ""
+        }`}
+      >
+        {label}
+        {active ? (
+          sortDir === "asc" ? (
+            <ArrowUp className="h-3.5 w-3.5" />
+          ) : (
+            <ArrowDown className="h-3.5 w-3.5" />
+          )
+        ) : (
+          <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
+        )}
+      </button>
+    </th>
+  );
+}
+
 export default function ProductList() {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const navigate = useNavigate();
@@ -135,6 +373,9 @@ export default function ProductList() {
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [itemTypeFilter, setItemTypeFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [sortKey, setSortKey] = useState("name");
+  const [sortDir, setSortDir] = useState("asc");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -169,15 +410,14 @@ export default function ProductList() {
     description: "",
   });
   const [savingDescription, setSavingDescription] = useState(false);
-  const [salesTargetModal, setSalesTargetModal] = useState({
-    open: false,
-    productId: null,
-    productName: "",
-    period: "none",
-    quantity: "",
-  });
+  const [salesTargetModal, setSalesTargetModal] = useState(
+    EMPTY_SALES_TARGET_MODAL,
+  );
   const [savingSalesTarget, setSavingSalesTarget] = useState(false);
-  const [togglingStopSalesId, setTogglingStopSalesId] = useState(null);
+  const [stopSalesModal, setStopSalesModal] = useState(EMPTY_STOP_SALES_MODAL);
+  const [savingStopSales, setSavingStopSales] = useState(false);
+  const [togglingStopKey, setTogglingStopKey] = useState(null);
+  const [branches, setBranches] = useState([]);
 
   const handlePageChange = useCallback(
     (page) => {
@@ -225,6 +465,22 @@ export default function ProductList() {
     setSearchParams(next, { replace: true });
   };
 
+  const handleCategoryFilterChange = (value) => {
+    setCategoryFilter(value || "");
+    const next = new URLSearchParams(searchParams);
+    next.set("page", "1");
+    setSearchParams(next, { replace: true });
+  };
+
+  const handleSort = (column) => {
+    if (sortKey === column) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(column);
+    setSortDir("asc");
+  };
+
   const getProductImages = (item) => {
     if (Array.isArray(item?.product_images)) {
       return item.product_images.filter(Boolean);
@@ -270,10 +526,22 @@ export default function ProductList() {
       });
   }, [activeBusiness?.id]);
 
-  const updateTaxableStatus = async (productId, currentTaxable) => {
+  useEffect(() => {
+    if (!activeBusiness?.id) return;
+    _fetchApi(
+      `/account/get/branches?facilityId=${activeBusiness.id}`,
+      (resp) => {
+        const rows = resp?.results || resp?.data || resp || [];
+        setBranches(Array.isArray(rows) ? rows : []);
+      },
+      () => setBranches([]),
+    );
+  }, [activeBusiness?.id]);
+
+  const updateTaxableStatus = async (productId, newTaxable) => {
     if (!activeBusiness?.id) return;
 
-    const newTaxable = currentTaxable === "Taxable" ? "Not Taxable" : "Taxable";
+    const resolved = normalizeTaxableStatus(newTaxable, "Taxable");
 
     try {
       const response = await fetch(
@@ -284,7 +552,7 @@ export default function ProductList() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            taxable: newTaxable,
+            taxable: resolved,
             facilityId: activeBusiness.id,
           }),
         },
@@ -293,13 +561,12 @@ export default function ProductList() {
       const resp = await response.json();
 
       if (resp.success) {
-        // Update the local state
         setData((prevData) =>
           prevData.map((item) =>
-            item.id === productId ? { ...item, taxable: newTaxable } : item,
+            item.id === productId ? { ...item, taxable: resolved } : item,
           ),
         );
-        toast.success(`Product marked as ${newTaxable}`);
+        toast.success(`Product marked as ${resolved}`);
       } else {
         toast.error(resp.message || "Failed to update taxable status");
       }
@@ -404,24 +671,167 @@ export default function ProductList() {
   };
 
   const openSalesTargetModal = (item) => {
-    const target = salesTargetFromProduct(item);
+    const sales_targets = warehouseTargetsFromProduct(item);
+    const legacy = legacySalesTargetFromProduct(item);
+    const existingIds = sales_targets
+      .map((t) => String(t.branch_id))
+      .filter(Boolean);
+    const quantities = {};
+    const periods = {};
+    for (const t of sales_targets) {
+      if (t.branch_id == null) continue;
+      const id = String(t.branch_id);
+      quantities[id] = String(t.quantity ?? "");
+      periods[id] = t.period || "daily";
+    }
+    const samePeriod =
+      sales_targets.length > 0 &&
+      sales_targets.every((t) => t.period === sales_targets[0].period);
+    const sameQty =
+      sales_targets.length > 0 &&
+      sales_targets.every(
+        (t) => String(t.quantity) === String(sales_targets[0].quantity),
+      );
+    const first = sales_targets[0];
     setSalesTargetModal({
       open: true,
       productId: item.id,
       productName: item.name,
-      period: target.period,
-      quantity: target.quantity,
+      period: samePeriod
+        ? first.period
+        : existingIds.length
+          ? first?.period || "daily"
+          : legacy.period === "none"
+            ? "daily"
+            : legacy.period,
+      quantity: sameQty
+        ? String(first.quantity ?? "")
+        : existingIds.length
+          ? ""
+          : legacy.quantity,
+      quantities,
+      periods,
+      branchIds: existingIds,
+      sales_targets,
+      legacyPeriod: legacy.period,
+      legacyQuantity: legacy.quantity,
     });
   };
 
+  const toggleSalesTargetWarehouse = (branchId) => {
+    const id = String(branchId);
+    setSalesTargetModal((prev) => {
+      const selected = prev.branchIds || [];
+      const nextIds = selected.includes(id)
+        ? selected.filter((x) => x !== id)
+        : [...selected, id];
+      const quantities = { ...(prev.quantities || {}) };
+      const periods = { ...(prev.periods || {}) };
+      if (!selected.includes(id)) {
+        if (quantities[id] == null || quantities[id] === "") {
+          quantities[id] = prev.quantity || "";
+        }
+        if (!periods[id] || periods[id] === "none") {
+          periods[id] = prev.period && prev.period !== "none" ? prev.period : "daily";
+        }
+      }
+      return { ...prev, branchIds: nextIds, quantities, periods };
+    });
+  };
+
+  const toggleAllSalesTargetWarehouses = () => {
+    const allIds = branches.map((b) => String(b.id));
+    setSalesTargetModal((prev) => {
+      const selected = prev.branchIds || [];
+      const allOn =
+        allIds.length > 0 && allIds.every((id) => selected.includes(id));
+      if (allOn) return { ...prev, branchIds: [] };
+      const quantities = { ...(prev.quantities || {}) };
+      const periods = { ...(prev.periods || {}) };
+      const fillQty = prev.quantity || "";
+      const fillPeriod =
+        prev.period && prev.period !== "none" ? prev.period : "daily";
+      for (const id of allIds) {
+        if (fillQty && (quantities[id] == null || quantities[id] === "")) {
+          quantities[id] = fillQty;
+        }
+        if (!periods[id] || periods[id] === "none") {
+          periods[id] = fillPeriod;
+        }
+      }
+      return { ...prev, branchIds: allIds, quantities, periods };
+    });
+  };
+
+  const applySalesTargetToAll = ({ quantity, period } = {}) => {
+    setSalesTargetModal((prev) => {
+      const nextPeriod = period !== undefined ? period : prev.period;
+      const nextQty = quantity !== undefined ? quantity : prev.quantity;
+      if (nextPeriod === "none") {
+        return { ...prev, period: "none", quantity: nextQty };
+      }
+      const selected = (prev.branchIds || []).length
+        ? prev.branchIds
+        : branches.map((b) => String(b.id));
+      const quantities = { ...(prev.quantities || {}) };
+      const periods = { ...(prev.periods || {}) };
+      for (const id of selected) {
+        if (quantity !== undefined) quantities[id] = nextQty;
+        if (period !== undefined) periods[id] = nextPeriod;
+        if (!periods[id] || periods[id] === "none") periods[id] = nextPeriod;
+      }
+      return {
+        ...prev,
+        period: nextPeriod,
+        quantity: nextQty,
+        branchIds: selected,
+        quantities,
+        periods,
+      };
+    });
+  };
+
+  const setSalesTargetQuantity = (branchId, value) => {
+    const id = String(branchId);
+    setSalesTargetModal((prev) => ({
+      ...prev,
+      quantities: { ...(prev.quantities || {}), [id]: value },
+    }));
+  };
+
+  const setSalesTargetPeriod = (branchId, value) => {
+    const id = String(branchId);
+    setSalesTargetModal((prev) => ({
+      ...prev,
+      periods: { ...(prev.periods || {}), [id]: value },
+    }));
+  };
+
   const saveSalesTarget = async () => {
-    const { productId, period, quantity } = salesTargetModal;
+    const { productId, period, quantities, periods, branchIds } =
+      salesTargetModal;
     if (!activeBusiness?.id || !productId) return;
 
+    const targets =
+      period === "none"
+        ? []
+        : (branchIds || []).map((id) => ({
+            branchId: id,
+            quantity: String(quantities?.[id] ?? "").replace(/,/g, ""),
+            period: periods?.[id] || period || "daily",
+          }));
+
     if (period !== "none") {
-      const qty = parseInt(String(quantity).replace(/,/g, ""), 10);
-      if (!Number.isFinite(qty) || qty <= 0) {
-        toast.error("Enter a valid sales target quantity");
+      if (!targets.length) {
+        toast.error("Select at least one warehouse");
+        return;
+      }
+      const invalid = targets.find((t) => {
+        const qty = parseInt(t.quantity, 10);
+        return !Number.isFinite(qty) || qty <= 0;
+      });
+      if (invalid) {
+        toast.error("Enter a valid quantity for each selected warehouse");
         return;
       }
     }
@@ -436,7 +846,7 @@ export default function ProductList() {
           body: JSON.stringify({
             facilityId: activeBusiness.id,
             period,
-            quantity: period === "none" ? null : quantity,
+            targets,
           }),
         },
       );
@@ -447,24 +857,18 @@ export default function ProductList() {
             row.id === productId
               ? {
                   ...row,
-                  daily_sales_limit: resp.data.daily_sales_limit,
-                  weekly_sales_limit: resp.data.weekly_sales_limit,
-                  monthly_sales_limit: resp.data.monthly_sales_limit,
+                  sales_targets: resp.data.sales_targets || [],
                 }
               : row,
           ),
         );
-        setSalesTargetModal({
-          open: false,
-          productId: null,
-          productName: "",
-          period: "none",
-          quantity: "",
-        });
+        setSalesTargetModal(EMPTY_SALES_TARGET_MODAL);
         toast.success(
-          period === "none"
-            ? "Sales target cleared"
-            : `Sales target set (${period})`,
+          period === "none" || !targets.length
+            ? "Sales targets cleared"
+            : `Sales targets saved for ${targets.length} warehouse${
+                targets.length === 1 ? "" : "s"
+              }`,
         );
       } else {
         toast.error(resp.message || "Failed to update sales target");
@@ -477,43 +881,133 @@ export default function ProductList() {
     }
   };
 
-  const toggleStopSales = async (productId, salesStopped) => {
-    if (!activeBusiness?.id || !productId) return;
-    setTogglingStopSalesId(productId);
+  const openStopSalesModal = (item) => {
+    const sales_stops = warehouseStopsFromProduct(item);
+    const existingIds = sales_stops
+      .map((s) => String(s.branch_id))
+      .filter(Boolean);
+    const legacyStopped = !!item.sales_stopped && existingIds.length === 0;
+    setStopSalesModal({
+      open: true,
+      productId: item.id,
+      productName: item.name,
+      branchIds: legacyStopped
+        ? branches.map((b) => String(b.id))
+        : existingIds,
+      sales_stops,
+      legacyStopped,
+    });
+  };
+
+  const toggleStopSalesWarehouse = (branchId) => {
+    const id = String(branchId);
+    setStopSalesModal((prev) => {
+      const selected = prev.branchIds || [];
+      const nextIds = selected.includes(id)
+        ? selected.filter((x) => x !== id)
+        : [...selected, id];
+      return { ...prev, branchIds: nextIds };
+    });
+  };
+
+  const toggleAllStopSalesWarehouses = () => {
+    const allIds = branches.map((b) => String(b.id));
+    setStopSalesModal((prev) => {
+      const selected = prev.branchIds || [];
+      const allOn =
+        allIds.length > 0 && allIds.every((id) => selected.includes(id));
+      return { ...prev, branchIds: allOn ? [] : allIds };
+    });
+  };
+
+  const persistStopSales = async (productId, branchIds) => {
+    if (!activeBusiness?.id || !productId) return false;
+    const response = await fetch(
+      `${apiURL}/api/products/${productId}/stop-sales`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          facilityId: activeBusiness.id,
+          branchIds,
+        }),
+      },
+    );
+    const resp = await response.json();
+    if (!resp.success) {
+      toast.error(resp.message || "Failed to update stop sales");
+      return false;
+    }
+    setData((prev) =>
+      prev.map((row) =>
+        row.id === productId
+          ? {
+              ...row,
+              sales_stops: resp.data.sales_stops || [],
+              sales_stopped: false,
+            }
+          : row,
+      ),
+    );
+    return true;
+  };
+
+  const setWarehouseStopped = async (item, branchId, stopped) => {
+    const id = String(branchId);
+    const current = displayStopsForProduct(item, branches).map((s) =>
+      String(s.branch_id),
+    );
+    const next = stopped
+      ? [...new Set([...current, id])]
+      : current.filter((x) => x !== id);
+    setTogglingStopKey(`${item.id}-${id}`);
     try {
-      const response = await fetch(
-        `${apiURL}/api/products/${productId}/stop-sales`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            facilityId: activeBusiness.id,
-            sales_stopped: salesStopped,
-          }),
-        },
-      );
-      const resp = await response.json();
-      if (resp.success) {
-        setData((prev) =>
-          prev.map((row) =>
-            row.id === productId
-              ? { ...row, sales_stopped: salesStopped }
-              : row,
-          ),
-        );
+      const ok = await persistStopSales(item.id, next);
+      if (ok) {
+        const name =
+          branches.find((b) => String(b.id) === id)?.branch_name ||
+          "this warehouse";
         toast.success(
-          salesStopped
-            ? "Sales stopped for this product"
-            : "Sales resumed for this product",
+          stopped ? `Sales stopped at ${name}` : `Sales resumed at ${name}`,
         );
-      } else {
-        toast.error(resp.message || "Failed to update stop sales");
       }
     } catch (err) {
       console.error(err);
       toast.error("Something went wrong while updating stop sales");
     } finally {
-      setTogglingStopSalesId(null);
+      setTogglingStopKey(null);
+    }
+  };
+
+  const saveStopSales = async () => {
+    const { productId, branchIds } = stopSalesModal;
+    if (!activeBusiness?.id || !productId) return;
+
+    setSavingStopSales(true);
+    try {
+      const ok = await persistStopSales(productId, branchIds);
+      if (ok) {
+        setStopSalesModal(EMPTY_STOP_SALES_MODAL);
+        const names = branches
+          .filter((b) => branchIds.includes(String(b.id)))
+          .map((b) => b.branch_name || `Warehouse ${b.id}`);
+        const where =
+          names.length === 0
+            ? "all warehouses"
+            : names.length <= 2
+              ? names.join(" and ")
+              : `${names.length} warehouses`;
+        toast.success(
+          names.length
+            ? `Sales stopped at ${where}`
+            : `Sales resumed at ${where}`,
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Something went wrong while updating stop sales");
+    } finally {
+      setSavingStopSales(false);
     }
   };
 
@@ -829,21 +1323,93 @@ export default function ProductList() {
     return itemType || "—";
   };
 
-  const filteredData = catalogData.filter((item) => {
+  const categoryOptions = useMemo(() => {
+    const names = new Set();
+    let hasUncategorized = false;
+    for (const item of catalogData) {
+      const name = String(item.category || "").trim();
+      if (name) names.add(name);
+      else hasUncategorized = true;
+    }
+    const options = [...names]
+      .sort(compareText)
+      .map((name) => ({ value: name, label: name }));
+    if (hasUncategorized) {
+      options.unshift({ value: "__none__", label: "Uncategorized" });
+    }
+    return options;
+  }, [catalogData]);
+
+  const filteredData = useMemo(() => {
     const searchLower = searchTerm.toLowerCase();
-    const typeLabel = displayItemType(item.item_type);
-    const matchesSearch =
-      item.name?.toLowerCase().includes(searchLower) ||
-      item.sku?.toLowerCase().includes(searchLower) ||
-      item.category?.toLowerCase().includes(searchLower) ||
-      item.item_type?.toLowerCase().includes(searchLower) ||
-      typeLabel?.toLowerCase().includes(searchLower);
+    const rows = catalogData.filter((item) => {
+      const typeLabel = displayItemType(item.item_type);
+      const matchesSearch =
+        !searchLower ||
+        item.name?.toLowerCase().includes(searchLower) ||
+        item.sku?.toLowerCase().includes(searchLower) ||
+        item.category?.toLowerCase().includes(searchLower) ||
+        item.item_type?.toLowerCase().includes(searchLower) ||
+        typeLabel?.toLowerCase().includes(searchLower);
 
-    const matchesItemType =
-      !itemTypeFilter || item.item_type === itemTypeFilter;
+      const matchesItemType =
+        !itemTypeFilter || item.item_type === itemTypeFilter;
 
-    return matchesSearch && matchesItemType;
-  });
+      const categoryName = String(item.category || "").trim();
+      const matchesCategory =
+        !categoryFilter ||
+        (categoryFilter === "__none__"
+          ? !categoryName
+          : categoryName === categoryFilter);
+
+      return matchesSearch && matchesItemType && matchesCategory;
+    });
+
+    const dir = sortDir === "desc" ? -1 : 1;
+    rows.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case "category":
+          cmp = compareText(a.category, b.category);
+          break;
+        case "type":
+          cmp = compareText(
+            displayItemType(a.item_type),
+            displayItemType(b.item_type),
+          );
+          break;
+        case "unit":
+          cmp = compareText(a.unit_of_measure, b.unit_of_measure);
+          break;
+        case "selling_price":
+          cmp = (Number(a.selling_price) || 0) - (Number(b.selling_price) || 0);
+          break;
+        case "status":
+          cmp = compareText(a.status, b.status);
+          break;
+        case "tax":
+          cmp = compareText(
+            normalizeTaxableStatus(a.taxable, "Taxable"),
+            normalizeTaxableStatus(b.taxable, "Taxable"),
+          );
+          break;
+        case "name":
+        default:
+          cmp = compareText(a.name, b.name);
+          break;
+      }
+      return cmp * dir;
+    });
+
+    return rows;
+  }, [
+    catalogData,
+    searchTerm,
+    itemTypeFilter,
+    categoryFilter,
+    sortKey,
+    sortDir,
+  ]);
 
   const totalPages = Math.max(
     1,
@@ -930,19 +1496,13 @@ export default function ProductList() {
             Add Description
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <div
-            className="flex items-center justify-between gap-3 px-2 py-2 text-sm"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
+          <DropdownMenuItem
+            onClick={() => openStopSalesModal(item)}
+            className="flex items-center gap-2"
           >
-            <span className="text-slate-700 font-medium">Stop Sales</span>
-            <Switch
-              checked={!!item.sales_stopped}
-              disabled={togglingStopSalesId === item.id}
-              onCheckedChange={(checked) => toggleStopSales(item.id, checked)}
-              className="data-[state=checked]:bg-red-600"
-            />
-          </div>
+            <Ban className="h-4 w-4 text-red-600" />
+            Stop Sales
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => toggleProductStatus(item.id, item.status)}
@@ -969,92 +1529,88 @@ export default function ProductList() {
   );
 
   return (
-    <>
-      {/* Header Section */}
-      <div className="bg-white rounded-lg shadow-sm border p-6 mb-2">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Product & Service Inventory
-            </h1>
-            <p className="text-gray-600">
-              Manage your products, services, and inventory levels
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button
-              onClick={() => navigate(`/app/inventory/product-list/new`)}
-              className="flex items-center gap-2 bg-[var(--aa-navy)] px-6 py-2 font-medium text-white shadow-none transition-colors hover:bg-[var(--aa-navy-hover)]"
-            >
-              <Plus className="h-4 w-4" />
-              Add Product/Service
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setUploadOpen(true)}
-              className="flex items-center gap-2 rounded-lg border-[var(--aa-navy)]/25 bg-white px-6 py-2 font-medium text-[var(--aa-navy)] shadow-none transition-colors hover:border-[var(--aa-navy)]/40 hover:bg-[var(--aa-sidebar-active)] hover:text-[var(--aa-navy)]"
-            >
-              <Upload className="h-4 w-4" />
-              Bulk Upload
-            </Button>
-          </div>
-        </div>
-      </div>
-      {/* Search and Filter Section */}
-      <div className="bg-white rounded-lg shadow-sm border p-4 mb-2">
-        <div className="flex flex-col lg:flex-row gap-4">
-          <div className="flex-1">
-            <Input.Search
-              placeholder="Search by name, SKU, category, or type..."
-              onChange={(e) => handleSearchChange(e.target.value)}
-              size="large"
-              className="w-full"
-              allowClear
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => getInventory()}
-              className="flex items-center gap-2 border-[var(--aa-navy)]/25 text-[var(--aa-navy)] shadow-none hover:border-[var(--aa-navy)]/40 hover:bg-[var(--aa-sidebar-active)] hover:text-[var(--aa-navy)]"
-              disabled={loading}
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-              />
-              Refresh
-            </Button>
+    <div className="min-h-screen">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">
+            Product & Service Inventory
+          </h1>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-600">
+              Total :{" "}
+              <span className="font-semibold text-gray-900">
+                {catalogData.length}
+              </span>
+            </span>
+            <span className="text-sm text-gray-600">
+              Goods:{" "}
+              <span className="font-semibold text-green-600">
+                {
+                  catalogData.filter((item) => isGoodsItemType(item.item_type))
+                    .length
+                }
+              </span>
+            </span>
+            <span className="text-sm text-gray-600">
+              Service:{" "}
+              <span className="font-semibold text-[var(--aa-navy)]">
+                {
+                  catalogData.filter((item) => item.item_type === "Service")
+                    .length
+                }
+              </span>
+            </span>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-          <div className="rounded-lg border border-[var(--aa-accent)]/20 bg-[var(--aa-sidebar-active)] p-3">
-            <div className="text-sm font-medium text-[var(--aa-accent)]">
-              Goods
-            </div>
-            <div className="text-2xl font-bold text-[var(--aa-navy)]">
-              {data.filter((item) => isGoodsItemType(item.item_type)).length}
-            </div>
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search by name, SKU, category, or type..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
+              value={searchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
+            />
           </div>
-          <div className="rounded-lg border border-[var(--aa-navy)]/15 bg-white p-3">
-            <div className="text-sm font-medium text-[var(--aa-navy)]">
-              Service
-            </div>
-            <div className="text-2xl font-bold text-[var(--aa-navy)]">
-              {data.filter((item) => item.item_type === "Service").length}
-            </div>
-          </div>
-          <div className="rounded-lg border border-[var(--aa-navy)]/20 bg-[var(--aa-navy)] p-3">
-            <div className="text-sm font-medium text-white/80">
-              Total Products
-            </div>
-            <div className="text-2xl font-bold text-white">
-              {catalogData.length}
-            </div>
-          </div>
+          <AntSelect
+            allowClear
+            showSearch
+            placeholder="All categories"
+            className="w-full sm:w-56"
+            value={categoryFilter || undefined}
+            onChange={handleCategoryFilterChange}
+            optionFilterProp="label"
+            options={categoryOptions}
+          />
+          <Button
+            type="button"
+            className="aa-btn-primary h-10 px-5 text-white"
+            onClick={() => navigate(`/app/inventory/product-list/new`)}
+          >
+            <Plus className="w-5 h-5" />
+            Add Product/Service
+          </Button>
+          <Button
+            type="button"
+            className="aa-btn-primary h-10 px-5 text-white"
+            onClick={() => setUploadOpen(true)}
+          >
+            <Upload className="w-5 h-5" />
+            Bulk Upload
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 px-4"
+            onClick={() => getInventory()}
+            disabled={loading}
+            title="Refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
         </div>
-      </div>
 
       <ProductsUpload
         open={uploadOpen}
@@ -1075,51 +1631,86 @@ export default function ProductList() {
           <div className="text-center py-12">
             <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              {searchTerm ? "No products found" : "No products yet"}
+              {searchTerm || categoryFilter
+                ? "No products found"
+                : "No products yet"}
             </h3>
             <p className="text-gray-500 mb-6 max-w-md mx-auto">
-              {searchTerm
-                ? "No products match your search criteria. Try searching by name, SKU, category, or type."
+              {searchTerm || categoryFilter
+                ? "No products match your search or category filter."
                 : "Get started by adding your first product or service to manage your inventory."}
             </p>
-            {!searchTerm && (
+            {!searchTerm && !categoryFilter && (
               <Button
+                type="button"
+                className="aa-btn-primary mx-auto h-10 px-5 text-white"
                 onClick={() => navigate(`/app/inventory/product-list/new`)}
-                className="mx-auto flex items-center gap-2 rounded-lg bg-[var(--aa-navy)] px-6 py-2 font-medium text-white shadow-none hover:bg-[var(--aa-navy-hover)]"
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="w-5 h-5" />
                 Add Your First Product/Service
               </Button>
             )}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+          <>
+          <div className="overflow-x-auto">
+              <table className="w-full min-w-[860px] border-collapse text-left text-sm">
                 <thead>
-                  <tr className="border-b border-[var(--aa-navy)]/10 bg-[var(--aa-navy)] text-white">
-                    <th className="w-12 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-white/70">
+                  <tr className="border-b border-slate-200 bg-slate-100">
+                    <th className="w-12 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
                       #
                     </th>
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                      Product
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                      Type
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                      Unit
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">
-                      Selling Price
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                      Tax
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">
+                    <SortTh
+                      label="Product"
+                      column="name"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    />
+                    <SortTh
+                      label="Category"
+                      column="category"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    />
+                    <SortTh
+                      label="Type"
+                      column="type"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    />
+                    <SortTh
+                      label="Unit"
+                      column="unit"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    />
+                    <SortTh
+                      label="Selling Price"
+                      column="selling_price"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      align="right"
+                    />
+                    <SortTh
+                      label="Status"
+                      column="status"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    />
+                    <SortTh
+                      label="Tax"
+                      column="tax"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    />
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
                       Actions
                     </th>
                   </tr>
@@ -1127,8 +1718,11 @@ export default function ProductList() {
                 <tbody>
                   {pageItems.map((item, idx) => {
                     const primaryImage = getPrimaryImage(item);
-                    const isTaxable =
-                      item.taxable === "Taxable" || item.taxable === true;
+                    const taxableValue = normalizeTaxableStatus(
+                      item.taxable,
+                      "Taxable",
+                    );
+                    const taxStyle = taxableStatusStyle(taxableValue);
                     const typeLabel = displayItemType(item.item_type);
                     const rowNum =
                       (pageFromUrl - 1) * pageSizeFromUrl + idx + 1;
@@ -1163,6 +1757,11 @@ export default function ProductList() {
                               </div>
                             </div>
                           </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle text-slate-700">
+                          {String(item.category || "").trim() || (
+                            <span className="text-slate-400">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 align-middle">
                           <span
@@ -1200,28 +1799,44 @@ export default function ProductList() {
                             >
                               {item.status || "Active"}
                             </button>
-                            {!!item.sales_stopped && (
-                              <span className="inline-flex rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700">
-                                Sales Stopped
-                              </span>
-                            )}
+                            <WarehouseStatusBadge
+                              item={item}
+                              branches={branches}
+                              onToggleStop={setWarehouseStopped}
+                              togglingKey={togglingStopKey}
+                              onEditTargets={() => openSalesTargetModal(item)}
+                            />
                           </div>
                         </td>
                         <td className="px-4 py-3 align-middle">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateTaxableStatus(item.id, item.taxable)
+                          <Select
+                            value={taxableValue}
+                            onValueChange={(value) =>
+                              updateTaxableStatus(item.id, value)
                             }
-                            title="Click to toggle tax"
-                            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
-                              isTaxable
-                                ? "bg-[var(--aa-sidebar-active)] text-[var(--aa-accent)] hover:bg-[var(--aa-accent)]/15"
-                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            }`}
                           >
-                            {isTaxable ? "Taxable" : "Not taxable"}
-                          </button>
+                            <SelectTrigger
+                              className={`h-7 w-[130px] rounded-full border-0 px-2.5 text-xs font-semibold shadow-none ${taxStyle.badgeClass}`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TAXABLE_STATUS_OPTIONS.map((opt) => (
+                                <SelectItem
+                                  key={opt.value}
+                                  value={opt.value}
+                                  className={opt.itemClass}
+                                >
+                                  <span className="inline-flex items-center gap-2">
+                                    <span
+                                      className={`h-2 w-2 shrink-0 rounded-full ${opt.dotClass}`}
+                                    />
+                                    {opt.label}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </td>
                         <td className="px-4 py-3 align-middle">
                           {renderRowActions(item)}
@@ -1233,7 +1848,7 @@ export default function ProductList() {
               </table>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-slate-200 bg-[var(--aa-sidebar-bg)]/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/40 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-slate-500">
                 Showing{" "}
                 <span className="font-medium text-slate-700">
@@ -1314,8 +1929,91 @@ export default function ProductList() {
                 </div>
               </div>
             </div>
-          </div>
+          </>
         )}
+
+        {/* Stop Sales Modal */}
+        <Modal
+          title={
+            <div className="flex items-center gap-2">
+              <Ban className="h-5 w-5 text-red-600" />
+              <span>Stop Sales</span>
+            </div>
+          }
+          open={stopSalesModal.open}
+          onCancel={() => setStopSalesModal(EMPTY_STOP_SALES_MODAL)}
+          onOk={saveStopSales}
+          okText="Save"
+          cancelText="Cancel"
+          confirmLoading={savingStopSales}
+          centered
+          width={520}
+          destroyOnClose
+        >
+          <p className="mb-5 text-sm leading-relaxed text-gray-600">
+            Stop selling <strong>{stopSalesModal.productName}</strong> at
+            selected warehouses. Tick one or more stores — invoices at those
+            locations will be blocked even if stock remains. Leave all unchecked
+            to resume sales everywhere.
+          </p>
+          {stopSalesModal.legacyStopped ? (
+            <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              This product currently has sales stopped everywhere. Saving will
+              apply the stop only to the warehouses you tick.
+            </p>
+          ) : null}
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            Warehouse
+          </label>
+          <div className="mb-2 max-h-52 overflow-y-auto rounded-md border border-slate-200">
+            <label className="flex cursor-pointer items-center gap-2.5 border-b border-slate-100 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-[var(--aa-accent)]"
+                checked={
+                  branches.length > 0 &&
+                  branches.every((b) =>
+                    (stopSalesModal.branchIds || []).includes(String(b.id)),
+                  )
+                }
+                onChange={toggleAllStopSalesWarehouses}
+              />
+              Select all warehouses
+            </label>
+            {branches.length === 0 ? (
+              <p className="px-3 py-3 text-sm text-slate-500">
+                No warehouses found
+              </p>
+            ) : (
+              branches.map((b) => {
+                const id = String(b.id);
+                const checked = (stopSalesModal.branchIds || []).includes(id);
+                const existing = (stopSalesModal.sales_stops || []).find(
+                  (s) => String(s.branch_id) === id,
+                );
+                return (
+                  <label
+                    key={id}
+                    className="flex cursor-pointer items-center gap-2.5 border-b border-slate-50 px-3 py-2 text-sm last:border-b-0 hover:bg-slate-50"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-[var(--aa-accent)]"
+                      checked={checked}
+                      onChange={() => toggleStopSalesWarehouse(id)}
+                    />
+                    <span className="flex-1 text-slate-800">
+                      {b.branch_name || `Warehouse ${b.id}`}
+                    </span>
+                    {existing ? (
+                      <span className="text-[11px] text-red-700">Stopped</span>
+                    ) : null}
+                  </label>
+                );
+              })
+            )}
+          </div>
+        </Modal>
 
         {/* Delete Confirmation Modal */}
         <Modal
@@ -1403,70 +2101,151 @@ export default function ProductList() {
             </div>
           }
           open={salesTargetModal.open}
-          onCancel={() =>
-            setSalesTargetModal({
-              open: false,
-              productId: null,
-              productName: "",
-              period: "none",
-              quantity: "",
-            })
-          }
+          onCancel={() => setSalesTargetModal(EMPTY_SALES_TARGET_MODAL)}
           onOk={saveSalesTarget}
           okText="Save Target"
           cancelText="Cancel"
           confirmLoading={savingSalesTarget}
           centered
+          width={640}
+          destroyOnClose
         >
-          <p className="text-gray-600 mb-4">
+          <p className="mb-5 text-sm leading-relaxed text-gray-600">
             Limit how many units of{" "}
             <strong>{salesTargetModal.productName}</strong> can be sold per
-            period. When the target is reached, further sales are blocked even
-            if stock remains.
+            period. Set daily 30 for all stores, then change any warehouse’s
+            period or quantity.
           </p>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Period
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            Period for all selected stores
           </label>
-          <Select
+          <AntSelect
+            className="mb-4 w-full"
+            size="large"
             value={salesTargetModal.period}
-            onValueChange={(value) =>
-              setSalesTargetModal((prev) => ({
-                ...prev,
-                period: value,
-                quantity: value === "none" ? "" : prev.quantity,
-              }))
-            }
-          >
-            <SelectTrigger className="w-full mb-4">
-              <SelectValue placeholder="Select period" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No limit (unlimited)</SelectItem>
-              <SelectItem value="daily">Daily</SelectItem>
-              <SelectItem value="weekly">Weekly</SelectItem>
-              <SelectItem value="monthly">Monthly</SelectItem>
-            </SelectContent>
-          </Select>
-          {salesTargetModal.period !== "none" && (
+            onChange={(value) => applySalesTargetToAll({ period: value })}
+            options={[
+              { value: "none", label: "No limit (unlimited)" },
+              ...SALES_TARGET_PERIOD_OPTIONS,
+            ]}
+            getPopupContainer={(node) => node?.parentElement || document.body}
+          />
+          {salesTargetModal.period !== "none" ? (
             <>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Max quantity ({salesTargetModal.period})
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Quantity for all selected stores
               </label>
               <Input
                 type="number"
                 min={1}
                 step="1"
+                className="mb-4"
+                size="large"
                 value={salesTargetModal.quantity}
                 onChange={(e) =>
-                  setSalesTargetModal((prev) => ({
-                    ...prev,
-                    quantity: e.target.value,
-                  }))
+                  applySalesTargetToAll({ quantity: e.target.value })
                 }
-                placeholder="e.g. 100"
-                size="large"
+                placeholder="e.g. 30"
               />
             </>
+          ) : null}
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            Warehouse {salesTargetModal.period !== "none" ? (
+              <span className="text-red-500">*</span>
+            ) : null}
+          </label>
+          <div className="mb-2 max-h-64 overflow-y-auto rounded-md border border-slate-200">
+            <label className="flex cursor-pointer items-center gap-2.5 border-b border-slate-100 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-[var(--aa-accent)]"
+                checked={
+                  branches.length > 0 &&
+                  branches.every((b) =>
+                    (salesTargetModal.branchIds || []).includes(String(b.id)),
+                  )
+                }
+                onChange={toggleAllSalesTargetWarehouses}
+              />
+              Select all warehouses
+            </label>
+            {branches.length === 0 ? (
+              <p className="px-3 py-3 text-sm text-slate-500">
+                No warehouses found
+              </p>
+            ) : (
+              branches.map((b) => {
+                const id = String(b.id);
+                const checked = (salesTargetModal.branchIds || []).includes(id);
+                return (
+                  <div
+                    key={id}
+                    className="flex items-center gap-2.5 border-b border-slate-50 px-3 py-2 text-sm last:border-b-0 hover:bg-slate-50"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-[var(--aa-accent)]"
+                      checked={checked}
+                      onChange={() => toggleSalesTargetWarehouse(id)}
+                    />
+                    <span className="flex-1 text-slate-800">
+                      {b.branch_name || `Warehouse ${b.id}`}
+                    </span>
+                    {salesTargetModal.period !== "none" ? (
+                      <>
+                        <select
+                          disabled={!checked}
+                          value={
+                            checked
+                              ? salesTargetModal.periods?.[id] ||
+                                salesTargetModal.period ||
+                                "daily"
+                              : ""
+                          }
+                          onChange={(e) =>
+                            setSalesTargetPeriod(id, e.target.value)
+                          }
+                          className="h-8 rounded-md border border-slate-200 bg-white px-1.5 text-xs text-slate-700 disabled:bg-slate-50 disabled:text-slate-400"
+                        >
+                          {SALES_TARGET_PERIOD_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          min={1}
+                          step="1"
+                          disabled={!checked}
+                          value={
+                            checked
+                              ? salesTargetModal.quantities?.[id] ?? ""
+                              : ""
+                          }
+                          onChange={(e) =>
+                            setSalesTargetQuantity(id, e.target.value)
+                          }
+                          placeholder="Qty"
+                          className="h-8 w-16 rounded-md border border-slate-200 px-2 text-right text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                        />
+                      </>
+                    ) : null}
+                  </div>
+                );
+              })
+            )}
+          </div>
+          {salesTargetModal.period !== "none" ? (
+            <p className="mt-2 text-xs text-slate-500">
+              Type daily 30 above to fill every selected store, then change any
+              store’s period or quantity. Unchecked stores have no limit.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-slate-500">
+              Saving with no limit removes sales targets for this product at
+              every warehouse.
+            </p>
           )}
         </Modal>
 
@@ -1666,6 +2445,7 @@ export default function ProductList() {
           </div>
         </Modal>
       </div>
-    </>
+      </div>
+    </div>
   );
 }

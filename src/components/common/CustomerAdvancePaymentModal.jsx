@@ -1094,6 +1094,7 @@ export default function CustomerAdvancePaymentModal({
               headList={headList}
               chequeNumber={chequeNumber}
               onChequeNumberChange={setChequeNumber}
+              allowCashTransfer={false}
             />
 
             <div className="space-y-2">

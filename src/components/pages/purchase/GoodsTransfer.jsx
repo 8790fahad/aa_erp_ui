@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Select from "react-select";
 import {
   Plus,
@@ -35,6 +35,12 @@ import { getStoresList } from "@/redux/actions/stores";
 import { toast } from "sonner";
 import moment from "moment";
 import { formatNumber1 } from "@/components/router/utilities";
+import {
+  canAccessPrivileges,
+  getUserFunctionalities,
+  hasFullAccess,
+  isBusinessOwner,
+} from "@/lib/access";
 
 const WORKFLOW_STEPS = [
   {
@@ -101,7 +107,8 @@ const GOODS_TRANSFER_TABS = [
   {
     value: "goods-list",
     label: "Goods",
-    privilege: "Goods List",
+    privilege: "Goods",
+    aliases: ["Goods List"],
   },
   {
     value: "new",
@@ -144,6 +151,7 @@ const sanitizeNumericInput = (value) => value.replace(/[^0-9.,]/g, "");
 
 export default function GoodsTransfer() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, activeBusiness } = useSelector((state) => state.auth);
 
@@ -152,7 +160,9 @@ export default function GoodsTransfer() {
   const activeTab = searchParams.get("subtab") || "goods-list";
   const handleSubTabChange = (value) => {
     const next = new URLSearchParams(searchParams);
-    if (value && value !== "new") next.set("subtab", value);
+    // Always persist the tab — including "new". Clearing "new" used to fall
+    // back to "goods-list", which left an empty panel when Goods List is hidden.
+    if (value) next.set("subtab", value);
     else next.delete("subtab");
     setSearchParams(next, { replace: true });
   };
@@ -213,30 +223,24 @@ export default function GoodsTransfer() {
   // { [transferId]: { [itemId]: "string value" } }
   const [approveQty, setApproveQty] = useState({});
 
-  const functionalities = useMemo(() => {
-    const parse = (raw) => {
-      if (Array.isArray(raw)) return raw;
-      if (typeof raw === "string") {
-        return raw
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-      }
-      return [];
-    };
-    return [
-      ...new Set([
-        ...parse(activeBusiness?.functionalities),
-        ...parse(user?.functionalities),
-      ]),
-    ];
-  }, [activeBusiness?.functionalities, user?.functionalities]);
+  const functionalities = useMemo(
+    () => getUserFunctionalities(user, activeBusiness),
+    [user, activeBusiness],
+  );
 
   const canViewTab = useCallback(
     (tabPrivilege) => {
-      return functionalities.includes(tabPrivilege);
+      if (
+        isBusinessOwner(user, activeBusiness) ||
+        hasFullAccess(functionalities)
+      ) {
+        return true;
+      }
+      const tab = GOODS_TRANSFER_TABS.find((t) => t.privilege === tabPrivilege);
+      const keys = [tabPrivilege, ...(tab?.aliases || [])];
+      return canAccessPrivileges(keys, functionalities);
     },
-    [functionalities],
+    [activeBusiness, functionalities, user],
   );
 
   const canWriteOff = functionalities.includes(WRITE_OFF_PRIVILEGE);
@@ -1043,17 +1047,11 @@ export default function GoodsTransfer() {
                   <div className={sectionCardClass}>
                     <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-4 mb-6">
                       <div>
-                        <label className={labelClass}>
-                          Transfer No.
-                        </label>
-                        <div className={readonlyClass}>
-                          {transferNo}
-                        </div>
+                        <label className={labelClass}>Transfer No.</label>
+                        <div className={readonlyClass}>{transferNo}</div>
                       </div>
                       <div>
-                        <label className={labelClass}>
-                          Date
-                        </label>
+                        <label className={labelClass}>Date</label>
                         <input
                           type="date"
                           value={transferDate}
@@ -1062,9 +1060,7 @@ export default function GoodsTransfer() {
                         />
                       </div>
                       <div>
-                        <label className={labelClass}>
-                          From Warehouse
-                        </label>
+                        <label className={labelClass}>From Warehouse</label>
                         <select
                           value={storeFromId}
                           onChange={(e) => {
@@ -1086,9 +1082,7 @@ export default function GoodsTransfer() {
                       </div>
                       {storeFromId ? (
                         <div>
-                          <label className={labelClass}>
-                            To Warehouse
-                          </label>
+                          <label className={labelClass}>To Warehouse</label>
                           <select
                             value={storeToId}
                             onChange={(e) => setStoreToId(e.target.value)}
@@ -1104,26 +1098,20 @@ export default function GoodsTransfer() {
                         </div>
                       ) : (
                         <div>
-                          <label className={labelClass}>
-                            To Warehouse
-                          </label>
+                          <label className={labelClass}>To Warehouse</label>
                           <div className="flex h-9 items-center rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 text-sm text-slate-500">
                             Select From Warehouse first
                           </div>
                         </div>
                       )}
                       <div>
-                        <label className={labelClass}>
-                          Initiated By
-                        </label>
+                        <label className={labelClass}>Initiated By</label>
                         <div className={readonlyClass}>
                           {`${user?.fullname || `${user?.firstname || ""} ${user?.lastname || ""}`.trim() || user?.username || "User"}${user?.role ? ` (${user.role})` : ""}`}
                         </div>
                       </div>
                       <div>
-                        <label className={labelClass}>
-                          Status
-                        </label>
+                        <label className={labelClass}>Status</label>
                         <div className={readonlyClass}>
                           <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
                             {formStatus}
@@ -1156,7 +1144,9 @@ export default function GoodsTransfer() {
                       <table className="w-full text-sm">
                         <thead>
                           <tr className={tableHeadClass}>
-                            <th className="w-1/2 px-3 py-2.5 text-left">Goods</th>
+                            <th className="w-1/2 px-3 py-2.5 text-left">
+                              Goods
+                            </th>
                             <th className="px-3 py-2.5 text-left">UoM</th>
                             <th className="px-3 py-2.5 text-right">Qty</th>
                             <th className="px-3 py-2.5 text-center">Action</th>
@@ -1233,7 +1223,9 @@ export default function GoodsTransfer() {
                                         row.item
                                           ? {
                                               value: row.item,
-                                              label: productOptionLabel(row.item),
+                                              label: productOptionLabel(
+                                                row.item,
+                                              ),
                                             }
                                           : null
                                       }
@@ -1412,7 +1404,7 @@ export default function GoodsTransfer() {
           )}
 
           {/* ====== GOODS LIST ====== */}
-          {canViewTab("Goods List") && (
+          {canViewTab("Goods") && (
             <TabsContent value="goods-list" className="mt-0">
               <div className={sectionCardClass}>
                 <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
@@ -1421,7 +1413,8 @@ export default function GoodsTransfer() {
                       Goods
                     </h3>
                     <p className="mt-1 text-sm text-slate-500">
-                      Finished Good, Resalable &amp; By-Product stock by warehouse
+                      Finished Good, Resalable &amp; By-Product stock by
+                      warehouse
                     </p>
                   </div>
                   <div className="flex flex-wrap items-end gap-3">
@@ -1444,9 +1437,7 @@ export default function GoodsTransfer() {
                       </select>
                     </div>
                     <div>
-                      <label className={labelClass}>
-                        Search
-                      </label>
+                      <label className={labelClass}>Search</label>
                       <input
                         type="text"
                         placeholder="Search items..."
@@ -1483,7 +1474,9 @@ export default function GoodsTransfer() {
                     <p>Select a warehouse to view available goods</p>
                   </div>
                 ) : loadingGoodsList ? (
-                  <div className="text-center py-12 text-slate-500">Loading…</div>
+                  <div className="text-center py-12 text-slate-500">
+                    Loading…
+                  </div>
                 ) : filteredGoodsList.length === 0 ? (
                   <div className="text-center py-12 text-slate-500">
                     <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -1497,7 +1490,9 @@ export default function GoodsTransfer() {
                           <th className="px-3 py-2.5 text-left">Goods</th>
                           <th className="px-3 py-2.5 text-left">SKU</th>
                           <th className="px-3 py-2.5 text-left">Item Type</th>
-                          <th className="px-3 py-2.5 text-right">Available Stock</th>
+                          <th className="px-3 py-2.5 text-right">
+                            Available Stock
+                          </th>
                           <th className="px-3 py-2.5 text-left">UoM</th>
                           {canWriteOff && (
                             <th className="px-3 py-2.5 text-center">Actions</th>
@@ -1521,10 +1516,45 @@ export default function GoodsTransfer() {
                                 {item.item_type || "—"}
                               </span>
                             </td>
-                            <td className="px-3 py-2.5 text-right font-medium text-slate-900">
-                              {formatNumber1(
-                                parseFloat(item.qty ?? item.balance) || 0,
-                              )}
+                            <td className="px-3 py-2.5 text-right">
+                              <button
+                                type="button"
+                                title="View stock in / out history"
+                                onClick={() => {
+                                  const pid =
+                                    item.product_id ||
+                                    item.sku ||
+                                    item.item_code;
+                                  if (!pid) {
+                                    toast.error(
+                                      "Product id missing for this item",
+                                    );
+                                    return;
+                                  }
+                                  const params = new URLSearchParams({
+                                    type: "all",
+                                  });
+                                  // Warehouse you came from (Goods list selection), not the product default.
+                                  const sourceBranchId =
+                                    goodsListBranchId ||
+                                    item.branch_id ||
+                                    item.branchId;
+                                  if (sourceBranchId) {
+                                    params.set(
+                                      "branchId",
+                                      String(sourceBranchId),
+                                    );
+                                  }
+                                  navigate(
+                                    `/app/inventory/inventory-list/view/${encodeURIComponent(pid)}?${params.toString()}`,
+                                  );
+                                }}
+                                className="tabular-nums font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800"
+                              >
+                                {formatNumber1(
+                                  parseFloat(item.qty ?? item.balance) || 0,
+                                )}
+                              </button>
                             </td>
                             <td className="px-3 py-2.5 text-slate-600">
                               {item.unit_of_measure || item.uom || "Pcs"}
@@ -1571,12 +1601,12 @@ export default function GoodsTransfer() {
             <TabsContent value="history" className="mt-0">
               <div className={sectionCardClass}>
                 <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
-                  <h3 className="text-base font-semibold tracking-tight text-slate-900">Transfer History</h3>
+                  <h3 className="text-base font-semibold tracking-tight text-slate-900">
+                    Transfer History
+                  </h3>
                   <div className="flex flex-wrap items-end gap-3">
                     <div>
-                      <label className={labelClass}>
-                        To Warehouse
-                      </label>
+                      <label className={labelClass}>To Warehouse</label>
                       <select
                         value={historyToLocation}
                         onChange={(e) => setHistoryToLocation(e.target.value)}
@@ -1591,15 +1621,13 @@ export default function GoodsTransfer() {
                       </select>
                     </div>
                     <div>
-                      <label className={labelClass}>
-                        Status
-                      </label>
+                      <label className={labelClass}>Status</label>
                       <select
                         value={historyStatus}
                         onChange={(e) => setHistoryStatus(e.target.value)}
                         className={`${fieldClass} min-w-[9rem]`}
                       >
-                        <option value="all">All statuses</option>
+                        <option value="all">All status</option>
                         <option value="pending">Pending</option>
                         <option value="approved">Approved</option>
                         <option value="rejected">Rejected</option>
@@ -1607,9 +1635,7 @@ export default function GoodsTransfer() {
                       </select>
                     </div>
                     <div>
-                      <label className={labelClass}>
-                        Date From
-                      </label>
+                      <label className={labelClass}>Date From</label>
                       <input
                         type="date"
                         value={historyFrom}
@@ -1619,9 +1645,7 @@ export default function GoodsTransfer() {
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>
-                        Date To
-                      </label>
+                      <label className={labelClass}>Date To</label>
                       <input
                         type="date"
                         value={historyTo}
@@ -1715,7 +1739,9 @@ export default function GoodsTransfer() {
             <TabsContent value="pending" className="mt-0">
               <div className={sectionCardClass}>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-semibold tracking-tight text-slate-900">Pending Approvals</h3>
+                  <h3 className="text-base font-semibold tracking-tight text-slate-900">
+                    Pending Approvals
+                  </h3>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1942,7 +1968,9 @@ export default function GoodsTransfer() {
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <History className="h-5 w-5 text-orange-500" />
-                <DialogTitle className="text-base">Write-off History</DialogTitle>
+                <DialogTitle className="text-base">
+                  Write-off History
+                </DialogTitle>
                 {writeOffHistory.length > 0 && (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
                     {writeOffHistory.length}
@@ -2040,7 +2068,9 @@ export default function GoodsTransfer() {
                         </td>
                         <td className="py-2 px-3 text-gray-600 text-xs whitespace-nowrap">
                           {row.created_at
-                            ? moment(row.created_at).format("DD MMM YYYY, HH:mm")
+                            ? moment(row.created_at).format(
+                                "DD MMM YYYY, HH:mm",
+                              )
                             : "—"}
                         </td>
                         <td className="py-2 px-3">
@@ -2172,7 +2202,9 @@ export default function GoodsTransfer() {
                           setAccountOpen(true);
                         }}
                         onFocus={() => setAccountOpen(true)}
-                        onBlur={() => setTimeout(() => setAccountOpen(false), 150)}
+                        onBlur={() =>
+                          setTimeout(() => setAccountOpen(false), 150)
+                        }
                         placeholder={
                           accountsLoading
                             ? "Loading accounts..."

@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import React, { useState } from "react";
+import React, { Fragment, useState } from "react";
 import {
   ChevronRight,
   ChevronsUpDown,
@@ -15,7 +15,6 @@ import {
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
-  BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import {
@@ -61,6 +60,7 @@ import { logout } from "@/redux/actions/auth";
 import { useDispatch, useSelector } from "react-redux";
 import { accessData } from "./MainRoutes";
 import { hasAccess, hasSubAccess } from "@/utilities";
+import { breadcrumbHrefForIndex } from "@/lib/breadcrumbNav";
 
 // Sample data for user info
 const data = {
@@ -259,31 +259,32 @@ export default function AuthRoutes() {
             <Separator orientation="vertical" className="mr-2 h-4 shrink-0" />
             <Breadcrumb className="min-w-0 shrink">
               <BreadcrumbList className="pl-0 mb-0 flex-wrap">
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="#">
-                    {location.pathname.split("/")[1]}
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                {location.pathname.split("/")[2] ? (
-                  <>
-                    <BreadcrumbSeparator className="hidden md:block" />
-                    <BreadcrumbItem>
-                      <BreadcrumbPage>
-                        {location.pathname.split("/")[2]}
-                      </BreadcrumbPage>
-                    </BreadcrumbItem>
-                  </>
-                ) : null}
-                {location.pathname.split("/")[3] ? (
-                  <>
-                    <BreadcrumbSeparator className="hidden md:block" />
-                    <BreadcrumbItem>
-                      <BreadcrumbPage>
-                        {location.pathname.split("/")[3]}
-                      </BreadcrumbPage>
-                    </BreadcrumbItem>
-                  </>
-                ) : null}
+                {location.pathname
+                  .split("/")
+                  .filter(Boolean)
+                  .map((part, index, pathParts) => {
+                    const isLast = index === pathParts.length - 1;
+                    const href = breadcrumbHrefForIndex(pathParts, index);
+                    return (
+                      <Fragment key={`${part}-${index}`}>
+                        {index > 0 ? (
+                          <BreadcrumbSeparator className="hidden md:block" />
+                        ) : null}
+                        <BreadcrumbItem
+                          className={index === 0 ? "hidden md:block" : undefined}
+                        >
+                          <BreadcrumbLink asChild>
+                            <Link
+                              to={isLast ? location.pathname : href}
+                              className="rounded px-1.5 py-0.5 hover:bg-amber-50 hover:text-slate-950"
+                            >
+                              {part}
+                            </Link>
+                          </BreadcrumbLink>
+                        </BreadcrumbItem>
+                      </Fragment>
+                    );
+                  })}
               </BreadcrumbList>
             </Breadcrumb>
 

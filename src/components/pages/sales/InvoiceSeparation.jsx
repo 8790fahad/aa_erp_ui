@@ -429,8 +429,8 @@ export default function InvoiceSeparation() {
               </h1>
               <p className="text-gray-600 mt-1">
                 Print the {dispatchDocLabel} per store (Sales Invoice is printed
-                at Collection Points), then mark separated. Credit invoices
-                appear here only after approval at Collection Points.
+                at Verification Points), then mark separated. Credit invoices
+                appear here only after approval at Verification Points.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -508,7 +508,7 @@ export default function InvoiceSeparation() {
               <div className="p-8 text-center text-gray-500 text-sm">
                 {activeTab === "history"
                   ? "No separated invoices yet. Mark Separated moves sales here."
-                  : "No invoices waiting. After Collection Points confirms payment (or approves credit), sales appear here to split by store."}
+                  : "No invoices waiting. After Verification Points confirms payment (or approves credit), sales appear here to split by store."}
               </div>
             ) : (
               <ul className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
@@ -608,10 +608,10 @@ export default function InvoiceSeparation() {
                     </Link>
                     {needsCreditApproval && !isHistoryRecord ? (
                       <Link
-                        to={`/app/payments/collection-points`}
+                        to={`/app/payments/verification-points`}
                         className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-800 hover:bg-rose-100"
                       >
-                        Approve at Collection Points
+                        Approve at Verification Points
                       </Link>
                     ) : null}
                     {canSeparate && packs.length > 1 ? (
@@ -658,7 +658,7 @@ export default function InvoiceSeparation() {
                 {needsCreditApproval && !isHistoryRecord ? (
                   <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
                     This credit sale is waiting for approval at{" "}
-                    <strong>Collection Points → Credit</strong>. It cannot move
+                    <strong>Verification Points → Credit</strong>. It cannot move
                     to Invoice Separation until credit is approved.
                   </div>
                 ) : null}
@@ -669,9 +669,9 @@ export default function InvoiceSeparation() {
                   </h3>
                   <p className="text-xs text-violet-800 mb-3">
                     {needsCreditApproval && !isHistoryRecord
-                      ? "Store copies appear only after credit is approved at Collection Points."
+                      ? "Store copies appear only after credit is approved at Verification Points."
                       : packs.length
-                        ? `One ${dispatchDocLabel} per store (${packs.length}). Sales Invoice is printed at Collection Points. Use Print all for ${
+                        ? `One ${dispatchDocLabel} per store (${packs.length}). Sales Invoice is printed at Verification Points. Use Print all for ${
                             isThermalDispatch
                               ? "a continuous 80mm thermal strip (cut marks between stores)"
                               : String(activeBusiness?.default_receipt_type || "")
@@ -705,7 +705,7 @@ export default function InvoiceSeparation() {
                   ) : packs.length === 0 ? (
                     <p className="text-sm text-violet-800">
                       {needsCreditApproval && !isHistoryRecord
-                        ? "No store copies yet — approve credit at Collection Points first."
+                        ? "No store copies yet — approve credit at Verification Points first."
                         : "No store lines found on this invoice yet."}
                     </p>
                   ) : (

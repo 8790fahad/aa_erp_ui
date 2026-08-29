@@ -96,88 +96,90 @@ export class PurchaseRequisitionAPI {
   }
 
   /**
-   * Submit purchase requisition (optionally with delivery/waybill documents).
-   * @param {Object} requisitionData - Purchase requisition data
-   * @param {File[]} [files] - Optional attachment files (max 5)
+   * Upload one document immediately (before the PO is created).
+   * Returns the stored file record to link on submit.
    */
-  static submitPurchaseRequisition(requisitionData, files = []) {
+  static stagePurchaseOrderDocument(file) {
+    if (!file) {
+      return Promise.reject(new Error("No file selected"));
+    }
+    return this.stagePurchaseOrderDocuments([file]);
+  }
+
+  /**
+   * Upload documents immediately (before the PO is created).
+   * Returns file paths to link on submit.
+   */
+  static stagePurchaseOrderDocuments(files = []) {
+    return new Promise((resolve, reject) => {
+      if (!files.length) {
+        reject(new Error("No files selected"));
+        return;
+      }
+      const formData = new FormData();
+      files.forEach((file) => formData.append("po_documents", file));
+
+      const token = localStorage.getItem("@@__token");
+      fetch(`${apiURL}/account/purchase-order-documents/stage`, {
+        method: "POST",
+        headers: { authorization: token || "" },
+        body: formData,
+      })
+        .then(async (response) => {
+          const res = await response.json().catch(() => ({}));
+          if (!response.ok || res.success === false) {
+            reject(new Error(res.message || "Upload failed"));
+            return;
+          }
+          resolve({ success: true, data: res.results || [] });
+        })
+        .catch((err) =>
+          reject(new Error(err?.message || "Upload failed")),
+        );
+    });
+  }
+
+  /**
+   * Submit purchase requisition. Pass already-uploaded document records to link.
+   * Files are not sent with this request.
+   * @param {Object} requisitionData - Purchase requisition data
+   * @param {Array} [linkedDocuments] - Staged files `{ file_path, original_name, ... }`
+   */
+  static submitPurchaseRequisition(requisitionData, linkedDocuments = []) {
     return new Promise((resolve, reject) => {
       const payload = {
         ...requisitionData,
         query_type: "insert",
+        linked_documents: (linkedDocuments || [])
+          .filter((doc) => doc?.file_path)
+          .map((doc) => ({
+            file_path: doc.file_path,
+            document_name: doc.document_name || doc.original_name || doc.name,
+            original_name: doc.original_name || doc.name,
+            file_size: doc.file_size || doc.size || null,
+            mime_type: doc.mime_type || doc.type || null,
+          })),
       };
 
-      const hasFiles = Array.isArray(files) && files.length > 0;
-
-      if (!hasFiles) {
-        _postApi(
-          "/account/purchase-requisition",
-          payload,
-          (res) => {
-            if (res.success) {
-              resolve({
-                success: true,
-                pr_no: res.pr_no,
-                message: res.message,
-              });
-            } else {
-              reject(
-                new Error(
-                  res.message || "Failed to submit purchase requisition",
-                ),
-              );
-            }
-          },
-          (err) => {
-            console.error("Submit Purchase Requisition Error:", err);
-            reject(
-              new Error(
-                err?.message ||
-                  "Error occurred while submitting purchase requisition",
-              ),
-            );
-          },
-        );
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append("po_data", JSON.stringify(payload));
-      files.forEach((file) => {
-        formData.append("po_documents", file);
-        formData.append("document_names", file.name);
-      });
-
-      const token = localStorage.getItem("@@__token");
-      fetch(`${apiURL}/account/purchase-requisition`, {
-        method: "POST",
-        headers: {
-          authorization: token || "",
-        },
-        body: formData,
-      })
-        .then(async (response) => {
-          let res = {};
-          try {
-            res = await response.json();
-          } catch (_) {
-            res = {};
-          }
-          if (!response.ok || res.success === false) {
+      _postApi(
+        "/account/purchase-requisition",
+        payload,
+        (res) => {
+          if (res.success) {
+            resolve({
+              success: true,
+              pr_no: res.pr_no,
+              message: res.message,
+            });
+          } else {
             reject(
               new Error(
                 res.message || "Failed to submit purchase requisition",
               ),
             );
-            return;
           }
-          resolve({
-            success: true,
-            pr_no: res.pr_no,
-            message: res.message,
-          });
-        })
-        .catch((err) => {
+        },
+        (err) => {
           console.error("Submit Purchase Requisition Error:", err);
           reject(
             new Error(
@@ -185,7 +187,8 @@ export class PurchaseRequisitionAPI {
                 "Error occurred while submitting purchase requisition",
             ),
           );
-        });
+        },
+      );
     });
   }
 
@@ -196,7 +199,7 @@ export class PurchaseRequisitionAPI {
     return new Promise((resolve, reject) => {
       const params = new URLSearchParams({ facilityId });
       if (pr_no) params.set("pr_no", pr_no);
-      if (po_no) params.set("po_no", po_no);
+      else if (po_no) params.set("po_no", po_no);
       _fetchApi(
         `/account/purchase-order-documents?${params}`,
         (data) => {

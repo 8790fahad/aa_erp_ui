@@ -23,6 +23,21 @@ import { Loader2, X, History, Receipt, Plus, Printer } from "lucide-react";
 import { formatNumber1 } from "@/components/router/utilities";
 import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
 import AdvancePaymentPaymentFields from "@/components/common/AdvancePaymentPaymentFields";
+import {
+  buildPaymentSplits,
+  isCashTransferSplitMode,
+  parseMoneyInput,
+} from "@/components/common/CashTransferPaymentFields";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 function parseNumberFromFormatted(value) {
   if (value === "" || value === null || value === undefined) return "";
@@ -60,8 +75,35 @@ function validatePaymentSource(
   modeOfPayment,
   accountHead,
   bankAccount,
-  chequeNumber
+  chequeNumber,
+  cashAmount = "",
+  transferAmount = "",
+  amountPaid = 0,
 ) {
+  if (isCashTransferSplitMode(modeOfPayment)) {
+    const cash = parseMoneyInput(cashAmount);
+    const transfer = parseMoneyInput(transferAmount);
+    const total = parseFloat(amountPaid) || 0;
+    if (cash <= 0 || transfer <= 0) {
+      toast.error("Enter both cash and transfer amounts");
+      return false;
+    }
+    if (Math.abs(cash + transfer - total) > 0.02) {
+      toast.error(
+        `Cash + Transfer must equal payment amount (₦${formatNumber1(total)})`,
+      );
+      return false;
+    }
+    if (!accountHead?.head) {
+      toast.error("Please select a cash account");
+      return false;
+    }
+    if (!bankAccount?.id) {
+      toast.error("Please select a bank account");
+      return false;
+    }
+    return true;
+  }
   if (modeOfPayment === "cash") {
     if (!accountHead?.head) {
       toast.error("Please select an account head for cash payment");
@@ -113,6 +155,10 @@ export default function SupplierAdvancePaymentModal({
     new Date().toISOString().slice(0, 10)
   );
   const [modeOfPayment, setModeOfPayment] = useState("cash");
+  const [cashAmount, setCashAmount] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState(null);
   const [narration, setNarration] = useState("");
   const [chequeNumber, setChequeNumber] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -148,6 +194,10 @@ export default function SupplierAdvancePaymentModal({
     setAmount("");
     setInvoicePayments({});
     amountBumpedFromLinesRef.current = false;
+    setCashAmount("");
+    setTransferAmount("");
+    setConfirmOpen(false);
+    setPendingPayload(null);
     setPaymentDate(new Date().toISOString().slice(0, 10));
     setModeOfPayment("cash");
     setNarration("");
@@ -383,12 +433,17 @@ export default function SupplierAdvancePaymentModal({
       toast.error("Enter a valid amount greater than zero");
       return;
     }
-    if (!validatePaymentSource(
-      modeOfPayment,
-      accountHead,
-      bankAccount,
-      chequeNumber
-    )) {
+    if (
+      !validatePaymentSource(
+        modeOfPayment,
+        accountHead,
+        bankAccount,
+        chequeNumber,
+        cashAmount,
+        transferAmount,
+        amt,
+      )
+    ) {
       return;
     }
 
@@ -446,8 +501,6 @@ export default function SupplierAdvancePaymentModal({
       }
     }
 
-    setSubmitting(true);
-
     const baseDesc = narration.trim() || "Supplier advance payment";
     const description =
       modeOfPayment === "cheque" && String(chequeNumber || "").trim()
@@ -467,24 +520,58 @@ export default function SupplierAdvancePaymentModal({
       line_of_business: "General",
       bank_account_id: bankAccount?.id || accountHead?.head,
     };
-    if (modeOfPayment === "cash" && accountHead?.head) {
+    if (
+      (modeOfPayment === "cash" || isCashTransferSplitMode(modeOfPayment)) &&
+      accountHead?.head
+    ) {
       basePayload.accountHead = {
         head: accountHead.head,
         description: accountHead.description,
       };
     }
-    if (["bank", "cheque"].includes(modeOfPayment) && bankAccount?.id) {
+    if (
+      (["bank", "cheque"].includes(modeOfPayment) ||
+        isCashTransferSplitMode(modeOfPayment)) &&
+      bankAccount?.id
+    ) {
       basePayload.bankAccount = { id: bankAccount.id };
     }
+    const paymentSplits = buildPaymentSplits({
+      mode: modeOfPayment,
+      cashAmount,
+      transferAmount,
+      accountHead,
+      bankAccount,
+    });
+    if (paymentSplits?.length) {
+      basePayload.payment_splits = paymentSplits;
+    }
 
-    const url = "/api/v1/supplier-advance-payment";
     const payload =
       invoicesPayload.length > 0
         ? { ...basePayload, invoices: invoicesPayload }
         : { ...basePayload, allocation_order: "fifo" };
 
+    const advancePortion = Math.max(0, amt - sumAlloc);
+    setPendingPayload({
+      payload,
+      amt,
+      invoicesPayload,
+      advancePortion,
+      supplierParty,
+    });
+    setConfirmOpen(true);
+  };
+
+  const executeSave = () => {
+    if (!pendingPayload || submitting) return;
+    const { payload, amt, invoicesPayload } = pendingPayload;
+    setConfirmOpen(false);
+    setSubmitting(true);
+
     const onDone = (resp) => {
       setSubmitting(false);
+      setPendingPayload(null);
       if (resp?.error) {
         toast.error(String(resp.error));
         return;
@@ -498,7 +585,6 @@ export default function SupplierAdvancePaymentModal({
         toast.success(
           ref ? `Deposit recorded (${ref})` : "Deposit recorded",
         );
-        // Build receipt data so user can view/print it
         setLastReceipt({
           ref,
           date: paymentDate,
@@ -522,13 +608,14 @@ export default function SupplierAdvancePaymentModal({
 
     const onFail = (err) => {
       setSubmitting(false);
+      setPendingPayload(null);
       console.error(err);
       toast.error(
         err?.error || err?.message || "Could not record advance payment",
       );
     };
 
-    _postApi(url, payload, onDone, onFail);
+    _postApi("/api/v1/supplier-advance-payment", payload, onDone, onFail);
   };
 
   if (!open) {
@@ -542,6 +629,52 @@ export default function SupplierAdvancePaymentModal({
         if (!isOpen) onClose();
       }}
     >
+      <AlertDialog
+        open={confirmOpen}
+        onOpenChange={(openState) => {
+          if (!openState && !submitting) {
+            setConfirmOpen(false);
+            setPendingPayload(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="z-[300] border border-slate-200 bg-white text-slate-900 shadow-2xl sm:rounded-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-600">
+              {pendingPayload?.advancePortion > 0.02 ? (
+                <>
+                  ₦{formatNumber1(pendingPayload.advancePortion)} will be
+                  recorded as vendor advance
+                  {pendingPayload.amt - pendingPayload.advancePortion > 0.02
+                    ? ` (₦${formatNumber1(pendingPayload.amt - pendingPayload.advancePortion)} applied to bills)`
+                    : ""}
+                  . Continue?
+                </>
+              ) : (
+                <>
+                  Record payment of ₦{formatNumber1(pendingPayload?.amt || 0)}{" "}
+                  to this supplier. Continue?
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                executeSave();
+              }}
+              disabled={submitting}
+              className="bg-[var(--aa-accent)] text-white hover:opacity-90"
+            >
+              {submitting ? "Saving…" : "Yes, continue"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <DrawerContent
         side="right"
         className="bg-white border-gray-200 flex flex-col sm:max-w-xl"
@@ -1157,7 +1290,14 @@ export default function SupplierAdvancePaymentModal({
                 <AdvancePaymentPaymentFields
                   idPrefix="supplier-adv"
                   modeOfPayment={modeOfPayment}
-                  onModeChange={setModeOfPayment}
+                  onModeChange={(value) => {
+                    setModeOfPayment(value);
+                    setCashAmount("");
+                    setTransferAmount("");
+                    setAccountHead({});
+                    setBankAccount(null);
+                    setChequeNumber("");
+                  }}
                   accountHead={accountHead}
                   onAccountHeadChange={setAccountHead}
                   bankAccount={bankAccount}
@@ -1166,6 +1306,13 @@ export default function SupplierAdvancePaymentModal({
                   headList={headList}
                   chequeNumber={chequeNumber}
                   onChequeNumberChange={setChequeNumber}
+                  cashAmount={cashAmount}
+                  onCashAmountChange={setCashAmount}
+                  transferAmount={transferAmount}
+                  onTransferAmountChange={setTransferAmount}
+                  expectedTotal={
+                    parseFloat(parseNumberFromFormatted(amount || "")) || 0
+                  }
                 />
 
                 <div className="space-y-2">
@@ -1194,7 +1341,9 @@ export default function SupplierAdvancePaymentModal({
                   const advancePortion = Math.max(0, amt - allocatedToBills);
 
                   const sourceLabel =
-                    modeOfPayment === "cash"
+                    isCashTransferSplitMode(modeOfPayment)
+                      ? "Cash + Transfer"
+                      : modeOfPayment === "cash"
                       ? accountHead?.description || "Cash on hand"
                       : modeOfPayment === "bank"
                       ? bankAccount?.name || bankAccount?.account_name || "Bank account"

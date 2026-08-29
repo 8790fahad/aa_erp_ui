@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import moment from "moment";
-import { Search, MessageSquare, Tag } from "lucide-react";
+import * as XLSX from "xlsx";
+import { Search, MessageSquare, Tag, Download } from "lucide-react";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,6 +83,54 @@ export default function CrmCustomers() {
   const toggleOne = (no) => {
     setSelected((prev) =>
       prev.includes(no) ? prev.filter((x) => x !== no) : [...prev, no],
+    );
+  };
+
+  const downloadCustomers = () => {
+    const source = selected.length
+      ? rows.filter((r) => selected.includes(r.customer_no))
+      : rows;
+    if (!source.length) {
+      toast.error("No customers to download");
+      return;
+    }
+
+    const segmentNameByKey = Object.fromEntries(
+      (segments || []).map((s) => [s.segment_key, s.name || s.segment_key]),
+    );
+
+    const data = source.map((r) => ({
+      "Customer No": r.customer_no || "",
+      "Customer Name": r.customer_name || "",
+      Phone: r.mobile || r.phone || "",
+      Email: r.email || "",
+      Status: r.crm_status || "",
+      Segment: segmentNameByKey[r.segment_key] || r.segment_key || "",
+      "Total Sales": Number(r.total_sales) || 0,
+      Outstanding: Number(r.outstanding) || 0,
+      "Last Purchase": r.last_purchase
+        ? moment(r.last_purchase).format("YYYY-MM-DD")
+        : "",
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws["!cols"] = [
+      { wch: 14 },
+      { wch: 28 },
+      { wch: 16 },
+      { wch: 24 },
+      { wch: 12 },
+      { wch: 18 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Customers");
+    const stamp = moment().format("YYYY-MM-DD");
+    XLSX.writeFile(wb, `crm-customers-${stamp}.xlsx`);
+    toast.success(
+      `Downloaded ${source.length} customer${source.length === 1 ? "" : "s"}`,
     );
   };
 
@@ -184,7 +233,22 @@ export default function CrmCustomers() {
             Search
           </Button>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading || (!rows.length && !selected.length)}
+            onClick={downloadCustomers}
+            title={
+              selected.length
+                ? `Download ${selected.length} selected`
+                : "Download filtered customer list"
+            }
+          >
+            <Download className="mr-1.5 h-4 w-4" />
+            Download
+            {selected.length ? ` (${selected.length})` : ""}
+          </Button>
           <Button
             variant="outline"
             size="sm"

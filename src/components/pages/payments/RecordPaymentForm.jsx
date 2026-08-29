@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 
 /**
  * Legacy /app/payments/receive-payment/new route.
- * Customer deposits are recorded at Collection Points.
+ * Customer deposits are recorded at Verification Points.
  */
 export default function RecordPaymentForm() {
   const navigate = useNavigate();
@@ -16,7 +16,7 @@ export default function RecordPaymentForm() {
     const params = new URLSearchParams({ action: "deposit" });
     if (customerNo) params.set("customerNo", customerNo);
     if (customerName) params.set("customerName", customerName);
-    navigate(`/app/payments/collection-points?${params.toString()}`, {
+    navigate(`/app/payments/verification-points?${params.toString()}`, {
       replace: true,
     });
   }, [navigate, searchParams]);
@@ -24,7 +24,7 @@ export default function RecordPaymentForm() {
   return (
     <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 text-sm text-slate-500">
       <Loader2 className="h-5 w-5 animate-spin" />
-      Opening Collection Points to make a deposit…
+      Opening Verification Points to make a deposit…
     </div>
   );
 }

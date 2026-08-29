@@ -15,6 +15,21 @@ import { _fetchApi } from "@/redux/actions/api";
 import { Button } from "reactstrap";
 import { Printer } from "lucide-react";
 
+/** Prefer live facility phone/address over stale invoice snapshot. */
+function resolvePrintBusiness(invoiceBusiness, activeBusiness, facilityId) {
+  if (invoiceBusiness?.business_name) {
+    return {
+      ...invoiceBusiness,
+      id: invoiceBusiness.id || facilityId || activeBusiness?.id,
+      business_phone:
+        activeBusiness?.business_phone || invoiceBusiness.business_phone,
+      business_address:
+        activeBusiness?.business_address || invoiceBusiness.business_address,
+    };
+  }
+  return activeBusiness;
+}
+
 function buildBranchInvoiceView(
   invoiceData,
   branchIdFilter,
@@ -240,7 +255,7 @@ function InvoicePreview() {
     .trim()
     .toLowerCase()
     .replace(/-/g, "_");
-  // Collection Points → invoice; Invoice Separation → gin/dispatch
+  // Verification Points → invoice; Invoice Separation → gin/dispatch
   const isDispatchDoc =
     docParam === "gin" ||
     docParam === "dispatch" ||
@@ -732,17 +747,11 @@ function InvoicePreview() {
                               ""
                             }
                             invoiceData={data}
-                            business={
-                              data.business?.business_name
-                                ? {
-                                    ...data.business,
-                                    id:
-                                      data.business.id ||
-                                      data.facility_id ||
-                                      activeBusiness?.id,
-                                  }
-                                : activeBusiness
-                            }
+                            business={resolvePrintBusiness(
+                              data.business,
+                              activeBusiness,
+                              data.facility_id,
+                            )}
                             customer={data.customer}
                           />
                         </div>
@@ -782,17 +791,11 @@ function InvoicePreview() {
                           <ThermalReceipt
                             preview
                             invoiceData={data}
-                            business={
-                              data.business?.business_name
-                                ? {
-                                    ...data.business,
-                                    id:
-                                      data.business.id ||
-                                      data.facility_id ||
-                                      activeBusiness?.id,
-                                  }
-                                : activeBusiness
-                            }
+                            business={resolvePrintBusiness(
+                              data.business,
+                              activeBusiness,
+                              data.facility_id,
+                            )}
                             customer={data.customer}
                           />
                         </div>
@@ -963,17 +966,11 @@ function InvoicePreview() {
                 <ThermalReceipt
                   preview
                   invoiceData={resolvedInvoiceData}
-                  business={
-                    resolvedInvoiceData.business?.business_name
-                      ? {
-                          ...resolvedInvoiceData.business,
-                          id:
-                            resolvedInvoiceData.business.id ||
-                            resolvedInvoiceData.facility_id ||
-                            activeBusiness?.id,
-                        }
-                      : activeBusiness
-                  }
+                  business={resolvePrintBusiness(
+                    resolvedInvoiceData.business,
+                    activeBusiness,
+                    resolvedInvoiceData.facility_id,
+                  )}
                   customer={resolvedInvoiceData.customer}
                 />
               </div>
@@ -1024,7 +1021,7 @@ function InvoicePreview() {
               </h2>
               <p className="text-sm text-gray-500">
                 80mm {dispatchDocLabel} — print at Invoice Separation (Sales
-                Invoice is printed at Collection Points)
+                Invoice is printed at Verification Points)
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1061,17 +1058,11 @@ function InvoicePreview() {
                     ""
                   }
                   invoiceData={resolvedInvoiceData}
-                  business={
-                    resolvedInvoiceData.business?.business_name
-                      ? {
-                          ...resolvedInvoiceData.business,
-                          id:
-                            resolvedInvoiceData.business.id ||
-                            resolvedInvoiceData.facility_id ||
-                            activeBusiness?.id,
-                        }
-                      : activeBusiness
-                  }
+                  business={resolvePrintBusiness(
+                    resolvedInvoiceData.business,
+                    activeBusiness,
+                    resolvedInvoiceData.facility_id,
+                  )}
                   customer={resolvedInvoiceData.customer}
                 />
               </div>

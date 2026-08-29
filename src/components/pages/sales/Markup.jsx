@@ -87,6 +87,7 @@ import {
   buildJointSharedJournalPreview,
   mapJointSharedPreviewToLedgerPayload,
 } from "./jointSharedJournalPreview";
+import { isProductTaxable } from "@/utils/taxableStatus";
 
 /** Same DR/CR display rules as `JournalEntryForm.jsx` (commas + decimal). */
 function formatJournalStyleQtyInputDisplay(raw) {
@@ -1532,7 +1533,7 @@ export default function Markup() {
   );
 
   const shouldApplyVatOnMarkupPrice = (taxableStatus) =>
-    taxableStatus === "Taxable" &&
+    isProductTaxable(taxableStatus) &&
     (activeBusiness?.vat_policy === "vat_inclusive" ||
       activeBusiness?.vat_policy === "all");
 
@@ -4617,7 +4618,7 @@ export default function Markup() {
               vat_rate:
                 fg.apply_vat === false ? 0 : parseFloat(fg.vat_rate) || 7.5,
               apply_vat: fg.apply_vat === false ? false : true,
-              taxable: fg?.finishedGood?.taxable || "Not Taxable",
+              taxable: fg?.finishedGood?.taxable || "Non-Taxable",
               selling_price: calculateFinishedGoodSellingPrice(
                 costPerUnitForPosting,
                 fg,
@@ -9197,12 +9198,12 @@ export default function Markup() {
                       </span>
                       <Badge
                         variant={
-                          selectedByProduct.taxable === "Taxable"
+                          isProductTaxable(selectedByProduct.taxable)
                             ? "default"
                             : "outline"
                         }
                         className={
-                          selectedByProduct.taxable === "Taxable"
+                          isProductTaxable(selectedByProduct.taxable)
                             ? "bg-amber-100 text-amber-800 border-amber-300"
                             : ""
                         }

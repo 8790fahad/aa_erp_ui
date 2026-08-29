@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { v4 as UUIDV4 } from "uuid";
 import moment from "moment";
+import { isProductTaxable } from "@/utils/taxableStatus";
 
 /** Remaining sales-limit qty for a product (facility-wide). null = unlimited. */
 function getSalesLimitRemaining(product) {
@@ -47,6 +48,54 @@ function cartQtyForSku(cart, sku, excludeId) {
         String(item.product_id) === String(sku),
     )
     .reduce((sum, item) => sum + parseFloat(item.quantity_sold || item.quantity || 0), 0);
+}
+
+/** Max qty allowed on a cart line after sales target (+ optional stock). null = no cap. */
+function getMaxQtyForLine(item, cart, { allowWithoutStock = true, catalog = [] } = {}) {
+  if (!item) return null;
+  const sku = item.product_id || item.sku;
+  let remaining = getSalesLimitRemaining(item);
+  let period = item.sales_limit_period ?? null;
+  if (remaining == null && sku && catalog.length) {
+    const match = catalog.find(
+      (p) =>
+        String(p.product_id || p.sku || "") === String(sku) ||
+        String(p.id) === String(item.id),
+    );
+    if (match) {
+      remaining = getSalesLimitRemaining(match);
+      period = match.sales_limit_period ?? period;
+    }
+  }
+
+  let max = Infinity;
+  if (remaining != null) {
+    const other = cartQtyForSku(cart, sku, item.id);
+    max = Math.min(max, Math.max(0, remaining - other));
+  }
+
+  if (!allowWithoutStock && item.item_type !== "Service") {
+    const stock = parseFloat(item.balance);
+    if (Number.isFinite(stock)) {
+      const otherSameBatch = (cart || [])
+        .filter(
+          (c) =>
+            c.id !== item.id &&
+            String(c.product_id) === String(sku) &&
+            c.expiry_date === item.expiry_date,
+        )
+        .reduce(
+          (sum, c) => sum + parseFloat(c.quantity_sold || c.quantity || 0),
+          0,
+        );
+      max = Math.min(max, Math.max(0, stock - otherSameBatch));
+    }
+  }
+
+  if (!Number.isFinite(max) || max === Infinity) {
+    return { max: null, remaining, period };
+  }
+  return { max, remaining, period };
 }
 
 // Components
@@ -631,8 +680,8 @@ function MakeSale() {
       // Prefer resolving the real branch from the product's branch id.
       // The raw branch_name on sales rows can contain store-type text like
       // "for sales", so it is not reliable as a location label.
-      const itemBranchId = item?.branchId || item?.branch_id;
-      if (itemBranchId) {
+      const itemBranchId = item?.branchId ?? item?.branch_id;
+      if (itemBranchId != null && String(itemBranchId).trim() !== "") {
         const match = branches.find(
           (b) => String(b.id) === String(itemBranchId),
         );
@@ -1110,6 +1159,8 @@ function MakeSale() {
         if (response.success) {
           // Show every branch's stock — same SKU can appear once per branch.
           // Do not filter by the user's assigned branchId (often stale / wrong).
+          // includeStopped=1 lists sales-stopped products so they appear in
+          // pickers; selecting them is blocked in addToCart / addToCartNew.
           const items = (response.results || [])
             .map((it) => {
               const bid = it.branchId ?? it.branch_id;
@@ -1129,6 +1180,7 @@ function MakeSale() {
                 location_name: locationName,
                 // Prefer real branch location over store-type text ("for sales")
                 branch_name: locationName || it.branch_name || null,
+                sales_stopped: isSalesStopped(it),
               };
             })
             .sort((a, b) => {
@@ -1160,7 +1212,12 @@ function MakeSale() {
       `/account/get-service-products/${activeBusiness.id}?includeStopped=1`,
       (response) => {
         if (response.success) {
-          setServiceProducts(response.results || []);
+          setServiceProducts(
+            (response.results || []).map((it) => ({
+              ...it,
+              sales_stopped: isSalesStopped(it),
+            })),
+          );
         }
         setLoadingServices(false);
       },
@@ -1412,7 +1469,7 @@ function MakeSale() {
     const saleItems = cart.filter(
       (item) =>
         item.status === "for sale" &&
-        item.taxable === "Taxable" &&
+        isProductTaxable(item.taxable) &&
         !item.proBono, // Exclude Pro-bono items from tax calculation
     );
     let totalTax = 0;
@@ -1599,6 +1656,32 @@ function MakeSale() {
       return;
     }
 
+    // Sales target / limit — block even when stock remains
+    const limitRemaining = getSalesLimitRemaining(selectedItem);
+    if (limitRemaining != null) {
+      const sku = selectedItem.product_id || selectedItem.id;
+      const qtyInCartForSku = cartQtyForSku(cart, sku);
+      const totalForSku = qtyInCartForSku + quantity;
+      if (limitRemaining <= 0) {
+        toast.error(
+          `Sales ${salesLimitPeriodLabel(selectedItem.sales_limit_period)} limit reached for ${
+            selectedItem.item_name
+          }. No more can be sold this period.`,
+        );
+        return;
+      }
+      if (totalForSku > limitRemaining) {
+        toast.error(
+          `Sales ${salesLimitPeriodLabel(selectedItem.sales_limit_period)} limit for ${
+            selectedItem.item_name
+          }. Remaining: ${formatNumber1(limitRemaining)}, in cart: ${formatNumber1(
+            qtyInCartForSku,
+          )}, trying to add: ${formatNumber1(quantity)}`,
+        );
+        return;
+      }
+    }
+
     const amount = sellingPrice * quantity;
 
     const cartItem = {
@@ -1620,13 +1703,16 @@ function MakeSale() {
       expiry_date: selectedItem.expiry_date,
       taxable: selectedItem.taxable || "Taxable",
       proBono: false, // Default to false
+      sales_stopped: isSalesStopped(selectedItem),
+      sales_limit_period: selectedItem.sales_limit_period ?? null,
+      sales_limit: selectedItem.sales_limit ?? null,
+      sales_limit_remaining: selectedItem.sales_limit_remaining ?? null,
       branchId:
-        selectedItem.branchId ||
-        selectedItem.branch_id ||
+        selectedItem.branchId ??
+        selectedItem.branch_id ??
         (selectedBranch ? Number(selectedBranch) : null),
       branch_name:
         selectedItem.location_name ||
-        selectedItem.branch_name ||
         getItemBranchLocation(selectedItem) ||
         selectedBranchLocation ||
         null,
@@ -1732,7 +1818,7 @@ function MakeSale() {
 
         // Calculate taxable subtotal (only from taxable items, exclude Pro-bono)
         const taxableItems = saleItems.filter(
-          (item) => item.taxable === "Taxable" && !item.proBono,
+          (item) => isProductTaxable(item.taxable) && !item.proBono,
         );
         const taxableSubtotal = taxableItems.reduce(
           (sum, item) => sum + parseFloat(item.amount),
@@ -1916,12 +2002,24 @@ function MakeSale() {
           sale_revenue_code: activeBusiness.sale_revenue_code,
           finished_goods_code: activeBusiness.finished_goods_code,
           inventory_account: activeBusiness.inventory_account || null,
-          items: saleItems.map((item) => ({
-            ...item,
-            type: item.proBono ? "Pro-bono" : "Regular",
-            // GL uses product.sku from DB; product_id on each line must match that sku
-            product_id: item.product_id || item.sku,
-          })),
+          items: saleItems.map((item) => {
+            const bidRaw = item.branchId ?? item.branch_id;
+            const bid =
+              bidRaw != null && String(bidRaw).trim() !== ""
+                ? parseInt(String(bidRaw), 10)
+                : null;
+            const lineBranchId =
+              Number.isFinite(bid) && bid > 0 ? bid : null;
+            return {
+              ...item,
+              type: item.proBono ? "Pro-bono" : "Regular",
+              // GL uses product.sku from DB; product_id on each line must match that sku
+              product_id: item.product_id || item.sku,
+              // Keep stock warehouse on the line (do not drop / coerce to 0)
+              branchId: lineBranchId,
+              branch_id: lineBranchId,
+            };
+          }),
           pro_bono_code: activeBusiness.pro_bono_code,
           subtotal: currentSubtotal,
           discount_amount: totalDiscount,
@@ -1954,7 +2052,7 @@ function MakeSale() {
           apply_prepayment: saleType !== "paid" && usePrepayment,
           transaction_date: transactionDate, // Add transaction date
           sale_branch_id: branchId,
-          // Payment is collected at Collection Points, not on create.
+          // Payment is collected at Verification Points, not on create.
           defer_payment: saleType === "paid",
           assigned_cashier_id: null,
           assigned_cashier_name: null,
@@ -2141,11 +2239,18 @@ function MakeSale() {
                   `/app/payments/apply-advance?${params.toString()}`,
                 );
               } else {
-                const dest =
-                  saleType === "credit"
-                    ? `/app/sales/process?sale_code=${response.sale_code}`
-                    : `/app/sales/process?sale_code=${response.sale_code}`;
-                navigate(dest);
+                const tip =
+                  modeOfPayment === "credit_split"
+                    ? "Available at Verification Points (Cash, Transfer, Credit)"
+                    : modeOfPayment === "credit"
+                      ? "Sent to Credit approval at Verification Points"
+                      : "Available at Verification Points for collection";
+                toast.success(`Invoice ${response.sale_code} — ${tip}`);
+                navigate(
+                  `/app/sales/process?sale_code=${encodeURIComponent(
+                    response.sale_code,
+                  )}`,
+                );
               }
             }
           } else {
@@ -2220,12 +2325,71 @@ function MakeSale() {
       return;
     }
 
+    // Client-side guard (API also enforces): stop sales + sales targets
+    for (const item of saleItems) {
+      if (isSalesStopped(item)) {
+        toast.error(
+          `Sales are stopped for ${item.item_name}. Remove it before saving.`,
+        );
+        return;
+      }
+      const limitRemaining = getSalesLimitRemaining(item);
+      if (limitRemaining != null) {
+        const qty = parseFloat(item.quantity_sold || item.quantity || 0) || 0;
+        const sku = item.product_id;
+        const otherQty = cartQtyForSku(saleItems, sku, item.id);
+        if (qty + otherQty > limitRemaining) {
+          toast.error(
+            `Sales ${salesLimitPeriodLabel(item.sales_limit_period)} limit for ${
+              item.item_name
+            }. Remaining: ${formatNumber1(limitRemaining)}`,
+          );
+          return;
+        }
+      }
+    }
+
+    // Credit limit (credit / deposit / credit_split) — API re-checks on create-sale
+    const needsCreditCheck =
+      saleType !== "paid" ||
+      modeOfPayment === "credit" ||
+      modeOfPayment === "deposit" ||
+      modeOfPayment === "credit_split";
+    if (needsCreditCheck) {
+      const creditLimit = parseFloat(selectedCustomer.credit_limit || 0);
+      if (creditLimit > 0) {
+        const outstanding =
+          Math.max(
+            0,
+            parseFloat(
+              selectedCustomer.balance ||
+                selectedCustomer.outstanding_balance ||
+                selectedCustomer.amount ||
+                0,
+            ) || 0,
+          );
+        const thisSale = saleItems
+          .filter((item) => !item.proBono)
+          .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+        if (outstanding + thisSale > creditLimit + 0.01) {
+          toast.error(
+            `Credit limit exceeded. Limit: ${formatNumber1(
+              creditLimit,
+            )}, Outstanding: ${formatNumber1(
+              outstanding,
+            )}, This sale: ${formatNumber1(thisSale)}`,
+          );
+          return;
+        }
+      }
+    }
+
     if (saleType === "paid") {
       if (!payWithCash && !payWithTransfer) {
         toast.error("Select Cash, Transfer, Cash + Transfer, or Credit + Cash + Transfer");
         return;
       }
-      // Payment is collected at Collection Points — invoice only records the mode.
+      // Payment is collected at Verification Points — invoice only records the mode.
       saveSale(false);
       return;
     }
@@ -2499,13 +2663,8 @@ function MakeSale() {
   }, [activeTab, mockProducts, mockServices, searchTerm]);
 
   // Line-item Typeahead options — do not reuse the POS grid searchTerm.
-  // Stopped items stay in the list but carry `disabled` so Typeahead renders
-  // them greyed out and refuses selection by click or keyboard.
   const filterItemsByTab = useCallback(
-    (tab) =>
-      (tab === "products" ? mockProducts : mockServices).map((item) =>
-        isSalesStopped(item) ? { ...item, disabled: true } : item,
-      ),
+    (tab) => (tab === "products" ? mockProducts : mockServices),
     [mockProducts, mockServices],
   );
 
@@ -2590,7 +2749,7 @@ function MakeSale() {
     const saleItems = cart.filter(
       (item) =>
         item.status === "for sale" &&
-        item.taxable === "Taxable" &&
+        isProductTaxable(item.taxable) &&
         !item.proBono, // Exclude Pro-bono items
     );
     return saleItems.reduce((sum, item) => sum + parseFloat(item.amount), 0);
@@ -2600,7 +2759,7 @@ function MakeSale() {
     const saleItems = cart.filter(
       (item) =>
         item.status === "for sale" &&
-        item.taxable !== "Taxable" &&
+        !isProductTaxable(item.taxable) &&
         !item.proBono,
     );
     return saleItems.reduce(
@@ -2813,7 +2972,7 @@ function MakeSale() {
           ];
       if (
         !item.proBono &&
-        item.taxable === "Taxable" &&
+        isProductTaxable(item.taxable) &&
         appliedTaxes.length > 0
       ) {
         vatRate = appliedTaxes.reduce(
@@ -3055,14 +3214,27 @@ function MakeSale() {
       }
 
       // Sales target / limit — block even when stock remains (facility-wide by SKU)
-      const limitRemaining = getSalesLimitRemaining(product);
+      const catalog = [...readyForSalesItems, ...serviceProducts];
+      let limitRemaining = getSalesLimitRemaining(product);
+      let limitPeriod = product.sales_limit_period;
+      if (limitRemaining == null) {
+        const match = catalog.find(
+          (p) =>
+            String(p.product_id || p.sku || "") ===
+            String(product.product_id || product.sku || product.id || ""),
+        );
+        if (match) {
+          limitRemaining = getSalesLimitRemaining(match);
+          limitPeriod = match.sales_limit_period ?? limitPeriod;
+        }
+      }
       if (limitRemaining != null) {
-        const sku = product.product_id || product.id;
+        const sku = product.product_id || product.sku || product.id;
         const qtyInCartForSku = cartQtyForSku(cart, sku);
         const totalForSku = qtyInCartForSku + quantityToAdd;
         if (limitRemaining <= 0) {
           toast.error(
-            `Sales ${salesLimitPeriodLabel(product.sales_limit_period)} limit reached for ${
+            `Sales ${salesLimitPeriodLabel(limitPeriod)} limit reached for ${
               product.name || product.item_name
             }. No more can be sold this period.`,
           );
@@ -3070,11 +3242,13 @@ function MakeSale() {
         }
         if (totalForSku > limitRemaining) {
           toast.error(
-            `Sales ${salesLimitPeriodLabel(product.sales_limit_period)} limit for ${
+            `Sales ${salesLimitPeriodLabel(limitPeriod)} limit for ${
               product.name || product.item_name
             }. Remaining: ${formatNumber1(limitRemaining)}, in cart: ${formatNumber1(
               qtyInCartForSku,
-            )}, trying to add: ${formatNumber1(quantityToAdd)}`,
+            )}, trying to add: ${formatNumber1(quantityToAdd)}. Max you can add: ${formatNumber1(
+              Math.max(0, limitRemaining - qtyInCartForSku),
+            )}`,
           );
           return;
         }
@@ -3104,16 +3278,21 @@ function MakeSale() {
         taxable: product.taxable || "Taxable",
         line_tax_id: defaultLineTaxId,
         proBono: false, // Default to false
-        sales_limit_period: product.sales_limit_period ?? null,
+        sales_stopped: isSalesStopped(product),
+        sales_limit_period: limitPeriod ?? product.sales_limit_period ?? null,
         sales_limit: product.sales_limit ?? null,
-        sales_limit_remaining: product.sales_limit_remaining ?? null,
-        branchId:
-          product.branchId ||
-          product.branch_id ||
-          (selectedBranch ? Number(selectedBranch) : null),
+        sales_limit_remaining:
+          limitRemaining ?? product.sales_limit_remaining ?? null,
+        branchId: (() => {
+          const bid = product.branchId ?? product.branch_id;
+          if (bid != null && String(bid).trim() !== "") {
+            const n = Number(bid);
+            return Number.isFinite(n) && n > 0 ? n : null;
+          }
+          return selectedBranch ? Number(selectedBranch) : null;
+        })(),
         branch_name:
           product.location_name ||
-          product.branch_name ||
           getItemBranchLocation(product) ||
           selectedBranchLocation ||
           null,
@@ -3156,6 +3335,8 @@ function MakeSale() {
       selectedBranchLocation,
       getItemBranchLocation,
       defaultLineTaxId,
+      readyForSalesItems,
+      serviceProducts,
     ],
   );
 
@@ -3330,102 +3511,68 @@ function MakeSale() {
     });
   }, []);
 
-  const updateQuantityNew = useCallback((itemId, newQuantity) => {
-    if (!Number.isFinite(newQuantity) || newQuantity < 0.0001) return;
+  const updateQuantityNew = useCallback(
+    (itemId, newQuantity) => {
+      if (!Number.isFinite(newQuantity) || newQuantity < 0.0001) return;
 
-    setCart((prev) => {
-      const itemToUpdate = prev.find((item) => item.id === itemId);
+      setCart((prev) => {
+        const itemToUpdate = prev.find((item) => item.id === itemId);
+        if (!itemToUpdate) return prev;
 
-      if (!itemToUpdate) return prev;
-
-      // Check stock availability for products (skip for services)
-      if (itemToUpdate.item_type !== "Service") {
-        const availableStock = parseFloat(itemToUpdate.balance) || 0;
-
-        // Calculate quantity of same product already in cart (excluding current item)
-        const quantityInCart = prev
-          .filter(
-            (item) =>
-              item.id !== itemId &&
-              item.product_id === itemToUpdate.product_id &&
-              item.expiry_date === itemToUpdate.expiry_date,
-          )
-          .reduce((sum, item) => sum + parseFloat(item.quantity_sold || 0), 0);
-
-        const totalQuantity = quantityInCart + newQuantity;
-
-        // Only check stock if allow_sales_without_stock is disabled
-        if (!allowSalesWithoutStock) {
-          if (totalQuantity > availableStock) {
-            toast.error(
-              `Insufficient stock! Available: ${formatNumber1(
-                availableStock,
-              )}, ` +
-                `Other in cart: ${formatNumber1(quantityInCart)}, ` +
-                `Maximum for this item: ${formatNumber1(
-                  availableStock - quantityInCart,
-                )}`,
-            );
-            return prev; // Don't update if exceeds stock
-          }
-        } else {
-          // When allow_sales_without_stock is enabled, warn but allow
-          if (totalQuantity > availableStock) {
-            toast.warning(
-              `Insufficient stock! Available: ${formatNumber1(
-                availableStock,
-              )}, ` +
-                `Other in cart: ${formatNumber1(quantityInCart)}, ` +
-                `Requested: ${formatNumber1(newQuantity)}. ` +
-                `Sale will proceed due to settings.`,
-            );
-          }
-        }
-      }
-
-      const limitRemaining = getSalesLimitRemaining(itemToUpdate);
-      if (isSalesStopped(itemToUpdate)) {
-        toast.error(
-          `Sales are stopped for ${itemToUpdate.item_name}. This product cannot be sold.`,
-        );
-        return prev;
-      }
-      if (limitRemaining != null) {
-        const qtyInCartForSku = cartQtyForSku(
-          prev,
-          itemToUpdate.product_id,
-          itemId,
-        );
-        const totalForSku = qtyInCartForSku + newQuantity;
-        if (totalForSku > limitRemaining) {
+        if (isSalesStopped(itemToUpdate)) {
           toast.error(
-            `Sales ${salesLimitPeriodLabel(itemToUpdate.sales_limit_period)} limit for ${
-              itemToUpdate.item_name
-            }. Remaining: ${formatNumber1(limitRemaining)}, other in cart: ${formatNumber1(
-              qtyInCartForSku,
-            )}`,
+            `Sales are stopped for ${itemToUpdate.item_name}. This product cannot be sold.`,
           );
           return prev;
         }
-      }
 
-      return prev.map((item) => {
-        if (item.id === itemId) {
-          // If Pro-bono, amount is always 0, otherwise calculate normally
+        const catalog = [...readyForSalesItems, ...serviceProducts];
+        const { max, remaining, period } = getMaxQtyForLine(
+          itemToUpdate,
+          prev,
+          {
+            allowWithoutStock: !!allowSalesWithoutStock,
+            catalog,
+          },
+        );
+
+        let qty = newQuantity;
+        if (max != null && qty > max + 1e-9) {
+          const label = salesLimitPeriodLabel(
+            period || itemToUpdate.sales_limit_period,
+          );
+          toast.error(
+            remaining != null
+              ? `Sales ${label} target for ${itemToUpdate.item_name}: max ${formatNumber1(
+                  max,
+                )} (remaining ${formatNumber1(remaining)})`
+              : `Maximum quantity for ${itemToUpdate.item_name} is ${formatNumber1(
+                  max,
+                )}`,
+          );
+          if (max < 0.0001) return prev;
+          qty = max;
+        }
+
+        return prev.map((item) => {
+          if (item.id !== itemId) return item;
           const newAmount = item.proBono
             ? 0
-            : parseFloat(item.selling_price) * newQuantity;
+            : parseFloat(item.selling_price) * qty;
           return {
             ...item,
-            quantity_sold: newQuantity,
-            quantity: newQuantity,
+            quantity_sold: qty,
+            quantity: qty,
             amount: newAmount,
+            sales_limit_remaining:
+              item.sales_limit_remaining ?? remaining ?? null,
+            sales_limit_period: item.sales_limit_period ?? period ?? null,
           };
-        }
-        return item;
+        });
       });
-    });
-  }, []);
+    },
+    [readyForSalesItems, serviceProducts, allowSalesWithoutStock],
+  );
 
   /** Step price on product/service cards (±1) without replacing typed decimals. */
   const CARD_PRICE_STEP = 1;
@@ -3600,12 +3747,12 @@ function MakeSale() {
                         : modeOfPayment === "deposit"
                           ? "Apply Deposit · create invoice, then apply customer deposit"
                           : modeOfPayment === "credit_split"
-                            ? "Sent to cashier · cash + transfer, remainder on credit"
+                            ? "Sent to Verification Points · Cash, Transfer & Credit"
                             : modeOfPayment === "both"
-                              ? "Sent to cashier · cash and transfer"
+                              ? "Sent to Verification Points · cash and transfer"
                               : modeOfPayment === "transfer"
-                                ? "Sent to cashier · transfer"
-                                : "Sent to cashier · cash"}
+                                ? "Sent to Verification Points · transfer"
+                                : "Sent to Verification Points · cash"}
                     </p>
                   </div>
                 </div>
@@ -3769,10 +3916,10 @@ function MakeSale() {
                     {modeOfPayment === "deposit"
                       ? "Invoice is created like credit, then you apply the customer deposit (not Credit Approval)."
                       : modeOfPayment === "credit"
-                        ? "Credit invoice goes to Credit approval first, then Invoice Separation."
+                        ? "Credit invoice goes to Verification Points (Credit tab) for approval first, then Invoice Separation."
                         : modeOfPayment === "credit_split"
-                          ? "Invoice is sent to Cashier for cash and transfer collection; unpaid remainder stays on credit."
-                          : `Invoice is sent to Cashier for ${
+                          ? "Sent to Verification Points — shows on Cash, Transfer, and Credit tabs."
+                          : `Invoice is sent to Verification Points for ${
                               modeOfPayment === "both"
                                 ? "cash and transfer"
                                 : modeOfPayment === "transfer"
@@ -4088,20 +4235,10 @@ function MakeSale() {
                             parseFloat(item.selling_price) ||
                             0;
                       const itemBranchLocation = getItemBranchLocation(item);
-                      const stopped = isSalesStopped(item);
                       return (
                         <div
                           key={item.id}
-                          aria-disabled={stopped}
                           onClick={() => {
-                            if (stopped) {
-                              toast.error(
-                                `Sales are stopped for ${
-                                  item.name || item.item_name
-                                }. This product cannot be sold.`,
-                              );
-                              return;
-                            }
                             setSelectedIndex(index);
                             // Ensure service has its default price when selected
                             const priceValue =
@@ -4136,14 +4273,12 @@ function MakeSale() {
                               }
                             }, 100);
                           }}
-                          className={`bg-white rounded-xl shadow-md transition-all overflow-hidden border-2 ${
-                            stopped
-                              ? "cursor-not-allowed border-transparent opacity-60 grayscale"
-                              : selectedIndex === index
-                                ? "cursor-pointer hover:shadow-xl border-[var(--aa-accent)] ring-2 ring-blue-200 bg-blue-50"
-                                : selectedProduct?.id === item.id
-                                  ? "cursor-pointer hover:shadow-xl ring-1"
-                                  : "cursor-pointer hover:shadow-xl border-transparent"
+                          className={`bg-white rounded-xl shadow-md hover:shadow-xl transition-all cursor-pointer overflow-hidden border-2 ${
+                            selectedIndex === index
+                              ? "border-[var(--aa-accent)] ring-2 ring-blue-200 bg-blue-50"
+                              : selectedProduct?.id === item.id
+                                ? "ring-1"
+                                : "border-transparent"
                           }`}
                         >
                           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 flex items-center justify-center h-32 relative m-0">
@@ -4154,12 +4289,7 @@ function MakeSale() {
                                 .map((word) => word.charAt(0).toUpperCase())
                                 .join("")}
                             </span>
-                            {stopped && (
-                              <div className="absolute top-2 left-2 rounded-full bg-red-600 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
-                                Sales stopped
-                              </div>
-                            )}
-                            {selectedIndex === index && !stopped && (
+                            {selectedIndex === index && (
                               <div className="absolute top-2 right-2 bg-[var(--aa-navy)] text-white text-xs font-bold px-2 py-1 rounded-full">
                                 {index + 1}
                               </div>
@@ -4174,6 +4304,19 @@ function MakeSale() {
                                 </span>
                               )}
                             </h3>
+                            {isSalesStopped(item) ? (
+                              <p className="mb-1">
+                                <span className="rounded-full border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                                  Sales Stopped
+                                </span>
+                              </p>
+                            ) : getSalesLimitRemaining(item) != null ? (
+                              <p className="mb-1 text-[10px] font-semibold text-amber-700">
+                                {salesLimitPeriodLabel(item.sales_limit_period)}{" "}
+                                left:{" "}
+                                {formatNumber1(getSalesLimitRemaining(item))}
+                              </p>
+                            ) : null}
                             {activeTab === "products" &&
                               (item.unit_of_measure || item.uom_category) && (
                                 <p className="text-xs text-gray-600 mb-1 mx-0">
@@ -4602,9 +4745,9 @@ function MakeSale() {
                                         type="button"
                                         title="Click to toggle taxable"
                                         onClick={() => {
-                                          if (item.taxable === "Taxable") {
+                                          if (isProductTaxable(item.taxable)) {
                                             updateCartItem(item.id, {
-                                              taxable: "Not Taxable",
+                                              taxable: "Non-Taxable",
                                               line_tax_id: null,
                                             });
                                             return;
@@ -4620,12 +4763,12 @@ function MakeSale() {
                                           });
                                         }}
                                         className={`ml-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                          item.taxable === "Taxable"
+                                          isProductTaxable(item.taxable)
                                             ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                                             : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                         }`}
                                       >
-                                        {item.taxable === "Taxable"
+                                        {isProductTaxable(item.taxable)
                                           ? "Taxable"
                                           : "Not taxable"}
                                       </button>
@@ -4654,6 +4797,18 @@ function MakeSale() {
                               </div>
                             </td>
                             <td className="px-2 py-3 text-right align-top">
+                              {(() => {
+                                const catalog = [
+                                  ...readyForSalesItems,
+                                  ...serviceProducts,
+                                ];
+                                const { max, remaining, period } =
+                                  getMaxQtyForLine(item, cart, {
+                                    allowWithoutStock: !!allowSalesWithoutStock,
+                                    catalog,
+                                  });
+                                return (
+                                  <>
                               <input
                                 id={`invoice-line-qty-${item.id}`}
                                 data-scanner-ignore="true"
@@ -4661,6 +4816,19 @@ function MakeSale() {
                                 inputMode="decimal"
                                 autoComplete="off"
                                 placeholder="1.00"
+                                title={
+                                  max != null
+                                    ? `Max ${formatNumber1(max)}${
+                                        remaining != null
+                                          ? ` (${salesLimitPeriodLabel(
+                                              period,
+                                            )} target left: ${formatNumber1(
+                                              remaining,
+                                            )})`
+                                          : ""
+                                      }`
+                                    : undefined
+                                }
                                 value={
                                   lineQtyDrafts[item.id] !== undefined
                                     ? lineQtyDrafts[item.id]
@@ -4680,10 +4848,54 @@ function MakeSale() {
                                   const sanitized =
                                     handleNumericInput(withoutCommas);
                                   const parts = sanitized.split(".");
-                                  const numericValue =
+                                  let numericValue =
                                     parts.length > 2
                                       ? parts[0] + "." + parts.slice(1).join("")
                                       : sanitized;
+
+                                  // Allow empty / trailing decimal while typing
+                                  if (
+                                    numericValue === "" ||
+                                    numericValue === "." ||
+                                    numericValue.endsWith(".")
+                                  ) {
+                                    setLineQtyDrafts((prev) => ({
+                                      ...prev,
+                                      [item.id]: numericValue,
+                                    }));
+                                    return;
+                                  }
+
+                                  const parsedValue =
+                                    parseNumberFromFormatted(numericValue);
+                                  let num = parseFloat(parsedValue);
+                                  if (!Number.isFinite(num)) {
+                                    setLineQtyDrafts((prev) => ({
+                                      ...prev,
+                                      [item.id]: numericValue,
+                                    }));
+                                    return;
+                                  }
+
+                                  // Clamp to sales target / stock max
+                                  if (max != null && num > max + 1e-9) {
+                                    num = max;
+                                    numericValue = String(max);
+                                    toast.error(
+                                      remaining != null
+                                        ? `Sales ${salesLimitPeriodLabel(
+                                            period,
+                                          )} target max is ${formatNumber1(
+                                            max,
+                                          )} (left: ${formatNumber1(
+                                            remaining,
+                                          )})`
+                                        : `Maximum quantity is ${formatNumber1(
+                                            max,
+                                          )}`,
+                                    );
+                                  }
+
                                   const formattedValue =
                                     formatNumberWithCommasQuantity(
                                       numericValue,
@@ -4692,12 +4904,6 @@ function MakeSale() {
                                     ...prev,
                                     [item.id]: formattedValue,
                                   }));
-                                  const parsedValue =
-                                    parseNumberFromFormatted(formattedValue);
-                                  const num =
-                                    parsedValue === ""
-                                      ? 0
-                                      : parseFloat(parsedValue) || 0;
                                   if (num >= 0.0001) {
                                     updateQuantityNew(item.id, num);
                                   }
@@ -4707,7 +4913,7 @@ function MakeSale() {
                                   const parsed = parseNumberFromFormatted(
                                     String(draft ?? ""),
                                   );
-                                  const num =
+                                  let num =
                                     parsed === "" || parsed === "."
                                       ? NaN
                                       : parseFloat(parsed);
@@ -4715,7 +4921,24 @@ function MakeSale() {
                                     draft !== undefined &&
                                     (!Number.isFinite(num) || num < 0.0001)
                                   ) {
-                                    updateQuantityNew(item.id, 1);
+                                    num = max != null && max >= 0.0001
+                                      ? Math.min(1, max)
+                                      : 1;
+                                  }
+                                  if (
+                                    max != null &&
+                                    Number.isFinite(num) &&
+                                    num > max
+                                  ) {
+                                    num = max >= 0.0001 ? max : 1;
+                                    toast.error(
+                                      `Quantity capped at ${formatNumber1(
+                                        max,
+                                      )} by sales target`,
+                                    );
+                                  }
+                                  if (Number.isFinite(num) && num >= 0.0001) {
+                                    updateQuantityNew(item.id, num);
                                   }
                                   setLineQtyDrafts((prev) => {
                                     const next = { ...prev };
@@ -4725,6 +4948,16 @@ function MakeSale() {
                                 }}
                                 className="ml-auto w-20 rounded border border-slate-300 px-2 py-1.5 text-right text-sm"
                               />
+                              {max != null && remaining != null ? (
+                                <div className="mt-0.5 text-[10px] font-medium text-amber-700">
+                                  Max {formatNumber1(max)} (
+                                  {salesLimitPeriodLabel(period)} left{" "}
+                                  {formatNumber1(remaining)})
+                                </div>
+                              ) : null}
+                                  </>
+                                );
+                              })()}
                             </td>
                             <td className="px-2 py-3 text-right align-top">
                               {item.proBono ? (
@@ -4792,7 +5025,7 @@ function MakeSale() {
                               <select
                                 value={item.line_tax_id ?? ""}
                                 disabled={
-                                  !!item.proBono || item.taxable !== "Taxable"
+                                  !!item.proBono || !isProductTaxable(item.taxable)
                                 }
                                 onChange={(e) => {
                                   const taxId = e.target.value || null;
@@ -4800,7 +5033,7 @@ function MakeSale() {
                                     line_tax_id: taxId,
                                     taxable: taxId
                                       ? "Taxable"
-                                      : "Not Taxable",
+                                      : "Non-Taxable",
                                   });
                                   if (taxId) {
                                     const tax = lineTaxOptions.find(
@@ -4828,7 +5061,7 @@ function MakeSale() {
                                 ))}
                               </select>
                               {!item.proBono &&
-                                item.taxable === "Taxable" &&
+                                isProductTaxable(item.taxable) &&
                                 money.lineVat > 0 && (
                                   <div className="mt-1 text-[11px] text-slate-500">
                                     NGN {formatNumber1(money.lineVat)}
@@ -4885,13 +5118,23 @@ function MakeSale() {
                                   labelKey={(opt) => {
                                     const loc =
                                       opt.location_name ||
-                                      opt.branch_name ||
                                       getItemBranchLocation(opt);
+                                    const stopped = isSalesStopped(opt)
+                                      ? " · Sales Stopped"
+                                      : "";
+                                    const lim =
+                                      getSalesLimitRemaining(opt) != null
+                                        ? ` · ${salesLimitPeriodLabel(
+                                            opt.sales_limit_period,
+                                          )} left: ${formatNumber1(
+                                            getSalesLimitRemaining(opt),
+                                          )}`
+                                        : "";
                                     return `${opt.name || opt.item_name}${
                                       opt.product_id || opt.sku
                                         ? ` (${opt.product_id || opt.sku})`
                                         : ""
-                                    }${loc ? ` · ${loc}` : ""}`;
+                                    }${loc ? ` · ${loc}` : ""}${stopped}${lim}`;
                                   }}
                                   filterBy={(opt, props) => {
                                     const q = String(
@@ -4900,7 +5143,6 @@ function MakeSale() {
                                     if (!q) return true;
                                     const loc =
                                       opt.location_name ||
-                                      opt.branch_name ||
                                       getItemBranchLocation(opt) ||
                                       "";
                                     return [
@@ -4910,6 +5152,7 @@ function MakeSale() {
                                       opt.product_id,
                                       opt.item_code,
                                       loc,
+                                      isSalesStopped(opt) ? "sales stopped" : "",
                                     ].some((v) =>
                                       String(v || "")
                                         .toLowerCase()
@@ -4919,18 +5162,6 @@ function MakeSale() {
                                   placeholder="Type or click to select an item"
                                   onChange={(selected) => {
                                     if (selected && selected.length > 0) {
-                                      // Keyboard selection bypasses the menu's
-                                      // disabled check, so re-test here and keep
-                                      // the empty row when nothing was added.
-                                      if (isSalesStopped(selected[0])) {
-                                        toast.error(
-                                          `Sales are stopped for ${
-                                            selected[0].name ||
-                                            selected[0].item_name
-                                          }. This product cannot be sold.`,
-                                        );
-                                        return;
-                                      }
                                       addToCartNew(selected[0]);
                                       setExtraEmptyLineRows((n) => n - 1);
                                     }
@@ -4945,26 +5176,37 @@ function MakeSale() {
                                   renderMenuItemChildren={(opt) => {
                                     const loc =
                                       opt.location_name ||
-                                      opt.branch_name ||
                                       getItemBranchLocation(opt);
-                                    const optStopped = isSalesStopped(opt);
+                                    const stopped = isSalesStopped(opt);
+                                    const limitLeft = getSalesLimitRemaining(opt);
                                     return (
-                                      <div className="py-1">
-                                        <div className="flex items-center gap-2">
+                                      <div
+                                        className={`py-1 ${
+                                          stopped ? "opacity-80" : ""
+                                        }`}
+                                      >
+                                        <div className="flex flex-wrap items-center gap-1.5">
                                           <span
                                             className={`text-sm font-medium ${
-                                              optStopped
-                                                ? "text-slate-400"
+                                              stopped
+                                                ? "text-slate-500"
                                                 : "text-slate-800"
                                             }`}
                                           >
                                             {opt.name || opt.item_name}
                                           </span>
-                                          {optStopped && (
-                                            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
-                                              Sales stopped
+                                          {stopped ? (
+                                            <span className="rounded-full border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                                              Sales Stopped
                                             </span>
-                                          )}
+                                          ) : null}
+                                          {!stopped &&
+                                          limitLeft != null &&
+                                          limitLeft <= 0 ? (
+                                            <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                                              Target reached
+                                            </span>
+                                          ) : null}
                                         </div>
                                         <small className="text-xs text-slate-500">
                                           {opt.product_id || opt.sku}
@@ -4980,6 +5222,15 @@ function MakeSale() {
                                                 {formatNumber1(opt.balance)}
                                               </span>
                                             )}
+                                          {!stopped && limitLeft != null ? (
+                                            <span className="ml-1 text-amber-700">
+                                              ·{" "}
+                                              {salesLimitPeriodLabel(
+                                                opt.sales_limit_period,
+                                              )}{" "}
+                                              left: {formatNumber1(limitLeft)}
+                                            </span>
+                                          ) : null}
                                         </small>
                                       </div>
                                     );
@@ -5396,12 +5647,12 @@ function MakeSale() {
                                   </span>
                                 )}
                               </h4>
-                              {item.taxable === "Taxable" && (
+                              {isProductTaxable(item.taxable) && (
                                 <span className="px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">
                                   Taxable
                                 </span>
                               )}
-                              {item.taxable !== "Taxable" && !item.proBono && (
+                              {!isProductTaxable(item.taxable) && !item.proBono && (
                                 <span className="px-1.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded">
                                   Not taxable
                                 </span>

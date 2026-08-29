@@ -340,7 +340,7 @@ export default function ApplyCustomerAdvance() {
             </h1>
             <p className="mt-0.5 text-xs text-slate-500">
               Apply an existing customer deposit to unpaid invoices. To record a
-              new deposit, use Collection Points → Make Deposit.
+              new deposit, use Verification Points → Make Deposit.
             </p>
           </div>
           {selectedCustomer && (

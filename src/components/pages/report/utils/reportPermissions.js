@@ -2,6 +2,7 @@ import {
   flattenAccountingReportPermissions,
   getReportPermissionKey,
 } from "./accountingReportCatalog";
+import { getUserFunctionalities } from "@/lib/access";
 
 /** Permission titles stored in membership.functionalities (comma-separated). */
 export const PRODUCTION_REPORT_PERMISSIONS = [
@@ -15,24 +16,7 @@ export const PRODUCTION_REPORT_PERMISSIONS = [
   { title: "Production vs Sales Comparison Report" },
 ];
 
-export { getReportPermissionKey };
-
-export function getUserFunctionalities(user, activeBusiness) {
-  const parse = (raw) => {
-    if (Array.isArray(raw)) return raw.filter(Boolean);
-    if (typeof raw === "string" && raw.trim()) {
-      return raw
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-    }
-    return [];
-  };
-  // Same as sidebar (nav-main): membership on active business, else user fallback.
-  const businessList = parse(activeBusiness?.functionalities);
-  if (businessList.length > 0) return businessList;
-  return parse(user?.functionalities);
-}
+export { getReportPermissionKey, getUserFunctionalities };
 
 /**
  * Same rule as GoodsTransfer tab visibility: functionalities must include the privilege.

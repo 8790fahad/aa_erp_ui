@@ -116,8 +116,8 @@ function ItemSelection({
                   <tr>
                     <td className="text-center">milo</td>
                     <td className="text-center">88</td>
-                    <td className="text-center">$7678</td>
-                    <td className="text-center">$87787678</td>
+                    <td className="text-center">₦7678</td>
+                    <td className="text-center">₦87787678</td>
                   </tr>
                 </tbody>
               </Table>

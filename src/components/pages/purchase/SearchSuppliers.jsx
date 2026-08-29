@@ -7,7 +7,8 @@ import SupplierRegisteration from "../suppliers/SupplierRegisteration";
 
 export default function SearchSupplierInput(props) {
   const dispatch = useDispatch();
-  const options = useSelector((state) => state.suppliers.supplierList);
+  const rawOptions = useSelector((state) => state.suppliers.supplierList);
+  const options = Array.isArray(rawOptions) ? rawOptions : [];
   const [inputValue, setInputValue] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -27,7 +28,7 @@ export default function SearchSupplierInput(props) {
       <CustomTypeahead
         {...props}
         options={options}
-        labelKey={(option) => `${option.supplier_name}`}
+        labelKey="supplier_name"
         // Allow creating a new supplier directly from the input
         allowNew
         newSelectionPrefix="Create new supplier: "

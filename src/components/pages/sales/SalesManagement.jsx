@@ -31,7 +31,7 @@ const FILTERS = [
   { id: "invoice", label: "Invoice", statuses: ["sales_order", "invoice_generated", "submitted"] },
   {
     id: "cashier",
-    label: "Collection Points",
+    label: "Verification Points",
     statuses: ["awaiting_payment", "awaiting_cashier_confirm"],
   },
   {
@@ -154,10 +154,19 @@ export default function SalesManagement() {
               }
               const pt = String(r.payment_type || "").toLowerCase();
               if (hasCash && !hasTransfer) {
-                return pt === "cash" || pt === "split";
+                return (
+                  pt === "cash" ||
+                  pt === "split" ||
+                  pt === "credit_split"
+                );
               }
               if (hasTransfer && !hasCash) {
-                return pt === "transfer" || pt === "bank" || pt === "split";
+                return (
+                  pt === "transfer" ||
+                  pt === "bank" ||
+                  pt === "split" ||
+                  pt === "credit_split"
+                );
               }
               return true;
             });
@@ -325,27 +334,27 @@ export default function SalesManagement() {
       ["awaiting_payment", "awaiting_cashier_confirm", "submitted"].includes(s)
     ) {
       return {
-        title: "Next: Collection Points",
-        description: "Collect payment for this invoice at Collection Points.",
-        to: "/app/payments/collection-points",
-        label: "Open Collection Points",
+        title: "Next: Verification Points",
+        description: "Collect payment for this invoice at Verification Points.",
+        to: "/app/payments/verification-points",
+        label: "Open Verification Points",
       };
     }
     if (s === "awaiting_discount_approval") {
       return {
         title: "Next: Discount approval",
         description:
-          "Approve the discount at Collection Points before cash/transfer collection.",
-        to: "/app/payments/collection-points",
-        label: "Open Collection Points",
+          "Approve the discount at Verification Points before cash/transfer collection.",
+        to: "/app/payments/verification-points",
+        label: "Open Verification Points",
       };
     }
     if (s === "awaiting_credit_approval") {
       return {
         title: "Next: Credit approval",
-        description: "Approve this credit sale at Collection Points.",
-        to: "/app/payments/collection-points",
-        label: "Open Collection Points",
+        description: "Approve this credit sale at Verification Points.",
+        to: "/app/payments/verification-points",
+        label: "Open Verification Points",
       };
     }
     if (
@@ -386,7 +395,7 @@ export default function SalesManagement() {
                 Sales Process
               </h1>
               <p className="text-gray-600 mt-1">
-                Customer → Create Invoice → Collection Points → Invoice
+                Customer → Create Invoice → Verification Points → Invoice
                 Separation → Warehouse Collection.
               </p>
             </div>

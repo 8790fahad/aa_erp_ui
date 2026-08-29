@@ -31,6 +31,7 @@ const MODULE_ACCENT = {
   Purchase: "var(--cat-purchase-b)",
   Sales: "var(--cat-sales-b)",
   Account: "var(--cat-accounts-b)",
+  "Asset Register": "var(--cat-accounts-b)",
   Payroll: "var(--cat-payroll-b)",
   Admin: "var(--cat-admin-b)",
   Reports: "var(--cat-reports-b)",

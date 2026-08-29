@@ -40,13 +40,13 @@ const TransactionTypeSelection = () => {
       line_of_business: lineOfBusiness,
     };
 
-    // Customer deposits → Collection Points; supplier deposits → Pay Bills
+    // Customer deposits → Verification Points; supplier deposits → Pay Bills
     if (transactionType.id === "supplier_deposit") {
       navigate("/app/payments/pay-bills?action=deposit", {
         state: { transactionType: serializableTransactionType },
       });
     } else if (transactionType.id === "customer_deposit") {
-      navigate("/app/payments/collection-points?action=deposit", {
+      navigate("/app/payments/verification-points?action=deposit", {
         state: { transactionType: serializableTransactionType },
       });
     } else if (transactionType.id === "customer_security_deposit") {
