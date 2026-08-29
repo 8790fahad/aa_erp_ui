@@ -62,10 +62,10 @@ export default function BillSources() {
   const [expenseList, setExpenseList] = useState([]);
   const searchFromUrl = searchParams.get("search") || "";
   const pageFromUrl = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-  const pageSizeFromUrl = Math.max(
-    1,
-    Math.min(50, parseInt(searchParams.get("pageSize") || "10", 10)),
-  );
+  const rawPageSize = parseInt(searchParams.get("pageSize") || "10", 10);
+  const pageSizeFromUrl = PAGE_SIZE_OPTIONS.includes(rawPageSize)
+    ? rawPageSize
+    : 10;
   const statusFromUrl = searchParams.get("status") || STATUS_ALL;
   const [searchInput, setSearchInput] = useState(searchFromUrl);
   const searchDebounceRef = useRef(null);
@@ -170,6 +170,12 @@ export default function BillSources() {
     },
     [searchParams, setSearchParams]
   );
+
+  useEffect(() => {
+    if (pageFromUrl > totalPages) {
+      updateUrl({ page: totalPages });
+    }
+  }, [pageFromUrl, totalPages, updateUrl]);
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
@@ -406,7 +412,7 @@ export default function BillSources() {
                     ))}
                   </tr>
                 ))
-              ) : filteredData.length === 0 ? (
+              ) : bills.length === 0 ? (
                 <tr>
                   <td colSpan={fields.length} className="px-4 py-12 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
@@ -424,7 +430,7 @@ export default function BillSources() {
                   </td>
                 </tr>
               ) : (
-                paginatedData.map((item) => (
+                bills.map((item) => (
                   <tr
                     key={item.invoice_id}
                     className="transition-colors hover:bg-slate-50/80"
@@ -446,87 +452,87 @@ export default function BillSources() {
           </table>
         </div>
 
-        {!loading && filteredData.length > 0 && (
-          <div className="flex items-center justify-end border-t border-slate-100 px-4 py-3">
-            <div className="flex w-full items-center gap-8 lg:w-fit">
-              <div className="hidden items-center gap-2 lg:flex">
-                <Label
-                  htmlFor="rows-per-page"
-                  className="text-sm font-medium text-slate-600"
-                >
-                  Rows per page
-                </Label>
-                <Select
-                  value={`${pageSize}`}
-                  onValueChange={(value) =>
-                    handlePageSizeChange(Number(value))
-                  }
-                >
-                  <SelectTrigger
-                    className="h-8 w-20 border-slate-200"
-                    id="rows-per-page"
-                  >
-                    <SelectValue placeholder={pageSize} />
-                  </SelectTrigger>
-                  <SelectContent side="top">
-                    {[10, 20, 30, 40, 50, 100].map((size) => (
-                      <SelectItem key={size} value={`${size}`}>
-                        {size}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex w-fit items-center justify-center text-sm font-medium text-slate-600">
-                Page {safePageIndex + 1} of {totalPages}
-              </div>
-              <div className="ml-auto flex items-center gap-2 lg:ml-0">
-                <Button
-                  variant="outline"
-                  className="hidden h-8 w-8 border-slate-200 p-0 lg:flex"
-                  onClick={() => handlePageChange(0)}
-                  disabled={safePageIndex === 0}
-                >
-                  <span className="sr-only">Go to first page</span>
-                  <ChevronsLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-8 w-8 border-slate-200 p-0"
-                  onClick={() =>
-                    handlePageChange(Math.max(0, safePageIndex - 1))
-                  }
-                  disabled={safePageIndex === 0}
-                >
-                  <span className="sr-only">Go to previous page</span>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-8 w-8 border-slate-200 p-0"
-                  onClick={() =>
-                    handlePageChange(
-                      Math.min(totalPages - 1, safePageIndex + 1),
-                    )
-                  }
-                  disabled={safePageIndex >= totalPages - 1}
-                >
-                  <span className="sr-only">Go to next page</span>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="hidden h-8 w-8 border-slate-200 p-0 lg:flex"
-                  onClick={() => handlePageChange(totalPages - 1)}
-                  disabled={safePageIndex >= totalPages - 1}
-                >
-                  <span className="sr-only">Go to last page</span>
-                  <ChevronsRight className="h-4 w-4" />
-                </Button>
-              </div>
+        <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/40 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-slate-500">
+            Showing{" "}
+            <span className="font-medium text-slate-700">
+              {showingFrom}–{showingTo}
+            </span>{" "}
+            of{" "}
+            <span className="font-medium text-slate-700">{totalCount}</span>
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Rows</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(value) => handlePageSizeChange(Number(value))}
+              >
+                <SelectTrigger className="h-8 w-[72px] border-slate-200 bg-white text-xs shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-8 border-slate-200 p-0"
+                disabled={safePage <= 1 || loading}
+                onClick={() => handlePageChange(0)}
+              >
+                <span className="sr-only">Go to first page</span>
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-8 border-slate-200 p-0"
+                disabled={safePage <= 1 || loading}
+                onClick={() => handlePageChange(Math.max(0, safePage - 2))}
+              >
+                <span className="sr-only">Go to previous page</span>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="min-w-[4.5rem] text-center text-xs text-slate-600">
+                {safePage} / {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-8 border-slate-200 p-0"
+                disabled={safePage >= totalPages || loading}
+                onClick={() =>
+                  handlePageChange(Math.min(totalPages - 1, safePage))
+                }
+              >
+                <span className="sr-only">Go to next page</span>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-8 border-slate-200 p-0"
+                disabled={safePage >= totalPages || loading}
+                onClick={() => handlePageChange(totalPages - 1)}
+              >
+                <span className="sr-only">Go to last page</span>
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       <Dialog open={createBillOpen} onOpenChange={setCreateBillOpen}>
