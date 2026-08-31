@@ -96,12 +96,6 @@ const METHOD_TABS = [
     privilege: "Cash Collection",
   },
   {
-    id: "credit_approval",
-    label: "Credit Approval",
-    icon: ClipboardCheck,
-    privilege: "Credit Collection",
-  },
-  {
     id: "credit",
     label: "Credit",
     icon: CreditCard,
@@ -210,6 +204,39 @@ function paymentTypeBadgeClass(type) {
   if (t === "transfer") return "bg-sky-50 text-sky-700 ring-sky-200";
   if (t === "credit") return "bg-amber-50 text-amber-700 ring-amber-200";
   if (t === "deposit") return "bg-teal-50 text-teal-700 ring-teal-200";
+  return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+}
+
+const AWAITING_CREDIT_STATUSES = new Set(["awaiting_credit_approval"]);
+const CREDITED_STATUSES = new Set([
+  "credit_approved",
+  "invoice_separation",
+  "final_invoice",
+  "warehouse_picking",
+  "dual_signature",
+  "goods_released",
+  "completed",
+  "payment_confirmed",
+]);
+
+function isAwaitingCreditRow(row) {
+  return AWAITING_CREDIT_STATUSES.has(String(row?.status || "").toLowerCase());
+}
+
+function isCreditedRow(row) {
+  return CREDITED_STATUSES.has(String(row?.status || "").toLowerCase());
+}
+
+/** Verification Points Credit tab: Awaiting credit vs Credited. */
+function creditStateLabel(row) {
+  if (isAwaitingCreditRow(row)) return "Awaiting credit";
+  if (isCreditedRow(row)) return "Credited";
+  return "Awaiting credit";
+}
+
+function creditStateBadgeClass(row) {
+  if (isAwaitingCreditRow(row))
+    return "bg-amber-50 text-amber-800 ring-amber-200";
   return "bg-emerald-50 text-emerald-700 ring-emerald-200";
 }
 
@@ -330,9 +357,6 @@ export default function ReceivePayment() {
             canViewCollectionTab("Credit Collection")
           );
         }
-        if (t.id === "credit_approval") {
-          return canViewCollectionTab("Credit Collection");
-        }
         return canViewCollectionTab(t.privilege);
       }),
     [canViewCollectionTab, canSwitchPaymentMode, canApprovePaymentMode],
@@ -340,10 +364,10 @@ export default function ReceivePayment() {
 
   const [methodTab, setMethodTab] = useState(() => {
     const q = String(searchParams.get("tab") || "").toLowerCase();
-    if (q === "deposit" || q === "credit_approval" || q === "credit")
-      return q;
+    if (q === "deposit" || q === "credit") return q;
+    if (q === "credit_approval") return "credit";
     if (String(location.pathname || "").includes("credit-approval"))
-      return "credit_approval";
+      return "credit";
     return "cash";
   });
   const [activeTab, setActiveTab] = useState("pending");
@@ -373,6 +397,8 @@ export default function ReceivePayment() {
     collected_today: 0,
     approved_credit_today: 0,
     approved_credit_count_today: 0,
+    applied_deposit_today: 0,
+    applied_deposit_count_today: 0,
     history_from: todayYmd,
     history_to: todayYmd,
   });
@@ -505,6 +531,8 @@ export default function ReceivePayment() {
               collected_today: 0,
               approved_credit_today: 0,
               approved_credit_count_today: 0,
+              applied_deposit_today: 0,
+              applied_deposit_count_today: 0,
               history_from: from,
               history_to: to,
             },
@@ -643,35 +671,15 @@ export default function ReceivePayment() {
           normalizePaymentMode(r.payment_type) === "credit_split" &&
           needsCollectionSide(r, "credit"),
       );
+      const approvalCount = creditPending.length;
+      const collectionCount = creditSplitPending.length;
       return {
         showCash: false,
         showTransfer: false,
         showSplit: false,
-        showCredit: true,
-        showCreditApproval: false,
-        showDiscount: false,
-        showMode: false,
-        pending_cash: 0,
-        pending_transfer: 0,
-        pending_split: 0,
-        pending_credit: sumAmounts(creditSplitPending),
-        pending_discount: 0,
-        pending_mode: 0,
-        collected_cash_today: 0,
-        collected_transfer_today: 0,
-        approved_credit_today: Number(summary.approved_credit_today) || 0,
-        approved_credit_count_today:
-          Number(summary.approved_credit_count_today) || 0,
-        pending_count: creditSplitPending.length,
-      };
-    }
-    if (methodTab === "credit_approval") {
-      return {
-        showCash: false,
-        showTransfer: false,
-        showSplit: false,
-        showCredit: false,
+        showCredit: collectionCount > 0,
         showCreditApproval: true,
+        showCredited: true,
         showDiscount: false,
         showMode: false,
         pending_cash: 0,
@@ -686,7 +694,8 @@ export default function ReceivePayment() {
         approved_credit_today: Number(summary.approved_credit_today) || 0,
         approved_credit_count_today:
           Number(summary.approved_credit_count_today) || 0,
-        pending_count: creditPending.length,
+        awaiting_credit_count: approvalCount,
+        pending_count: approvalCount + collectionCount,
       };
     }
     if (methodTab === "deposit") {
@@ -708,6 +717,9 @@ export default function ReceivePayment() {
         pending_mode: 0,
         collected_cash_today: 0,
         collected_transfer_today: 0,
+        applied_deposit_today: Number(summary.applied_deposit_today) || 0,
+        applied_deposit_count_today:
+          Number(summary.applied_deposit_count_today) || 0,
         pending_count: depositPending.length,
       };
     }
@@ -780,8 +792,7 @@ export default function ReceivePayment() {
     const counts = {
       cash: 0,
       transfer: 0,
-      credit: creditSplitPending.length,
-      credit_approval: creditPending.length,
+      credit: creditPending.length + creditSplitPending.length,
       deposit: depositPending.length,
       discount: discountPending.length,
       mode: modePending.length,
@@ -800,16 +811,23 @@ export default function ReceivePayment() {
     return counts;
   }, [pending, creditPending, depositPending, discountPending, modePending]);
 
-  const filteredPending = useMemo(() => {
+  const pendingForTab = useMemo(() => {
     let list;
-    if (methodTab === "credit_approval") {
-      list = creditPending;
-    } else if (methodTab === "credit") {
-      list = pending.filter(
+    if (methodTab === "credit") {
+      const split = pending.filter(
         (r) =>
           normalizePaymentMode(r.payment_type) === "credit_split" &&
           needsCollectionSide(r, "credit"),
       );
+      const byCode = new Map();
+      for (const r of [...creditPending, ...split]) {
+        if (!r?.sale_code) continue;
+        const existing = byCode.get(r.sale_code);
+        if (!existing || r.status === "awaiting_credit_approval") {
+          byCode.set(r.sale_code, r);
+        }
+      }
+      list = [...byCode.values()];
     } else if (methodTab === "deposit") {
       list = depositPending;
     } else if (methodTab === "discount") {
@@ -838,25 +856,32 @@ export default function ReceivePayment() {
           needsCollectionSide(r, methodTab),
       );
     }
+    return list;
+  }, [pending, creditPending, depositPending, discountPending, modePending, methodTab]);
+
+  const filteredPending = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((r) =>
+    if (!q) return pendingForTab;
+    return pendingForTab.filter((r) =>
       [r.sale_code, r.customer_no, r.customer_name]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q)),
     );
-  }, [pending, creditPending, depositPending, discountPending, modePending, methodTab, search]);
+  }, [pendingForTab, search]);
 
   const filteredHistory = useMemo(() => {
     let list = history.filter((r) => {
-      if (methodTab === "credit_approval") {
-        return matchesMethod(r.payment_type, "credit_approval");
-      }
       if (methodTab === "credit") {
-        return matchesMethod(r.payment_type, "credit");
+        return (
+          matchesMethod(r.payment_type, "credit") ||
+          matchesMethod(r.payment_type, "credit_approval")
+        );
       }
       if (methodTab === "deposit") {
-        return matchesMethod(r.payment_type, "deposit");
+        return (
+          matchesMethod(r.payment_type, "deposit") ||
+          r.kind === "deposit_applied"
+        );
       }
       return matchesMethod(r.payment_type, methodTab);
     });
@@ -1103,7 +1128,11 @@ export default function ReceivePayment() {
       // Credit + Cash + Transfer: collect (cash/transfer/remainder) on any tab
       if (pt === "credit_split" || pt === "split") return "collect";
       if (methodTab === "deposit" || pt === "deposit") return "deposit";
-      if (methodTab === "credit_approval" || pt === "credit") return "credit";
+      if (
+        row?.status === "awaiting_credit_approval" ||
+        pt === "credit"
+      )
+        return "credit";
       if (methodTab === "credit") return "collect";
       if (methodTab === "discount") return "discount";
       if (methodTab === "mode") return "mode";
@@ -1138,7 +1167,7 @@ export default function ReceivePayment() {
 
       if (action === "collect" && pt === "credit") {
         toast.info(
-          "Credit invoices are approved on the Credit Approval tab — not collected as cash/transfer",
+          "Credit invoices are approved on the Credit tab — not collected as cash/transfer",
         );
         return;
       }
@@ -1195,7 +1224,7 @@ export default function ReceivePayment() {
           return;
         }
         if (pt === "credit" || creditPending.includes(pendingMatch)) {
-          setMethodTab("credit_approval");
+          setMethodTab("credit");
         } else if (pt === "transfer" || pt === "bank") {
           if (canViewCollectionTab("Transfer Collection")) {
             setMethodTab("transfer");
@@ -1261,7 +1290,7 @@ export default function ReceivePayment() {
 
     const tab = String(searchParams.get("tab") || "").toLowerCase();
     if (tab === "credit_approval" && canViewCollectionTab("Credit Collection")) {
-      setMethodTab("credit_approval");
+      setMethodTab("credit");
     } else if (tab === "credit" && canViewCollectionTab("Credit Collection")) {
       setMethodTab("credit");
     } else if (
@@ -1382,7 +1411,7 @@ export default function ReceivePayment() {
           } else {
             if (modeChangeNext === "credit" && !requireApproval) {
               toast.success(
-                "Switched to Credit — approve on the Credit Approval tab before Invoice Separation",
+                "Switched to Credit — approve on the Credit tab, then it opens Sales Process",
               );
             } else {
               toast.success(
@@ -1504,8 +1533,7 @@ export default function ReceivePayment() {
         setSubmitting(false);
         if (res?.success) {
           toast.success(
-            res.message ||
-              "Credit approved — invoice sent to Invoice Separation",
+            res.message || "Credit approved — opening Sales Process",
           );
           closeHub();
           fetchDashboard();
@@ -1615,7 +1643,7 @@ export default function ReceivePayment() {
                   `Credit ₦${formatNumber1(remainingDue)} sent for approval`,
               );
               closeCollect();
-              setMethodTab("credit_approval");
+              setMethodTab("credit");
               fetchDashboard();
             }
           },
@@ -1626,11 +1654,11 @@ export default function ReceivePayment() {
                 `Credit ₦${formatNumber1(remainingDue)} sent for approval`,
             );
             closeCollect();
-            setMethodTab("credit_approval");
+            setMethodTab("credit");
             fetchDashboard();
             toast.error(
               err?.message ||
-                "Credit recorded but approval failed — finish on the Credit Approval tab",
+                "Credit recorded but approval failed — finish on the Credit tab",
             );
           },
         );
@@ -1821,11 +1849,7 @@ export default function ReceivePayment() {
   })();
 
   const summaryGridCols =
-    methodTab === "credit" ||
-    methodTab === "credit_approval" ||
-    methodTab === "deposit" ||
-    methodTab === "discount" ||
-    methodTab === "mode"
+    methodTab === "discount" || methodTab === "mode"
       ? "xl:grid-cols-1 sm:grid-cols-1"
       : "xl:grid-cols-2";
 
@@ -1877,7 +1901,6 @@ export default function ReceivePayment() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {methodTab !== "credit" &&
-            methodTab !== "credit_approval" &&
             methodTab !== "discount" &&
             methodTab !== "deposit" ? (
               <button
@@ -1993,41 +2016,46 @@ export default function ReceivePayment() {
             <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-amber-800">
                 <ClipboardCheck className="h-4 w-4 text-amber-600" />
-                Credit awaiting approval
+                Awaiting credit
               </div>
               <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">
                 ₦{formatNumber1(viewSummary.pending_credit)}
               </p>
               <p className="mt-1 text-xs text-amber-800/80">
-                {viewSummary.pending_count} credit invoice
-                {viewSummary.pending_count === 1 ? "" : "s"} — approve before
-                Invoice Separation
+                {viewSummary.awaiting_credit_count ??
+                  viewSummary.pending_count}{" "}
+                invoice
+                {(viewSummary.awaiting_credit_count ??
+                  viewSummary.pending_count) === 1
+                  ? ""
+                  : "s"}{" "}
+                — approve before Invoice Separation
               </p>
             </div>
           ) : null}
 
-          {viewSummary.showCreditApproval ? (
+          {viewSummary.showCredited ? (
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 {historyFrom === todayYmd && historyTo === todayYmd
-                  ? "Credit approved today"
-                  : "Credit approved"}
+                  ? "Credited today"
+                  : "Credited"}
               </div>
               <p className="mt-2 text-2xl font-semibold tabular-nums text-emerald-700">
                 ₦{formatNumber1(viewSummary.approved_credit_today)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                {viewSummary.approved_credit_count_today || 0} credit invoice
+                {viewSummary.approved_credit_count_today || 0} invoice
                 {(viewSummary.approved_credit_count_today || 0) === 1
                   ? ""
                   : "s"}{" "}
-                approved
+                posted to the customer account
                 {historyFrom === todayYmd && historyTo === todayYmd
                   ? " today"
                   : historyFrom === historyTo
                     ? ` on ${moment(historyFrom).format("DD MMM")}`
-                    : ` in range`}
+                    : " in range"}
               </p>
             </div>
           ) : null}
@@ -2044,7 +2072,7 @@ export default function ReceivePayment() {
               <p className="mt-1 text-xs text-violet-800/80">
                 {viewSummary.pending_count} invoice
                 {viewSummary.pending_count === 1 ? "" : "s"} — collect cash /
-                transfer, then send remainder to Credit Approval
+                transfer, then approve remaining credit here
               </p>
             </div>
           ) : null}
@@ -2062,6 +2090,32 @@ export default function ReceivePayment() {
                 {viewSummary.pending_count} invoice
                 {viewSummary.pending_count === 1 ? "" : "s"} — apply customer
                 deposit before credit approval or separation
+              </p>
+            </div>
+          ) : null}
+
+          {viewSummary.showDeposit ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                {historyFrom === todayYmd && historyTo === todayYmd
+                  ? "Deposits applied today"
+                  : "Deposits applied"}
+              </div>
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-emerald-700">
+                ₦{formatNumber1(viewSummary.applied_deposit_today)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {viewSummary.applied_deposit_count_today || 0} invoice
+                {(viewSummary.applied_deposit_count_today || 0) === 1
+                  ? ""
+                  : "s"}{" "}
+                settled
+                {historyFrom === todayYmd && historyTo === todayYmd
+                  ? " today"
+                  : historyFrom === historyTo
+                    ? ` on ${moment(historyFrom).format("DD MMM")}`
+                    : " in range"}
               </p>
             </div>
           ) : null}
@@ -2244,19 +2298,17 @@ export default function ReceivePayment() {
             filteredPending.length === 0 ? (
               <div className="px-4 py-16 text-center text-sm text-slate-500">
                 No invoices awaiting{" "}
-                {methodTab === "credit_approval"
-                  ? "credit approval"
-                  : methodTab === "credit"
-                    ? "credit collection"
-                    : methodTab === "deposit"
+                {methodTab === "credit"
+                  ? "credit"
+                  : methodTab === "deposit"
                     ? "apply deposit"
                     : methodTab === "discount"
-                    ? "discount approval"
-                    : methodTab === "mode"
-                      ? "payment mode approval"
-                      : methodTab === "transfer"
-                        ? "transfer payment"
-                        : "cash payment"}
+                      ? "discount approval"
+                      : methodTab === "mode"
+                        ? "payment mode approval"
+                        : methodTab === "transfer"
+                          ? "transfer payment"
+                          : "cash payment"}
                 .
               </div>
             ) : (
@@ -2289,7 +2341,7 @@ export default function ReceivePayment() {
                               status={row.status}
                               paymentType={
                                 row.payment_type ||
-                                (methodTab === "credit_approval"
+                                (row.status === "awaiting_credit_approval"
                                   ? "credit"
                                   : undefined)
                               }
@@ -2303,7 +2355,8 @@ export default function ReceivePayment() {
                           <div className="text-xs text-slate-500">
                             {row.customer_no}
                           </div>
-                          {methodTab === "credit_approval" ? (
+                          {(methodTab === "credit" &&
+                            row.status === "awaiting_credit_approval") ? (
                             row.credit_unlimited ? (
                               <div className="mt-1 text-[11px] text-slate-400">
                                 Credit unlimited
@@ -2387,6 +2440,14 @@ export default function ReceivePayment() {
                                 </div>
                               )}
                             </div>
+                          ) : methodTab === "credit" ? (
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${creditStateBadgeClass(
+                                row,
+                              )}`}
+                            >
+                              {creditStateLabel(row)}
+                            </span>
                           ) : (
                             <span
                               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
@@ -2541,7 +2602,8 @@ export default function ReceivePayment() {
                               <Wallet className="h-3.5 w-3.5" />
                               View & Apply Deposit
                             </button>
-                          ) : methodTab === "credit_approval" ? (
+                          ) : methodTab === "credit" &&
+                            row.status === "awaiting_credit_approval" ? (
                             <button
                               type="button"
                               disabled={submitting || row.credit_over_limit}
@@ -2632,11 +2694,9 @@ export default function ReceivePayment() {
           ) : filteredHistory.length === 0 ? (
             <div className="px-4 py-16 text-center text-sm text-slate-500">
               No confirmed{" "}
-              {methodTab === "credit_approval"
-                ? "credit approvals"
-                : methodTab === "credit"
-                  ? "credit collections"
-                  : methodTab === "deposit"
+              {methodTab === "credit"
+                ? "credited invoices"
+                : methodTab === "deposit"
                   ? "deposit applications"
                   : "payments"}{" "}
               for{" "}
@@ -2690,15 +2750,25 @@ export default function ReceivePayment() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
-                            row.payment_type,
-                          )}`}
-                        >
-                          {isAdvance
-                            ? `Deposit · ${paymentTypeLabel(row.payment_type)}`
-                            : paymentTypeLabel(row.payment_type)}
-                        </span>
+                        {methodTab === "credit" && !isAdvance ? (
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${creditStateBadgeClass(
+                              row,
+                            )}`}
+                          >
+                            {creditStateLabel(row)}
+                          </span>
+                        ) : (
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
+                              row.payment_type,
+                            )}`}
+                          >
+                            {isAdvance
+                              ? `Deposit · ${paymentTypeLabel(row.payment_type)}`
+                              : paymentTypeLabel(row.payment_type)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">
                         ₦{formatNumber1(row.amount)}
@@ -2706,7 +2776,9 @@ export default function ReceivePayment() {
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                          {row.status_label || row.status}
+                          {methodTab === "credit" && !isAdvance
+                            ? "Credited"
+                            : row.status_label || row.status}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-500">

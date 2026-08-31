@@ -458,9 +458,9 @@ function InvoicePreview() {
   })();
 
   const handlePrintThermalDeliveryOrder = () => {
-    toast.message("Check Paper size in the print dialog", {
-      description: `For ${dispatchDocLabel} use 80mm / 72mm thermal paper. Scale = Actual size / 100%.`,
-      duration: 7000,
+    toast.message("Printing slip to content height", {
+      description: `Set Scale to Actual size / 100%. Paper size should match the short ${dispatchDocLabel} — not 72 × 210 mm.`,
+      duration: 6000,
     });
     printThermalDeliveryOrder();
   };
@@ -504,9 +504,9 @@ function InvoicePreview() {
 
   const handlePrintAll = () => {
     if (showThermalDeliveryOrder) {
-      toast.message("Check Paper size in the print dialog", {
-        description: `For ${dispatchDocLabel} use 80mm / 72mm thermal paper. Scale = Actual size / 100%.`,
-        duration: 7000,
+      toast.message("Printing slip to content height", {
+        description: `Set Scale to Actual size / 100%. Paper size should match the short ${dispatchDocLabel} — not 72 × 210 mm.`,
+        duration: 6000,
       });
       printThermalDeliveryOrder();
       return;

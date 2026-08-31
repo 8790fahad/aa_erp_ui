@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   CheckCircle2,
@@ -77,6 +77,7 @@ export default function SalesManagement() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const saleFromUrl = searchParams.get("sale_code") || "";
+  const focusedSaleCode = saleFromUrl.trim();
 
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
@@ -86,8 +87,37 @@ export default function SalesManagement() {
   const [packsLoading, setPacksLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  const fetchOne = useCallback(() => {
+    if (!activeBusiness?.id || !focusedSaleCode) return;
+    setLoading(true);
+    const params = new URLSearchParams({
+      facilityId: activeBusiness.id,
+      saleCode: focusedSaleCode,
+    });
+    _fetchApi(
+      `/api/v1/sale-workflows/one?${params.toString()}`,
+      (res) => {
+        setLoading(false);
+        if (res.success && res.results) {
+          setRows([res.results]);
+          setSelectedCode(res.results.sale_code || focusedSaleCode);
+        } else {
+          setRows([]);
+          setSelectedCode("");
+          toast.error(res.message || "Invoice not found");
+        }
+      },
+      () => {
+        setLoading(false);
+        setRows([]);
+        setSelectedCode("");
+        toast.error("Failed to load invoice");
+      },
+    );
+  }, [activeBusiness?.id, focusedSaleCode]);
+
   const fetchList = useCallback(() => {
-    if (!activeBusiness?.id) return;
+    if (!activeBusiness?.id || focusedSaleCode) return;
     setLoading(true);
     const params = new URLSearchParams({ facilityId: activeBusiness.id });
     const filterDef = FILTERS.find((f) => f.id === filter);
@@ -174,9 +204,6 @@ export default function SalesManagement() {
 
           setRows(list);
           setSelectedCode((prev) => {
-            if (saleFromUrl && list.some((r) => r.sale_code === saleFromUrl)) {
-              return saleFromUrl;
-            }
             if (prev && list.some((r) => r.sale_code === prev)) return prev;
             return list[0]?.sale_code || "";
           });
@@ -191,11 +218,12 @@ export default function SalesManagement() {
         setRows([]);
       },
     );
-  }, [activeBusiness?.id, activeBusiness?.functionalities, filter, saleFromUrl, user?.functionalities]);
+  }, [activeBusiness?.id, activeBusiness?.functionalities, filter, focusedSaleCode, user?.functionalities]);
 
   useEffect(() => {
-    fetchList();
-  }, [fetchList]);
+    if (focusedSaleCode) fetchOne();
+    else fetchList();
+  }, [focusedSaleCode, fetchOne, fetchList]);
 
   const selected = useMemo(
     () => rows.find((r) => r.sale_code === selectedCode) || null,
@@ -327,6 +355,12 @@ export default function SalesManagement() {
   })();
   const currentIdx = stagePath.findIndex((s) => s.id === timelineStatusId);
 
+  const refreshCurrent = useCallback(() => {
+    if (focusedSaleCode) fetchOne();
+    else fetchList();
+    fetchPacks();
+  }, [focusedSaleCode, fetchOne, fetchList, fetchPacks]);
+
   const nextActionHub = (() => {
     if (!selected || selected.status === "completed") return null;
     const s = selected.status;
@@ -352,9 +386,10 @@ export default function SalesManagement() {
     if (s === "awaiting_credit_approval") {
       return {
         title: "Next: Credit approval",
-        description: "Approve this credit sale on Credit Approval.",
-        to: "/app/payments/credit-approval",
-        label: "Open Credit Approval",
+        description:
+          "Use Credit Approval in the Sales menu to approve this credit sale.",
+        label: "Approve Credit",
+        disabled: true,
       };
     }
     if (
@@ -368,17 +403,14 @@ export default function SalesManagement() {
       return {
         title: "Next: Invoice Separation",
         description:
-          "Split the invoice into warehouse copies on Invoice Separation.",
-        to: `/app/sales/separation?sale_code=${encodeURIComponent(selected.sale_code)}`,
-        label: "Open Invoice Separation",
+          "Use Invoice Separation in the Sales menu when you are ready to split warehouse copies.",
       };
     }
     if (s === "warehouse_picking") {
       return {
         title: "Next: Warehouse Collection",
-        description: "Collect goods and print the collection receipt.",
-        to: "/app/sales/warehouse-requests",
-        label: "Open Warehouse Collection",
+        description:
+          "Use Warehouse Collection in the Sales menu to collect goods and print the receipt.",
       };
     }
     return null;
@@ -403,10 +435,7 @@ export default function SalesManagement() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  fetchList();
-                  fetchPacks();
-                }}
+                onClick={refreshCurrent}
                 className="flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -415,8 +444,8 @@ export default function SalesManagement() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => navigate("/app/sales/separation")}
-                className="flex items-center gap-2"
+                disabled
+                className="flex items-center gap-2 opacity-50"
               >
                 <Printer className="w-4 h-4" />
                 Invoice Separation
@@ -424,8 +453,8 @@ export default function SalesManagement() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => navigate("/app/sales/warehouse-requests")}
-                className="flex items-center gap-2"
+                disabled
+                className="flex items-center gap-2 opacity-50"
               >
                 <Package className="w-4 h-4" />
                 Warehouse Collection
@@ -440,6 +469,7 @@ export default function SalesManagement() {
             </div>
           </div>
 
+          {!focusedSaleCode ? (
           <div className="flex flex-wrap gap-2">
             {FILTERS.map((f) => (
               <button
@@ -456,9 +486,11 @@ export default function SalesManagement() {
               </button>
             ))}
           </div>
+          ) : null}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className={`grid grid-cols-1 gap-6 ${focusedSaleCode ? "" : "lg:grid-cols-5"}`}>
+          {!focusedSaleCode ? (
           <div className="lg:col-span-2 bg-white rounded-lg shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 space-y-2">
               <div className="font-semibold text-gray-800">
@@ -537,12 +569,21 @@ export default function SalesManagement() {
               </ul>
             )}
           </div>
+          ) : null}
 
-          <div className="lg:col-span-3 bg-white rounded-lg shadow-sm p-6">
-            {!selected ? (
+          <div className={`${focusedSaleCode ? "" : "lg:col-span-3"} bg-white rounded-lg shadow-sm p-6`}>
+            {loading && focusedSaleCode ? (
+              <div className="space-y-3 py-6">
+                <Skeleton className="h-8 w-48" />
+                <Skeleton className="h-4 w-72" />
+                <Skeleton className="h-40 w-full" />
+              </div>
+            ) : !selected ? (
               <div className="h-64 flex flex-col items-center justify-center text-gray-500 gap-2">
                 <HandHelping className="w-10 h-10 text-gray-300" />
-                Select a sale to track its progress
+                {focusedSaleCode
+                  ? "Invoice not found"
+                  : "Select a sale to track its progress"}
               </div>
             ) : (
               <>
@@ -571,13 +612,13 @@ export default function SalesManagement() {
                         : "—"}
                     </p>
                   </div>
-                  <Link
-                    to={`/app/sales/invoice-preview?sale_code=${selected.sale_code}`}
-                    className="inline-flex items-center gap-1 text-sm text-[var(--aa-accent)] hover:underline"
+                  <span
+                    aria-disabled="true"
+                    className="inline-flex cursor-not-allowed items-center gap-1 text-sm text-slate-400"
                   >
                     <Eye className="w-4 h-4" />
                     View full invoice
-                  </Link>
+                  </span>
                 </div>
 
                 <div className="mb-6">
@@ -726,14 +767,25 @@ export default function SalesManagement() {
                     <p className="mt-1 text-xs text-slate-600">
                       {nextActionHub.description}
                     </p>
-                    <Button
-                      type="button"
-                      className="mt-3"
-                      style={{ backgroundColor: "var(--aa-navy)" }}
-                      onClick={() => navigate(nextActionHub.to)}
-                    >
-                      {nextActionHub.label}
-                    </Button>
+                    {nextActionHub.disabled && nextActionHub.label ? (
+                      <Button
+                        type="button"
+                        disabled
+                        className="mt-3 opacity-50"
+                        style={{ backgroundColor: "var(--aa-navy)" }}
+                      >
+                        {nextActionHub.label}
+                      </Button>
+                    ) : nextActionHub.to ? (
+                      <Button
+                        type="button"
+                        className="mt-3"
+                        style={{ backgroundColor: "var(--aa-navy)" }}
+                        onClick={() => navigate(nextActionHub.to)}
+                      >
+                        {nextActionHub.label}
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
 

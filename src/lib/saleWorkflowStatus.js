@@ -79,8 +79,8 @@ export const PROCESS_STAGES = [
 /** Credit sales only — waiting approval before Paid. */
 export const CREDIT_PROCESS_STAGE = {
   id: "credit",
-  short: "Credit",
-  label: "Credit approval",
+  short: "Awaiting",
+  label: "Awaiting credit",
   color: "rose",
   badge: "bg-rose-100 text-rose-800 border-rose-200",
   dot: "bg-rose-500",
@@ -163,8 +163,8 @@ export const SALE_WORKFLOW_STATUS_META = {
     row: "bg-green-50",
   },
   awaiting_credit_approval: {
-    label: "Credit approval",
-    short: "Credit",
+    label: "Awaiting credit",
+    short: "Awaiting",
     color: "rose",
     badge: "bg-rose-100 text-rose-800 border-rose-200",
     dot: "bg-rose-500",

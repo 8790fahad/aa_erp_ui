@@ -642,7 +642,7 @@ const THERMAL_TICKET_MM = 210;
  * Build and print a PDF: one page per receipt canvas, height = that receipt only.
  * Never slices through a receipt (avoids “Released by” on page 1 / “Received by” on page 2).
  */
-async function printThermalCanvases(canvases) {
+export async function printThermalCanvases(canvases) {
   const list = (Array.isArray(canvases) ? canvases : [canvases]).filter(
     Boolean,
   );
@@ -703,7 +703,7 @@ async function printThermalCanvas(canvas) {
 }
 
 /** Capture one DOM node to a trimmed canvas. */
-async function captureThermalNode(node, html2canvas) {
+export async function captureThermalNode(node, html2canvas) {
   const contentPx = measureReceiptHeightPx(node);
   let canvas = await html2canvas(node, {
     backgroundColor: "#ffffff",

@@ -2436,56 +2436,11 @@ function MakeSale() {
               `Sale of ₦${shownTotal.toFixed(2)} saved successfully!`,
             );
             if (response?.sale_code) {
-              if (hasDepositMode) {
-                const params = new URLSearchParams();
-                if (selectedCustomer?.customerNo) {
-                  params.set("customerNo", selectedCustomer.customerNo);
-                  const name =
-                    selectedCustomer.name ||
-                    selectedCustomer.fullname ||
-                    selectedCustomer.company_name ||
-                    "";
-                  if (name) params.set("customerName", name);
-                }
-                params.set("sale_code", response.sale_code);
-                params.set("tab", "deposit");
-                toast.success(
-                  `Invoice ${response.sale_code} created — apply deposit at Verification Points`,
-                );
-                navigate(
-                  `/app/payments/verification-points?${params.toString()}`,
-                );
-              } else if (hasCreditMode && !hasCashMode && !hasTransferMode) {
-                toast.success(
-                  `Invoice ${response.sale_code} — sent to Credit Approval`,
-                );
-                navigate(
-                  `/app/payments/verification-points?tab=credit_approval&sale_code=${encodeURIComponent(
-                    response.sale_code,
-                  )}`,
-                );
-              } else if (hasCreditMode && (hasCashMode || hasTransferMode)) {
-                toast.success(
-                  `Invoice ${response.sale_code} — collect cash/transfer then credit`,
-                );
-                navigate(
-                  `/app/payments/verification-points?tab=credit&sale_code=${encodeURIComponent(
-                    response.sale_code,
-                  )}`,
-                );
-              } else {
-                const tip = hasCreditMode
-                  ? hasCashMode || hasTransferMode
-                    ? "Available at Verification Points (cash/transfer + credit)"
-                    : "Sent to Credit approval at Verification Points"
-                  : "Available at Verification Points for collection";
-                toast.success(`Invoice ${response.sale_code} — ${tip}`);
-                navigate(
-                  `/app/sales/process?sale_code=${encodeURIComponent(
-                    response.sale_code,
-                  )}`,
-                );
-              }
+              navigate(
+                `/app/sales/process?sale_code=${encodeURIComponent(
+                  response.sale_code,
+                )}`,
+              );
             }
           } else {
             toast.error(response.message || "Failed to complete sale");

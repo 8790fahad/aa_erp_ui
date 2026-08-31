@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import moment from "moment";
 import QRCode from "qrcode";
+import {
+  captureThermalNode,
+  printThermalCanvases,
+} from "./ThermalReceipt";
 
 function formatThermalNumber(value) {
   const n = Number(value);
@@ -116,8 +120,8 @@ export default function ThermalDeliveryOrder({
     // so white-on-black HTML text vanishes; an image prints like the QR.
     setFeedbackLabelImg(buildFeedbackLabelDataUrl());
     QRCode.toDataURL(feedbackUrl, {
-      width: 160,
-      margin: 0,
+      width: 320,
+      margin: 1,
       errorCorrectionLevel: "M",
       color: { dark: "#000000", light: "#ffffff" },
     })
@@ -256,8 +260,8 @@ export default function ThermalDeliveryOrder({
           flex-direction: row;
           align-items: stretch;
           width: 100%;
-          height: 16mm;
-          max-height: 16mm;
+          height: 28mm;
+          max-height: 28mm;
           gap: 0;
           padding: 0;
           overflow: hidden;
@@ -269,9 +273,9 @@ export default function ThermalDeliveryOrder({
           print-color-adjust: exact;
         }
         .thermal-do-root .tr-feedback-qr {
-          flex: 0 0 16mm;
-          width: 16mm;
-          height: 16mm;
+          flex: 0 0 28mm;
+          width: 28mm;
+          height: 28mm;
           margin: 0;
           padding: 0;
           background: #fff;
@@ -281,9 +285,9 @@ export default function ThermalDeliveryOrder({
         }
         .thermal-do-root .tr-feedback-qr img {
           display: block;
-          width: 16mm;
-          height: 16mm;
-          margin: 0;
+          width: 26mm;
+          height: 26mm;
+          margin: 1mm;
           padding: 0;
           border: 0;
           object-fit: contain;
@@ -292,7 +296,7 @@ export default function ThermalDeliveryOrder({
         .thermal-do-root .tr-feedback-label {
           flex: 1 1 auto;
           min-width: 0;
-          height: 16mm;
+          height: 28mm;
           margin: 0;
           padding: 0;
           box-sizing: border-box;
@@ -305,8 +309,8 @@ export default function ThermalDeliveryOrder({
         .thermal-do-root .tr-feedback-label img {
           display: block;
           width: 100%;
-          height: 14mm;
-          max-height: 14mm;
+          height: 22mm;
+          max-height: 22mm;
           margin: 0;
           padding: 0;
           border: 0;
@@ -318,7 +322,9 @@ export default function ThermalDeliveryOrder({
         className={`thermal-do-root thermal-delivery-order-root${
           preview ? " thermal-do-preview" : ""
         }`}
-        data-receipt-variant={isGoodsIssue ? "goods-issue-note" : "delivery-order"}
+        data-receipt-variant={
+          isGoodsIssue ? "goods-issue-note" : "delivery-order"
+        }
       >
         <div className="tr-center tr-bold tr-business-name">
           {business.business_name || docTitle}
@@ -347,7 +353,9 @@ export default function ThermalDeliveryOrder({
 
         <div className="tr-divider" />
 
-        <div className="tr-bold">{isGoodsIssue ? "Issue To" : "Deliver To"}</div>
+        <div className="tr-bold">
+          {isGoodsIssue ? "Issue To" : "Deliver To"}
+        </div>
         <div>{customer.customer_name || customer.fullname || "Walk-in"}</div>
         {customer.customerNo || customer.account_no ? (
           <div className="tr-muted">
@@ -453,180 +461,208 @@ export default function ThermalDeliveryOrder({
 
 const THERMAL_WIDTH_MM = 72;
 
-function ensureThermalPrintFrame() {
-  let frame = document.getElementById("thermal-print-frame");
-  if (!frame) {
-    frame = document.createElement("iframe");
-    frame.id = "thermal-print-frame";
-    frame.setAttribute(
-      "style",
-      "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;",
-    );
-    document.body.appendChild(frame);
+const THERMAL_DO_IFRAME_CSS = `
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: ${THERMAL_WIDTH_MM}mm !important;
+    max-width: ${THERMAL_WIDTH_MM}mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  return frame;
+  body {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.25;
+  }
+  * {
+    color: #000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .thermal-do-root, .thermal-delivery-order-root {
+    display: block !important;
+    width: ${THERMAL_WIDTH_MM}mm !important;
+    max-width: ${THERMAL_WIDTH_MM}mm !important;
+    margin: 0 !important;
+    padding: 1mm 1mm 0 !important;
+    box-sizing: border-box;
+    background: #fff;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  .tr-center { text-align: center; }
+  .tr-bold { font-weight: 700; color: #000 !important; }
+  .tr-divider { border-top: 1px dashed #000; margin: 4px 0; }
+  .tr-muted { font-size: 12px; color: #000 !important; opacity: 1; }
+  .tr-business-name { font-size: 15px; font-weight: 700; line-height: 1.2; color: #000 !important; }
+  .tr-items { width: 100%; border-collapse: collapse; }
+  .tr-items th, .tr-items td { padding: 1px 0; vertical-align: top; font-size: 14px; color: #000 !important; }
+  .tr-items th { border-bottom: 1px solid #000; font-size: 12px; }
+  .tr-items .tr-qty { width: 22%; text-align: right; }
+  .tr-line { border-bottom: 1px solid #000; min-height: 16px; margin: 2px 0 6px; }
+  .tr-field { margin-top: 4px; color: #000 !important; }
+  .tr-note {
+    font-size: 11px;
+    margin-top: 4px;
+    line-height: 1.35;
+    font-style: italic;
+    text-align: center;
+    color: #000 !important;
+  }
+  .tr-feedback {
+    margin-top: 4px;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    width: 100%;
+    height: 28mm;
+    max-height: 28mm;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #fff !important;
+    border: 1.5px solid #000 !important;
+    box-sizing: border-box;
+    line-height: 0;
+  }
+  .tr-feedback-qr {
+    flex: 0 0 28mm;
+    width: 28mm;
+    height: 28mm;
+    margin: 0;
+    padding: 0;
+    background: #fff !important;
+    border-right: 1.5px solid #000 !important;
+    box-sizing: border-box;
+    line-height: 0;
+  }
+  .tr-feedback-qr img {
+    display: block;
+    width: 26mm;
+    height: 26mm;
+    margin: 1mm;
+    padding: 0;
+    border: 0;
+    object-fit: contain;
+  }
+  .tr-feedback-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 28mm;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    background: #fff !important;
+    line-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tr-feedback-label img {
+    display: block;
+    width: 100%;
+    height: 22mm;
+    max-height: 22mm;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    object-fit: contain;
+  }
+`;
+
+function waitForImages(root) {
+  const imgs = Array.from(root.querySelectorAll("img"));
+  if (imgs.length === 0) return Promise.resolve();
+  return Promise.all(
+    imgs.map((img) =>
+      img.complete
+        ? Promise.resolve()
+        : new Promise((resolve) => {
+            img.addEventListener("load", resolve, { once: true });
+            img.addEventListener("error", resolve, { once: true });
+          }),
+    ),
+  );
+}
+
+function cleanupDoPrintFrame(frame) {
+  if (!frame) return;
+  frame.style.cssText =
+    "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
 }
 
 /** Print on-page thermal Delivery Order / Goods Issue Note slip(s). */
 export function printThermalDeliveryOrder() {
   const nodes = Array.from(
-    document.querySelectorAll(
-      ".thermal-delivery-order-root, .thermal-do-root",
-    ),
+    document.querySelectorAll(".thermal-delivery-order-root, .thermal-do-root"),
   ).filter((el, idx, arr) => arr.indexOf(el) === idx);
   if (!nodes.length) {
     window.print();
     return;
   }
 
-  const frame = ensureThermalPrintFrame();
-  const doc = frame.contentDocument || frame.contentWindow?.document;
-  if (!doc) {
-    window.print();
-    return;
-  }
+  const run = async () => {
+    let frame = document.getElementById("thermal-print-frame");
+    if (frame) frame.remove();
+    frame = document.createElement("iframe");
+    frame.id = "thermal-print-frame";
+    frame.setAttribute("title", "Thermal dispatch print");
+    document.body.appendChild(frame);
+    frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${THERMAL_WIDTH_MM}mm;height:auto;min-height:0;border:0;opacity:1;pointer-events:none;z-index:-1;`;
 
-  doc.open();
-  doc.write(`<!doctype html><html><head><title>Dispatch Slip</title>
-    <style>
-      @page { size: ${THERMAL_WIDTH_MM}mm auto; margin: 0; }
-      html, body {
-        margin: 0 !important;
-        padding: 0 !important;
-        width: ${THERMAL_WIDTH_MM}mm !important;
-        background: #fff !important;
-        color: #000 !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-      * {
-        color: #000 !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-      .tr-center { text-align: center; }
-      .tr-bold { font-weight: 700; color: #000 !important; }
-      .tr-divider { border-top: 1px dashed #000; margin: 4px 0; }
-      .tr-muted { font-size: 12px; color: #000 !important; opacity: 1; }
-      .tr-business-name { font-size: 15px; font-weight: 700; line-height: 1.2; color: #000 !important; }
-      .tr-items { width: 100%; border-collapse: collapse; }
-      .tr-items th, .tr-items td { padding: 1px 0; vertical-align: top; font-size: 14px; color: #000 !important; }
-      .tr-items th { border-bottom: 1px solid #000; font-size: 12px; }
-      .tr-items .tr-qty { width: 22%; text-align: right; }
-      .tr-line { border-bottom: 1px solid #000; min-height: 16px; margin: 2px 0 6px; }
-      .tr-field { margin-top: 4px; color: #000 !important; }
-      .tr-note {
-        font-size: 11px;
-        margin-top: 4px;
-        line-height: 1.35;
-        font-style: italic;
-        text-align: center;
-        color: #000 !important;
-      }
-      .tr-feedback {
-        margin-top: 4px;
-        display: flex;
-        flex-direction: row;
-        align-items: stretch;
-        width: 100%;
-        height: 16mm;
-        max-height: 16mm;
-        gap: 0;
-        padding: 0;
-        overflow: hidden;
-        background: #fff !important;
-        border: 1.5px solid #000 !important;
-        box-sizing: border-box;
-        line-height: 0;
-      }
-      .tr-feedback-qr {
-        flex: 0 0 16mm;
-        width: 16mm;
-        height: 16mm;
-        margin: 0;
-        padding: 0;
-        background: #fff !important;
-        border-right: 1.5px solid #000 !important;
-        box-sizing: border-box;
-        line-height: 0;
-      }
-      .tr-feedback-qr img {
-        display: block;
-        width: 16mm;
-        height: 16mm;
-        margin: 0;
-        padding: 0;
-        border: 0;
-        object-fit: contain;
-      }
-      .tr-feedback-label {
-        flex: 1 1 auto;
-        min-width: 0;
-        height: 16mm;
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-        background: #fff !important;
-        line-height: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .tr-feedback-label img {
-        display: block;
-        width: 100%;
-        height: 14mm;
-        max-height: 14mm;
-        margin: 0;
-        padding: 0;
-        border: 0;
-        object-fit: contain;
-      }
-      .thermal-cut-mark {
-        display: block;
-        width: ${THERMAL_WIDTH_MM}mm;
-        margin: 2mm 0 3mm;
-        text-align: center;
-        font-family: "Courier New", Courier, monospace;
-        font-size: 10px;
-      }
-      .thermal-cut-mark::before {
-        content: "- - - - - cut here - - - - -";
-        display: block;
-      }
-    </style></head><body></body></html>`);
-  doc.close();
-
-  nodes.forEach((node, idx) => {
-    const clone = node.cloneNode(true);
-    clone.classList.remove("thermal-do-preview");
-    clone.style.display = "block";
-    clone.style.width = `${THERMAL_WIDTH_MM}mm`;
-    clone.style.maxWidth = `${THERMAL_WIDTH_MM}mm`;
-    clone.style.margin = "0";
-    clone.style.padding = "1mm";
-    clone.style.fontFamily = '"Courier New", Courier, monospace';
-    clone.style.fontSize = "15px";
-    clone.style.lineHeight = "1.25";
-    clone.style.color = "#000";
-    clone.style.background = "#fff";
-    clone.style.boxSizing = "border-box";
-    doc.body.appendChild(clone);
-    if (idx < nodes.length - 1) {
-      const cut = doc.createElement("div");
-      cut.className = "thermal-cut-mark";
-      cut.setAttribute("aria-hidden", "true");
-      doc.body.appendChild(cut);
+    const doc = frame.contentDocument || frame.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
     }
-  });
 
-  setTimeout(() => {
+    doc.open();
+    doc.write(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Dispatch Slip</title><style>${THERMAL_DO_IFRAME_CSS}</style></head><body></body></html>`,
+    );
+    doc.close();
+
+    const clones = nodes.map((node) => {
+      const clone = node.cloneNode(true);
+      clone.classList.remove("thermal-do-preview");
+      clone.style.cssText = `display:block;width:${THERMAL_WIDTH_MM}mm;max-width:${THERMAL_WIDTH_MM}mm;margin:0;padding:1mm 1mm 0;background:#fff;box-sizing:border-box;height:auto;min-height:0;font-family:"Courier New",Courier,monospace;font-size:15px;line-height:1.25;color:#000;`;
+      doc.body.appendChild(clone);
+      return clone;
+    });
+
+    await Promise.all(clones.map((clone) => waitForImages(clone)));
+    await new Promise((r) => setTimeout(r, 350));
+
     try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvases = [];
+      for (const clone of clones) {
+        canvases.push(await captureThermalNode(clone, html2canvas));
+      }
+      await printThermalCanvases(canvases);
+      cleanupDoPrintFrame(frame);
+    } catch (err) {
+      console.warn("thermal DO capture failed, HTML print:", err);
+      const mmHeights = clones.map((clone) =>
+        Math.max(35, Math.ceil((clone.scrollHeight * 25.4) / 96) + 2),
+      );
+      const pageH = Math.max(...mmHeights);
+      const pageStyle = doc.createElement("style");
+      pageStyle.textContent = `@page { size: ${THERMAL_WIDTH_MM}mm ${pageH}mm; margin: 0; }
+        html, body { margin: 0; padding: 0; height: auto; }`;
+      doc.head.appendChild(pageStyle);
       frame.contentWindow?.focus();
       frame.contentWindow?.print();
-    } catch (err) {
-      console.warn("thermal DO print failed:", err);
-      window.print();
+      setTimeout(() => cleanupDoPrintFrame(frame), 1500);
     }
-  }, 250);
+  };
+
+  void run();
 }
