@@ -251,12 +251,25 @@ function isTaxInclusive(tax, vatPolicy = "vat_exclusive") {
   return vatPolicy === "vat_inclusive";
 }
 
-function isOutputVatTax(tax) {
-  const description = (tax?.description || "").toLowerCase();
+function isInputVatTax(tax) {
+  const description = String(tax?.description || tax?.name || "").toLowerCase();
+  const category = String(tax?.tax_category || tax?.category || "").toLowerCase();
   return (
-    description.includes("vat") ||
+    description.includes("input vat") ||
+    description.includes("input-vat") ||
+    category.includes("purchase") ||
+    category.includes("input")
+  );
+}
+
+function isOutputVatTax(tax) {
+  if (isInputVatTax(tax)) return false;
+  const description = String(tax?.description || tax?.name || "").toLowerCase();
+  return (
     description.includes("output vat") ||
-    description.includes("value added tax")
+    description.includes("output-vat") ||
+    description.includes("value added tax") ||
+    description.includes("vat")
   );
 }
 import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
@@ -951,17 +964,9 @@ function MakeSale() {
     [taxes],
   );
 
-  // Filter Output VAT taxes (taxes with "VAT" or "Output VAT" in description)
+  // Filter Output VAT taxes (sales VAT only — never Input VAT)
   const outputVATTaxes = useMemo(
-    () =>
-      salesTaxes.filter((tax) => {
-        const description = (tax.description || "").toLowerCase();
-        return (
-          description.includes("vat") ||
-          description.includes("output vat") ||
-          description.includes("value added tax")
-        );
-      }),
+    () => (salesTaxes || []).filter((tax) => isOutputVatTax(tax)),
     [salesTaxes],
   );
   const [showServices, setShowServices] = useState(false);
@@ -1574,13 +1579,26 @@ function MakeSale() {
 
       const pickOne = (ids) => {
         if (!ids.length) return [];
-        if (ids.length === 1) return ids;
+        const eligible = ids.filter((id) => {
+          const tax = filteredOutputVATTaxes.find((t) => t.id === id);
+          return tax && !isInputVatTax(tax);
+        });
+        const pool = eligible.length ? eligible : ids;
+        if (pool.length === 1) return pool;
+        const outputNamed = filteredOutputVATTaxes.find(
+          (t) =>
+            pool.includes(t.id) &&
+            String(t.description || "")
+              .toLowerCase()
+              .includes("output"),
+        );
+        if (outputNamed) return [outputNamed.id];
         const exclusive = filteredOutputVATTaxes.find(
           (t) =>
-            ids.includes(t.id) && !isTaxInclusive(t, "vat_exclusive"),
+            pool.includes(t.id) && !isTaxInclusive(t, "vat_exclusive"),
         );
         if (exclusive) return [exclusive.id];
-        return [ids[0]];
+        return [pool[0]];
       };
 
       if (validIds.length > 0) {
@@ -1595,18 +1613,25 @@ function MakeSale() {
       }
 
       const preferred =
+        filteredOutputVATTaxes.find((t) =>
+          String(t.description || "")
+            .toLowerCase()
+            .includes("output"),
+        ) ||
         filteredOutputVATTaxes.find(
           (t) => !isTaxInclusive(t, "vat_exclusive"),
-        ) || filteredOutputVATTaxes[0];
+        ) ||
+        filteredOutputVATTaxes[0];
       return preferred ? [preferred.id] : [];
     });
   }, [filteredOutputVATTaxes]);
 
   const lineTaxOptions = useMemo(() => {
     const map = new Map();
-    [...(filteredSalesTaxes || []), ...(filteredOutputVATTaxes || [])].forEach(
+    [...(filteredOutputVATTaxes || []), ...(filteredSalesTaxes || [])].forEach(
       (t) => {
-        if (t?.id != null) map.set(t.id, t);
+        if (t?.id == null || isInputVatTax(t)) return;
+        map.set(t.id, t);
       },
     );
     return Array.from(map.values());
@@ -1616,6 +1641,25 @@ function MakeSale() {
     if (selectedOutputVAT.length) return selectedOutputVAT[0];
     return lineTaxOptions[0]?.id ?? null;
   }, [selectedOutputVAT, lineTaxOptions]);
+
+  useEffect(() => {
+    if (!lineTaxOptions.length) return;
+    const validIds = new Set(lineTaxOptions.map((t) => String(t.id)));
+    const fallback = defaultLineTaxId || lineTaxOptions[0]?.id || null;
+    if (!fallback) return;
+    setCart((prev) => {
+      let changed = false;
+      const next = prev.map((item) => {
+        if (item.proBono || !isProductTaxable(item.taxable)) return item;
+        if (item.line_tax_id && validIds.has(String(item.line_tax_id))) {
+          return item;
+        }
+        changed = true;
+        return { ...item, line_tax_id: fallback };
+      });
+      return changed ? next : prev;
+    });
+  }, [lineTaxOptions, defaultLineTaxId]);
 
   const getChartOfAccounts = useCallback(() => {
     if (!activeBusiness?.id) return;

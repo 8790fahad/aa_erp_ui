@@ -259,7 +259,7 @@ function parseFormattedAmount(value) {
 }
 
 /** Cash / Transfer / Credit tabs — credit_split appears on all three. */
-function matchesMethod(paymentType, method) {
+function matchesMethod(paymentType, method, row = null) {
   const pt = normalizePaymentMode(paymentType);
   if (method === "cash")
     return pt === "cash" || pt === "split" || pt === "credit_split";
@@ -268,7 +268,26 @@ function matchesMethod(paymentType, method) {
   if (method === "credit") return pt === "credit_split";
   if (method === "credit_approval") return pt === "credit";
   if (method === "deposit") return pt === "deposit";
-  return true;
+  if (method === "discount") {
+    return (
+      Boolean(row?.has_discount) ||
+      Number(row?.discount_amount) > 0 ||
+      (Array.isArray(row?.history) &&
+        row.history.some((h) =>
+          String(h?.note || "")
+            .toLowerCase()
+            .includes("discount approved"),
+        ))
+    );
+  }
+  if (method === "mode") {
+    return (
+      row?.status === "awaiting_payment_mode_approval" ||
+      Boolean(row?.proposed_payment_type) ||
+      Boolean(row?.pending_payment_mode)
+    );
+  }
+  return false;
 }
 
 /** Show split / credit_split while any balance remains to collect. */
@@ -883,7 +902,13 @@ export default function ReceivePayment() {
           r.kind === "deposit_applied"
         );
       }
-      return matchesMethod(r.payment_type, methodTab);
+      if (methodTab === "discount") {
+        return matchesMethod(r.payment_type, "discount", r);
+      }
+      if (methodTab === "mode") {
+        return matchesMethod(r.payment_type, "mode", r);
+      }
+      return matchesMethod(r.payment_type, methodTab, r);
     });
     const q = search.trim().toLowerCase();
     if (!q) return list;
@@ -1561,7 +1586,7 @@ export default function ReceivePayment() {
       {
         facilityId: activeBusiness.id,
         saleCode: row.sale_code,
-        action: "advance",
+        action: "approve_discount",
         updated_by: user?.id,
         note: "Discount approved",
       },
@@ -2585,6 +2610,11 @@ export default function ReceivePayment() {
                         </td>
                         <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
                           ₦{formatNumber1(row.amount)}
+                          {Number(row.discount_amount) > 0 ? (
+                            <div className="mt-0.5 text-[11px] font-medium text-orange-700">
+                              Discount −₦{formatNumber1(row.discount_amount)}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-slate-500">
                           {row.createdAt
@@ -2692,13 +2722,15 @@ export default function ReceivePayment() {
               </div>
             )
           ) : filteredHistory.length === 0 ? (
-            <div className="px-4 py-16 text-center text-sm text-slate-500">
+              <div className="px-4 py-16 text-center text-sm text-slate-500">
               No confirmed{" "}
               {methodTab === "credit"
                 ? "credited invoices"
                 : methodTab === "deposit"
                   ? "deposit applications"
-                  : "payments"}{" "}
+                  : methodTab === "discount"
+                    ? "discounted invoices"
+                    : "payments"}{" "}
               for{" "}
               {historyFrom === historyTo
                 ? moment(historyFrom).format("DD MMM YYYY")
@@ -2772,6 +2804,11 @@ export default function ReceivePayment() {
                       </td>
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">
                         ₦{formatNumber1(row.amount)}
+                        {Number(row.discount_amount) > 0 ? (
+                          <div className="mt-0.5 text-[11px] font-medium text-orange-700">
+                            Discount −₦{formatNumber1(row.discount_amount)}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
