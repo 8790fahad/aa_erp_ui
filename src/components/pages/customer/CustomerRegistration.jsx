@@ -95,6 +95,23 @@ const CustomerRegistartion = ({
     return branches.filter((b) => userBranchIds.includes(Number(b.id)));
   }, [branches, userBranchIds]);
 
+  const isDefaultWarehouse = (b) =>
+    b?.is_default === true || b?.is_default === 1 || b?.is_default === "1";
+
+  const defaultWarehouseId = useMemo(() => {
+    const def = visibleBranches.find(isDefaultWarehouse);
+    const pick = def || visibleBranches[0];
+    return pick ? String(pick.id) : "";
+  }, [visibleBranches]);
+
+  const resolveWarehouseId = useCallback(
+    (current) => {
+      if (current && String(current).trim()) return String(current);
+      return defaultWarehouseId;
+    },
+    [defaultWarehouseId],
+  );
+
   const getInitialFormValues = useCallback(
     () => ({
       entity_type: "business",
@@ -118,7 +135,7 @@ const CustomerRegistartion = ({
       obdate: "",
       receivable_code: activeBusiness?.receivable_code || "",
       receivable_accural_code: activeBusiness?.receivable_accural_code || "",
-      branch_id: userBranchId ? String(userBranchId) : "",
+      branch_id: "",
       // Address
       billing_attention: "",
       billing_country: "Nigeria",
@@ -141,7 +158,6 @@ const CustomerRegistartion = ({
     [
       activeBusiness?.receivable_code,
       activeBusiness?.receivable_accural_code,
-      userBranchId,
     ],
   );
 
@@ -230,7 +246,8 @@ const CustomerRegistartion = ({
         receivable_code: selectedCustomer.receivable_code || "",
         receivable_accural_code: selectedCustomer.receivable_accural_code || "",
         branch_id:
-          selectedCustomer.branch_id != null
+          selectedCustomer.branch_id != null &&
+          String(selectedCustomer.branch_id).trim() !== ""
             ? String(selectedCustomer.branch_id)
             : userBranchId
               ? String(userBranchId)
@@ -249,14 +266,10 @@ const CustomerRegistartion = ({
     if (!visibleBranches.length || selectedCustomer) return;
     setForm((prev) => {
       if (prev.branch_id) return prev;
-      const isDefaultBranch = (b) =>
-        b?.is_default === 1 || b?.is_default === "1" || b?.is_default === true;
-      const fromUser =
-        userBranchId &&
-        visibleBranches.find((b) => String(b.id) === String(userBranchId));
       const target =
-        fromUser ||
-        visibleBranches.find(isDefaultBranch) ||
+        visibleBranches.find(isDefaultWarehouse) ||
+        (userBranchId &&
+          visibleBranches.find((b) => String(b.id) === String(userBranchId))) ||
         visibleBranches[0];
       return target ? { ...prev, branch_id: String(target.id) } : prev;
     });
@@ -372,6 +385,10 @@ const CustomerRegistartion = ({
     if (!String(form.receivable_accural_code || "").trim()) {
       newErrors.receivable_accural_code = "Customer deposits account is required";
     }
+    if (!resolveWarehouseId(form.branch_id)) {
+      newErrors.branch_id =
+        "Warehouse is required. Set a default warehouse under Admin → Manage Warehouses.";
+    }
     const parsedOpeningBalance = form.opening_balance
       ? parseFloat(parseNumberFromFormatted(form.opening_balance)) || 0
       : 0;
@@ -383,7 +400,11 @@ const CustomerRegistartion = ({
     }
     setErrors(newErrors);
     if (newErrors.address) setActiveTab("address");
-    else if (newErrors.receivable_code || newErrors.receivable_accural_code)
+    else if (
+      newErrors.receivable_code ||
+      newErrors.receivable_accural_code ||
+      newErrors.branch_id
+    )
       setActiveTab("other");
     return Object.keys(newErrors).length === 0;
   };
@@ -479,7 +500,7 @@ const CustomerRegistartion = ({
           ...basePayload,
           receivable_code: form.receivable_code,
           receivable_accural_code: form.receivable_accural_code,
-          branch_id: form.branch_id || null,
+          branch_id: resolveWarehouseId(form.branch_id) || null,
         };
         _postApi(
           `/create-customer`,
@@ -533,7 +554,7 @@ const CustomerRegistartion = ({
           facilityId,
           receivable_code: form.receivable_code,
           deposit_code: form.receivable_accural_code,
-          branch_id: form.branch_id || null,
+          branch_id: resolveWarehouseId(form.branch_id) || null,
           created_by: user.id,
           opening_balance_equity: activeBusiness.opening_balance_equity,
         };
@@ -922,7 +943,7 @@ const CustomerRegistartion = ({
                 </div>
                 <div>
                   <ShadcnLabel htmlFor="branch_id" className={labelClass}>
-                    Warehouse
+                    Warehouse <span className="text-red-500">*</span>
                   </ShadcnLabel>
                   <select
                     id="branch_id"
@@ -931,13 +952,28 @@ const CustomerRegistartion = ({
                     onChange={handleChange}
                     className={inputClass}
                   >
-                    <option value="">Select warehouse...</option>
+                    <option value="">
+                      {defaultWarehouseId
+                        ? "Use default warehouse"
+                        : "Select warehouse..."}
+                    </option>
                     {visibleBranches.map((b) => (
                       <option key={b.id} value={String(b.id)}>
                         {b.branch_name}
+                        {isDefaultWarehouse(b) ? " (Default)" : ""}
                       </option>
                     ))}
                   </select>
+                  {errors.branch_id ? (
+                    <p className="mt-1 text-xs text-red-500">
+                      {errors.branch_id}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      If you leave this blank, the default warehouse is used.
+                      Every customer must have a warehouse.
+                    </p>
+                  )}
                 </div>
                 {!selectedCustomer && (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

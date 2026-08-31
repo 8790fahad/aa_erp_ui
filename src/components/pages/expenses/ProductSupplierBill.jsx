@@ -35,7 +35,23 @@ import CashTransferPaymentFields, {
   parseMoneyInput,
 } from "@/components/common/CashTransferPaymentFields";
 import CreatableSelect from "react-select/creatable";
-import { isProductTaxable } from "@/utils/taxableStatus";
+import {
+  isProductTaxable,
+  normalizeTaxableStatus,
+  taxableStatusStyle,
+  TAXABLE_STATUS_OPTIONS,
+} from "@/utils/taxableStatus";
+
+function applyLineTaxable(item, nextStatus, defaultLineTaxId) {
+  const taxable = normalizeTaxableStatus(nextStatus, "Taxable");
+  return {
+    ...item,
+    taxable,
+    line_tax_id: isProductTaxable(taxable)
+      ? item.line_tax_id || defaultLineTaxId || null
+      : null,
+  };
+}
 
 const initialItemForm = {
   item_name: "",
@@ -313,14 +329,14 @@ export default function ProductSupplierBill() {
     }
     const qty = Number(quantity) > 0 ? Number(quantity) : 1;
     const cost = parseFloat(product.cost_price || 0) || 0;
-    const isTaxable = isProductTaxable(product.taxable || "Taxable");
-    const lineTaxId = isTaxable ? defaultLineTaxId : null;
+    const taxable = normalizeTaxableStatus(product.taxable, "Taxable");
+    const lineTaxId = isProductTaxable(taxable) ? defaultLineTaxId : null;
     const newItem = {
       _id: uuidv4(),
       item_name: product.name,
       sku: product.sku,
       item_type: product.item_type || "Resalable",
-      taxable: isTaxable ? "Taxable" : "Non-Taxable",
+      taxable,
       line_tax_id: lineTaxId,
       quantity: formatNumberWithCommas(String(qty)),
       cost: cost > 0 ? formatNumberWithCommas(String(cost)) : "",
@@ -525,7 +541,7 @@ export default function ProductSupplierBill() {
   useEffect(() => {
     const usedIds = new Set(
       items
-        .filter((i) => i.isProductTaxable(taxable) && i.line_tax_id)
+        .filter((i) => isProductTaxable(i.taxable) && i.line_tax_id)
         .map((i) => String(i.line_tax_id)),
     );
     setSelectedTaxes(lineTaxOptions.filter((t) => usedIds.has(String(t.id))));
@@ -1024,7 +1040,10 @@ export default function ProductSupplierBill() {
             p.sku === (item.item_code || item.sku) || p.name === item.item_name,
         ) || null;
 
-      const taxable = matchedProduct?.taxable || item.taxable || "Non-Taxable";
+      const taxable = normalizeTaxableStatus(
+        matchedProduct?.taxable || item.taxable,
+        "Non-Taxable",
+      );
       return {
         _id: uuidv4(),
         item_name: item.item_name || "",
@@ -1578,9 +1597,11 @@ export default function ProductSupplierBill() {
                                 const costNum =
                                   parseFloat(product.cost_price || 0) || 0;
                                 const total = qty * costNum;
-                                const isTaxable =
-                                  isProductTaxable(product.taxable || "Taxable");
-                                const lineTaxId = isTaxable
+                                const taxable = normalizeTaxableStatus(
+                                  product.taxable,
+                                  "Taxable",
+                                );
+                                const lineTaxId = isProductTaxable(taxable)
                                   ? item.line_tax_id || defaultLineTaxId
                                   : null;
                                 setItems((prev) =>
@@ -1591,9 +1612,7 @@ export default function ProductSupplierBill() {
                                           item_name: product.name || "",
                                           sku: product.sku || "",
                                           item_type: product.item_type,
-                                          taxable: isTaxable
-                                            ? "Taxable"
-                                            : "Non-Taxable",
+                                          taxable,
                                           line_tax_id: lineTaxId,
                                           cost:
                                             costNum > 0
@@ -1647,39 +1666,36 @@ export default function ProductSupplierBill() {
                           />
                           {item.sku && (
                             <div className="mt-1.5 flex items-center gap-2">
-                              <button
-                                type="button"
-                                title="Click to toggle taxable"
-                                onClick={() => {
+                              <select
+                                title="VAT status"
+                                value={normalizeTaxableStatus(
+                                  item.taxable,
+                                  "Taxable",
+                                )}
+                                onChange={(e) => {
+                                  const next = e.target.value;
                                   setItems((prev) =>
-                                    prev.map((i) => {
-                                      if (i._id !== item._id) return i;
-                                      if (i.isProductTaxable(taxable)) {
-                                        return {
-                                          ...i,
-                                          taxable: "Non-Taxable",
-                                          line_tax_id: null,
-                                        };
-                                      }
-                                      return {
-                                        ...i,
-                                        taxable: "Taxable",
-                                        line_tax_id:
-                                          i.line_tax_id || defaultLineTaxId,
-                                      };
-                                    }),
+                                    prev.map((i) =>
+                                      i._id === item._id
+                                        ? applyLineTaxable(
+                                            i,
+                                            next,
+                                            defaultLineTaxId,
+                                          )
+                                        : i,
+                                    ),
                                   );
                                 }}
-                                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                  isProductTaxable(item.taxable)
-                                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                className={`max-w-[8.5rem] cursor-pointer rounded-full border-0 px-1.5 py-0.5 text-[10px] font-semibold outline-none ${
+                                  taxableStatusStyle(item.taxable).badgeClass
                                 }`}
                               >
-                                {isProductTaxable(item.taxable)
-                                  ? "Taxable"
-                                  : "Not taxable"}
-                              </button>
+                                {TAXABLE_STATUS_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
                               <span className="text-xs text-slate-500">
                                 {item.sku}
                               </span>
@@ -1759,17 +1775,23 @@ export default function ProductSupplierBill() {
                             onChange={(e) => {
                               const taxId = e.target.value || null;
                               setItems((prev) =>
-                                prev.map((i) =>
-                                  i._id === item._id
-                                    ? {
-                                        ...i,
-                                        line_tax_id: taxId,
-                                        taxable: taxId
-                                          ? "Taxable"
-                                          : "Non-Taxable",
-                                      }
-                                    : i,
-                                ),
+                                prev.map((i) => {
+                                  if (i._id !== item._id) return i;
+                                  if (taxId) {
+                                    return {
+                                      ...i,
+                                      line_tax_id: taxId,
+                                      taxable: "Taxable",
+                                    };
+                                  }
+                                  return applyLineTaxable(
+                                    { ...i, line_tax_id: null },
+                                    isProductTaxable(i.taxable)
+                                      ? "Non-Taxable"
+                                      : i.taxable,
+                                    defaultLineTaxId,
+                                  );
+                                }),
                               );
                             }}
                             className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)] disabled:bg-slate-50"

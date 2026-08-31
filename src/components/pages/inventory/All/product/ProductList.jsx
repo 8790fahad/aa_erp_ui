@@ -55,6 +55,22 @@ import {
 } from "@/components/ui/select";
 import { apiURL, _fetchApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
+import {
+  formatNumberWithCommas,
+  filterJournalAmountInput,
+} from "@/utilities";
+
+const JOURNAL_QTY_INPUT_CLASS =
+  "h-9 rounded-md border border-slate-200 bg-white px-3 text-center text-sm tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20 disabled:bg-slate-50 disabled:text-slate-400";
+
+function formatJournalQtyInput(value) {
+  const withoutCommas = String(value ?? "").replace(/,/g, "");
+  const sanitized = filterJournalAmountInput(withoutCommas);
+  const parts = sanitized.split(".");
+  const numericValue =
+    parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : sanitized;
+  return formatNumberWithCommas(numericValue);
+}
 
 const legacySalesTargetFromProduct = (item) => {
   if (!item) return { period: "none", quantity: "" };
@@ -64,6 +80,8 @@ const legacySalesTargetFromProduct = (item) => {
     return { period: "weekly", quantity: String(item.weekly_sales_limit) };
   if (item.monthly_sales_limit)
     return { period: "monthly", quantity: String(item.monthly_sales_limit) };
+  if (item.yearly_sales_limit)
+    return { period: "yearly", quantity: String(item.yearly_sales_limit) };
   return { period: "none", quantity: "" };
 };
 
@@ -111,6 +129,7 @@ const SALES_TARGET_PERIOD_OPTIONS = [
   { value: "daily", label: "Daily" },
   { value: "weekly", label: "Weekly" },
   { value: "monthly", label: "Monthly" },
+  { value: "yearly", label: "Yearly" },
 ];
 
 const EMPTY_STOP_SALES_MODAL = {
@@ -2107,7 +2126,7 @@ export default function ProductList() {
           cancelText="Cancel"
           confirmLoading={savingSalesTarget}
           centered
-          width={640}
+          width={720}
           destroyOnClose
         >
           <p className="mb-5 text-sm leading-relaxed text-gray-600">
@@ -2135,17 +2154,19 @@ export default function ProductList() {
               <label className="mb-2 block text-sm font-medium text-gray-700">
                 Quantity for all selected stores
               </label>
-              <Input
-                type="number"
-                min={1}
-                step="1"
-                className="mb-4"
-                size="large"
+              <input
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                className={`${JOURNAL_QTY_INPUT_CLASS} mb-4 w-full`}
+                style={{ textAlign: "center" }}
                 value={salesTargetModal.quantity}
                 onChange={(e) =>
-                  applySalesTargetToAll({ quantity: e.target.value })
+                  applySalesTargetToAll({
+                    quantity: formatJournalQtyInput(e.target.value),
+                  })
                 }
-                placeholder="e.g. 30"
+                placeholder="0.00"
               />
             </>
           ) : null}
@@ -2188,7 +2209,7 @@ export default function ProductList() {
                       checked={checked}
                       onChange={() => toggleSalesTargetWarehouse(id)}
                     />
-                    <span className="flex-1 text-slate-800">
+                    <span className="min-w-0 flex-1 truncate text-slate-800">
                       {b.branch_name || `Warehouse ${b.id}`}
                     </span>
                     {salesTargetModal.period !== "none" ? (
@@ -2205,7 +2226,7 @@ export default function ProductList() {
                           onChange={(e) =>
                             setSalesTargetPeriod(id, e.target.value)
                           }
-                          className="h-8 rounded-md border border-slate-200 bg-white px-1.5 text-xs text-slate-700 disabled:bg-slate-50 disabled:text-slate-400"
+                          className="h-9 w-[7.25rem] shrink-0 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 disabled:bg-slate-50 disabled:text-slate-400"
                         >
                           {SALES_TARGET_PERIOD_OPTIONS.map((opt) => (
                             <option key={opt.value} value={opt.value}>
@@ -2214,9 +2235,9 @@ export default function ProductList() {
                           ))}
                         </select>
                         <input
-                          type="number"
-                          min={1}
-                          step="1"
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
                           disabled={!checked}
                           value={
                             checked
@@ -2224,10 +2245,14 @@ export default function ProductList() {
                               : ""
                           }
                           onChange={(e) =>
-                            setSalesTargetQuantity(id, e.target.value)
+                            setSalesTargetQuantity(
+                              id,
+                              formatJournalQtyInput(e.target.value),
+                            )
                           }
-                          placeholder="Qty"
-                          className="h-8 w-16 rounded-md border border-slate-200 px-2 text-right text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                          placeholder="0.00"
+                          className={`${JOURNAL_QTY_INPUT_CLASS} w-[8.5rem] shrink-0`}
+                          style={{ textAlign: "center" }}
                         />
                       </>
                     ) : null}

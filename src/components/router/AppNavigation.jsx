@@ -547,6 +547,10 @@ const routeModules = {
     element: <Outlet />,
     children: [
       {
+        path: "credit-approval",
+        element: <ReceivePayment />,
+      },
+      {
         path: "verification-points",
         element: <ReceivePayment />,
       },

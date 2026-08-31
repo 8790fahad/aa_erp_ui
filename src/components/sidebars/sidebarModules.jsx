@@ -316,7 +316,6 @@ export const modules = [
           "Collection Points",
           "Cash Collection",
           "Transfer Collection",
-          "Credit Collection",
           "Switch Payment Mode",
           "Approve Payment Mode Switch",
           "Collection Reconciliation",
@@ -327,7 +326,7 @@ export const modules = [
         subFunctionalities: [
           { title: "Cash Collection" },
           { title: "Transfer Collection" },
-          { title: "Credit Collection" },
+          { title: "Apply Deposit" },
           { title: "Switch Payment Mode" },
           { title: "Approve Payment Mode Switch" },
           { title: "Collection Reconciliation" },
@@ -341,8 +340,26 @@ export const modules = [
         ],
       },
       {
+        title: "Credit Approval",
+        url: "/app/payments/credit-approval",
+        functionality: [
+          "Credit Collection",
+          "Verification Points",
+          "Collection Points",
+          "Receive Payment",
+          "Payments",
+        ],
+        access: [
+          "services",
+          "retailers",
+          "recycling",
+          "manufacturing",
+          "contractors",
+        ],
+      },
+      {
         title: "Apply Deposit",
-        url: "/app/payments/apply-advance",
+        url: "/app/payments/verification-points?tab=deposit",
         functionality: [
           "Receive Payment",
           "Payments",

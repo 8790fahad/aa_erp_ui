@@ -36,7 +36,97 @@ function salesLimitPeriodLabel(period) {
   if (period === "daily") return "daily";
   if (period === "weekly") return "weekly";
   if (period === "monthly") return "monthly";
+  if (period === "yearly") return "yearly";
   return "sales";
+}
+
+const PAYMENT_MODE_OPTIONS = [
+  { id: "cash", label: "Cash" },
+  { id: "transfer", label: "Transfer" },
+  { id: "credit", label: "Credit" },
+  { id: "deposit", label: "Apply Deposit" },
+];
+
+function encodePaymentModes(modes) {
+  const set = new Set(modes);
+  const hasCash = set.has("cash");
+  const hasTransfer = set.has("transfer");
+  const hasCredit = set.has("credit");
+  const hasDeposit = set.has("deposit");
+  if (hasDeposit && !hasCash && !hasTransfer) return "deposit";
+  if (hasCredit && (hasCash || hasTransfer)) return "credit_split";
+  if (hasCredit && !hasCash && !hasTransfer) return "CREDIT";
+  if (hasCash && hasTransfer) return "split";
+  if (hasTransfer) return "bank";
+  return "cash";
+}
+
+function paymentModesHint(modes) {
+  const set = new Set(modes);
+  const parts = [];
+  if (set.has("deposit")) {
+    parts.push("apply customer deposit after the invoice is created");
+  }
+  if (set.has("cash") || set.has("transfer")) {
+    const collect = [
+      set.has("cash") ? "cash" : null,
+      set.has("transfer") ? "transfer" : null,
+    ]
+      .filter(Boolean)
+      .join(" and ");
+    parts.push(`collect ${collect} at Verification Points`);
+  }
+  if (set.has("credit")) {
+    parts.push("remainder goes to Credit approval (credit limit applies)");
+  }
+  if (!parts.length) return "Select at least one payment method.";
+  return parts.join(". ") + ".";
+}
+
+/** Cash/Transfer skip credit/deposit caps. Otherwise the invoice total cannot exceed leftover credit, deposit, or both. */
+function invoiceCoverageError({
+  total,
+  hasCash,
+  hasTransfer,
+  hasCredit,
+  hasDeposit,
+  creditLimit,
+  creditOutstanding,
+  depositBalance,
+}) {
+  if (hasCash || hasTransfer) return null;
+  if (!hasCredit && !hasDeposit) return null;
+  const invoiceTotal = Number(total) || 0;
+  if (!(invoiceTotal > 0.009)) return "Invoice total must be greater than zero.";
+  const deposit = Math.max(0, Number(depositBalance) || 0);
+  const limit = Number(creditLimit) || 0;
+  const outstanding = Math.max(0, Number(creditOutstanding) || 0);
+  const unlimitedCredit = !(limit > 0);
+  const creditLeft = unlimitedCredit
+    ? Infinity
+    : Math.max(0, limit - outstanding);
+
+  const fmt = (n) => `₦${formatNumber1(n)}`;
+
+  if (hasCredit && hasDeposit) {
+    if (unlimitedCredit) return null;
+    const cap = creditLeft + deposit;
+    if (invoiceTotal > cap + 0.009) {
+      return `Invoice ${fmt(invoiceTotal)} exceeds credit available (${fmt(creditLeft)}) plus deposit (${fmt(deposit)}).`;
+    }
+    return null;
+  }
+  if (hasCredit) {
+    if (unlimitedCredit) return null;
+    if (invoiceTotal > creditLeft + 0.009) {
+      return `Invoice ${fmt(invoiceTotal)} exceeds credit available ${fmt(creditLeft)}.`;
+    }
+    return null;
+  }
+  if (invoiceTotal > deposit + 0.009) {
+    return `Invoice ${fmt(invoiceTotal)} exceeds deposit available ${fmt(deposit)}.`;
+  }
+  return null;
 }
 
 function cartQtyForSku(cart, sku, excludeId) {
@@ -170,6 +260,97 @@ function isOutputVatTax(tax) {
   );
 }
 import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
+import { Checkbox } from "@/components/ui/checkbox";
+
+function PaymentModePicker({ selected, onToggle, className = "" }) {
+  return (
+    <div className={className}>
+      <div className="flex flex-wrap gap-2">
+        {PAYMENT_MODE_OPTIONS.map((opt) => {
+          const checked = selected.includes(opt.id);
+          return (
+            <label
+              key={opt.id}
+              className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm ${
+                checked
+                  ? "border-[var(--aa-accent)] bg-[var(--aa-accent)]/5 text-slate-900"
+                  : "border-slate-300 bg-white text-slate-700"
+              }`}
+            >
+              <Checkbox
+                checked={checked}
+                onCheckedChange={() => onToggle(opt.id)}
+                className="border-slate-400 data-[state=checked]:border-[var(--aa-accent)] data-[state=checked]:bg-[var(--aa-accent)]"
+              />
+              {opt.label}
+            </label>
+          );
+        })}
+      </div>
+      <p className="mt-1 text-[11px] text-slate-500">
+        {paymentModesHint(selected)}
+      </p>
+    </div>
+  );
+}
+
+function CustomerPaymentBalances({
+  showCredit,
+  showDeposit,
+  loading,
+  creditOutstanding,
+  creditLimit,
+  depositBalance,
+  currency = "₦",
+}) {
+  if (!showCredit && !showDeposit) return null;
+  const fmt = (n) =>
+    `${currency}${formatNumber1(Math.max(0, Number(n) || 0))}`;
+  const available =
+    creditLimit > 0
+      ? Math.max(0, creditLimit - (Number(creditOutstanding) || 0))
+      : null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {showCredit ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-950">
+          {loading ? (
+            "Loading credit balance…"
+          ) : (
+            <>
+              <span className="font-semibold">Credit outstanding: </span>
+              {fmt(creditOutstanding)}
+              {creditLimit > 0 ? (
+                <>
+                  <span className="mx-1.5 text-amber-700">·</span>
+                  <span className="font-semibold">Limit: </span>
+                  {fmt(creditLimit)}
+                  <span className="mx-1.5 text-amber-700">·</span>
+                  <span className="font-semibold">Available: </span>
+                  {fmt(available)}
+                </>
+              ) : (
+                <span className="ml-1 text-amber-700">(no limit set)</span>
+              )}
+            </>
+          )}
+        </div>
+      ) : null}
+      {showDeposit ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-950">
+          {loading ? (
+            "Loading deposit balance…"
+          ) : (
+            <>
+              <span className="font-semibold">Deposit available: </span>
+              {fmt(depositBalance)}
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 // import DepartmentSelect from "@/components/common/DepartmentSelect";
 
 const normalizeScannedCode = (value) =>
@@ -659,11 +840,20 @@ function MakeSale() {
   const selectedBranch = selectedBranches[0] || "";
   const [branches, setBranches] = useState([]);
 
+  // Warehouses this user may sell from. Assigned staff see only theirs;
+  // users with no assignment (admins) see every warehouse.
+  const sellableWarehouses = useMemo(() => {
+    if (hasAssignedBranches) {
+      return branches.filter((b) => userBranchIds.includes(Number(b.id)));
+    }
+    return branches;
+  }, [branches, hasAssignedBranches, userBranchIds]);
+
+  const warehouseLabel = (b) =>
+    String(b?.branch_name || b?.storeName || b?.branch_id || "").trim();
+
   // Strict branch access: a user only ever sees the branches assigned to them.
-  const assignedBranches = useMemo(
-    () => branches.filter((b) => userBranchIds.includes(Number(b.id))),
-    [branches, userBranchIds],
-  );
+  const assignedBranches = sellableWarehouses;
 
   const selectedBranchLocation = useMemo(() => {
     if (!selectedBranch || selectedBranch === "all") return "";
@@ -672,6 +862,14 @@ function MakeSale() {
       match?.branch_name || match?.storeName || match?.branch_id || "",
     );
   }, [selectedBranch, branches]);
+
+  const selectedWarehouseName = useMemo(() => {
+    if (!selectedBranch) return "";
+    const match = sellableWarehouses.find(
+      (b) => String(b.id) === String(selectedBranch),
+    );
+    return warehouseLabel(match) || selectedBranchLocation;
+  }, [selectedBranch, sellableWarehouses, selectedBranchLocation]);
 
   const getItemBranchLocation = useCallback(
     (item) => {
@@ -826,43 +1024,91 @@ function MakeSale() {
     moment().add(30, "days").format("YYYY-MM-DD"),
   );
   /** Paid now via cash, transfer, or both (split). */
-  const [saleType, setSaleType] = useState("paid");
-  const [payWithCash, setPayWithCash] = useState(true);
+  const [saleType, setSaleType] = useState("credit");
+  const [payWithCash, setPayWithCash] = useState(false);
   const [payWithTransfer, setPayWithTransfer] = useState(false);
   const [cashPayAmount, setCashPayAmount] = useState("");
   const [transferPayAmount, setTransferPayAmount] = useState("");
-  /** Mode of payment: cash | transfer | both | credit | credit_split | deposit */
-  const [modeOfPayment, setModeOfPayment] = useState("cash");
+  /** Multi-select: cash | transfer | credit | deposit — none until customer is selected */
+  const [selectedPaymentModes, setSelectedPaymentModes] = useState([]);
   const [chequeNumber, setChequeNumber] = useState("");
 
-  const applyPaymentMode = useCallback((mode) => {
-    setModeOfPayment(mode);
-    if (mode === "deposit") {
-      // Create invoice like credit, then open Apply Deposit after save
-      setSaleType("credit");
-      setPayWithCash(false);
-      setPayWithTransfer(false);
-      return;
-    }
-    if (mode === "credit") {
-      setSaleType("credit");
-      setPayWithCash(false);
-      setPayWithTransfer(false);
-      return;
-    }
-    setSaleType("paid");
-    if (mode === "cash") {
-      setPayWithCash(true);
-      setPayWithTransfer(false);
-    } else if (mode === "transfer") {
-      setPayWithCash(false);
-      setPayWithTransfer(true);
-    } else {
-      // both | credit_split → cash + transfer at cashier
-      setPayWithCash(true);
-      setPayWithTransfer(true);
-    }
+  const hasCashMode = selectedPaymentModes.includes("cash");
+  const hasTransferMode = selectedPaymentModes.includes("transfer");
+  const hasCreditMode = selectedPaymentModes.includes("credit");
+  const hasDepositMode = selectedPaymentModes.includes("deposit");
+  const modeOfPayment = encodePaymentModes(selectedPaymentModes);
+  const [depositBalance, setDepositBalance] = useState(null);
+  const [creditOutstanding, setCreditOutstanding] = useState(null);
+  const [creditLimitDisplay, setCreditLimitDisplay] = useState(null);
+  const [balancesLoading, setBalancesLoading] = useState(false);
+
+  const applyPaymentModes = useCallback((modes) => {
+    const unique = PAYMENT_MODE_OPTIONS.map((o) => o.id).filter((id) =>
+      modes.includes(id),
+    );
+    setSelectedPaymentModes(unique);
+    const cash = unique.includes("cash");
+    const transfer = unique.includes("transfer");
+    setPayWithCash(cash);
+    setPayWithTransfer(transfer);
+    setSaleType(cash || transfer ? "paid" : "credit");
   }, []);
+
+  const togglePaymentMode = useCallback(
+    (id) => {
+      const next = selectedPaymentModes.includes(id)
+        ? selectedPaymentModes.filter((m) => m !== id)
+        : [...selectedPaymentModes, id];
+      applyPaymentModes(next);
+    },
+    [selectedPaymentModes, applyPaymentModes],
+  );
+
+  useEffect(() => {
+    const customerNo = selectedCustomer?.customerNo;
+    const facilityId = activeBusiness?.id;
+    if (!customerNo || !facilityId || (!hasCreditMode && !hasDepositMode)) {
+      setDepositBalance(null);
+      setCreditOutstanding(null);
+      setCreditLimitDisplay(
+        parseFloat(selectedCustomer?.credit_limit || 0) || 0,
+      );
+      setBalancesLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setBalancesLoading(true);
+    _fetchApi(
+      `/api/v1/get-customer-balance/${encodeURIComponent(customerNo)}/${encodeURIComponent(facilityId)}`,
+      (res) => {
+        if (cancelled) return;
+        const receivables =
+          parseFloat(res?.receivables ?? res?.balance) || 0;
+        const deposit = parseFloat(res?.deposit) || 0;
+        if (hasDepositMode) setDepositBalance(deposit);
+        if (hasCreditMode) setCreditOutstanding(receivables);
+        setCreditLimitDisplay(
+          parseFloat(selectedCustomer?.credit_limit || 0) || 0,
+        );
+        setBalancesLoading(false);
+      },
+      () => {
+        if (cancelled) return;
+        if (hasDepositMode) setDepositBalance(0);
+        if (hasCreditMode) setCreditOutstanding(0);
+        setCreditLimitDisplay(
+          parseFloat(selectedCustomer?.credit_limit || 0) || 0,
+        );
+        setBalancesLoading(false);
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCustomer, activeBusiness?.id, hasCreditMode, hasDepositMode]);
   const [invoiceNumberDisplay] = useState(
     () => `INV-${moment().format("YYMMDD")}-DRAFT`,
   );
@@ -930,17 +1176,14 @@ function MakeSale() {
   }, [modeOfPayment]);
 
   useEffect(() => {
-    if (saleType === "paid") {
-      setInvoiceTerms("Due on receipt");
-      if (!payWithCash && !payWithTransfer) {
-        setPayWithCash(true);
-      }
-    } else {
+    if (hasCreditMode) {
       setInvoiceTerms((prev) =>
         prev === "Due on receipt" ? "Net 30" : prev,
       );
+    } else {
+      setInvoiceTerms("Due on receipt");
     }
-  }, [saleType]);
+  }, [hasCreditMode]);
 
   /** Cart list above or below transaction date in the right sidebar (cards view). */
   const [cartAboveTransactionDate, setCartAboveTransactionDate] = useState(
@@ -1099,21 +1342,7 @@ function MakeSale() {
     }
   }, [activeBusiness?.id, fetchDiscounts]);
 
-  // Keep the selected branches valid: once branches load, drop any selection
-  // that isn't one of the user's assigned branches (default to the first).
-  useEffect(() => {
-    if (assignedBranches.length === 0) return;
-    const validIds = selectedBranches.filter((id) =>
-      assignedBranches.some((b) => String(b.id) === String(id)),
-    );
-    if (validIds.length === 0) {
-      setSelectedBranches([String(assignedBranches[0].id)]);
-    } else if (validIds.length !== selectedBranches.length) {
-      setSelectedBranches(validIds);
-    }
-  }, [assignedBranches, selectedBranches]);
-
-  // Branch options + current selection for the multiselect.
+  // Branch options for labels (no invoice-level warehouse picker).
   const branchOptions = useMemo(
     () =>
       assignedBranches.map((b) => ({
@@ -1651,7 +1880,9 @@ function MakeSale() {
 
     if (isSalesStopped(selectedItem)) {
       toast.error(
-        `Sales are stopped for ${selectedItem.item_name}. This product cannot be sold.`,
+        `Sales are stopped for ${selectedItem.item_name} at ${
+          getItemBranchLocation(selectedItem) || "this warehouse"
+        }. This product cannot be sold here.`,
       );
       return;
     }
@@ -1710,11 +1941,10 @@ function MakeSale() {
       branchId:
         selectedItem.branchId ??
         selectedItem.branch_id ??
-        (selectedBranch ? Number(selectedBranch) : null),
+        null,
       branch_name:
         selectedItem.location_name ||
         getItemBranchLocation(selectedItem) ||
-        selectedBranchLocation ||
         null,
     };
 
@@ -1736,8 +1966,7 @@ function MakeSale() {
     selectedItem,
     form.quantity_sold,
     cart,
-    selectedBranch,
-    selectedBranchLocation,
+    getItemBranchLocation,
   ]);
 
   const removeFromCart = useCallback((itemId) => {
@@ -1971,9 +2200,7 @@ function MakeSale() {
                 const exclusiveOutputVATTaxes = outputVATTaxes.filter(
                   (t) =>
                     selectedOutputVAT.includes(t.id) &&
-                    (t.inclusive_type === "exclusive" ||
-                      (t.inclusive_type === undefined &&
-                        t.tax_type === "exclusive")),
+                    !isTaxInclusive(t, vatPolicy),
                 );
                 if (vatPolicy === "vat_inclusive") return 0;
                 return exclusiveOutputVATTaxes.reduce(
@@ -2035,14 +2262,8 @@ function MakeSale() {
           tax_amount: taxAmount,
           total_amount: totalWithTax,
           amountPaid: prepaymentAmount, // Apply prepayment if available
-          modeOfPayment: (() => {
-            if (modeOfPayment === "deposit") return "deposit";
-            if (modeOfPayment === "credit_split") return "credit_split";
-            if (saleType !== "paid") return "CREDIT";
-            if (payWithCash && payWithTransfer) return "split";
-            if (payWithTransfer) return "bank";
-            return "cash";
-          })(),
+          modeOfPayment,
+          payment_modes: selectedPaymentModes,
           discount: totalDiscount,
           txn_type: saleType === "paid" ? "Cash Sale" : "Credit Sale",
           reference: transactionId,
@@ -2180,12 +2401,7 @@ function MakeSale() {
 
       // One invoice for the full cart (mixed branches stay on one sale_code).
       // Stock is written per line branch on the API; separation happens after payment.
-      const primaryBranchId =
-        selectedBranch && selectedBranch !== "all"
-          ? parseInt(String(selectedBranch), 10) || 0
-          : 0;
-
-      let headerBranchId = primaryBranchId;
+      let headerBranchId = 0;
       for (const item of allSaleItems) {
         const bid = parseInt(String(item.branchId ?? item.branch_id ?? ""), 10);
         if (Number.isFinite(bid) && bid > 0) {
@@ -2220,7 +2436,7 @@ function MakeSale() {
               `Sale of ₦${shownTotal.toFixed(2)} saved successfully!`,
             );
             if (response?.sale_code) {
-              if (modeOfPayment === "deposit") {
+              if (hasDepositMode) {
                 const params = new URLSearchParams();
                 if (selectedCustomer?.customerNo) {
                   params.set("customerNo", selectedCustomer.customerNo);
@@ -2232,19 +2448,37 @@ function MakeSale() {
                   if (name) params.set("customerName", name);
                 }
                 params.set("sale_code", response.sale_code);
+                params.set("tab", "deposit");
                 toast.success(
-                  `Invoice ${response.sale_code} created — apply deposit next`,
+                  `Invoice ${response.sale_code} created — apply deposit at Verification Points`,
                 );
                 navigate(
-                  `/app/payments/apply-advance?${params.toString()}`,
+                  `/app/payments/verification-points?${params.toString()}`,
+                );
+              } else if (hasCreditMode && !hasCashMode && !hasTransferMode) {
+                toast.success(
+                  `Invoice ${response.sale_code} — sent to Credit Approval`,
+                );
+                navigate(
+                  `/app/payments/verification-points?tab=credit_approval&sale_code=${encodeURIComponent(
+                    response.sale_code,
+                  )}`,
+                );
+              } else if (hasCreditMode && (hasCashMode || hasTransferMode)) {
+                toast.success(
+                  `Invoice ${response.sale_code} — collect cash/transfer then credit`,
+                );
+                navigate(
+                  `/app/payments/verification-points?tab=credit&sale_code=${encodeURIComponent(
+                    response.sale_code,
+                  )}`,
                 );
               } else {
-                const tip =
-                  modeOfPayment === "credit_split"
-                    ? "Available at Verification Points (Cash, Transfer, Credit)"
-                    : modeOfPayment === "credit"
-                      ? "Sent to Credit approval at Verification Points"
-                      : "Available at Verification Points for collection";
+                const tip = hasCreditMode
+                  ? hasCashMode || hasTransferMode
+                    ? "Available at Verification Points (cash/transfer + credit)"
+                    : "Sent to Credit approval at Verification Points"
+                  : "Available at Verification Points for collection";
                 toast.success(`Invoice ${response.sale_code} — ${tip}`);
                 navigate(
                   `/app/sales/process?sale_code=${encodeURIComponent(
@@ -2289,6 +2523,11 @@ function MakeSale() {
       payWithCash,
       payWithTransfer,
       modeOfPayment,
+      selectedPaymentModes,
+      hasDepositMode,
+      hasCreditMode,
+      hasCashMode,
+      hasTransferMode,
       cashPayAmount,
       transferPayAmount,
       accountHead,
@@ -2316,12 +2555,39 @@ function MakeSale() {
       return;
     }
 
-    // Branch comes from each line item (product stock per branch).
-    // No form-level branch selection required.
-
     const saleItems = cart.filter((item) => item.status === "for sale");
     if (saleItems.length === 0) {
       toast.error("No items to sell");
+      return;
+    }
+
+    if (!selectedPaymentModes.length) {
+      toast.error("Select a mode of payment");
+      return;
+    }
+
+    if (
+      (hasCreditMode || hasDepositMode) &&
+      !hasCashMode &&
+      !hasTransferMode &&
+      balancesLoading
+    ) {
+      toast.error("Loading customer credit/deposit — try again in a moment.");
+      return;
+    }
+
+    const coverageError = invoiceCoverageError({
+      total: totalRef.current,
+      hasCash: hasCashMode,
+      hasTransfer: hasTransferMode,
+      hasCredit: hasCreditMode,
+      hasDeposit: hasDepositMode,
+      creditLimit: creditLimitDisplay,
+      creditOutstanding,
+      depositBalance,
+    });
+    if (coverageError) {
+      toast.error(coverageError);
       return;
     }
 
@@ -2329,7 +2595,12 @@ function MakeSale() {
     for (const item of saleItems) {
       if (isSalesStopped(item)) {
         toast.error(
-          `Sales are stopped for ${item.item_name}. Remove it before saving.`,
+          `Sales are stopped for ${item.item_name} at ${
+            item.location_name ||
+            item.branch_name ||
+            getItemBranchLocation(item) ||
+            "this warehouse"
+          }. Remove it before saving.`,
         );
         return;
       }
@@ -2349,44 +2620,9 @@ function MakeSale() {
       }
     }
 
-    // Credit limit (credit / deposit / credit_split) — API re-checks on create-sale
-    const needsCreditCheck =
-      saleType !== "paid" ||
-      modeOfPayment === "credit" ||
-      modeOfPayment === "deposit" ||
-      modeOfPayment === "credit_split";
-    if (needsCreditCheck) {
-      const creditLimit = parseFloat(selectedCustomer.credit_limit || 0);
-      if (creditLimit > 0) {
-        const outstanding =
-          Math.max(
-            0,
-            parseFloat(
-              selectedCustomer.balance ||
-                selectedCustomer.outstanding_balance ||
-                selectedCustomer.amount ||
-                0,
-            ) || 0,
-          );
-        const thisSale = saleItems
-          .filter((item) => !item.proBono)
-          .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-        if (outstanding + thisSale > creditLimit + 0.01) {
-          toast.error(
-            `Credit limit exceeded. Limit: ${formatNumber1(
-              creditLimit,
-            )}, Outstanding: ${formatNumber1(
-              outstanding,
-            )}, This sale: ${formatNumber1(thisSale)}`,
-          );
-          return;
-        }
-      }
-    }
-
     if (saleType === "paid") {
       if (!payWithCash && !payWithTransfer) {
-        toast.error("Select Cash, Transfer, Cash + Transfer, or Credit + Cash + Transfer");
+        toast.error("Select Cash and/or Transfer to collect now, or Credit / Apply Deposit.");
         return;
       }
       // Payment is collected at Verification Points — invoice only records the mode.
@@ -2405,10 +2641,20 @@ function MakeSale() {
     payWithCash,
     payWithTransfer,
     modeOfPayment,
+    hasCashMode,
+    hasTransferMode,
+    hasCreditMode,
+    hasDepositMode,
+    creditLimitDisplay,
+    creditOutstanding,
+    depositBalance,
+    balancesLoading,
+    selectedPaymentModes,
     cashPayAmount,
     transferPayAmount,
     accountHead,
     bankAccount,
+    getItemBranchLocation,
   ]);
 
   const handleConfirmSale = useCallback(() => {
@@ -2587,12 +2833,15 @@ function MakeSale() {
         category: item.category || item.uom_category,
         price: parseFloat(item.selling_price) || 0,
         stock: item.balance || 0,
-        image: "📦", // Default emoji for products
+        image: "📦",
         sku: item.sku || item.item_code,
         ...item,
       })),
     [readyForSalesItems],
   );
+
+  // List every in-stock SKU with its store, including sales-stopped rows.
+  const sellableProducts = useMemo(() => mockProducts, [mockProducts]);
 
   const mockServices = useMemo(
     () =>
@@ -2620,10 +2869,10 @@ function MakeSale() {
       const code = normalizeScannedCode(rawCode);
       if (!code) return null;
 
-      const exact = allSellableItems.find((item) =>
+      const matches = allSellableItems.filter((item) =>
         productMatchesScanCode(item, code),
       );
-      if (exact) return exact;
+      if (matches[0]) return matches[0];
 
       const q = code.toLowerCase();
       return (
@@ -2646,7 +2895,7 @@ function MakeSale() {
 
   // Filtered items for new UI
   const filteredItems = useMemo(() => {
-    const items = activeTab === "products" ? mockProducts : mockServices;
+    const items = activeTab === "products" ? sellableProducts : mockServices;
     const q = searchTerm.toLowerCase();
     return items.filter(
       (item) =>
@@ -2660,12 +2909,12 @@ function MakeSale() {
           .toLowerCase()
           .includes(q),
     );
-  }, [activeTab, mockProducts, mockServices, searchTerm]);
+  }, [activeTab, sellableProducts, mockServices, searchTerm]);
 
   // Line-item Typeahead options — do not reuse the POS grid searchTerm.
   const filterItemsByTab = useCallback(
-    (tab) => (tab === "products" ? mockProducts : mockServices),
-    [mockProducts, mockServices],
+    (tab) => (tab === "products" ? sellableProducts : mockServices),
+    [sellableProducts, mockServices],
   );
 
   // Check minimum order amount when subtotal changes
@@ -3130,6 +3379,16 @@ function MakeSale() {
         return;
       }
 
+      if (
+        product.item_type !== "Service" &&
+        !(product.branchId ?? product.branch_id)
+      ) {
+        toast.error(
+          `${product.name || product.item_name} has no warehouse on this stock row.`,
+        );
+        return;
+      }
+
       const rawQty = parseNumberFromFormatted(quantityFormattedRef.current);
       if (rawQty === "" || rawQty === ".") {
         toast.error("Enter a quantity");
@@ -3208,7 +3467,11 @@ function MakeSale() {
         toast.error(
           `Sales are stopped for ${
             product.name || product.item_name
-          }. This product cannot be sold.`,
+          } at ${
+            product.location_name ||
+            getItemBranchLocation(product) ||
+            "this warehouse"
+          }. This product cannot be sold here.`,
         );
         return;
       }
@@ -3289,13 +3552,10 @@ function MakeSale() {
             const n = Number(bid);
             return Number.isFinite(n) && n > 0 ? n : null;
           }
-          return selectedBranch ? Number(selectedBranch) : null;
+          return null;
         })(),
         branch_name:
-          product.location_name ||
-          getItemBranchLocation(product) ||
-          selectedBranchLocation ||
-          null,
+          product.location_name || getItemBranchLocation(product) || null,
       };
 
       setCart((prev) => [...prev, cartItem]);
@@ -3331,8 +3591,6 @@ function MakeSale() {
       allowSalesWithoutStock,
       formatNumber1,
       invoiceViewMode,
-      selectedBranch,
-      selectedBranchLocation,
       getItemBranchLocation,
       defaultLineTaxId,
       readyForSalesItems,
@@ -3344,7 +3602,8 @@ function MakeSale() {
     (rawCode) => {
       const product = resolveProductFromScanCode(rawCode);
       if (!product) {
-        toast.error(`No product found for "${normalizeScannedCode(rawCode)}"`);
+        const code = normalizeScannedCode(rawCode);
+        toast.error(`No product found for "${code}"`);
         return false;
       }
 
@@ -3742,17 +4001,11 @@ function MakeSale() {
                       New Invoice
                     </h1>
                     <p className="text-xs text-slate-500">
-                      {modeOfPayment === "credit"
-                        ? "Credit sale · goes to credit approval (no cashier)"
-                        : modeOfPayment === "deposit"
-                          ? "Apply Deposit · create invoice, then apply customer deposit"
-                          : modeOfPayment === "credit_split"
-                            ? "Sent to Verification Points · Cash, Transfer & Credit"
-                            : modeOfPayment === "both"
-                              ? "Sent to Verification Points · cash and transfer"
-                              : modeOfPayment === "transfer"
-                                ? "Sent to Verification Points · transfer"
-                                : "Sent to Verification Points · cash"}
+                      {PAYMENT_MODE_OPTIONS.filter((o) =>
+                        selectedPaymentModes.includes(o.id),
+                      )
+                        .map((o) => o.label)
+                        .join(" · ") || "Select payment methods"}
                     </p>
                   </div>
                 </div>
@@ -3784,15 +4037,11 @@ function MakeSale() {
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h1 className="text-xl font-bold">
-                    {modeOfPayment === "credit"
-                      ? "Credit Sale"
-                      : modeOfPayment === "credit_split"
-                        ? "Credit + Cash + Transfer Sale"
-                        : modeOfPayment === "both"
-                          ? "Cash + Transfer Sale"
-                          : modeOfPayment === "transfer"
-                            ? "Transfer Sale"
-                            : "Cash Sale"}
+                    {PAYMENT_MODE_OPTIONS.filter((o) =>
+                      selectedPaymentModes.includes(o.id),
+                    )
+                      .map((o) => o.label)
+                      .join(" + ") || "Sale"}
                   </h1>
                 </div>
                 {allowSalesWithoutStock && (
@@ -3826,6 +4075,7 @@ function MakeSale() {
                     selected={selectedCustomer ? [selectedCustomer] : []}
                     onChange={(customer) => {
                       setSelectedCustomer(customer);
+                      applyPaymentModes([]);
                     }}
                     className="w-full"
                   />
@@ -3864,7 +4114,7 @@ function MakeSale() {
                     max={moment().format("YYYY-MM-DD")}
                     className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                   />
-                  {saleType === "credit" && (
+                  {(hasCreditMode || hasDepositMode) && (
                     <>
                       <div className="flex items-center gap-2">
                         <label className="text-sm text-slate-600">Terms</label>
@@ -3895,40 +4145,27 @@ function MakeSale() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
-                <label className="text-sm font-medium text-slate-600 lg:text-right">
+              {selectedCustomer ? (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,1fr)] lg:items-start">
+                <label className="pt-1.5 text-sm font-medium text-slate-600 lg:text-right">
                   Mode of Payment <span className="text-red-500">*</span>
                 </label>
-                <div className="w-full max-w-xs space-y-1">
-                  <select
-                    value={modeOfPayment}
-                    onChange={(e) => applyPaymentMode(e.target.value)}
-                    className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="transfer">Transfer</option>
-                    <option value="both">Cash + Transfer</option>
-                    <option value="credit_split">Credit + Cash + Transfer</option>
-                    <option value="credit">Credit</option>
-                    <option value="deposit">Apply Deposit</option>
-                  </select>
-                  <p className="text-[11px] text-slate-500">
-                    {modeOfPayment === "deposit"
-                      ? "Invoice is created like credit, then you apply the customer deposit (not Credit Approval)."
-                      : modeOfPayment === "credit"
-                        ? "Credit invoice goes to Verification Points (Credit tab) for approval first, then Invoice Separation."
-                        : modeOfPayment === "credit_split"
-                          ? "Sent to Verification Points — shows on Cash, Transfer, and Credit tabs."
-                          : `Invoice is sent to Verification Points for ${
-                              modeOfPayment === "both"
-                                ? "cash and transfer"
-                                : modeOfPayment === "transfer"
-                                  ? "transfer"
-                                  : "cash"
-                            } collection — payment is not taken here.`}
-                  </p>
+                <div>
+                  <PaymentModePicker
+                    selected={selectedPaymentModes}
+                    onToggle={togglePaymentMode}
+                  />
+                  <CustomerPaymentBalances
+                    showCredit={hasCreditMode && Boolean(selectedCustomer)}
+                    showDeposit={hasDepositMode && Boolean(selectedCustomer)}
+                    loading={balancesLoading}
+                    creditOutstanding={creditOutstanding}
+                    creditLimit={creditLimitDisplay}
+                    depositBalance={depositBalance}
+                  />
                 </div>
               </div>
+              ) : null}
 
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
                 <label className="text-sm font-medium text-slate-600 lg:text-right">
@@ -3966,7 +4203,7 @@ function MakeSale() {
                   }`}
                 >
                   <Package className="inline mr-2" size={16} />
-                  Products ({mockProducts?.length || 0})
+                  Products ({sellableProducts?.length || 0})
                 </button>
                 <button
                   onClick={() => setActiveTab("services")}
@@ -3983,24 +4220,26 @@ function MakeSale() {
               {/* {JSON.stringify(cart)} */}
               {/* Search and Filters */}
               <div className="px-4 py-2 bg-gray-50 border-b">
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {selectedCustomer ? (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Mode of Payment
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Mode of Payment <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      value={modeOfPayment}
-                      onChange={(e) => applyPaymentMode(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
-                    >
-                      <option value="cash">Cash</option>
-                      <option value="transfer">Transfer</option>
-                      <option value="both">Cash + Transfer</option>
-                      <option value="credit_split">Credit + Cash + Transfer</option>
-                      <option value="credit">Credit</option>
-                      <option value="deposit">Apply Deposit</option>
-                    </select>
+                    <PaymentModePicker
+                      selected={selectedPaymentModes}
+                      onToggle={togglePaymentMode}
+                    />
+                    <CustomerPaymentBalances
+                      showCredit={hasCreditMode && Boolean(selectedCustomer)}
+                      showDeposit={hasDepositMode && Boolean(selectedCustomer)}
+                      loading={balancesLoading}
+                      creditOutstanding={creditOutstanding}
+                      creditLimit={creditLimitDisplay}
+                      depositBalance={depositBalance}
+                    />
                   </div>
+                  ) : null}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
                       Search / Scan
@@ -5522,6 +5761,7 @@ function MakeSale() {
                   selected={selectedCustomer ? [selectedCustomer] : []}
                   onChange={(customer) => {
                     setSelectedCustomer(customer);
+                    applyPaymentModes([]);
                   }}
                   className="w-full"
                 />

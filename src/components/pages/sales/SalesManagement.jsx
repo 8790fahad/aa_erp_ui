@@ -352,9 +352,9 @@ export default function SalesManagement() {
     if (s === "awaiting_credit_approval") {
       return {
         title: "Next: Credit approval",
-        description: "Approve this credit sale at Verification Points.",
-        to: "/app/payments/verification-points",
-        label: "Open Verification Points",
+        description: "Approve this credit sale on Credit Approval.",
+        to: "/app/payments/credit-approval",
+        label: "Open Credit Approval",
       };
     }
     if (
