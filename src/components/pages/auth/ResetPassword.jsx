@@ -18,12 +18,18 @@ export default function ResetPassword() {
   const navigate = useNavigate();
   const query = useQuery();
   const resetToken = query.get("token");
+  const resetEmail = query.get("email");
   const [verifiedEmail, setVerifiedEmail] = useState("");
 
   useEffect(() => {
     if (!resetToken) return;
+    const params = new URLSearchParams({
+      token: resetToken,
+      type: "reset",
+    });
+    if (resetEmail) params.set("email", resetEmail);
     _fetchApi(
-      `/api/auth/verify?token=${encodeURIComponent(resetToken)}&type=reset`,
+      `/api/auth/verify?${params.toString()}`,
       (resp) => {
         if (resp.success && resp.email) {
           setVerifiedEmail(resp.email);
@@ -31,7 +37,7 @@ export default function ResetPassword() {
       },
       () => {},
     );
-  }, [resetToken]);
+  }, [resetToken, resetEmail]);
 
   const passwordRules = [
     { rule: "At least 8 characters", valid: newPassword.length >= 8 },

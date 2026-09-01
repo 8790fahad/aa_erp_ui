@@ -32,7 +32,11 @@ export default function TokenVerification() {
       setMessage("");
 
       _fetchApi(
-        `/api/auth/verify?token=${token}&type=${type}&email=${email}`,
+        `/api/auth/verify?${new URLSearchParams({
+          token,
+          type,
+          email,
+        }).toString()}`,
         (resp) => {
           if (resp.success) {
             setStatus("success");
@@ -40,7 +44,9 @@ export default function TokenVerification() {
               if (resp.type === "login") {
                 navigate("/login");
               } else if (resp.type === "reset") {
-                navigate(`/reset-password?token=${encodeURIComponent(token)}`);
+                navigate(
+                  `/reset-password?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email || "")}`,
+                );
               } else {
                 navigate("/login");
               }
@@ -97,7 +103,7 @@ export default function TokenVerification() {
   const nextHref =
     type === "login"
       ? "/login"
-      : `/reset-password?token=${encodeURIComponent(token || "")}`;
+      : `/reset-password?token=${encodeURIComponent(token || "")}&email=${encodeURIComponent(email || "")}`;
 
   return (
     <AuthShell
