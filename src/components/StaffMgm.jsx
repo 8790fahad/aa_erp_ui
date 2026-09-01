@@ -711,6 +711,15 @@ const StaffManagementDashboard = () => {
       return;
     }
 
+    const emailNorm = String(formData.email).trim().toLowerCase();
+    const emailTaken = (usersList || []).some(
+      (u) => String(u.email || "").trim().toLowerCase() === emailNorm,
+    );
+    if (emailTaken) {
+      toast.error("Email already exist");
+      return;
+    }
+
     setLoading2(true);
 
     const roleValue = await createRoleIfNeeded(roleText);
@@ -768,6 +777,9 @@ const StaffManagementDashboard = () => {
       (err) => {
         setLoading2(false);
         console.error("Error submitting form:", err);
+        toast.error(
+          err?.message || err?.msg || "Could not add staff. Please try again.",
+        );
       }
     );
   };
@@ -842,7 +854,9 @@ const StaffManagementDashboard = () => {
       (err) => {
         setLoading2(false);
         console.error("Error submitting form:", err);
-        toast.error("Server error while submitting form");
+        toast.error(
+          err?.message || err?.msg || "Could not update staff. Please try again.",
+        );
       }
     );
   };
@@ -879,7 +893,10 @@ const StaffManagementDashboard = () => {
       },
       (err) => {
         console.error("Invite error:", err);
-        setErrors({ email: "Something went wrong. Try again later." });
+        const msg =
+          err?.message || err?.msg || "Something went wrong. Try again later.";
+        setErrors({ email: msg });
+        toast.error(msg);
         setLoading2(false);
       }
     );

@@ -594,28 +594,53 @@ function waitForImages(root) {
 
 function cleanupDoPrintFrame(frame) {
   if (!frame) return;
-  frame.style.cssText =
-    "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+  try {
+    frame.remove();
+  } catch {
+    frame.style.cssText =
+      "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+  }
 }
 
 /** Print on-page thermal Delivery Order / Goods Issue Note slip(s). */
 export function printThermalDeliveryOrder() {
   const nodes = Array.from(
-    document.querySelectorAll(".thermal-delivery-order-root, .thermal-do-root"),
+    document.querySelectorAll(
+      ".thermal-do-root.thermal-do-preview, .thermal-delivery-order-root",
+    ),
   ).filter((el, idx, arr) => arr.indexOf(el) === idx);
-  if (!nodes.length) {
+  const visible = nodes.filter(
+    (el) => (el.offsetHeight || el.scrollHeight || 0) > 8,
+  );
+  const sources = visible.length ? visible : nodes;
+  if (!sources.length) {
     window.print();
     return;
   }
 
   const run = async () => {
+    await Promise.all(sources.map((node) => waitForImages(node)));
+    await new Promise((r) => setTimeout(r, 200));
+
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvases = [];
+      for (const node of sources) {
+        canvases.push(await captureThermalNode(node, html2canvas));
+      }
+      await printThermalCanvases(canvases);
+      return;
+    } catch (err) {
+      console.warn("thermal DO capture failed, HTML print:", err);
+    }
+
     let frame = document.getElementById("thermal-print-frame");
     if (frame) frame.remove();
     frame = document.createElement("iframe");
     frame.id = "thermal-print-frame";
     frame.setAttribute("title", "Thermal dispatch print");
     document.body.appendChild(frame);
-    frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${THERMAL_WIDTH_MM}mm;height:auto;min-height:0;border:0;opacity:1;pointer-events:none;z-index:-1;`;
+    frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${THERMAL_WIDTH_MM}mm;height:4000px;min-height:4000px;border:0;opacity:1;pointer-events:none;z-index:-1;`;
 
     const doc = frame.contentDocument || frame.contentWindow?.document;
     if (!doc) {
@@ -629,39 +654,27 @@ export function printThermalDeliveryOrder() {
     );
     doc.close();
 
-    const clones = nodes.map((node) => {
+    const clones = sources.map((node) => {
       const clone = node.cloneNode(true);
-      clone.classList.remove("thermal-do-preview");
-      clone.style.cssText = `display:block;width:${THERMAL_WIDTH_MM}mm;max-width:${THERMAL_WIDTH_MM}mm;margin:0;padding:1mm 1mm 0;background:#fff;box-sizing:border-box;height:auto;min-height:0;font-family:"Courier New",Courier,monospace;font-size:15px;line-height:1.25;color:#000;`;
+      clone.classList.add("thermal-do-preview");
+      clone.style.cssText = `display:block !important;width:${THERMAL_WIDTH_MM}mm;max-width:${THERMAL_WIDTH_MM}mm;margin:0;padding:1mm 1mm 0;background:#fff;box-sizing:border-box;height:auto;min-height:0;font-family:"Courier New",Courier,monospace;font-size:15px;line-height:1.25;color:#000;`;
       doc.body.appendChild(clone);
       return clone;
     });
 
     await Promise.all(clones.map((clone) => waitForImages(clone)));
     await new Promise((r) => setTimeout(r, 350));
-
-    try {
-      const html2canvas = (await import("html2canvas")).default;
-      const canvases = [];
-      for (const clone of clones) {
-        canvases.push(await captureThermalNode(clone, html2canvas));
-      }
-      await printThermalCanvases(canvases);
-      cleanupDoPrintFrame(frame);
-    } catch (err) {
-      console.warn("thermal DO capture failed, HTML print:", err);
-      const mmHeights = clones.map((clone) =>
-        Math.max(35, Math.ceil((clone.scrollHeight * 25.4) / 96) + 2),
-      );
-      const pageH = Math.max(...mmHeights);
-      const pageStyle = doc.createElement("style");
-      pageStyle.textContent = `@page { size: ${THERMAL_WIDTH_MM}mm ${pageH}mm; margin: 0; }
+    const mmHeights = clones.map((clone) =>
+      Math.max(35, Math.ceil((clone.scrollHeight * 25.4) / 96) + 2),
+    );
+    const pageH = Math.max(...mmHeights);
+    const pageStyle = doc.createElement("style");
+    pageStyle.textContent = `@page { size: ${THERMAL_WIDTH_MM}mm ${pageH}mm; margin: 0; }
         html, body { margin: 0; padding: 0; height: auto; }`;
-      doc.head.appendChild(pageStyle);
-      frame.contentWindow?.focus();
-      frame.contentWindow?.print();
-      setTimeout(() => cleanupDoPrintFrame(frame), 1500);
-    }
+    doc.head.appendChild(pageStyle);
+    frame.contentWindow?.focus();
+    frame.contentWindow?.print();
+    setTimeout(() => cleanupDoPrintFrame(frame), 1500);
   };
 
   void run();

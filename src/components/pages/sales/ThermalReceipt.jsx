@@ -631,8 +631,12 @@ function trimCanvasWhiteBottom(canvas, whiteMin = 248) {
 
 function cleanupThermalFrame(frame) {
   if (!frame) return;
-  frame.style.cssText =
-    "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+  try {
+    frame.remove();
+  } catch {
+    frame.style.cssText =
+      "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+  }
 }
 
 /** POS-80t default ticket height in the Mac driver (causes blank if we ignore it). */
@@ -674,22 +678,29 @@ export async function printThermalCanvases(canvases) {
   pdf.autoPrint();
   const url = URL.createObjectURL(pdf.output("blob"));
 
-  // Hidden iframe only — do not open a new browser tab
+  // Chrome prints a blank page from a 0×0 / opacity:0 iframe. Keep the PDF
+  // viewer on-screen at a real size (nearly invisible) so ink actually renders.
   let frame = document.getElementById("thermal-print-frame");
   if (frame) frame.remove();
   frame = document.createElement("iframe");
   frame.id = "thermal-print-frame";
   frame.setAttribute("title", "Thermal receipt print");
+  const printW = Math.max(280, Math.round((pageW * 96) / 25.4));
+  const firstH = list[0]?.height || 400;
+  const firstW = list[0]?.width || printW;
+  const printH = Math.max(420, Math.round((firstH * printW) / firstW) + 48);
   document.body.appendChild(frame);
-  frame.style.cssText =
-    "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+  frame.style.cssText = `position:fixed;left:0;top:0;width:${printW}px;height:${printH}px;border:0;opacity:0.02;pointer-events:none;z-index:2147483646;`;
   frame.onload = () => {
-    try {
-      frame.contentWindow?.focus();
-      frame.contentWindow?.print();
-    } catch (_) {
-      /* ignore */
-    }
+    const goPrint = () => {
+      try {
+        frame.contentWindow?.focus();
+        frame.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    };
+    setTimeout(goPrint, 400);
     setTimeout(() => {
       URL.revokeObjectURL(url);
       cleanupThermalFrame(frame);
@@ -704,7 +715,13 @@ async function printThermalCanvas(canvas) {
 
 /** Capture one DOM node to a trimmed canvas. */
 export async function captureThermalNode(node, html2canvas) {
-  const contentPx = measureReceiptHeightPx(node);
+  const measured = measureReceiptHeightPx(node);
+  const contentPx = Math.max(
+    measured,
+    Math.ceil(node.scrollHeight || 0),
+    Math.ceil(node.offsetHeight || 0),
+    80,
+  );
   let canvas = await html2canvas(node, {
     backgroundColor: "#ffffff",
     scale: 2,
@@ -714,6 +731,15 @@ export async function captureThermalNode(node, html2canvas) {
     scrollY: 0,
     height: contentPx,
     windowHeight: contentPx,
+    onclone: (clonedDoc) => {
+      clonedDoc
+        .querySelectorAll(".thermal-do-root, .thermal-receipt-root")
+        .forEach((el) => {
+          el.style.setProperty("display", "block", "important");
+          el.style.setProperty("visibility", "visible", "important");
+          el.style.setProperty("opacity", "1", "important");
+        });
+    },
   });
   return trimCanvasWhiteBottom(canvas);
 }
@@ -750,7 +776,7 @@ export function printThermalReceipt(_mode = "both") {
     frame.id = "thermal-print-frame";
     frame.setAttribute("title", "Thermal receipt print");
     document.body.appendChild(frame);
-    frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${THERMAL_WIDTH_MM}mm;height:auto;min-height:0;border:0;opacity:1;pointer-events:none;z-index:-1;`;
+    frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${THERMAL_WIDTH_MM}mm;height:4000px;min-height:4000px;border:0;opacity:1;pointer-events:none;z-index:-1;`;
 
     const doc = frame.contentDocument || frame.contentWindow?.document;
     if (!doc) {
@@ -830,7 +856,7 @@ function printAllThermalReceiptsFromNodes(receipts) {
     frame.id = "thermal-print-frame";
     frame.setAttribute("title", "Thermal print all");
     document.body.appendChild(frame);
-    frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${THERMAL_WIDTH_MM}mm;height:auto;border:0;opacity:1;pointer-events:none;z-index:-1;`;
+    frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${THERMAL_WIDTH_MM}mm;height:4000px;min-height:4000px;border:0;opacity:1;pointer-events:none;z-index:-1;`;
 
     const doc = frame.contentDocument || frame.contentWindow?.document;
     if (!doc) {
