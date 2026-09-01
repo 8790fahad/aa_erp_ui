@@ -88,6 +88,18 @@ export const CREDIT_PROCESS_STAGE = {
   statuses: ["awaiting_credit_approval"],
 };
 
+/** Apply Deposit queue — not a cashier collection. */
+export const DEPOSIT_PROCESS_STAGE = {
+  id: "deposit",
+  short: "Deposit",
+  label: "Apply deposit",
+  color: "teal",
+  badge: "bg-teal-100 text-teal-800 border-teal-200",
+  dot: "bg-teal-500",
+  row: "bg-teal-50",
+  statuses: ["awaiting_payment", "awaiting_cashier_confirm"],
+};
+
 const STATUS_TO_PROCESS = (() => {
   const map = {};
   for (const stage of [...PROCESS_STAGES, CREDIT_PROCESS_STAGE]) {
@@ -268,7 +280,17 @@ export const FULFILLMENT_STATUS_META = {
 };
 
 export function getProcessStage(status, paymentType) {
-  const isCredit = String(paymentType || "").toLowerCase() === "credit";
+  const pt = String(paymentType || "").toLowerCase();
+  const isCredit = pt === "credit";
+  const isDeposit = pt === "deposit" || pt === "apply_deposit";
+  if (
+    isDeposit &&
+    ["awaiting_payment", "awaiting_cashier_confirm"].includes(
+      String(status || ""),
+    )
+  ) {
+    return DEPOSIT_PROCESS_STAGE;
+  }
   // Credit sales in separation are still unpaid — show Credit, not Paid
   if (
     isCredit &&
@@ -299,7 +321,26 @@ export function getProcessStage(status, paymentType) {
 export function getWorkflowStatusMeta(status, paymentType) {
   const process = getProcessStage(status, paymentType);
   const detail = SALE_WORKFLOW_STATUS_META[status];
-  const isCredit = String(paymentType || "").toLowerCase() === "credit";
+  const pt = String(paymentType || "").toLowerCase();
+  const isCredit = pt === "credit";
+  const isDeposit = pt === "deposit" || pt === "apply_deposit";
+  if (
+    isDeposit &&
+    ["awaiting_payment", "awaiting_cashier_confirm"].includes(
+      String(status || ""),
+    )
+  ) {
+    return {
+      label: "Apply deposit",
+      short: "Deposit",
+      color: "teal",
+      badge: DEPOSIT_PROCESS_STAGE.badge,
+      dot: DEPOSIT_PROCESS_STAGE.dot,
+      row: DEPOSIT_PROCESS_STAGE.row,
+      processId: "deposit",
+      processLabel: "Apply deposit",
+    };
+  }
   if (
     isCredit &&
     ["payment_confirmed", "invoice_separation", "credit_approved", "final_invoice"].includes(

@@ -188,7 +188,8 @@ const PAYMENT_MODE_OPTIONS = [
   { value: "deposit", label: "Apply Deposit", icon: Wallet },
 ];
 
-function paymentTypeLabel(type) {
+function paymentTypeLabel(type, row = null) {
+  if (row?.credit_after_deposit) return "Apply Deposit + Credit";
   const t = normalizePaymentMode(type);
   const opt = PAYMENT_MODE_OPTIONS.find((o) => o.value === t);
   if (opt) return opt.label;
@@ -228,13 +229,34 @@ function isCreditedRow(row) {
 }
 
 /** Verification Points Credit tab: Awaiting credit vs Credited. */
+function isCreditPlusDepositRow(row) {
+  if (!row) return false;
+  if (row.deposit_pending || row.credit_after_deposit) return true;
+  if (Number(row.credit_remainder) > 0.05) return true;
+  const due = Number(row.amount) || 0;
+  const dep = Number(row.deposit_available) || 0;
+  return due - dep > 0.05;
+}
+
+function isDepositPendingCredit(row) {
+  if (
+    String(row?.status || "").toLowerCase() === "awaiting_credit_approval"
+  ) {
+    return false;
+  }
+  return isCreditPlusDepositRow(row);
+}
+
 function creditStateLabel(row) {
+  if (isDepositPendingCredit(row)) return "Apply deposit first";
   if (isAwaitingCreditRow(row)) return "Awaiting credit";
   if (isCreditedRow(row)) return "Credited";
   return "Awaiting credit";
 }
 
 function creditStateBadgeClass(row) {
+  if (isDepositPendingCredit(row))
+    return "bg-teal-50 text-teal-800 ring-teal-200";
   if (isAwaitingCreditRow(row))
     return "bg-amber-50 text-amber-800 ring-amber-200";
   return "bg-emerald-50 text-emerald-700 ring-emerald-200";
@@ -690,8 +712,23 @@ export default function ReceivePayment() {
           normalizePaymentMode(r.payment_type) === "credit_split" &&
           needsCollectionSide(r, "credit"),
       );
-      const approvalCount = creditPending.length;
+      const depositCredit = depositPending.filter(isCreditPlusDepositRow);
+      const creditCodes = new Set(
+        [...creditPending, ...depositCredit]
+          .map((r) => r.sale_code)
+          .filter(Boolean),
+      );
+      const approvalCount = creditCodes.size;
       const collectionCount = creditSplitPending.length;
+      const creditAmount =
+        Number(summary.pending_credit) ||
+        sumAmounts([
+          ...creditPending,
+          ...depositCredit.filter(
+            (r) =>
+              !creditPending.some((c) => String(c.sale_code) === String(r.sale_code)),
+          ),
+        ]);
       return {
         showCash: false,
         showTransfer: false,
@@ -704,8 +741,7 @@ export default function ReceivePayment() {
         pending_cash: 0,
         pending_transfer: 0,
         pending_split: 0,
-        pending_credit:
-          Number(summary.pending_credit) || sumAmounts(creditPending),
+        pending_credit: creditAmount,
         pending_discount: 0,
         pending_mode: 0,
         collected_cash_today: 0,
@@ -808,10 +844,16 @@ export default function ReceivePayment() {
         needsCollectionSide(r, "credit") &&
         normalizePaymentMode(r.payment_type) === "credit_split",
     );
+    const depositCredit = depositPending.filter(isCreditPlusDepositRow);
+    const creditCodes = new Set(
+      [...creditPending, ...depositCredit]
+        .map((r) => r.sale_code)
+        .filter(Boolean),
+    );
     const counts = {
       cash: 0,
       transfer: 0,
-      credit: creditPending.length + creditSplitPending.length,
+      credit: creditCodes.size + creditSplitPending.length,
       deposit: depositPending.length,
       discount: discountPending.length,
       mode: modePending.length,
@@ -838,8 +880,9 @@ export default function ReceivePayment() {
           normalizePaymentMode(r.payment_type) === "credit_split" &&
           needsCollectionSide(r, "credit"),
       );
+      const depositCredit = depositPending.filter(isCreditPlusDepositRow);
       const byCode = new Map();
-      for (const r of [...creditPending, ...split]) {
+      for (const r of [...creditPending, ...split, ...depositCredit]) {
         if (!r?.sale_code) continue;
         const existing = byCode.get(r.sale_code);
         if (!existing || r.status === "awaiting_credit_approval") {
@@ -1609,6 +1652,36 @@ export default function ReceivePayment() {
     );
   };
 
+  const sendRemainderToCredit = (row) => {
+    if (!row?.sale_code || !activeBusiness?.id) return;
+    setSubmitting(true);
+    _postApi(
+      "/api/v1/sale-workflows/advance",
+      {
+        facilityId: activeBusiness.id,
+        saleCode: row.sale_code,
+        action: "send_remainder_to_credit",
+        updated_by: user?.id,
+        note: "No deposit available — remainder sent to Credit approval",
+      },
+      (res) => {
+        setSubmitting(false);
+        if (res?.success) {
+          toast.success(
+            res.message || "Remainder sent to Credit approval",
+          );
+          fetchDashboard();
+        } else {
+          toast.error(res?.message || "Could not send remainder to Credit");
+        }
+      },
+      (err) => {
+        setSubmitting(false);
+        toast.error(err?.message || "Could not send remainder to Credit");
+      },
+    );
+  };
+
   const sendCreditRemainder = () => {
     if (!selected || !activeBusiness?.id) return;
     if (normalizePaymentMode(selected.payment_type) !== "credit_split") {
@@ -2054,7 +2127,8 @@ export default function ReceivePayment() {
                   viewSummary.pending_count) === 1
                   ? ""
                   : "s"}{" "}
-                — approve before Invoice Separation
+                — apply deposit first if selected, then approve credit
+                remainder before Invoice Separation
               </p>
             </div>
           ) : null}
@@ -2380,8 +2454,44 @@ export default function ReceivePayment() {
                           <div className="text-xs text-slate-500">
                             {row.customer_no}
                           </div>
-                          {(methodTab === "credit" &&
-                            row.status === "awaiting_credit_approval") ? (
+                          {methodTab === "deposit" ? (
+                            <div className="mt-1 text-[11px] text-slate-500">
+                              Deposit available ₦
+                              {formatNumber1(row.deposit_available || 0)}
+                              {Number(row.credit_remainder) > 0.05 ||
+                              (Number(row.amount) || 0) -
+                                (Number(row.deposit_available) || 0) >
+                                0.05 ? (
+                                <span className="block text-teal-700">
+                                  Credit remainder ₦
+                                  {formatNumber1(
+                                    Number(row.credit_remainder) > 0
+                                      ? row.credit_remainder
+                                      : (Number(row.amount) || 0) -
+                                          (Number(row.deposit_available) || 0),
+                                  )}
+                                </span>
+                              ) : row.credit_after_deposit ? (
+                                <span className="block text-teal-700">
+                                  Deposit covers this invoice
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : methodTab === "credit" &&
+                            isDepositPendingCredit(row) ? (
+                            <div className="mt-1 text-[11px] text-slate-500">
+                              Deposit available ₦
+                              {formatNumber1(row.deposit_available || 0)}
+                              <span className="block text-amber-800">
+                                {Number(row.credit_remainder) > 0.05
+                                  ? `Credit remainder ₦${formatNumber1(row.credit_remainder)} after deposit`
+                                  : row.credit_after_deposit
+                                    ? "Apply deposit first — then credit if anything remains"
+                                    : "Apply deposit first"}
+                              </span>
+                            </div>
+                          ) : methodTab === "credit" &&
+                            row.status === "awaiting_credit_approval" ? (
                             row.credit_unlimited ? (
                               <div className="mt-1 text-[11px] text-slate-400">
                                 Credit unlimited
@@ -2483,6 +2593,7 @@ export default function ReceivePayment() {
                               {paymentTypeLabel(
                                 row.payment_type ||
                                   (methodTab === "credit" ? "credit" : ""),
+                                row,
                               )}
                             </span>
                           )}
@@ -2610,6 +2721,12 @@ export default function ReceivePayment() {
                         </td>
                         <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
                           ₦{formatNumber1(row.amount)}
+                          {methodTab === "credit" &&
+                          Number(row.credit_remainder) > 0.05 ? (
+                            <div className="mt-0.5 text-[11px] font-medium text-amber-800">
+                              Credit ₦{formatNumber1(row.credit_remainder)}
+                            </div>
+                          ) : null}
                           {Number(row.discount_amount) > 0 ? (
                             <div className="mt-0.5 text-[11px] font-medium text-orange-700">
                               Discount −₦{formatNumber1(row.discount_amount)}
@@ -2623,15 +2740,52 @@ export default function ReceivePayment() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           {methodTab === "deposit" ? (
-                            <button
-                              type="button"
-                              disabled={submitting}
-                              onClick={() => goApplyDeposit(row)}
-                              className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
-                            >
-                              <Wallet className="h-3.5 w-3.5" />
-                              View & Apply Deposit
-                            </button>
+                            <div className="flex flex-col items-end gap-1.5">
+                              <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => goApplyDeposit(row)}
+                                className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                              >
+                                <Wallet className="h-3.5 w-3.5" />
+                                View & Apply Deposit
+                              </button>
+                              {Number(row.deposit_available) <= 0.05 ? (
+                                <button
+                                  type="button"
+                                  disabled={submitting}
+                                  onClick={() => sendRemainderToCredit(row)}
+                                  className="inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                                >
+                                  <CreditCard className="h-3.5 w-3.5" />
+                                  Send to Credit
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : methodTab === "credit" &&
+                            isDepositPendingCredit(row) ? (
+                            <div className="flex flex-col items-end gap-1.5">
+                              <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => goApplyDeposit(row)}
+                                className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                              >
+                                <Wallet className="h-3.5 w-3.5" />
+                                View & Apply Deposit
+                              </button>
+                              {Number(row.deposit_available) <= 0.05 ? (
+                                <button
+                                  type="button"
+                                  disabled={submitting}
+                                  onClick={() => sendRemainderToCredit(row)}
+                                  className="inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                                >
+                                  <CreditCard className="h-3.5 w-3.5" />
+                                  Approve remainder
+                                </button>
+                              ) : null}
+                            </div>
                           ) : methodTab === "credit" &&
                             row.status === "awaiting_credit_approval" ? (
                             <button

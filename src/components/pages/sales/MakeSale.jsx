@@ -2840,7 +2840,15 @@ function MakeSale() {
   );
 
   // List every in-stock SKU with its store, including sales-stopped rows.
-  const sellableProducts = useMemo(() => mockProducts, [mockProducts]);
+  const sellableProducts = useMemo(
+    () =>
+      mockProducts.filter((item) => {
+        if (item.item_type === "Service") return true;
+        const bid = Number(item.branchId ?? item.branch_id);
+        return Number.isFinite(bid) && bid > 0;
+      }),
+    [mockProducts],
+  );
 
   const mockServices = useMemo(
     () =>
@@ -3383,7 +3391,7 @@ function MakeSale() {
         !(product.branchId ?? product.branch_id)
       ) {
         toast.error(
-          `${product.name || product.item_name} has no warehouse on this stock row.`,
+          `${product.name || product.item_name} has no warehouse on this stock row. Pick the same item from a warehouse (not Resalable).`,
         );
         return;
       }

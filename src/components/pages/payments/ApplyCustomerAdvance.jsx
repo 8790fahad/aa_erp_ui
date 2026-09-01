@@ -75,6 +75,14 @@ export default function ApplyCustomerAdvance() {
   const autoSeededFor = useRef("");
   const prefilledFromUrl = useRef(false);
 
+  const preferSale = String(searchParams.get("sale_code") || "").trim();
+  const orderedInvoices = useMemo(() => {
+    if (!preferSale) return invoices;
+    const match = invoices.filter((inv) => invoiceKey(inv) === preferSale);
+    const rest = invoices.filter((inv) => invoiceKey(inv) !== preferSale);
+    return [...match, ...rest];
+  }, [invoices, preferSale]);
+
   const loadCustomerData = useCallback(
     (customerNo) => {
       if (!facilityId || !customerNo) return;
@@ -467,16 +475,21 @@ export default function ApplyCustomerAdvance() {
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
-          ) : availableDeposit <= 0 ? (
-            <div className="px-4 py-12 text-center text-sm text-slate-500">
-              No available advance for this customer. Record one under Received
-              Funds first.
-            </div>
           ) : invoices.length === 0 ? (
             <div className="px-4 py-12 text-center text-sm text-slate-500">
-              No unpaid invoices for this customer.
+              {availableDeposit <= 0
+                ? "No available advance for this customer. Record one under Received Funds first."
+                : "No unpaid invoices for this customer."}
             </div>
           ) : (
+            <>
+              {availableDeposit <= 0 ? (
+                <div className="border-b border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  This customer has no available deposit. Unpaid invoices are
+                  listed below. For Credit + Apply Deposit, send the remainder
+                  to Credit from Verification Points.
+                </div>
+              ) : null}
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">
@@ -488,10 +501,18 @@ export default function ApplyCustomerAdvance() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {invoices.map((inv) => {
+                {orderedInvoices.map((inv) => {
                   const k = invoiceKey(inv);
+                  const isPreferred = preferSale && k === preferSale;
                   return (
-                    <tr key={k} className="hover:bg-slate-50/60">
+                    <tr
+                      key={k}
+                      className={
+                        isPreferred
+                          ? "bg-teal-50/80 hover:bg-teal-50"
+                          : "hover:bg-slate-50/60"
+                      }
+                    >
                       <td className="px-3 py-2 text-gray-700">
                         {inv.transaction_date
                           ? moment(inv.transaction_date).format("DD MMM YYYY")
@@ -505,6 +526,11 @@ export default function ApplyCustomerAdvance() {
                           title="View invoice"
                         >
                           {k}
+                          {isPreferred ? (
+                            <span className="ml-2 rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal-800">
+                              This invoice
+                            </span>
+                          ) : null}
                         </button>
                       </td>
                       <td className="px-3 py-2 text-right font-medium">
@@ -550,6 +576,7 @@ export default function ApplyCustomerAdvance() {
                 </tr>
               </tfoot>
             </table>
+            </>
           )}
         </div>
 
