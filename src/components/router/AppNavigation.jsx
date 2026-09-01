@@ -1525,6 +1525,7 @@ export default function AppNavigation() {
         { path: "signup", element: <Register2 /> },
         { path: "email-verification", element: <EmailVerification /> },
         { path: "token-verify", element: <TokenVerification /> },
+        { path: "verify-email", element: <TokenVerification /> },
         { path: "reset-password", element: <ResetPassword /> },
         {
           path: "accept-invite",
