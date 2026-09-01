@@ -1,21 +1,11 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Eye,
-  EyeOff,
-  CheckCircle,
-  XCircle,
-  Lock,
-  Loader2,
-  ArrowLeft,
-} from "lucide-react";
-import logo from "../../../assets/aa_erp-blue.png";
-import { _postApi, _fetchApi } from "@/redux/actions/api";
+import { Eye, EyeOff, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import useQuery from "@/common/Custom/Hook/useQuery";
+import { _postApi, _fetchApi } from "@/redux/actions/api";
+import AuthShell, { AUTH_BRAND, authFieldClass } from "./AuthShell";
 
 export default function ResetPassword() {
   const [newPassword, setNewPassword] = useState("");
@@ -43,11 +33,8 @@ export default function ResetPassword() {
     );
   }, [resetToken]);
 
-  // Password validation rules
   const passwordRules = [
     { rule: "At least 8 characters", valid: newPassword.length >= 8 },
-    // { rule: "Contains uppercase letter", valid: /[A-Z]/.test(newPassword) },
-    // { rule: "Contains lowercase letter", valid: /[a-z]/.test(newPassword) },
     { rule: "Contains number", valid: /\d/.test(newPassword) },
   ];
 
@@ -63,395 +50,221 @@ export default function ResetPassword() {
       setError("Please ensure your password meets all requirements");
       return;
     }
-
     if (!passwordsMatch) {
       setError("Passwords do not match");
       return;
     }
 
     setIsSubmitting(true);
-
     _postApi(
       `/api/auth/reset-password`,
       { password: newPassword, token: resetToken },
       (resp) => {
         if (resp.success) {
           toast.success(resp.message);
-          setIsSubmitting(false);
           setSuccess(true);
         } else {
           toast.error(resp.message || "Something went wrong.");
-          setIsSubmitting(false);
         }
+        setIsSubmitting(false);
       },
       (err) => {
         console.error("API Error:", err);
         toast.error("Something went wrong while sending password reset.");
         setIsSubmitting(false);
-      }
+      },
     );
   };
 
   if (!resetToken) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 px-4 py-8">
-        <div className="w-full max-w-md space-y-6 text-center">
-          <div className="relative inline-block mx-auto">
-            <img
-              src={logo}
-              alt="YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES logo"
-              className="mx-auto"
-              style={{ width: "9rem", height: "3.5rem" }}
-            />
-          </div>
-          <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 border border-gray-100 space-y-4">
-            <div className="flex justify-center">
-              <XCircle className="h-16 w-16 text-amber-500" />
-            </div>
-            <h1 className="text-xl font-semibold text-gray-900">
-              Link incomplete or expired
-            </h1>
-            <p className="text-sm text-gray-600">
-              Open the password reset link from your email, or request a new
-              reset from the login page.
-            </p>
-            <Button
-              onClick={() => navigate("/login")}
-              className="w-full bg-gradient-to-r from-[var(--aa-navy)] to-blue-600 text-white font-semibold py-3 rounded-lg"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4 inline" />
-              Back to Log In
-            </Button>
-          </div>
+      <AuthShell
+        title="Link incomplete"
+        subtitle="Open the reset link from your email, or request a new one."
+      >
+        <div className="flex flex-1 flex-col">
+          <p className="text-[15px] text-slate-500">
+            This page needs a valid reset token. Go back to login and use Forgot
+            password to send a new email.
+          </p>
+          <Link
+            to="/login"
+            className="mt-5 flex h-11 w-full items-center justify-center rounded-md text-[15px] font-semibold text-white transition hover:brightness-105"
+            style={{ backgroundColor: AUTH_BRAND.button }}
+          >
+            Back to Log In
+          </Link>
+          <p className="mt-auto pt-8 text-center text-[11px] tracking-wide text-slate-400">
+            This solution is powered by Nexifour Limited
+          </p>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   if (success) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 px-4 py-8">
-        <div className="w-full max-w-md space-y-6 animate-fade-in">
-          {/* Header */}
-          <div className="text-center space-y-4 animate-slide-down">
-            <div className="relative inline-block mx-auto">
-              <img
-                src={logo}
-                alt="YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES logo"
-                className="mx-auto animate-scale-in"
-                style={{ width: "9rem", height: "3.5rem" }}
-              />
-            </div>
+      <AuthShell
+        title="Password updated"
+        subtitle="You can now sign in with your new password."
+      >
+        <div className="flex flex-1 flex-col">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50">
+            <CheckCircle className="h-7 w-7 text-emerald-600" />
           </div>
-
-          {/* Success Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 space-y-6 border border-gray-100 animate-slide-up">
-            <div className="text-center space-y-4">
-              <div className="flex justify-center">
-                <div className="relative">
-                  <CheckCircle className="h-20 w-20 text-green-600 animate-scale-in" />
-                  <div className="absolute inset-0 bg-green-100 rounded-full animate-ping opacity-20"></div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-2xl font-semibold text-green-800">
-                  Password Reset Successful!
-                </h3>
-                <p className="text-gray-600">
-                  Your password has been successfully updated. You can now log
-                  in with your new password.
-                </p>
-              </div>
-              <div className="pt-4">
-                <Button
-                  onClick={() => navigate("/login")}
-                  className="w-full bg-gradient-to-r from-[var(--aa-navy)] to-blue-600 hover:from-[var(--aa-navy)]/90 hover:to-blue-600/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
-                >
-                  Continue to Log In
-                </Button>
-              </div>
-            </div>
-          </div>
+          <h3 className="mt-4 text-lg font-semibold text-slate-900">
+            Password Reset Successful!
+          </h3>
+          <p className="mt-1 text-[15px] text-slate-500">
+            Your password has been updated. Continue to the login page to access{" "}
+            {AUTH_BRAND.name}.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate("/login")}
+            className="mt-5 flex h-11 w-full items-center justify-center rounded-md text-[15px] font-semibold text-white transition hover:brightness-105"
+            style={{ backgroundColor: AUTH_BRAND.button }}
+          >
+            Continue to Log In
+          </button>
+          <p className="mt-auto pt-8 text-center text-[11px] tracking-wide text-slate-400">
+            This solution is powered by Nexifour Limited
+          </p>
         </div>
-
-        <style>{`
-          @keyframes fade-in {
-            from { opacity: 0; }
-            to { opacity: 1; }
-          }
-          @keyframes slide-down {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          @keyframes slide-up {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          @keyframes scale-in {
-            from { opacity: 0; transform: scale(0.8); }
-            to { opacity: 1; transform: scale(1); }
-          }
-          .animate-fade-in {
-            animation: fade-in 0.6s ease-out forwards;
-            opacity: 0;
-          }
-          .animate-slide-down {
-            animation: slide-down 0.6s ease-out forwards;
-          }
-          .animate-slide-up {
-            animation: slide-up 0.6s ease-out forwards;
-          }
-          .animate-scale-in {
-            animation: scale-in 0.5s ease-out forwards;
-          }
-        `}</style>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 px-4 py-8">
-      <div className="w-full max-w-md space-y-6 animate-fade-in">
-        {/* Header */}
-        <div className="space-y-4 text-center animate-slide-down">
-          <div className="relative inline-block">
-            <img
-              src={logo}
-              alt="YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES logo"
-              className="mx-auto animate-scale-in"
-              style={{ width: "9rem", height: "3.5rem" }}
-            />
+    <AuthShell
+      title="Reset Your Password"
+      subtitle={
+        verifiedEmail ? (
+          <>
+            Account: <span className="font-medium text-slate-700">{verifiedEmail}</span>
+          </>
+        ) : (
+          "Enter a new password for your account."
+        )
+      }
+    >
+      <form className="flex flex-1 flex-col" onSubmit={handleSubmit}>
+        {error ? (
+          <div className="mb-4 rounded-lg border border-red-100 bg-red-50 p-3.5">
+            <p className="text-center text-sm text-red-600">{error}</p>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Reset Your Password
-          </h1>
-          <p className="text-sm text-gray-600">
-            Enter your new password below. Make sure it&apos;s strong and
-            secure.
-          </p>
-          {verifiedEmail && (
-            <p className="text-xs text-gray-500">
-              Account: <span className="font-medium">{verifiedEmail}</span>
-            </p>
-          )}
-        </div>
+        ) : null}
 
-        {/* Form Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 space-y-6 border border-gray-100 animate-slide-up">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 animate-fade-in">
-                <div className="flex items-center gap-2">
-                  <XCircle className="h-5 w-5 text-red-600" />
-                  <p className="text-red-600 text-sm">{error}</p>
-                </div>
-              </div>
-            )}
-
-            {/* New Password Field */}
-            <div className="space-y-2">
-              <Label htmlFor="new-password" className="flex items-center gap-2">
-                <Lock className="w-4 h-4 text-gray-500" />
-                New Password
-              </Label>
-              <div className="relative">
-                <Input
-                  id="new-password"
-                  type={showNewPassword ? "text" : "password"}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Enter your new password"
-                  className="border-2 pr-12 transition-all border-gray-300 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
-                  required
-                />
-                <button
-                  type="button"
-                  className="absolute inset-y-0 right-0 px-3 flex items-center hover:bg-gray-50 rounded-r transition-colors"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                >
-                  {showNewPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-500" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-gray-500" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Password Requirements */}
-            {newPassword && (
-              <div className="space-y-2 bg-gray-50 rounded-lg p-4 animate-fade-in">
-                <Label className="text-sm font-medium text-gray-700">
-                  Password Requirements
-                </Label>
-                <div className="space-y-2 mt-2">
-                  {passwordRules.map((rule, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      {rule.valid ? (
-                        <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-gray-300 flex-shrink-0" />
-                      )}
-                      <span
-                        className={
-                          rule.valid
-                            ? "text-green-700 font-medium"
-                            : "text-gray-500"
-                        }
-                      >
-                        {rule.rule}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Confirm Password Field */}
-            <div className="space-y-2">
-              <Label
-                htmlFor="confirm-password"
-                className="flex items-center gap-2"
+        <div className="space-y-4">
+          <div>
+            <div className="relative">
+              <input
+                id="new-password"
+                type={showNewPassword ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="New password"
+                autoComplete="new-password"
+                required
+                className={`h-11 w-full rounded-md border bg-white px-3.5 pr-11 text-[15px] text-slate-900 outline-none transition focus:ring-4 ${authFieldClass(false)}`}
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"
+                onClick={() => setShowNewPassword((v) => !v)}
+                aria-label={showNewPassword ? "Hide password" : "Show password"}
               >
-                <Lock className="w-4 h-4 text-gray-500" />
-                Confirm New Password
-              </Label>
-              <div className="relative">
-                <Input
-                  id="confirm-password"
-                  type={showConfirmPassword ? "text" : "password"}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm your new password"
-                  className={`border-2 pr-12 transition-all ${
-                    confirmPassword && !passwordsMatch
-                      ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                      : confirmPassword && passwordsMatch
-                      ? "border-green-500 focus:ring-green-500 focus:border-green-500"
-                      : "border-gray-300 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-navy)]"
-                  }`}
-                  required
-                />
-                <button
-                  type="button"
-                  className="absolute inset-y-0 right-0 px-3 flex items-center hover:bg-gray-50 rounded-r transition-colors"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-500" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-gray-500" />
-                  )}
-                </button>
-              </div>
-              {confirmPassword && !passwordsMatch && (
-                <p className="text-sm text-red-600 flex items-center gap-2 animate-fade-in">
-                  <XCircle className="h-4 w-4" />
-                  <span>Passwords do not match</span>
-                </p>
-              )}
-              {confirmPassword && passwordsMatch && (
-                <p className="text-sm text-green-600 flex items-center gap-2 animate-fade-in">
-                  <CheckCircle className="h-4 w-4" />
-                  <span>Passwords match</span>
-                </p>
-              )}
+                {showNewPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
             </div>
+            {newPassword ? (
+              <ul className="mt-2 space-y-1">
+                {passwordRules.map((rule) => (
+                  <li
+                    key={rule.rule}
+                    className={`flex items-center gap-1.5 text-xs ${
+                      rule.valid ? "text-emerald-700" : "text-slate-400"
+                    }`}
+                  >
+                    {rule.valid ? (
+                      <CheckCircle className="h-3.5 w-3.5" />
+                    ) : (
+                      <XCircle className="h-3.5 w-3.5" />
+                    )}
+                    {rule.rule}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
 
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              className="w-full bg-gradient-to-r from-[var(--aa-navy)] to-blue-600 hover:from-[var(--aa-navy)]/90 hover:to-blue-600/90 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02]"
-              disabled={!isPasswordValid || !passwordsMatch || isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Updating Password...
-                </>
-              ) : (
-                "Update Password"
-              )}
-            </Button>
-          </form>
-
-          {/* Back to Login */}
-          <div className="pt-4 border-t text-center">
-            <Button
-              variant="outline"
-              onClick={() => navigate("/login")}
-              className="border-2 border-gray-300 hover:bg-gray-50 text-gray-700 font-medium"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Log In
-            </Button>
+          <div>
+            <div className="relative">
+              <input
+                id="confirm-password"
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm new password"
+                autoComplete="new-password"
+                required
+                className={`h-11 w-full rounded-md border bg-white px-3.5 pr-11 text-[15px] text-slate-900 outline-none transition focus:ring-4 ${authFieldClass(
+                  Boolean(confirmPassword && !passwordsMatch),
+                )}`}
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                aria-label={
+                  showConfirmPassword ? "Hide password" : "Show password"
+                }
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            {confirmPassword && !passwordsMatch ? (
+              <p className="mt-1.5 text-sm text-red-500">Passwords do not match</p>
+            ) : null}
           </div>
         </div>
-      </div>
 
-      <style>{`
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
+        <button
+          type="submit"
+          disabled={!isPasswordValid || !passwordsMatch || isSubmitting}
+          className="mt-5 flex h-11 w-full items-center justify-center rounded-md text-[15px] font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ backgroundColor: AUTH_BRAND.button }}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Updating…
+            </>
+          ) : (
+            "Update Password"
+          )}
+        </button>
 
-        @keyframes slide-down {
-          from {
-            opacity: 0;
-            transform: translateY(-20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
+        <Link
+          to="/login"
+          className="mt-4 text-center text-xs font-medium hover:underline"
+          style={{ color: AUTH_BRAND.button }}
+        >
+          Back to Log In
+        </Link>
 
-        @keyframes slide-up {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes scale-in {
-          from {
-            opacity: 0;
-            transform: scale(0.8);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-
-        .animate-fade-in {
-          animation: fade-in 0.6s ease-out forwards;
-          opacity: 0;
-        }
-
-        .animate-slide-down {
-          animation: slide-down 0.6s ease-out forwards;
-        }
-
-        .animate-slide-up {
-          animation: slide-up 0.6s ease-out forwards;
-        }
-
-        .animate-scale-in {
-          animation: scale-in 0.5s ease-out forwards;
-        }
-      `}</style>
-    </div>
+        <p className="mt-auto pt-8 text-center text-[11px] tracking-wide text-slate-400">
+          This solution is powered by Nexifour Limited
+        </p>
+      </form>
+    </AuthShell>
   );
 }

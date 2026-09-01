@@ -23,6 +23,7 @@ import {
 import moment from "moment";
 import { toast } from "sonner";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
+import { hasFullAccess } from "@/lib/access";
 import { formatNumber1 } from "@/components/router/utilities";
 import {
   POSTING_DATE_MIN,
@@ -93,7 +94,7 @@ const METHOD_TABS = [
     id: "deposit",
     label: "Apply Deposit",
     icon: Wallet,
-    privilege: "Cash Collection",
+    privilege: "Apply Deposit",
   },
   {
     id: "credit",
@@ -105,13 +106,13 @@ const METHOD_TABS = [
     id: "discount",
     label: "Discount",
     icon: Percent,
-    privilege: "Cash Collection",
+    privilege: "Discount Collection",
   },
   {
     id: "mode",
     label: "Mode Switch",
     icon: ArrowRightLeft,
-    privilege: "Approve Payment Mode Switch",
+    privilege: "Switch Payment Mode",
   },
 ];
 
@@ -126,6 +127,15 @@ const LEGACY_COLLECTION_PRIVILEGES = [
   "Receive Payment",
   "Payments",
   "Cashier",
+];
+
+const MAKE_DEPOSIT_PRIVILEGE = "Make Deposit";
+const APPLY_DEPOSIT_PRIVILEGE = "Apply Deposit";
+const RECONCILIATION_PRIVILEGE = "Collection Reconciliation";
+const HEADER_ACTION_PRIVILEGES = [
+  MAKE_DEPOSIT_PRIVILEGE,
+  APPLY_DEPOSIT_PRIVILEGE,
+  RECONCILIATION_PRIVILEGE,
 ];
 
 function parseFunctionalities(raw) {
@@ -343,17 +353,36 @@ export default function ReceivePayment() {
   const hasTransferCollection = functionalities.includes(
     "Transfer Collection",
   );
+  const hasFullCollectionAccess =
+    hasFullAccess(functionalities) || !functionalities.length;
   const canSwitchPaymentMode =
-    !functionalities.length ||
+    hasFullCollectionAccess ||
     functionalities.includes(SWITCH_PAYMENT_MODE_PRIVILEGE);
   const canApprovePaymentMode =
-    !functionalities.length ||
+    hasFullCollectionAccess ||
     functionalities.includes(APPROVE_PAYMENT_MODE_PRIVILEGE);
+
+  const hasAnyHeaderActionPrivilege = HEADER_ACTION_PRIVILEGES.some((p) =>
+    functionalities.includes(p),
+  );
+  const canUseHeaderAction = useCallback(
+    (privilege) => {
+      if (hasFullCollectionAccess) return true;
+      if (functionalities.includes(privilege)) return true;
+      if (!hasAnyHeaderActionPrivilege) {
+        return LEGACY_COLLECTION_PRIVILEGES.some((p) =>
+          functionalities.includes(p),
+        );
+      }
+      return false;
+    },
+    [functionalities, hasFullCollectionAccess, hasAnyHeaderActionPrivilege],
+  );
 
   const canViewCollectionTab = useCallback(
     (privilege) => {
-      // No privilege list configured → full access (admin / legacy)
-      if (!functionalities.length) return true;
+      if (hasFullAccess(functionalities) || !functionalities.length)
+        return true;
 
       if (functionalities.includes(privilege)) return true;
 
@@ -392,11 +421,7 @@ export default function ReceivePayment() {
           return canSwitchPaymentMode || canApprovePaymentMode;
         }
         if (t.id === "deposit") {
-          return (
-            canViewCollectionTab("Cash Collection") ||
-            canViewCollectionTab("Transfer Collection") ||
-            canViewCollectionTab("Credit Collection")
-          );
+          return canViewCollectionTab(APPLY_DEPOSIT_PRIVILEGE);
         }
         return canViewCollectionTab(t.privilege);
       }),
@@ -1961,8 +1986,9 @@ export default function ReceivePayment() {
           <div className="mt-6 rounded-xl border border-slate-200 bg-white p-8 text-center">
             <p className="text-sm font-medium text-slate-600">
               You do not have permission to collect payments. Ask an admin to
-              grant Cash Collection, Transfer Collection, or Credit Collection
-              under Sales → Verification Points.
+              grant Cash Collection, Transfer Collection, Credit Collection,
+              Apply Deposit, Discount Collection, or Make Deposit under Sales →
+              Verification Points.
             </p>
           </div>
         </div>
@@ -1998,7 +2024,8 @@ export default function ReceivePayment() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {methodTab !== "credit" &&
+            {canUseHeaderAction(MAKE_DEPOSIT_PRIVILEGE) &&
+            methodTab !== "credit" &&
             methodTab !== "discount" &&
             methodTab !== "deposit" ? (
               <button
@@ -2010,6 +2037,7 @@ export default function ReceivePayment() {
                 Make Deposit
               </button>
             ) : null}
+            {canUseHeaderAction(APPLY_DEPOSIT_PRIVILEGE) ? (
             <button
               type="button"
               onClick={() => {
@@ -2021,6 +2049,8 @@ export default function ReceivePayment() {
               <Wallet className="h-4 w-4" />
               Apply Deposit
             </button>
+            ) : null}
+            {canUseHeaderAction(RECONCILIATION_PRIVILEGE) ? (
             <Link
               to="/app/payments/collection-reconciliation"
               className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
@@ -2028,6 +2058,7 @@ export default function ReceivePayment() {
               <ClipboardCheck className="h-4 w-4" />
               Collection Reconciliation
             </Link>
+            ) : null}
             <button
               type="button"
               onClick={fetchDashboard}

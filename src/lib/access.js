@@ -85,6 +85,11 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "Transfer Payment",
   "Credit Payment",
   "Apply Deposit Payment",
+  "Make Deposit",
+  "Apply Deposit",
+  "Collection Reconciliation",
+  "Credit Collection",
+  "Discount Collection",
 ];
 
 /** Create Invoice → Mode of Payment checkboxes. */

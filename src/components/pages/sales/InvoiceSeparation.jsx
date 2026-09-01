@@ -608,10 +608,10 @@ export default function InvoiceSeparation() {
                     </Link>
                     {needsCreditApproval && !isHistoryRecord ? (
                       <Link
-                        to={`/app/payments/credit-approval`}
+                        to={`/app/payments/verification-points?tab=credit`}
                         className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-800 hover:bg-rose-100"
                       >
-                        Open Credit Approval
+                        Open Verification Points (Credit)
                       </Link>
                     ) : null}
                     {canSeparate && packs.length > 1 ? (
