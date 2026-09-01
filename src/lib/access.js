@@ -81,7 +81,67 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "Create Purchase Order",
   "Approve Purchase Order",
   "Purchase Order History",
+  "Cash Payment",
+  "Transfer Payment",
+  "Credit Payment",
+  "Apply Deposit Payment",
 ];
+
+/** Create Invoice → Mode of Payment checkboxes. */
+export const INVOICE_PAYMENT_MODE_PRIVILEGES = {
+  cash: "Cash Payment",
+  transfer: "Transfer Payment",
+  credit: "Credit Payment",
+  deposit: "Apply Deposit Payment",
+};
+
+const ALL_INVOICE_PAYMENT_MODE_IDS = ["cash", "transfer", "credit", "deposit"];
+
+/**
+ * Payment modes the user may select on Create Invoice.
+ * If none of the four privileges are assigned yet, all modes stay available
+ * so existing Create Invoice users are not locked out.
+ */
+export function allowedInvoicePaymentModeIds(functionalities) {
+  if (hasFullAccess(functionalities)) return [...ALL_INVOICE_PAYMENT_MODE_IDS];
+  const funcs = Array.isArray(functionalities) ? functionalities : [];
+  const granted = ALL_INVOICE_PAYMENT_MODE_IDS.filter((id) =>
+    funcs.includes(INVOICE_PAYMENT_MODE_PRIVILEGES[id]),
+  );
+  return granted.length ? granted : [...ALL_INVOICE_PAYMENT_MODE_IDS];
+}
+
+/** Manage Users → Sales → CRM child switches (also used to hide CRM tabs). */
+export const CRM_TAB_PRIVILEGES = [
+  "CRM Dashboard",
+  "CRM Customers",
+  "CRM Activities",
+  "CRM Follow-ups",
+  "CRM Feedback",
+  "CRM Segments",
+  "CRM Outreach",
+  "CRM Templates",
+  "CRM Settings",
+];
+
+/**
+ * CRM module + tab access.
+ * Parent "CRM" opens the module. Tab privileges hide individual CRM tabs.
+ * Users with only "CRM" (no tab grants yet) keep every tab so existing
+ * staff are not locked out.
+ */
+export function allowedCrmTabPrivileges(functionalities) {
+  if (hasFullAccess(functionalities)) return [...CRM_TAB_PRIVILEGES];
+  const funcs = Array.isArray(functionalities) ? functionalities : [];
+  if (!funcs.includes("CRM") && !funcs.includes("Customer Feedback")) {
+    return [];
+  }
+  const granted = CRM_TAB_PRIVILEGES.filter((title) => funcs.includes(title));
+  if (granted.length) return granted;
+  if (funcs.includes("CRM")) return [...CRM_TAB_PRIVILEGES];
+  if (funcs.includes("Customer Feedback")) return ["CRM Feedback"];
+  return [];
+}
 
 export function privilegeKeysForItem(item) {
   if (!item) return [];

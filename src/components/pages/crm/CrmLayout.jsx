@@ -1,17 +1,22 @@
+import { useMemo } from "react";
 import { useSelector } from "react-redux";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import {
+  allowedCrmTabPrivileges,
+  getUserFunctionalities,
+} from "@/lib/access";
 
 const TABS = [
-  { to: "/app/crm", end: true, label: "Dashboard" },
-  { to: "/app/crm/customers", label: "Customers" },
-  { to: "/app/crm/activities", label: "Activities" },
-  { to: "/app/crm/followups", label: "Follow-ups" },
-  { to: "/app/crm/feedback", label: "Feedback" },
-  { to: "/app/crm/segments", label: "Segments" },
-  { to: "/app/crm/sms", label: "Outreach" },
-  { to: "/app/crm/templates", label: "Templates" },
-  { to: "/app/crm/settings", label: "Settings" },
+  { to: "/app/crm", end: true, label: "Dashboard", privilege: "CRM Dashboard" },
+  { to: "/app/crm/customers", label: "Customers", privilege: "CRM Customers" },
+  { to: "/app/crm/activities", label: "Activities", privilege: "CRM Activities" },
+  { to: "/app/crm/followups", label: "Follow-ups", privilege: "CRM Follow-ups" },
+  { to: "/app/crm/feedback", label: "Feedback", privilege: "CRM Feedback" },
+  { to: "/app/crm/segments", label: "Segments", privilege: "CRM Segments" },
+  { to: "/app/crm/sms", label: "Outreach", privilege: "CRM Outreach" },
+  { to: "/app/crm/templates", label: "Templates", privilege: "CRM Templates" },
+  { to: "/app/crm/settings", label: "Settings", privilege: "CRM Settings" },
 ];
 
 export function useCrmFacilityId() {
@@ -51,9 +56,29 @@ export function statusBadgeClass(status) {
   return map[status] || "bg-slate-50 text-slate-700 border-slate-200";
 }
 
+function tabMatchesPath(tab, pathname) {
+  if (tab.end) return pathname === tab.to;
+  return pathname === tab.to || pathname.startsWith(`${tab.to}/`);
+}
+
 export default function CrmLayout() {
   const location = useLocation();
-  const is360 = /\/crm\/customers\/[^/]+$/.test(location.pathname);
+  const { user, activeBusiness } = useSelector((s) => s.auth || {});
+  const pathname = location.pathname.replace(/\/+$/, "") || "/";
+  const is360 = /\/crm\/customers\/[^/]+$/.test(pathname);
+
+  const visibleTabs = useMemo(() => {
+    const allowed = new Set(
+      allowedCrmTabPrivileges(getUserFunctionalities(user, activeBusiness)),
+    );
+    return TABS.filter((tab) => allowed.has(tab.privilege));
+  }, [user, activeBusiness]);
+
+  const pathAllowed = visibleTabs.some((tab) => tabMatchesPath(tab, pathname));
+
+  if (visibleTabs.length && !pathAllowed) {
+    return <Navigate to={visibleTabs[0].to} replace />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#eef2f9] via-white to-white">
@@ -71,7 +96,7 @@ export default function CrmLayout() {
           </div>
           {!is360 && (
             <nav className="mt-4 flex gap-1 overflow-x-auto pb-1">
-              {TABS.map((tab) => (
+              {visibleTabs.map((tab) => (
                 <NavLink
                   key={tab.to}
                   to={tab.to}
@@ -93,7 +118,14 @@ export default function CrmLayout() {
         </div>
       </div>
       <div className="px-4 py-5 md:px-6">
-        <Outlet />
+        {visibleTabs.length ? (
+          <Outlet />
+        ) : (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            You don&apos;t have permission to open CRM. Ask an admin to grant
+            the CRM privilege under Sales.
+          </p>
+        )}
       </div>
     </div>
   );

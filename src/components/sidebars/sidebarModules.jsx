@@ -300,6 +300,12 @@ export const modules = [
           "Invoices",
           "Make Sales",
         ],
+        subFunctionalities: [
+          { title: "Cash Payment" },
+          { title: "Transfer Payment" },
+          { title: "Credit Payment" },
+          { title: "Apply Deposit Payment" },
+        ],
         access: [
           "services",
           "retailers",
@@ -440,8 +446,25 @@ export const modules = [
       {
         title: "CRM",
         url: "/app/crm",
-        functionality: ["CRM", "CRM Dashboard", "Customers", "Make sales"],
-        access: ["retailers"],
+        functionality: ["CRM"],
+        subFunctionalities: [
+          { title: "CRM Dashboard" },
+          { title: "CRM Customers" },
+          { title: "CRM Activities" },
+          { title: "CRM Follow-ups" },
+          { title: "CRM Feedback" },
+          { title: "CRM Segments" },
+          { title: "CRM Outreach" },
+          { title: "CRM Templates" },
+          { title: "CRM Settings" },
+        ],
+        access: [
+          "services",
+          "retailers",
+          "recycling",
+          "manufacturing",
+          "contractors",
+        ],
       },
       {
         title: "Invoice List",

@@ -9,6 +9,10 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { v4 as UUIDV4 } from "uuid";
 import moment from "moment";
 import { isProductTaxable } from "@/utils/taxableStatus";
+import {
+  getUserFunctionalities,
+  allowedInvoicePaymentModeIds,
+} from "@/lib/access";
 
 /** Remaining sales-limit qty for a product (facility-wide). null = unlimited. */
 function getSalesLimitRemaining(product) {
@@ -275,11 +279,28 @@ function isOutputVatTax(tax) {
 import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
 import { Checkbox } from "@/components/ui/checkbox";
 
-function PaymentModePicker({ selected, onToggle, className = "" }) {
+function PaymentModePicker({
+  selected,
+  onToggle,
+  options = PAYMENT_MODE_OPTIONS,
+  className = "",
+}) {
+  if (!options.length) {
+    return (
+      <div className={className}>
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          You don&apos;t have permission to select a payment method. Ask an
+          admin to grant Cash Payment, Transfer Payment, Credit Payment, or
+          Apply Deposit Payment under Create Invoice.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className={className}>
       <div className="flex flex-wrap gap-2">
-        {PAYMENT_MODE_OPTIONS.map((opt) => {
+        {options.map((opt) => {
           const checked = selected.includes(opt.id);
           return (
             <label
@@ -302,6 +323,9 @@ function PaymentModePicker({ selected, onToggle, className = "" }) {
       </div>
       <p className="mt-1 text-[11px] text-slate-500">
         {paymentModesHint(selected)}
+        {options.length < PAYMENT_MODE_OPTIONS.length
+          ? " Only payment methods granted to your role are shown."
+          : ""}
       </p>
     </div>
   );
@@ -770,6 +794,19 @@ function MakeSale() {
   const vatPolicy = activeBusiness?.vat_policy || "vat_exclusive";
   const allowSalesWithoutStock =
     activeBusiness?.allow_sales_without_stock || false;
+  const userFunctionalities = useMemo(
+    () => getUserFunctionalities(user_id, activeBusiness),
+    [user_id, activeBusiness],
+  );
+  const allowedPaymentModeIds = useMemo(
+    () => allowedInvoicePaymentModeIds(userFunctionalities),
+    [userFunctionalities],
+  );
+  const allowedPaymentModeOptions = useMemo(
+    () =>
+      PAYMENT_MODE_OPTIONS.filter((o) => allowedPaymentModeIds.includes(o.id)),
+    [allowedPaymentModeIds],
+  );
   const check = parseInt(buz_id) === parseInt(user_id.id);
   const [activeStore, setActiveStore] = useState(user_id.branch_name);
 
@@ -1048,27 +1085,40 @@ function MakeSale() {
   const [creditLimitDisplay, setCreditLimitDisplay] = useState(null);
   const [balancesLoading, setBalancesLoading] = useState(false);
 
-  const applyPaymentModes = useCallback((modes) => {
-    const unique = PAYMENT_MODE_OPTIONS.map((o) => o.id).filter((id) =>
-      modes.includes(id),
-    );
-    setSelectedPaymentModes(unique);
-    const cash = unique.includes("cash");
-    const transfer = unique.includes("transfer");
-    setPayWithCash(cash);
-    setPayWithTransfer(transfer);
-    setSaleType(cash || transfer ? "paid" : "credit");
-  }, []);
+  const applyPaymentModes = useCallback(
+    (modes) => {
+      const unique = PAYMENT_MODE_OPTIONS.map((o) => o.id).filter(
+        (id) => modes.includes(id) && allowedPaymentModeIds.includes(id),
+      );
+      setSelectedPaymentModes(unique);
+      const cash = unique.includes("cash");
+      const transfer = unique.includes("transfer");
+      setPayWithCash(cash);
+      setPayWithTransfer(transfer);
+      setSaleType(cash || transfer ? "paid" : "credit");
+    },
+    [allowedPaymentModeIds],
+  );
 
   const togglePaymentMode = useCallback(
     (id) => {
+      if (!allowedPaymentModeIds.includes(id)) return;
       const next = selectedPaymentModes.includes(id)
         ? selectedPaymentModes.filter((m) => m !== id)
         : [...selectedPaymentModes, id];
       applyPaymentModes(next);
     },
-    [selectedPaymentModes, applyPaymentModes],
+    [selectedPaymentModes, applyPaymentModes, allowedPaymentModeIds],
   );
+
+  useEffect(() => {
+    const next = selectedPaymentModes.filter((id) =>
+      allowedPaymentModeIds.includes(id),
+    );
+    if (next.length !== selectedPaymentModes.length) {
+      applyPaymentModes(next);
+    }
+  }, [allowedPaymentModeIds, selectedPaymentModes, applyPaymentModes]);
 
   useEffect(() => {
     const customerNo = selectedCustomer?.customerNo;
@@ -2562,6 +2612,15 @@ function MakeSale() {
 
     if (!selectedPaymentModes.length) {
       toast.error("Select a mode of payment");
+      return;
+    }
+
+    if (
+      selectedPaymentModes.some((id) => !allowedPaymentModeIds.includes(id))
+    ) {
+      toast.error(
+        "You don't have permission for one or more selected payment modes.",
+      );
       return;
     }
 
@@ -4161,6 +4220,7 @@ function MakeSale() {
                   <PaymentModePicker
                     selected={selectedPaymentModes}
                     onToggle={togglePaymentMode}
+                    options={allowedPaymentModeOptions}
                   />
                   <CustomerPaymentBalances
                     showCredit={hasCreditMode && Boolean(selectedCustomer)}
@@ -4236,6 +4296,7 @@ function MakeSale() {
                     <PaymentModePicker
                       selected={selectedPaymentModes}
                       onToggle={togglePaymentMode}
+                      options={allowedPaymentModeOptions}
                     />
                     <CustomerPaymentBalances
                       showCredit={hasCreditMode && Boolean(selectedCustomer)}
