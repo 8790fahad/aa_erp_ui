@@ -68,7 +68,7 @@ export default function ForgotPasswordForm() {
       },
       (err) => {
         console.error("API Error:", err)
-        toast.error("Something went wrong while sending reset email.")
+        toast.error(err?.message || "Something went wrong while sending reset email.")
         setLoading(false)
       },
     )

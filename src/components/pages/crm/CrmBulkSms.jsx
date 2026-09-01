@@ -273,7 +273,7 @@ export default function CrmBulkSms() {
             <h2 className="text-lg font-semibold text-[#1a2d5e]">Outreach</h2>
             <p className="text-sm text-slate-500">
               {isEmail
-                ? "Email via Mailtrap. Attach files if needed. Use {{customer_name}} / {{customer_no}}."
+                ? "Email is sent to the recipient. Use {{customer_name}} / {{customer_no}}."
                 : "SMS via BulkSMS Nigeria. Use {{customer_name}} / {{customer_no}}."}
             </p>
           </div>
