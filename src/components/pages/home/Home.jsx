@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
-import { getSidebarByAppType } from "@/components/sidebars/sidebarModules";
+import { getMergedSidebarForBusiness } from "@/components/sidebars/sidebarModules";
 import { cn } from "@/lib/utils";
 import {
   canAccessDashboard,
@@ -186,7 +186,7 @@ export default function Home() {
     "";
 
   const linkGroups = useMemo(() => {
-    const modules = getSidebarByAppType("retailers")
+    const modules = getMergedSidebarForBusiness(activeBusiness?.business_type)
       .map((module) => {
         if (!module.items?.length) return module;
         return {

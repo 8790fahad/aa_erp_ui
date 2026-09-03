@@ -21,7 +21,7 @@ import {
   getImageDimensions,
   validateImageDimensions,
 } from "@/utils/imageUtils";
-import { getSidebarByAppType } from "./sidebars/sidebarModules";
+import { getMergedSidebarForBusiness } from "./sidebars/sidebarModules";
 import { mergeReportPermissionsIntoSidebar } from "@/components/pages/report/utils/reportPermissions";
 import { EXPLICIT_ONLY_PRIVILEGES } from "@/lib/access";
 import { useSelector, useDispatch } from "react-redux";
@@ -1077,139 +1077,9 @@ const StaffManagementDashboard = () => {
 
   // Parse business_type and merge sidebar items from all business types
   const sidebarItems = useMemo(() => {
-    const businessType = activeBusiness?.business_type || "";
-
-    if (!businessType) {
-      console.warn("⚠️ No business_type found in activeBusiness");
-      return getSidebarByAppType("services"); // Default fallback
-    }
-
-    // Parse business_type - can be comma-separated string like "Retailers, Services"
-    const businessTypes = (() => {
-      // Handle if it's already an array
-      if (Array.isArray(businessType)) {
-        return businessType
-          .map((type) => {
-            const lower = String(type).trim().toLowerCase();
-            const typeMap = {
-              retailer: "retailers",
-              retailers: "retailers",
-              retail: "retailers",
-              service: "services",
-              services: "services",
-              recycling: "recycling",
-              manufacturing: "manufacturing",
-              manufacturer: "manufacturing",
-              manufacturers: "manufacturing",
-              contractor: "contractors",
-              contractors: "contractors",
-            };
-            return (
-              typeMap[lower] ||
-              (["retailers", "services", "recycling", "manufacturing", "contractors"].includes(
-                lower
-              )
-                ? lower
-                : null)
-            );
-          })
-          .filter((type) => type !== null && type !== "");
-      }
-
-      // Handle string (comma-separated)
-      if (typeof businessType !== "string") {
-        return [];
-      }
-
-      return businessType
-        .split(",")
-        .map((type) => {
-          const trimmed = type.trim();
-          if (!trimmed) return null;
-
-          const lower = trimmed.toLowerCase();
-          const typeMap = {
-            retailer: "retailers",
-            retailers: "retailers",
-            retail: "retailers",
-            service: "services",
-            services: "services",
-            recycling: "recycling",
-            manufacturing: "manufacturing",
-            manufacturer: "manufacturing",
-            manufacturers: "manufacturing",
-            contractor: "contractors",
-            contractors: "contractors",
-          };
-
-          const mapped = typeMap[lower];
-          if (mapped) return mapped;
-
-          if (
-            ["retailers", "services", "recycling", "manufacturing", "contractors"].includes(
-              lower
-            )
-          ) {
-            return lower;
-          }
-
-          return null;
-        })
-        .filter((type) => type !== null && type !== "");
-    })();
-
-    // Filter to only valid business types
-    const validBusinessTypes = businessTypes.filter((type) =>
-      ["retailers", "services", "recycling", "manufacturing", "contractors"].includes(type)
+    return mergeReportPermissionsIntoSidebar(
+      getMergedSidebarForBusiness(activeBusiness?.business_type),
     );
-
-    if (validBusinessTypes.length === 0) {
-      console.warn(
-        "⚠️ No valid business types found, using default 'services'"
-      );
-      return getSidebarByAppType("services"); // Default fallback
-    }
-
-    // Get all unique module titles from all business types
-    const allModulesMap = new Map();
-
-    validBusinessTypes.forEach((type) => {
-      const items = getSidebarByAppType(type);
-
-      items.forEach((module) => {
-        const existingModule = allModulesMap.get(module.title);
-
-        if (!existingModule) {
-          // First time seeing this module, add it with a deep copy
-          const moduleCopy = {
-            ...module,
-            items: module.items ? [...module.items] : undefined,
-          };
-          allModulesMap.set(module.title, moduleCopy);
-        } else {
-          // Module already exists, merge items
-          if (module.items && module.items.length > 0) {
-            const existingItems = existingModule.items || [];
-            const newItems = module.items || [];
-
-            // Merge items, avoiding duplicates by URL
-            const mergedItems = [...existingItems];
-            newItems.forEach((newItem) => {
-              const exists = existingItems.some(
-                (item) => item.url === newItem.url
-              );
-              if (!exists) {
-                mergedItems.push(newItem);
-              }
-            });
-
-            existingModule.items = mergedItems;
-          }
-        }
-      });
-    });
-
-    return mergeReportPermissionsIntoSidebar(Array.from(allModulesMap.values()));
   }, [activeBusiness?.business_type]);
 
   const [form, setForm] = useState({

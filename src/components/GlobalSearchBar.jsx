@@ -11,14 +11,14 @@ import {
   X,
 } from "lucide-react";
 import { _fetchApi } from "@/redux/actions/api";
-import { getSidebarByAppType } from "@/components/sidebars/sidebarModules";
+import { getMergedSidebarForBusiness } from "@/components/sidebars/sidebarModules";
 import { canAccessPrivileges, getUserFunctionalities, privilegeKeysForItem } from "@/lib/access";
 
 const DEBOUNCE_MS = 280;
 const MIN_QUERY = 1;
 
-function buildPageShortcuts(appType, functionalities) {
-  const modules = getSidebarByAppType(appType || "retailers") || [];
+function buildPageShortcuts(businessType, functionalities) {
+  const modules = getMergedSidebarForBusiness(businessType) || [];
   const pages = [];
   for (const mod of modules) {
     const leafItems =

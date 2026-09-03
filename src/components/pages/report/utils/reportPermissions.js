@@ -67,6 +67,7 @@ export function canAccessAnyProductionReport(user, activeBusiness) {
 /** Staff permissions UI: attach report toggles under Production + Reports. */
 export function mergeReportPermissionsIntoSidebar(modules) {
   const accountingPermissions = flattenAccountingReportPermissions();
+  const hasProduction = (modules || []).some((m) => m.title === "Production");
 
   return modules.map((module) => {
     if (module.title === "Production") {
@@ -86,20 +87,39 @@ export function mergeReportPermissionsIntoSidebar(modules) {
       };
     }
     if (module.title === "Reports") {
-      return {
-        ...module,
-        items: [
-          ...(module.items || []),
-          {
-            title: "Accounting Reports",
-            subFunctionalities: accountingPermissions,
-          },
-          {
-            title: "Production Reports",
-            subFunctionalities: PRODUCTION_REPORT_PERMISSIONS,
-          },
-        ],
+      const existing = [...(module.items || [])];
+      const ensureItem = (title, extra = {}) => {
+        const idx = existing.findIndex((item) => item.title === title);
+        if (idx >= 0) {
+          existing[idx] = { ...existing[idx], ...extra };
+          return;
+        }
+        existing.push({ title, ...extra });
       };
+      ensureItem("Accounting Reports", {
+        url: existing.find((i) => i.title === "Accounting Reports")?.url
+          || "/app/reports/accounting-reports",
+        functionality: [
+          "Accounting Reports",
+          "Reports",
+          "Report",
+        ],
+        subFunctionalities: accountingPermissions,
+      });
+      if (hasProduction) {
+        ensureItem("Production Reports", {
+          url: existing.find((i) => i.title === "Production Reports")?.url
+            || "/app/production/production-reports",
+          functionality: [
+            "Production Reports",
+            "Reports",
+            "Report",
+            "Production",
+          ],
+          subFunctionalities: PRODUCTION_REPORT_PERMISSIONS,
+        });
+      }
+      return { ...module, items: existing };
     }
     return module;
   });

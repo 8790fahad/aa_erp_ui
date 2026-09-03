@@ -9,7 +9,7 @@ import {
   hasFullAccess,
   privilegeKeysForItem,
 } from "@/lib/access";
-import { getSidebarByAppType } from "@/components/sidebars/sidebarModules";
+import { getMergedSidebarForBusiness } from "@/components/sidebars/sidebarModules";
 
 function collectNavEntries(modules) {
   const entries = [];
@@ -53,8 +53,8 @@ export default function PageAccessGuard({ children }) {
   );
 
   const entries = useMemo(
-    () => collectNavEntries(getSidebarByAppType("retailers")),
-    [],
+    () => collectNavEntries(getMergedSidebarForBusiness(activeBusiness?.business_type)),
+    [activeBusiness?.business_type],
   );
 
   if (!authenticated && !loggedIn) return children;

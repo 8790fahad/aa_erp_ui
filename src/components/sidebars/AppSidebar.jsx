@@ -11,7 +11,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { getSidebarByAppType } from "./sidebarModules";
+import { getMergedSidebarForBusiness } from "./sidebarModules";
 import { canAccessDashboard } from "@/lib/access";
 import { useSelector } from "react-redux";
 import { NavLink } from "react-router-dom";
@@ -27,7 +27,7 @@ export function AppSidebar(props) {
   const showDashboard = canAccessDashboard(user, activeBusiness);
 
   const sidebarItems = useMemo(() => {
-    return getSidebarByAppType("retailers")
+    return getMergedSidebarForBusiness(activeBusiness?.business_type)
       .filter((module) => module.title !== "Dashboard")
       .map((module) => {
         if (!module.items?.length) return module;

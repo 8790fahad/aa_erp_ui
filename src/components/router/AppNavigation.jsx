@@ -120,7 +120,9 @@ import JournalEntryForm from "../pages/account/JournalEntryForm";
 import JournalEntryDetail from "../pages/account/JournalEntryDetail";
 // import BankTransactions from "../pages/audit/BankTransactions";
 // import BankReconciliationModals from "../pages/account/BankReconcilationModals";
-import { appTypeAccess } from "../sidebars/sidebarModules";
+import { appTypeAccess, getAppTypesForBusiness } from "../sidebars/sidebarModules";
+import { parseBusinessTypes } from "@/utils/businessTypeUtils";
+import { useSelector } from "react-redux";
 import TeamSetup from "../pages/admin/TeamSetup";
 import RateSetup from "../pages/admin/RateSetup";
 import DiscountSetup from "../pages/admin/DiscountSetup";
@@ -1467,17 +1469,27 @@ const routeModules = {
 };
 
 export default function AppNavigation() {
-  // YAMMUSA GLOBAL FARMS & AGRO ALLIED SERVICES is retail-only — never merge manufacturing/recycling (would pull Production)
+  const businessType = useSelector(
+    (state) => state.auth.activeBusiness?.business_type,
+  );
+  const types = parseBusinessTypes(businessType);
+  const includeProduction =
+    types.includes("manufacturing") || types.includes("recycling");
+
+  const allRouteKeys = new Set();
+  const routeTypes = getAppTypesForBusiness(businessType);
+  for (const type of routeTypes) {
+    for (const key of appTypeAccess[type] || []) {
+      allRouteKeys.add(key);
+    }
+  }
   // Customers / Suppliers live under Sales / Purchase in the sidebar but keep their own routes
   // Expenses (Bill + cash expenses) is linked from Purchase but registered as its own module
-  const allRouteKeys = new Set([
-    ...(appTypeAccess["retailers"] || []),
-    "Customers",
-    "Suppliers",
-    "Expenses",
-    // CRM lives under Sales in the sidebar but keeps its own /app/crm routes
-    "CRM",
-  ]);
+  allRouteKeys.add("Customers");
+  allRouteKeys.add("Suppliers");
+  allRouteKeys.add("Expenses");
+  allRouteKeys.add("CRM");
+  if (includeProduction) allRouteKeys.add("Production");
 
   // Map route keys to actual route modules, avoiding duplicates
   const dynamicRoutes = Array.from(allRouteKeys)
@@ -1508,7 +1520,14 @@ export default function AppNavigation() {
           path: "sales/separation",
           element: <InvoiceSeparation />,
         },
-        { path: "production/*", element: <Navigate to="/app/home" replace /> },
+        ...(!includeProduction
+          ? [
+              {
+                path: "production/*",
+                element: <Navigate to="/app/home" replace />,
+              },
+            ]
+          : []),
         { path: "*", element: <NotFound /> },
       ],
     },

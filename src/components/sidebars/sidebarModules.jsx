@@ -10,8 +10,10 @@ import {
   Landmark,
   NotebookText,
   Folder,
+  Factory,
 } from "lucide-react";
 import { SETTINGS_TABS } from "@/components/pages/admin/settingsTabs";
+import { parseBusinessTypes } from "@/utils/businessTypeUtils";
 
 export const modules = [
   {
@@ -117,6 +119,81 @@ export const modules = [
       //   url: "/app/inventory/store",
       //   access: ["services", "retailers", "recycling", "manufacturing"],
       // },
+    ],
+  },
+  {
+    title: "Production",
+    url: "#",
+    icon: Factory,
+    functionality: ["Production"],
+    items: [
+      {
+        title: "Record Production",
+        url: "/app/production/record-production",
+        functionality: ["Record Production", "Production"],
+        access: ["manufacturing"],
+      },
+      {
+        title: "WIP Inventory",
+        url: "/app/production/wip-inventory",
+        functionality: ["WIP Inventory", "Production"],
+        access: ["manufacturing"],
+      },
+      {
+        title: "Material Requisition",
+        url: "/app/production/requisition",
+        functionality: ["Material Requisition", "Production"],
+        access: ["manufacturing"],
+        requiresBusinessFlag: "enable_material_requisition",
+      },
+      {
+        title: "Material Received Note",
+        url: "/app/production/received-note",
+        functionality: ["Material Received Note", "Production"],
+        access: ["manufacturing"],
+      },
+      {
+        title: "Process Production",
+        url: "/app/production/process",
+        functionality: ["Process Production", "Production"],
+        access: ["manufacturing"],
+      },
+      {
+        title: "Produce",
+        url: "/app/production/produce-list",
+        functionality: ["Produce", "Production"],
+        access: ["recycling"],
+      },
+      {
+        title: "Collection",
+        url: "/app/production/collection",
+        functionality: ["Collection", "Production"],
+        access: ["recycling"],
+      },
+      {
+        title: "Raw Materials",
+        url: "/app/production/raw-material-collected",
+        functionality: ["Raw Materials", "Production"],
+        access: ["recycling"],
+      },
+      {
+        title: "Energy Consumption",
+        url: "/app/production/energy-consumption",
+        functionality: ["Energy Consumption", "Production"],
+        access: ["recycling"],
+      },
+      {
+        title: "Production Automation",
+        url: "/app/production/automation",
+        functionality: ["Production Automation", "Production"],
+        access: ["manufacturing", "recycling"],
+      },
+      {
+        title: "Production Reports",
+        url: "/app/production/production-reports",
+        functionality: ["Production Reports", "Production"],
+        access: ["manufacturing", "recycling"],
+      },
     ],
   },
   //Purchase
@@ -266,7 +343,8 @@ export const modules = [
       {
         title: "Projects",
         url: "/app/projects/project-list",
-        access: ["contractors"],
+        functionality: ["Projects"],
+        access: ["contractors", "manufacturing"],
       },
     ],
   },
@@ -537,7 +615,7 @@ export const modules = [
 
   {
     title: "Reports",
-    url: "/app/reports/accounting-reports",
+    url: "#",
     icon: NotebookPen,
     functionality: [
       "Reports",
@@ -545,12 +623,34 @@ export const modules = [
       "Production Reports",
       "Report",
     ],
-    access: [
-      "services",
-      "retailers",
-      "recycling",
-      "manufacturing",
-      "contractors",
+    items: [
+      {
+        title: "Accounting Reports",
+        url: "/app/reports/accounting-reports",
+        functionality: [
+          "Accounting Reports",
+          "Reports",
+          "Report",
+        ],
+        access: [
+          "services",
+          "retailers",
+          "recycling",
+          "manufacturing",
+          "contractors",
+        ],
+      },
+      {
+        title: "Production Reports",
+        url: "/app/production/production-reports",
+        functionality: [
+          "Production Reports",
+          "Reports",
+          "Report",
+          "Production",
+        ],
+        access: ["manufacturing", "recycling"],
+      },
     ],
   },
   // {
@@ -953,6 +1053,7 @@ export const appTypeAccess = {
   recycling: [
     "Dashboard",
     "Attendance",
+    "Production",
     // "Sales",
     "Customers",
     "Suppliers",
@@ -989,6 +1090,8 @@ export const appTypeAccess = {
     "Dashboard",
     "Attendance",
     "Inventory",
+    "Production",
+    "Projects",
     "Purchase",
     "Customers",
     "Suppliers",
@@ -1015,6 +1118,14 @@ export const appType = [
   "contractors",
 ];
 
+/** Map NGO onto contractors so Grants/Projects appear. */
+export function getAppTypesForBusiness(businessType) {
+  const validTypes = parseBusinessTypes(businessType)
+    .map((type) => (type === "ngo" ? "contractors" : type))
+    .filter((type) => appTypeAccess[type]);
+  return validTypes.length ? validTypes : ["retailers"];
+}
+
 export function getSidebarByAppType(appType) {
   const allowedTitles = appTypeAccess[appType] || [];
 
@@ -1036,4 +1147,34 @@ export function getSidebarByAppType(appType) {
       // Keep module if it has items or no items needed
       return !module.items || module.items.length > 0;
     });
+}
+
+/** Merge sidebar modules for comma-separated `business.business_type`. */
+export function getMergedSidebarForBusiness(businessType) {
+  const types = getAppTypesForBusiness(businessType);
+
+  const allModulesMap = new Map();
+  for (const type of types) {
+    for (const module of getSidebarByAppType(type)) {
+      const existing = allModulesMap.get(module.title);
+      if (!existing) {
+        allModulesMap.set(module.title, {
+          ...module,
+          items: module.items ? [...module.items] : undefined,
+        });
+        continue;
+      }
+      if (!module.items?.length) continue;
+      const existingItems = existing.items || [];
+      const mergedItems = [...existingItems];
+      for (const newItem of module.items) {
+        if (!existingItems.some((item) => item.url === newItem.url)) {
+          mergedItems.push(newItem);
+        }
+      }
+      existing.items = mergedItems;
+    }
+  }
+
+  return Array.from(allModulesMap.values());
 }
