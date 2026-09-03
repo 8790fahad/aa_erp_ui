@@ -387,7 +387,7 @@ export default function SalesManagement() {
       return {
         title: "Next: Credit approval",
         description:
-          "Use Credit Approval in the Sales menu to approve this credit sale.",
+          "Use the Credit tab on Verification Points to approve this credit sale.",
         label: "Approve Credit",
         disabled: true,
       };
