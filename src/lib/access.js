@@ -150,16 +150,25 @@ export function allowedCrmTabPrivileges(functionalities) {
 
 export function privilegeKeysForItem(item) {
   if (!item) return [];
+  const keys = [];
+  if (item.title) keys.push(item.title);
   if (Array.isArray(item.functionality) && item.functionality.length) {
-    return item.functionality;
+    keys.push(...item.functionality);
+  } else if (item.functionality) {
+    keys.push(item.functionality);
   }
-  if (item.functionality) return [item.functionality];
   if (Array.isArray(item.privileges) && item.privileges.length) {
-    return item.privileges;
+    keys.push(...item.privileges);
+  } else if (item.privileges) {
+    keys.push(item.privileges);
   }
-  if (item.privileges) return [item.privileges];
-  // Fallback to title only when explicitly allowed by caller
-  return item.title ? [item.title] : [];
+  return [
+    ...new Set(
+      keys
+        .map((key) => String(key).trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function moduleFunctionalityKeys(module) {

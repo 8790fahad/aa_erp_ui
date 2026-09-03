@@ -206,7 +206,7 @@ export const modules = [
       {
         title: "Vendors",
         url: "/app/suppliers",
-        functionality: ["Suppliers", "Supplier Register"],
+        functionality: ["Vendors", "Suppliers", "Supplier Register"],
         access: [
           "services",
           "retailers",

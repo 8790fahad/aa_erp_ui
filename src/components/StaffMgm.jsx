@@ -23,7 +23,7 @@ import {
 } from "@/utils/imageUtils";
 import { getMergedSidebarForBusiness } from "./sidebars/sidebarModules";
 import { mergeReportPermissionsIntoSidebar } from "@/components/pages/report/utils/reportPermissions";
-import { EXPLICIT_ONLY_PRIVILEGES } from "@/lib/access";
+import { EXPLICIT_ONLY_PRIVILEGES, privilegeKeysForItem } from "@/lib/access";
 import { useSelector, useDispatch } from "react-redux";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -1088,23 +1088,24 @@ const StaffManagementDashboard = () => {
   });
   const handleChildChechBoxChange = (subItem) => {
     setForm((prevForm) => {
-      const isChecked = prevForm.functionalities.includes(subItem.title);
+      const itemKeys = privilegeKeysForItem(subItem);
+      const isChecked = itemKeys.some((key) =>
+        prevForm.functionalities.includes(key),
+      );
       const allSubTitles =
         subItem.subFunctionalities?.map((s) => s.title).filter(Boolean) || [];
-      // Privileges that must be granted explicitly — not auto-enabled
-      // when the parent module switch is turned on.
       const autoSubTitles = allSubTitles.filter(
         (t) => !EXPLICIT_ONLY_PRIVILEGES.includes(t),
       );
+      const keysToRemove = [...itemKeys, ...allSubTitles];
 
       let updatedFunctionalities = isChecked
         ? prevForm.functionalities.filter(
-            (func) =>
-              func !== subItem.title && !allSubTitles.includes(func),
+            (func) => !keysToRemove.includes(func),
           )
         : [
             ...prevForm.functionalities,
-            subItem.title,
+            ...itemKeys,
             ...autoSubTitles.filter(
               (t) => !prevForm.functionalities.includes(t),
             ),
@@ -1941,6 +1942,7 @@ const StaffManagementDashboard = () => {
                                 const moduleFuncTitles = (
                                   module.items?.flatMap((item) => [
                                     item.title,
+                                    ...privilegeKeysForItem(item),
                                     ...(item.subFunctionalities?.map((s) => s.title) ||
                                       []),
                                   ]) || []
@@ -1978,8 +1980,8 @@ const StaffManagementDashboard = () => {
                                 <input
                                   type="checkbox"
                                   className="form-check-input"
-                                  checked={form.functionalities?.includes(
-                                    item.title
+                                  checked={privilegeKeysForItem(item).some((key) =>
+                                    form.functionalities?.includes(key),
                                   )}
                                   onChange={() => handleChildChechBoxChange(item)}
                                   id={`subSwitch-${index}-${itemIndex}`}
