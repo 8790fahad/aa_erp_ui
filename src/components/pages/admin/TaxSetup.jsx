@@ -238,29 +238,9 @@ const TaxSetup = ({ embedded = false }) => {
     getExistingCodes();
   }, [getTaxes, getExistingCodes]);
 
-  const fetchGeneratedCode = (parentCode) => {
-    if (!parentCode || !parentCode[0]) return;
-
-    _postApi(
-      "/account/generate-chart-of-account",
-      {
-        parent_code: parentCode[0],
-        parent_description: parentCode[1],
-        business_name: activeBusiness?.business_name,
-      },
-      (resp) => {
-        if (resp.success) {
-          console.log("Generated code:", resp.code);
-        } else {
-          toast.error("Failed to generate account code.");
-        }
-      },
-      (err) => {
-        console.error("API Error:", err);
-        toast.error("Something went wrong while generating the code.");
-      }
-    );
-  };
+  const selectedAccountHead = existingCodes.filter(
+    (account) => String(account.head) === String(formData.subhead),
+  );
 
   const fields = [
     {
@@ -603,16 +583,12 @@ const TaxSetup = ({ embedded = false }) => {
                     placeholder="Select account head"
                     required
                     onChange={(selected) => {
-                      const selectedSubhead = [
-                        selected[0]?.head,
-                        selected[0]?.description,
-                      ];
                       setFormData((prev) => ({
                         ...prev,
-                        subhead: selectedSubhead[0],
+                        subhead: selected[0]?.head || "",
                       }));
-                      fetchGeneratedCode(selectedSubhead);
                     }}
+                    selected={selectedAccountHead}
                     labelKey={(option) =>
                       `${option.description} - (${option.head})`
                     }
