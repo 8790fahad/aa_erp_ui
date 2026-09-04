@@ -9,6 +9,7 @@ import PropTypes from "prop-types";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 import Barcode from "react-barcode";
 import { isProductTaxable } from "@/utils/taxableStatus";
+import { inferTaxInclusiveType } from "@/utils/saleVat";
 
 export default function CreditSaleInvoice({
   invoiceData: propInvoiceData,
@@ -118,9 +119,11 @@ export default function CreditSaleInvoice({
           rate: tax.rate ?? computedRate,
           tax_type: tax.tax_type || "Sales Tax",
           amount: tax.amount,
-          inclusive_type:
-            tax.inclusive_type ||
-            (tax.tax_type === "inclusive" ? "inclusive" : "exclusive"),
+          inclusive_type: inferTaxInclusiveType(
+            tax,
+            subtotal,
+            vatPolicy,
+          ),
         };
       });
       setCustomerCopyTaxes(mappedTaxes);
@@ -326,14 +329,12 @@ export default function CreditSaleInvoice({
   };
 
   const isExclusiveTaxRow = (tax) => {
-    if (vatPolicy === "vat_inclusive") return false;
-    if (vatPolicy === "vat_exclusive") return true;
-    const inc = String(tax?.inclusive_type || "").toLowerCase();
-    const typ = String(tax?.tax_type || "").toLowerCase();
-    if (inc === "inclusive" || typ === "inclusive") return false;
-    if (inc === "exclusive" || typ === "exclusive") return true;
-    // Stored sale tax lines without flags are treated as exclusive add-ons
-    return Number(tax?.amount || tax?.cost || 0) > 0;
+    const kind = inferTaxInclusiveType(
+      tax,
+      taxableNetAmount > 0 ? taxableNetAmount : subtotal,
+      vatPolicy,
+    );
+    return kind === "exclusive";
   };
 
   // Step 1: Calculate gross selling price (subtotal) - all items
@@ -443,55 +444,54 @@ export default function CreditSaleInvoice({
 
   // Exclusive VAT to fold into Amount(₦) / add to grand total
   const exclusiveTaxTotal = (() => {
-    if (!propTaxes?.length && totalTax > 0 && !isInclusiveTax) {
-      return totalTax;
-    }
     const fromRows = (propTaxes || [])
       .filter((tax) => isExclusiveTaxRow(tax))
       .reduce((sum, tax) => sum + Number(tax.amount ?? tax.cost ?? 0), 0);
     if (fromRows > 0) return fromRows;
-    if (vatPolicy === "all" || vatPolicy === "vat_exclusive") {
+    const anyInclusive = (propTaxes || []).some(
+      (tax) => !isExclusiveTaxRow(tax),
+    );
+    if (anyInclusive) return 0;
+    if (!propTaxes?.length && totalTax > 0 && !isInclusiveTax) {
       return totalTax;
     }
     return 0;
   })();
   const foldVatIntoUnitPrice =
-    customerPrintMode === "amount" &&
-    (Number(exclusiveTaxTotal) > 0 || Number(totalTax) > 0);
-  const vatToFold =
-    Number(exclusiveTaxTotal) > 0 ? exclusiveTaxTotal : Number(totalTax) || 0;
+    customerPrintMode === "amount" && Number(exclusiveTaxTotal) > 0;
+  const vatToFold = Number(exclusiveTaxTotal) || 0;
   const displaySubtotal = foldVatIntoUnitPrice
     ? subtotal + vatToFold
     : subtotal;
 
-  // Step 8: Calculate total amount (grand total) based on VAT policy
-  // Prefer sale totals from API when present (includes Output VAT).
+  // Step 8: Grand total — inclusive VAT is already in line prices.
   let totalAmount = 0;
   const backendTotal = Number(
     invoice.totalAmount ?? invoice.total_amount ?? NaN,
   );
-  if (Number.isFinite(backendTotal) && backendTotal > 0) {
+  const inclusiveComputed = netAmountAfterDiscount;
+  const exclusiveAddOn =
+    exclusiveTaxTotal > 0
+      ? exclusiveTaxTotal
+      : vatPolicy === "all" && propTaxes?.length
+        ? propTaxes
+            .filter((tax) => isExclusiveTaxRow(tax))
+            .reduce((sum, tax) => {
+              if (!(taxableNetAmount > 0)) return sum;
+              return (
+                sum + (taxableNetAmount * (parseFloat(tax.rate) || 0)) / 100
+              );
+            }, 0)
+        : 0;
+  const hasInclusiveVat =
+    isInclusiveTax ||
+    (propTaxes || []).some((tax) => !isExclusiveTaxRow(tax));
+  if (hasInclusiveVat && exclusiveAddOn <= 0.0001) {
+    totalAmount = inclusiveComputed;
+  } else if (vatPolicy === "all") {
+    totalAmount = inclusiveComputed + exclusiveAddOn;
+  } else if (Number.isFinite(backendTotal) && backendTotal > 0) {
     totalAmount = backendTotal;
-  } else if (vatPolicy === "all" && propTaxes && propTaxes.length > 0) {
-    const exclusiveVAT =
-      exclusiveTaxTotal > 0
-        ? exclusiveTaxTotal
-        : (() => {
-            const exclusiveTaxes = propTaxes.filter((tax) =>
-              isExclusiveTaxRow(tax),
-            );
-            if (exclusiveTaxes.length > 0 && taxableNetAmount > 0) {
-              return exclusiveTaxes.reduce((sum, tax) => {
-                return (
-                  sum + (taxableNetAmount * (parseFloat(tax.rate) || 0)) / 100
-                );
-              }, 0);
-            }
-            return 0;
-          })();
-    totalAmount = netAmountAfterDiscount + exclusiveVAT;
-  } else if (isInclusiveTax) {
-    totalAmount = subtotal - discountAmount;
   } else {
     totalAmount = netAmountAfterDiscount + totalTax;
   }
@@ -1486,15 +1486,11 @@ export default function CreditSaleInvoice({
                         </td>
                       </tr>
                     )}
-                    {!foldVatIntoUnitPrice &&
-                      resolvedTaxes.map((tax, index) => {
-                        // Determine if this specific tax is inclusive or exclusive
-                        const isTaxInclusive =
-                          vatPolicy === "all"
-                            ? tax.inclusive_type === "inclusive" ||
-                              (tax.inclusive_type === undefined &&
-                                tax.tax_type === "inclusive")
-                            : isInclusiveTax;
+                    {resolvedTaxes.map((tax, index) => {
+                        const isTaxInclusive = !isExclusiveTaxRow(tax);
+                        if (foldVatIntoUnitPrice && !isTaxInclusive) {
+                          return null;
+                        }
 
                         // Prefer VAT amount stored on the sale; fall back to rate calc
                         let taxAmount = Number(tax.amount ?? tax.cost ?? 0);
@@ -1585,17 +1581,7 @@ export default function CreditSaleInvoice({
                               className="border-r border-t border-gray-200 px-2 py-1 text-right text-xs font-semibold text-gray-700"
                             >
                               {tax.description} ({tax.rate}%{" "}
-                              {vatPolicy === "all"
-                                ? tax.inclusive_type === "inclusive"
-                                  ? "Inclusive"
-                                  : tax.inclusive_type === "exclusive"
-                                    ? "Exclusive"
-                                    : tax.tax_type === "inclusive"
-                                      ? "Inclusive"
-                                      : "Exclusive"
-                                : isInclusiveTax
-                                  ? "inclusive"
-                                  : "exclusive"}
+                              {isTaxInclusive ? "Inclusive" : "Exclusive"}
                               ):
                             </td>
                             <td className="border-t border-gray-200 px-2 py-1 text-right text-xs font-semibold text-gray-900">
@@ -1646,25 +1632,24 @@ export default function CreditSaleInvoice({
 
               {/* How this invoice is paid — after totals */}
               {(() => {
-                const collectedNow = Number(
-                  (cashPaid + transferPaid > 0.05
-                    ? cashPaid + transferPaid
-                    : amountPaid
-                  ).toFixed(2),
-                );
+                const collectedNow = Number((cashPaid + transferPaid).toFixed(2));
                 const onCredit = Number(creditAmount.toFixed(2));
                 const outstanding = Number(balanceDue.toFixed(2));
                 const isCreditOnly =
                   onCredit > 0.05 && collectedNow <= 0.05;
                 const isSettledNow =
-                  collectedNow > 0.05 && onCredit <= 0.05;
+                  collectedNow > 0.05 && outstanding <= 0.05;
+                const awaitingCollection =
+                  collectedNow <= 0.05 && outstanding > 0.05 && onCredit <= 0.05;
                 const paymentNote = isCreditOnly
                   ? "Nothing was collected at sale. The full amount is charged to the customer’s account and is still outstanding."
                   : isSettledNow
                     ? "This invoice was settled at sale. There is no credit balance."
-                    : onCredit > 0.05
-                      ? `₦${formatNumber(collectedNow)} was collected now. ₦${formatNumber(onCredit)} is charged to the customer’s account.`
-                      : null;
+                    : awaitingCollection
+                      ? "Cashier has not collected this payment yet. The amount below is still due."
+                      : onCredit > 0.05
+                        ? `₦${formatNumber(collectedNow)} was collected now. ₦${formatNumber(onCredit)} is charged to the customer’s account.`
+                        : null;
                 const metricBox = (label, value, hint) => (
                   <div
                     className={`min-w-0 rounded border border-emerald-100 bg-white ${
@@ -1733,7 +1718,7 @@ export default function CreditSaleInvoice({
 
                     <div
                       className={`grid gap-1 ${
-                        isCreditOnly || isSettledNow
+                        isCreditOnly || isSettledNow || awaitingCollection
                           ? "grid-cols-2"
                           : "grid-cols-3"
                       } ${isA5 ? "mt-0.5" : "mt-1.5"}`}
@@ -1756,7 +1741,7 @@ export default function CreditSaleInvoice({
                               ? "Amount not yet collected"
                               : "Fully paid",
                           )}
-                      {!isCreditOnly && !isSettledNow
+                      {!isCreditOnly && !isSettledNow && !awaitingCollection
                         ? metricBox(
                             "Still outstanding",
                             outstanding,
