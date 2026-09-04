@@ -234,19 +234,21 @@ export default function CreditSaleTaxDiscountPanel({
                     <div className="flex-1 min-w-0">
                       <label className="block text-xs font-semibold text-gray-700 mb-0.5">
                         {vatTax.description} ({vatTax.rate}%)
-                        {vatTax.inclusive_type && (
-                          <span
-                            className={`ml-2 px-1.5 py-0.5 rounded text-xs font-medium ${
-                              vatTax.inclusive_type === "inclusive"
-                                ? "bg-blue-100 text-blue-700"
-                                : "bg-green-100 text-green-700"
-                            }`}
-                          >
-                            {vatTax.inclusive_type === "inclusive"
-                              ? "Inclusive"
-                              : "Exclusive"}
-                          </span>
-                        )}
+                        <span
+                          className={`ml-2 px-1.5 py-0.5 rounded text-xs font-medium ${
+                            String(
+                              vatTax.inclusive_type || vatTax.tax_type || "",
+                            ).toLowerCase() === "inclusive"
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-green-100 text-green-700"
+                          }`}
+                        >
+                          {String(
+                            vatTax.inclusive_type || vatTax.tax_type || "",
+                          ).toLowerCase() === "inclusive"
+                            ? "Inclusive"
+                            : "Exclusive"}
+                        </span>
                       </label>
                       <p className="text-xs text-gray-500">
                         {vatTax.inclusive_type === "inclusive" ||

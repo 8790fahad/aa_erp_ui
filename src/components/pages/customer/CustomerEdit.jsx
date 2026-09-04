@@ -59,6 +59,9 @@ export default function CustomerEdit() {
     setForm((p) => ({
       ...p,
       [name]: value,
+      ...(name === "customer_type" && value === "walk-in"
+        ? { credit_limit: 0 }
+        : {}),
     }));
   };
 
@@ -115,10 +118,10 @@ export default function CustomerEdit() {
             value={form.customer_type}
             onChange={handleChange}
           >
-            <option value="">--select--</option>
+            <option value="customer">Customer</option>
+            <option value="walk-in">Walk-in</option>
             <option value="partners">Partners</option>
             <option value="directors">Directors</option>
-            <option value="customers">Customers</option>
           </select>
         </>
       ),
@@ -136,6 +139,10 @@ export default function CustomerEdit() {
     let obj = {
       ...form,
       query_type: "update",
+      customer_type:
+        form.customer_type === "walk-in" ? "walk-in" : form.customer_type || "customer",
+      credit_limit:
+        form.customer_type === "walk-in" ? 0 : form.credit_limit,
     };
 
     console.log(obj);

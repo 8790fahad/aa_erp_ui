@@ -24,6 +24,10 @@ import {
   sanitizePhoneInput,
   NIGERIAN_PHONE_HINT,
 } from "@/lib/nigerianPhone";
+import {
+  isWalkInCustomer,
+  normalizeCustomerKind,
+} from "@/utils/customerKind";
 
 const SALUTATIONS = [
   "Mr.",
@@ -131,6 +135,7 @@ const CustomerRegistartion = ({
       payment_terms: "Due on Receipt",
       enable_portal: false,
       credit_limit: "",
+      customer_type: "customer",
       opening_balance: "",
       obdate: "",
       receivable_code: activeBusiness?.receivable_code || "",
@@ -235,11 +240,14 @@ const CustomerRegistartion = ({
         payment_terms: selectedCustomer.payment_terms || "Due on Receipt",
         enable_portal: Boolean(selectedCustomer.enable_portal),
         remarks: selectedCustomer.remarks || "",
+        customer_type: normalizeCustomerKind(selectedCustomer),
         credit_limit:
-          selectedCustomer.credit_limit != null &&
-          selectedCustomer.credit_limit !== ""
-            ? formatNumberWithCommas(String(selectedCustomer.credit_limit))
-            : "",
+          isWalkInCustomer(selectedCustomer)
+            ? "0"
+            : selectedCustomer.credit_limit != null &&
+                selectedCustomer.credit_limit !== ""
+              ? formatNumberWithCommas(String(selectedCustomer.credit_limit))
+              : "",
         opening_balance: openingBalance
           ? formatNumberWithCommas(String(openingBalance))
           : "",
@@ -295,6 +303,14 @@ const CustomerRegistartion = ({
         entity_type: value,
         // Company RC only applies to business customers
         company_id: value === "individual" ? "" : prev.company_id,
+      }));
+    } else if (name === "customer_type") {
+      setForm((prev) => ({
+        ...prev,
+        customer_type: value,
+        entity_type: value === "walk-in" ? "individual" : prev.entity_type,
+        company_id: value === "walk-in" ? "" : prev.company_id,
+        credit_limit: value === "walk-in" ? "0" : prev.credit_limit,
       }));
     } else {
       setForm((prev) => ({ ...prev, [name]: value }));
@@ -468,7 +484,9 @@ const CustomerRegistartion = ({
       const basePayload = {
         name: displayName,
         fullname: displayName,
-        entity_type: form.entity_type || "business",
+        entity_type: isWalkInCustomer(form.customer_type)
+          ? "individual"
+          : form.entity_type || "business",
         company_name: form.company_name || displayName,
         salutation: form.salutation || "",
         first_name: form.first_name || "",
@@ -485,10 +503,12 @@ const CustomerRegistartion = ({
         language: form.language || "English",
         currency: form.currency || "NGN - Nigerian Naira",
         payment_terms: form.payment_terms || "Due on Receipt",
-        credit_limit:
-          form.credit_limit && form.credit_limit !== ""
+        credit_limit: isWalkInCustomer(form.customer_type)
+          ? 0
+          : form.credit_limit && form.credit_limit !== ""
             ? parseFloat(parseNumberFromFormatted(form.credit_limit)) || 0
             : 0,
+        customer_type: normalizeCustomerKind(form.customer_type),
         remarks: form.remarks || "",
         billing_address,
         shipping_address,
@@ -651,6 +671,30 @@ const CustomerRegistartion = ({
         >
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
             <div>
+              <ShadcnLabel className={labelClass}>Customer Type</ShadcnLabel>
+              <div className="flex items-center gap-5 pt-1">
+                {[
+                  ["customer", "Customer"],
+                  ["walk-in", "Walk-in"],
+                ].map(([value, label]) => (
+                  <label
+                    key={value}
+                    className="flex cursor-pointer items-center gap-2 text-sm text-slate-700"
+                  >
+                    <input
+                      type="radio"
+                      name="customer_type"
+                      value={value}
+                      checked={normalizeCustomerKind(form.customer_type) === value}
+                      onChange={handleChange}
+                      className="accent-[var(--aa-accent)]"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
               {/* <ShadcnLabel className={labelClass}>Customer Type</ShadcnLabel> */}
               <div className="flex items-center gap-5 pt-1">
                 {[
@@ -667,6 +711,7 @@ const CustomerRegistartion = ({
                       value={value}
                       checked={form.entity_type === value}
                       onChange={handleChange}
+                      disabled={isWalkInCustomer(form.customer_type)}
                       className="accent-[var(--aa-accent)]"
                     />
                     {label}
@@ -878,12 +923,26 @@ const CustomerRegistartion = ({
                   <input
                     id="credit_limit"
                     name="credit_limit"
-                    value={form.credit_limit || ""}
+                    value={
+                      isWalkInCustomer(form.customer_type)
+                        ? "0"
+                        : form.credit_limit || ""
+                    }
                     onChange={handleChange}
                     inputMode="decimal"
                     placeholder="0.00"
-                    className={inputClass}
+                    disabled={isWalkInCustomer(form.customer_type)}
+                    className={cn(
+                      inputClass,
+                      isWalkInCustomer(form.customer_type) &&
+                        "bg-slate-50 text-slate-500",
+                    )}
                   />
+                  {isWalkInCustomer(form.customer_type) ? (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Walk-in customers cannot be invoiced on credit.
+                    </p>
+                  ) : null}
                 </div>
                 <div>
                   <ShadcnLabel className={labelClass}>

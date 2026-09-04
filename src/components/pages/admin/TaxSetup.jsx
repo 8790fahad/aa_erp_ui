@@ -488,8 +488,8 @@ const TaxSetup = ({ embedded = false }) => {
                       <SelectValue placeholder="Select tax category" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="sales">Sales</SelectItem>
-                      <SelectItem value="purchase">
+                      <SelectItem value="Sales">Sales</SelectItem>
+                      <SelectItem value="Purchase">
                         Purchase/Expenses
                       </SelectItem>
                     </SelectContent>

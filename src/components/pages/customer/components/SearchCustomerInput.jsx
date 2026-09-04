@@ -4,6 +4,7 @@ import { getCustomers } from "@/redux/actions/customer";
 import { useCallback, useEffect, useId, useMemo } from "react";
 import { Typeahead } from "react-bootstrap-typeahead";
 import { useDispatch, useSelector } from "react-redux";
+import { customerKindLabel } from "@/utils/customerKind";
 
 function SearchCustomerInput(props) {
   const dispatch = useDispatch();
@@ -82,8 +83,19 @@ function SearchCustomerInput(props) {
         selected={selectedForTypeahead}
         renderMenuItemChildren={(option) => (
           <div className="py-1">
-            <div className="font-semibold text-slate-800">
-              {labelKeyFn(option)}
+            <div className="flex items-center justify-between gap-3">
+              <div className="font-semibold text-slate-800">
+                {labelKeyFn(option)}
+              </div>
+              <span
+                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                  customerKindLabel(option) === "Walk-in"
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {customerKindLabel(option)}
+              </span>
             </div>
             <small className="text-slate-600 text-xs">
               Customer ID: {option.customerNo}

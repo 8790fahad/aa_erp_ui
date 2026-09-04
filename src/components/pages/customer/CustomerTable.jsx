@@ -25,6 +25,7 @@ import CustomersUpload from "./components/CustomersUpload";
 import CustomerRegistartion from "./CustomerRegistration";
 import { _fetchApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
+import { customerKindLabel, isWalkInCustomer } from "@/utils/customerKind";
 
 const AVATAR_BG = [
   "linear-gradient(155deg,#4d6bff,#141c56)",
@@ -170,6 +171,8 @@ export default function CustomerTable() {
       item.mobile,
       item.email,
       item.customerNo,
+      item.customer_type,
+      customerKindLabel(item),
     ].some((v) => String(v || "").toLowerCase().includes(filterText.toLowerCase()));
 
   const viewingAllWarehouses =
@@ -418,6 +421,7 @@ export default function CustomerTable() {
                     </th>
                     {[
                       ["Customer", false],
+                      ["Type", false],
                       ["Company", false],
                       ["Contact", false],
                       ["Receivables", true, "₦ used"],
@@ -450,7 +454,8 @@ export default function CustomerTable() {
                     const email = String(item.email || "").trim();
                     const phone = formatDisplayPhone(item.phone || item.mobile || "");
                     const limit = parseFloat(item.credit_limit) || 0;
-                    const unlimited = !(limit > 0);
+                    const walkIn = isWalkInCustomer(item);
+                    const unlimited = !walkIn && !(limit > 0);
                     const pct = unlimited ? null : Number(item.credit_used_percent ?? 0);
                     const deposit = parseFloat(
                       item.deposit ?? item.unearned_deposit ?? item.unused_credits,
@@ -503,6 +508,20 @@ export default function CustomerTable() {
                               </div>
                             </div>
                           </div>
+                        </td>
+                        <td
+                          className="px-2.5 py-[15px]"
+                          data-label="Type"
+                        >
+                          <span
+                            className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                              walkIn
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-slate-100 text-[#3d4260]"
+                            }`}
+                          >
+                            {customerKindLabel(item)}
+                          </span>
                         </td>
                         <td
                           className="px-2.5 py-[15px] text-[13.5px] font-medium text-[#3d4260]"

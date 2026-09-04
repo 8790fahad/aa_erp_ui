@@ -97,7 +97,11 @@ function invoiceCoverageError({
   creditLimit,
   creditOutstanding,
   depositBalance,
+  isWalkIn = false,
 }) {
+  if (isWalkIn && hasCredit) {
+    return "Walk-in customers cannot be invoiced on credit. Use Cash or Transfer.";
+  }
   if (hasCash || hasTransfer) return null;
   if (!hasCredit && !hasDeposit) return null;
   const invoiceTotal = Number(total) || 0;
@@ -131,6 +135,67 @@ function invoiceCoverageError({
     return `Invoice ${fmt(invoiceTotal)} exceeds deposit available ${fmt(deposit)}.`;
   }
   return null;
+}
+
+function InvoiceWalkInFields({
+  isWalkIn,
+  setIsWalkIn,
+  walkInName,
+  setWalkInName,
+  walkInPhone,
+  setWalkInPhone,
+  selectedCustomer,
+  onPickCustomer,
+}) {
+  return (
+    <div className="mt-2 space-y-2">
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          checked={isWalkIn}
+          onChange={(e) => {
+            const on = e.target.checked;
+            setIsWalkIn(on);
+            if (on) {
+              if (selectedCustomer && !isWalkInCustomer(selectedCustomer)) {
+                onPickCustomer(null);
+              }
+            } else {
+              setWalkInName("");
+              setWalkInPhone("");
+            }
+          }}
+          className="accent-[var(--aa-accent)]"
+        />
+        Walk-in customer
+      </label>
+      {isWalkIn ? (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div>
+            <input
+              type="text"
+              value={walkInName}
+              onChange={(e) => setWalkInName(e.target.value)}
+              placeholder="Walk-in name"
+              className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)]"
+            />
+          </div>
+          <div>
+            <input
+              type="tel"
+              value={walkInPhone}
+              onChange={(e) => setWalkInPhone(e.target.value)}
+              placeholder="Phone number"
+              className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)]"
+            />
+            <p className="mt-0.5 text-[10px] text-slate-500">
+              {NIGERIAN_PHONE_HINT}
+            </p>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function cartQtyForSku(cart, sku, excludeId) {
@@ -240,6 +305,15 @@ import { Button, Table } from "reactstrap";
 import { Typeahead } from "react-bootstrap-typeahead";
 import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
 import CustomerRegistartion from "@/components/pages/customer/CustomerRegistration";
+import {
+  isWalkInCustomer,
+  customerKindLabel,
+} from "@/utils/customerKind";
+import {
+  isValidNigerianPhone,
+  normalizeNigerianPhone,
+  NIGERIAN_PHONE_HINT,
+} from "@/lib/nigerianPhone";
 import CreditSaleInvoicePDFViewer from "./CreditSaleInvoicePDF";
 import CreditSaleInvoiceImproved from "./CreditSaleInvoiceImproved";
 import CreditSaleTaxDiscountPanel from "./CreditSaleTaxDiscountPanel";
@@ -258,22 +332,67 @@ function isTaxInclusive(tax, vatPolicy = "vat_exclusive") {
 function isInputVatTax(tax) {
   const description = String(tax?.description || tax?.name || "").toLowerCase();
   const category = String(tax?.tax_category || tax?.category || "").toLowerCase();
+  // Invoice/sales taxes are never Input VAT, even if the description is misnamed.
+  if (category === "sales" || category === "sale") return false;
   return (
     description.includes("input vat") ||
     description.includes("input-vat") ||
-    category.includes("purchase") ||
-    category.includes("input")
+    description.includes("inputvat")
   );
 }
 
 function isOutputVatTax(tax) {
   if (isInputVatTax(tax)) return false;
   const description = String(tax?.description || tax?.name || "").toLowerCase();
-  return (
+  const category = String(tax?.tax_category || tax?.category || "").toLowerCase();
+  if (
     description.includes("output vat") ||
     description.includes("output-vat") ||
-    description.includes("value added tax") ||
-    description.includes("vat")
+    description.includes("value added tax")
+  ) {
+    return true;
+  }
+  if (category === "sales" || category === "sale") {
+    return description.includes("vat") || description.includes("tax");
+  }
+  return false;
+}
+
+function taxInclusiveKind(tax) {
+  return String(tax?.inclusive_type || tax?.tax_type || "").trim().toLowerCase();
+}
+
+function matchesVatPolicy(tax, vatPolicy) {
+  if (!vatPolicy || vatPolicy === "all") return true;
+  const kind = taxInclusiveKind(tax);
+  if (!kind) return true;
+  if (vatPolicy === "vat_exclusive") return kind === "exclusive";
+  if (vatPolicy === "vat_inclusive") return kind === "inclusive";
+  return true;
+}
+
+function taxInclusiveExclusiveLabel(tax) {
+  return isTaxInclusive(tax, "vat_exclusive") ? "Inclusive" : "Exclusive";
+}
+
+function formatVatOptionLabel(tax) {
+  const name = String(tax?.description || "VAT").trim();
+  const rate = tax?.rate != null && tax.rate !== "" ? `${tax.rate}%` : "";
+  const kind = taxInclusiveExclusiveLabel(tax);
+  return rate ? `${name} ${rate} (${kind})` : `${name} (${kind})`;
+}
+
+function pickPreferredVatTax(taxes) {
+  const list = (taxes || []).filter((t) => t && !isInputVatTax(t));
+  if (!list.length) return null;
+  const outputNamed = list.filter((t) =>
+    String(t.description || "")
+      .toLowerCase()
+      .includes("output"),
+  );
+  const pool = outputNamed.length ? outputNamed : list;
+  return (
+    pool.find((t) => isTaxInclusive(t, "vat_exclusive")) || pool[0] || null
   );
 }
 import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
@@ -802,10 +921,17 @@ function MakeSale() {
     () => allowedInvoicePaymentModeIds(userFunctionalities),
     [userFunctionalities],
   );
+  const [isWalkIn, setIsWalkIn] = useState(false);
+  const [walkInName, setWalkInName] = useState("");
+  const [walkInPhone, setWalkInPhone] = useState("");
   const allowedPaymentModeOptions = useMemo(
     () =>
-      PAYMENT_MODE_OPTIONS.filter((o) => allowedPaymentModeIds.includes(o.id)),
-    [allowedPaymentModeIds],
+      PAYMENT_MODE_OPTIONS.filter((o) => {
+        if (!allowedPaymentModeIds.includes(o.id)) return false;
+        if (isWalkIn && o.id === "credit") return false;
+        return true;
+      }),
+    [allowedPaymentModeIds, isWalkIn],
   );
   const check = parseInt(buz_id) === parseInt(user_id.id);
   const [activeStore, setActiveStore] = useState(user_id.branch_name);
@@ -1001,14 +1127,17 @@ function MakeSale() {
     [taxes],
   );
 
-  // Filter Output VAT taxes (sales VAT only — never Input VAT)
+  // Filter Output VAT (invoice VAT). Include Output VAT even if it was saved
+  // under Purchase, and include Sales-category VAT even if named Input VAT.
   const outputVATTaxes = useMemo(
-    () => (salesTaxes || []).filter((tax) => isOutputVatTax(tax)),
-    [salesTaxes],
+    () => (taxes || []).filter((tax) => isOutputVatTax(tax)),
+    [taxes],
   );
   const [showServices, setShowServices] = useState(false);
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const selectedCustomerRef = useRef(null);
+  selectedCustomerRef.current = selectedCustomer;
   const [selectedItem, setSelectedItem] = useState(null);
   const [otherInfo, setOtherInfo] = useState({});
   const [showInvoicePreview, setShowInvoicePreview] = useState(false);
@@ -1112,13 +1241,28 @@ function MakeSale() {
   );
 
   useEffect(() => {
-    const next = selectedPaymentModes.filter((id) =>
-      allowedPaymentModeIds.includes(id),
-    );
-    if (next.length !== selectedPaymentModes.length) {
-      applyPaymentModes(next);
+    if (!isWalkIn) return;
+    if (selectedPaymentModes.includes("credit")) {
+      applyPaymentModes(selectedPaymentModes.filter((id) => id !== "credit"));
     }
-  }, [allowedPaymentModeIds, selectedPaymentModes, applyPaymentModes]);
+  }, [isWalkIn, selectedPaymentModes, applyPaymentModes]);
+
+  const onPickCustomer = useCallback(
+    (customer) => {
+      setSelectedCustomer(customer);
+      applyPaymentModes([]);
+      if (customer && isWalkInCustomer(customer)) {
+        setIsWalkIn(true);
+        setWalkInName(customer.fullname || "");
+        setWalkInPhone(customer.phone || customer.mobile || "");
+      } else if (customer) {
+        setIsWalkIn(false);
+        setWalkInName("");
+        setWalkInPhone("");
+      }
+    },
+    [applyPaymentModes],
+  );
 
   useEffect(() => {
     const customerNo = selectedCustomer?.customerNo;
@@ -1127,7 +1271,9 @@ function MakeSale() {
       setDepositBalance(null);
       setCreditOutstanding(null);
       setCreditLimitDisplay(
-        parseFloat(selectedCustomer?.credit_limit || 0) || 0,
+        isWalkIn || isWalkInCustomer(selectedCustomer)
+          ? 0
+          : parseFloat(selectedCustomer?.credit_limit || 0) || 0,
       );
       setBalancesLoading(false);
       return undefined;
@@ -1145,7 +1291,9 @@ function MakeSale() {
         if (hasDepositMode) setDepositBalance(deposit);
         if (hasCreditMode) setCreditOutstanding(receivables);
         setCreditLimitDisplay(
-          parseFloat(selectedCustomer?.credit_limit || 0) || 0,
+          isWalkIn || isWalkInCustomer(selectedCustomer)
+            ? 0
+            : parseFloat(selectedCustomer?.credit_limit || 0) || 0,
         );
         setBalancesLoading(false);
       },
@@ -1154,7 +1302,9 @@ function MakeSale() {
         if (hasDepositMode) setDepositBalance(0);
         if (hasCreditMode) setCreditOutstanding(0);
         setCreditLimitDisplay(
-          parseFloat(selectedCustomer?.credit_limit || 0) || 0,
+          isWalkIn || isWalkInCustomer(selectedCustomer)
+            ? 0
+            : parseFloat(selectedCustomer?.credit_limit || 0) || 0,
         );
         setBalancesLoading(false);
       },
@@ -1163,7 +1313,13 @@ function MakeSale() {
     return () => {
       cancelled = true;
     };
-  }, [selectedCustomer, activeBusiness?.id, hasCreditMode, hasDepositMode]);
+  }, [
+    selectedCustomer,
+    activeBusiness?.id,
+    hasCreditMode,
+    hasDepositMode,
+    isWalkIn,
+  ]);
   const [invoiceNumberDisplay] = useState(
     () => `INV-${moment().format("YYMMDD")}-DRAFT`,
   );
@@ -1516,9 +1672,8 @@ function MakeSale() {
     if (!activeBusiness?.id) return;
 
     setLoadingTaxes(true);
-    const taxCategory = encodeURIComponent("sales");
     _fetchApi(
-      `/api/get-taxes-by-category?facilityId=${activeBusiness.id}&tax_category=${taxCategory}`,
+      `/api/taxes?facilityId=${activeBusiness.id}`,
       (response) => {
         if (response.success) {
           setTaxes(response.results || []);
@@ -1541,73 +1696,12 @@ function MakeSale() {
     });
   }, [salesTaxes]);
 
-  // Filter taxes based on vat_policy
-  const filteredSalesTaxes = useMemo(() => {
-    if (!salesTaxes || salesTaxes.length === 0) return [];
-
-    // If vat_policy is "all", show all taxes
-    if (vatPolicy === "all") {
-      return salesTaxes;
-    }
-
-    // Filter based on vat_policy
-    return salesTaxes.filter((tax) => {
-      // If tax has inclusive_type, use it
-      if (tax.inclusive_type) {
-        if (vatPolicy === "vat_exclusive") {
-          return tax.inclusive_type === "exclusive";
-        } else if (vatPolicy === "vat_inclusive") {
-          return tax.inclusive_type === "inclusive";
-        }
-      }
-
-      // Fallback to tax_type if inclusive_type is not available
-      if (tax.tax_type) {
-        if (vatPolicy === "vat_exclusive") {
-          return tax.tax_type === "exclusive";
-        } else if (vatPolicy === "vat_inclusive") {
-          return tax.tax_type === "inclusive";
-        }
-      }
-
-      // If no type specified, don't show it
-      return false;
-    });
-  }, [salesTaxes, vatPolicy]);
-
-  // Filter Output VAT taxes based on vat_policy
-  const filteredOutputVATTaxes = useMemo(() => {
-    if (!outputVATTaxes || outputVATTaxes.length === 0) return [];
-
-    // If vat_policy is "all", show all Output VAT taxes
-    if (vatPolicy === "all") {
-      return outputVATTaxes;
-    }
-
-    // Filter based on vat_policy
-    return outputVATTaxes.filter((tax) => {
-      // If tax has inclusive_type, use it
-      if (tax.inclusive_type) {
-        if (vatPolicy === "vat_exclusive") {
-          return tax.inclusive_type === "exclusive";
-        } else if (vatPolicy === "vat_inclusive") {
-          return tax.inclusive_type === "inclusive";
-        }
-      }
-
-      // Fallback to tax_type if inclusive_type is not available
-      if (tax.tax_type) {
-        if (vatPolicy === "vat_exclusive") {
-          return tax.tax_type === "exclusive";
-        } else if (vatPolicy === "vat_inclusive") {
-          return tax.tax_type === "inclusive";
-        }
-      }
-
-      // If no type specified, don't show it
-      return false;
-    });
-  }, [outputVATTaxes, vatPolicy]);
+  // Show Inclusive and Exclusive VAT together; Inclusive is the default pick.
+  const filteredSalesTaxes = useMemo(() => salesTaxes || [], [salesTaxes]);
+  const filteredOutputVATTaxes = useMemo(
+    () => outputVATTaxes || [],
+    [outputVATTaxes],
+  );
 
   // Output VAT is controlled separately — keep it out of selectedTaxes
   useEffect(() => {
@@ -1617,79 +1711,39 @@ function MakeSale() {
     });
   }, [salesTaxes]);
 
-  // Auto-enable Output VAT when available (so tax calculates without a manual toggle).
-  // When vat_policy is "all", the catalog often has BOTH inclusive + exclusive Output VAT
-  // rows — selecting both double-posts VAT and breaks the ledger. Prefer one (exclusive).
+  // Auto-enable one Output VAT. Prefer Inclusive when both exist.
   useEffect(() => {
     if (!filteredOutputVATTaxes.length) return;
     setSelectedOutputVAT((prev) => {
       const validIds = prev.filter((id) =>
         filteredOutputVATTaxes.some((t) => t.id === id),
       );
-
-      const pickOne = (ids) => {
-        if (!ids.length) return [];
-        const eligible = ids.filter((id) => {
-          const tax = filteredOutputVATTaxes.find((t) => t.id === id);
-          return tax && !isInputVatTax(tax);
-        });
-        const pool = eligible.length ? eligible : ids;
-        if (pool.length === 1) return pool;
-        const outputNamed = filteredOutputVATTaxes.find(
-          (t) =>
-            pool.includes(t.id) &&
-            String(t.description || "")
-              .toLowerCase()
-              .includes("output"),
-        );
-        if (outputNamed) return [outputNamed.id];
-        const exclusive = filteredOutputVATTaxes.find(
-          (t) =>
-            pool.includes(t.id) && !isTaxInclusive(t, "vat_exclusive"),
-        );
-        if (exclusive) return [exclusive.id];
-        return [pool[0]];
-      };
-
       if (validIds.length > 0) {
-        const next = pickOne(validIds);
-        if (
-          next.length === prev.length &&
-          next.every((id, i) => id === prev[i])
-        ) {
-          return prev;
-        }
+        const next = [validIds[0]];
+        if (prev.length === 1 && prev[0] === next[0]) return prev;
         return next;
       }
-
-      const preferred =
-        filteredOutputVATTaxes.find((t) =>
-          String(t.description || "")
-            .toLowerCase()
-            .includes("output"),
-        ) ||
-        filteredOutputVATTaxes.find(
-          (t) => !isTaxInclusive(t, "vat_exclusive"),
-        ) ||
-        filteredOutputVATTaxes[0];
+      const preferred = pickPreferredVatTax(filteredOutputVATTaxes);
       return preferred ? [preferred.id] : [];
     });
   }, [filteredOutputVATTaxes]);
 
   const lineTaxOptions = useMemo(() => {
     const map = new Map();
-    [...(filteredOutputVATTaxes || []), ...(filteredSalesTaxes || [])].forEach(
-      (t) => {
-        if (t?.id == null || isInputVatTax(t)) return;
-        map.set(t.id, t);
-      },
-    );
-    return Array.from(map.values());
-  }, [filteredSalesTaxes, filteredOutputVATTaxes]);
+    [...(outputVATTaxes || []), ...(salesTaxes || [])].forEach((t) => {
+      if (t?.id == null || isInputVatTax(t)) return;
+      map.set(t.id, t);
+    });
+    return Array.from(map.values()).sort((a, b) => {
+      const aInc = isTaxInclusive(a, "vat_exclusive") ? 0 : 1;
+      const bInc = isTaxInclusive(b, "vat_exclusive") ? 0 : 1;
+      return aInc - bInc;
+    });
+  }, [salesTaxes, outputVATTaxes]);
 
   const defaultLineTaxId = useMemo(() => {
     if (selectedOutputVAT.length) return selectedOutputVAT[0];
-    return lineTaxOptions[0]?.id ?? null;
+    return pickPreferredVatTax(lineTaxOptions)?.id ?? null;
   }, [selectedOutputVAT, lineTaxOptions]);
 
   useEffect(() => {
@@ -2363,7 +2417,7 @@ function MakeSale() {
           reference: transactionId,
           facilityId: activeBusiness.id,
           created_by: user_id.id,
-          customer_id: selectedCustomer.customerNo,
+          customer_id: selectedCustomerRef.current?.customerNo,
           apply_prepayment: saleType !== "paid" && usePrepayment,
           transaction_date: transactionDate, // Add transaction date
           sale_branch_id: branchId,
@@ -2599,8 +2653,12 @@ function MakeSale() {
       return;
     }
 
-    if (!selectedCustomer) {
-      toast.error("Please select a customer");
+    if (!selectedCustomerRef.current) {
+      toast.error(
+        isWalkIn
+          ? "Enter the walk-in customer name and phone number"
+          : "Please select a customer",
+      );
       return;
     }
 
@@ -2643,6 +2701,7 @@ function MakeSale() {
       creditLimit: creditLimitDisplay,
       creditOutstanding,
       depositBalance,
+      isWalkIn,
     });
     if (coverageError) {
       toast.error(coverageError);
@@ -2693,6 +2752,7 @@ function MakeSale() {
   }, [
     cart,
     selectedCustomer,
+    isWalkIn,
     saveSale,
     processingCheckout,
     saleType,
@@ -2730,6 +2790,9 @@ function MakeSale() {
     // Clear cart and reset form
     setCart([]);
     setSelectedCustomer(null);
+    setIsWalkIn(false);
+    setWalkInName("");
+    setWalkInPhone("");
     setSelectedTaxes([]);
     setOtherInfo({});
     setShowPDFPreview(false);
@@ -2750,6 +2813,9 @@ function MakeSale() {
     // Since transaction is already saved, clear and go to pending sales
     setCart([]);
     setSelectedCustomer(null);
+    setIsWalkIn(false);
+    setWalkInName("");
+    setWalkInPhone("");
     setSelectedTaxes([]);
     setOtherInfo({});
     setShowInvoicePreview(false);
@@ -2770,16 +2836,120 @@ function MakeSale() {
   }, []);
 
   const handleSubmit = useCallback(() => {
-    // Guard: ignore if already processing
     if (isSavingRef.current || processingCheckout) {
       return;
     }
+
+    const finish = (customer) => {
+      if (customer) {
+        selectedCustomerRef.current = customer;
+        setSelectedCustomer(customer);
+      }
+      checkout();
+    };
+
+    if (isWalkIn) {
+      const name = String(walkInName || "").trim();
+      const phone = String(walkInPhone || "").trim();
+      if (!name) {
+        toast.error("Enter the walk-in customer name");
+        return;
+      }
+      if (!phone) {
+        toast.error("Enter the walk-in customer phone number");
+        return;
+      }
+      if (!isValidNigerianPhone(phone)) {
+        toast.error(NIGERIAN_PHONE_HINT);
+        return;
+      }
+      if (
+        selectedCustomer &&
+        isWalkInCustomer(selectedCustomer) &&
+        String(selectedCustomer.fullname || "").trim() === name
+      ) {
+        finish(selectedCustomer);
+        return;
+      }
+      if (
+        !activeBusiness?.receivable_code ||
+        !activeBusiness?.receivable_accural_code ||
+        !activeBusiness?.opening_balance_equity
+      ) {
+        toast.error(
+          "Set receivable, deposit, and opening balance equity accounts before creating a walk-in customer.",
+        );
+        return;
+      }
+      _postApi(
+        "/create-customer",
+        {
+          query_type: "create",
+          fullname: name,
+          name,
+          phone: normalizeNigerianPhone(phone),
+          customer_type: "walk-in",
+          entity_type: "individual",
+          credit_limit: 0,
+          facilityId: activeBusiness.id,
+          branch_id: selectedBranch || userBranchIds[0] || null,
+          receivable_code: activeBusiness.receivable_code,
+          deposit_code: activeBusiness.receivable_accural_code,
+          head: activeBusiness.receivable_code,
+          opening_balance_equity: activeBusiness.opening_balance_equity,
+          created_by: user_id?.id,
+        },
+        (res) => {
+          if (!res?.success) {
+            toast.error(res?.message || "Failed to save walk-in customer");
+            return;
+          }
+          const createdRaw = res.data?.customer || res.customer;
+          const created = createdRaw?.dataValues || createdRaw;
+          const customerNo =
+            created?.customerNo || res.data?.customerNo;
+          const customer = created
+            ? {
+                ...created,
+                customerNo: created.customerNo || customerNo,
+                customer_type: created.customer_type || "walk-in",
+                credit_limit: 0,
+              }
+            : {
+                customerNo,
+                fullname: name,
+                phone: normalizeNigerianPhone(phone),
+                customer_type: "walk-in",
+                credit_limit: 0,
+              };
+          dispatch(getCustomers());
+          finish(customer);
+        },
+        (err) => {
+          toast.error(err?.message || "Failed to save walk-in customer");
+        },
+      );
+      return;
+    }
+
     if (selectedCustomer) {
       checkout();
     } else {
       setShowNewCustomerModal(true);
     }
-  }, [selectedCustomer, checkout, processingCheckout]);
+  }, [
+    selectedCustomer,
+    checkout,
+    processingCheckout,
+    isWalkIn,
+    walkInName,
+    walkInPhone,
+    activeBusiness,
+    user_id,
+    dispatch,
+    selectedBranch,
+    userBranchIds,
+  ]);
 
   const createCustomerAndCheckout = useCallback(
     (customerData) => {
@@ -4087,10 +4257,17 @@ function MakeSale() {
                   )}
                 </div>
               </div>
-              {(!selectedCustomer || cart.length === 0) && (
+              {((!selectedCustomer &&
+                !(isWalkIn && walkInName.trim() && walkInPhone.trim())) ||
+                cart.length === 0) && (
                 <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                  {!selectedCustomer && (
-                    <span className="mr-3">Select a customer.</span>
+                  {!selectedCustomer &&
+                    !(isWalkIn && walkInName.trim() && walkInPhone.trim()) && (
+                    <span className="mr-3">
+                      {isWalkIn
+                        ? "Enter walk-in name and phone."
+                        : "Select a customer."}
+                    </span>
                   )}
                   {cart.length === 0 && (
                     <span>Enter a valid item name or description.</span>
@@ -4139,11 +4316,18 @@ function MakeSale() {
                   <SearchCustomerInput
                     size="sm"
                     selected={selectedCustomer ? [selectedCustomer] : []}
-                    onChange={(customer) => {
-                      setSelectedCustomer(customer);
-                      applyPaymentModes([]);
-                    }}
+                    onChange={onPickCustomer}
                     className="w-full"
+                  />
+                  <InvoiceWalkInFields
+                    isWalkIn={isWalkIn}
+                    setIsWalkIn={setIsWalkIn}
+                    walkInName={walkInName}
+                    setWalkInName={setWalkInName}
+                    walkInPhone={walkInPhone}
+                    setWalkInPhone={setWalkInPhone}
+                    selectedCustomer={selectedCustomer}
+                    onPickCustomer={onPickCustomer}
                   />
                   {selectedCustomer?.customerNo && (
                     <p className="mt-1 text-[11px] text-slate-500">
@@ -4151,6 +4335,15 @@ function MakeSale() {
                       <span className="font-medium">
                         {selectedCustomer.customerNo}
                       </span>
+                      {selectedCustomer.customer_type ? (
+                        <>
+                          {" · "}
+                          Type:{" "}
+                          <span className="font-medium">
+                            {customerKindLabel(selectedCustomer)}
+                          </span>
+                        </>
+                      ) : null}
                     </p>
                   )}
                 </div>
@@ -5363,7 +5556,7 @@ function MakeSale() {
                                 <option value="">Select VAT</option>
                                 {lineTaxOptions.map((tax) => (
                                   <option key={tax.id} value={tax.id}>
-                                    {tax.description} ({tax.rate}%)
+                                    {formatVatOptionLabel(tax)}
                                   </option>
                                 ))}
                               </select>
@@ -5827,11 +6020,18 @@ function MakeSale() {
                   size="sm"
                   label="Customer Name"
                   selected={selectedCustomer ? [selectedCustomer] : []}
-                  onChange={(customer) => {
-                    setSelectedCustomer(customer);
-                    applyPaymentModes([]);
-                  }}
+                  onChange={onPickCustomer}
                   className="w-full"
+                />
+                <InvoiceWalkInFields
+                  isWalkIn={isWalkIn}
+                  setIsWalkIn={setIsWalkIn}
+                  walkInName={walkInName}
+                  setWalkInName={setWalkInName}
+                  walkInPhone={walkInPhone}
+                  setWalkInPhone={setWalkInPhone}
+                  selectedCustomer={selectedCustomer}
+                  onPickCustomer={onPickCustomer}
                 />
               </div>
             </div>
@@ -6245,8 +6445,7 @@ function MakeSale() {
                             className="flex justify-between text-sm"
                           >
                             <span className="text-gray-600">
-                              {vatTax.description} ({vatTax.rate}%) [Output
-                              VAT]:
+                              {formatVatOptionLabel(vatTax)} [Output VAT]:
                             </span>
                             <span className="font-semibold text-blue-600">
                               ₦{formatNumber1(taxAmountForDisplay)}
