@@ -434,29 +434,25 @@ export default function InvoiceList() {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full table-fixed border-collapse text-sm">
-                  <colgroup>
-                    <col className="w-[7.25rem]" />
-                    <col className="w-[6.75rem]" />
-                    <col className="w-[15rem]" />
-                    <col className="w-[7.5rem]" />
-                    <col className="w-[7rem]" />
-                    <col className="w-[5rem]" />
-                    <col />
-                  </colgroup>
+                <table className="w-full min-w-[52rem] border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50/90 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                      <th className="px-3 py-2 font-semibold">Invoice</th>
-                      <th className="px-3 py-2 font-semibold">Date</th>
+                      <th className="whitespace-nowrap px-3 py-2 font-semibold">
+                        Invoice
+                      </th>
+                      <th className="whitespace-nowrap px-3 py-2 font-semibold">
+                        Date
+                      </th>
                       <th className="px-3 py-2 font-semibold">Customer</th>
-                      <th className="px-3 py-2 font-semibold">Status</th>
-                      <th className="px-3 py-2 text-right font-semibold">
+                      <th className="whitespace-nowrap px-3 py-2 font-semibold">
+                        Status
+                      </th>
+                      <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
                         Amount
                       </th>
-                      <th className="px-3 py-2 text-right font-semibold">
+                      <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
                         Actions
                       </th>
-                      <th className="p-0" aria-hidden="true" />
                     </tr>
                   </thead>
                   <tbody>
@@ -505,11 +501,12 @@ export default function InvoiceList() {
                           </td>
                           <td className={`px-3 py-2 align-middle ${bg}`}>
                             {item.workflow_status ? (
-                              <div className="flex flex-col items-start gap-0.5">
+                              <div className="flex max-w-[11rem] flex-col items-start gap-0.5 overflow-hidden">
                                 <WorkflowStatusBadge
                                   status={item.workflow_status}
                                   paymentType={item.workflow_payment_type}
                                   compact
+                                  className="max-w-full"
                                 />
                                 {statusMatchesProcessStage(
                                   item.workflow_status,
@@ -585,7 +582,6 @@ export default function InvoiceList() {
                               ) : null}
                             </div>
                           </td>
-                          <td className={`p-0 ${bg}`} aria-hidden="true" />
                         </tr>
                       );
                     })}

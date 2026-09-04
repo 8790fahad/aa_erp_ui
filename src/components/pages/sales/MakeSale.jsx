@@ -198,6 +198,40 @@ function InvoiceWalkInFields({
   );
 }
 
+function parseDiscountNumber(raw) {
+  const n = parseFloat(String(raw ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Percentage discount max 100%; fixed discount max invoice subtotal. */
+function capDiscountInputValue(raw, mode, subtotal) {
+  let s = String(raw ?? "").replace(/[^\d.]/g, "");
+  const parts = s.split(".");
+  if (parts.length > 2) s = `${parts[0]}.${parts.slice(1).join("")}`;
+  if (s === "" || s === ".") return { next: s, capped: false, reason: null };
+  const n = parseFloat(s);
+  if (!Number.isFinite(n)) return { next: s, capped: false, reason: null };
+  if (mode === "%") {
+    if (n > 100) {
+      return {
+        next: "100",
+        capped: true,
+        reason: "Discount cannot be more than 100%.",
+      };
+    }
+    return { next: s, capped: false, reason: null };
+  }
+  const max = Math.max(0, Number(subtotal) || 0);
+  if (n > max + 0.0001) {
+    return {
+      next: String(max),
+      capped: true,
+      reason: "Discount cannot be more than the invoice total.",
+    };
+  }
+  return { next: s, capped: false, reason: null };
+}
+
 function cartQtyForSku(cart, sku, excludeId) {
   if (!sku) return 0;
   return (cart || [])
@@ -2160,10 +2194,12 @@ function MakeSale() {
   // Calculate discount amount — editable value (% or NGN) drives the total;
   // selecting a catalog discount fills that value.
   const discountAmount = useMemo(() => {
-    const n = parseFloat(String(zohoDiscountPercent).replace(/,/g, ""));
-    if (!Number.isFinite(n) || n <= 0) return 0;
-    if (zohoDiscountMode === "%") return (subtotal * n) / 100;
-    return n;
+    const n = parseDiscountNumber(zohoDiscountPercent);
+    if (n <= 0) return 0;
+    if (zohoDiscountMode === "%") {
+      return (subtotal * Math.min(n, 100)) / 100;
+    }
+    return Math.min(n, Math.max(0, subtotal));
   }, [subtotal, zohoDiscountPercent, zohoDiscountMode]);
 
   // Actual save function
@@ -2673,6 +2709,16 @@ function MakeSale() {
       return;
     }
 
+    const discountRaw = parseDiscountNumber(zohoDiscountPercent);
+    if (zohoDiscountMode === "%" && discountRaw > 100) {
+      toast.error("Discount cannot be more than 100%.");
+      return;
+    }
+    if (zohoDiscountMode !== "%" && discountRaw > subtotal + 0.009) {
+      toast.error("Discount cannot be more than the invoice total.");
+      return;
+    }
+
     if (
       selectedPaymentModes.some((id) => !allowedPaymentModeIds.includes(id))
     ) {
@@ -2773,6 +2819,9 @@ function MakeSale() {
     accountHead,
     bankAccount,
     getItemBranchLocation,
+    subtotal,
+    zohoDiscountPercent,
+    zohoDiscountMode,
   ]);
 
   const handleConfirmSale = useCallback(() => {
@@ -3173,6 +3222,18 @@ function MakeSale() {
     }
   }, [subtotal, selectedDiscount]);
 
+  useEffect(() => {
+    if (zohoDiscountMode === "%" || !zohoDiscountPercent) return;
+    const { next, capped } = capDiscountInputValue(
+      zohoDiscountPercent,
+      "flat",
+      subtotal,
+    );
+    if (capped && next !== zohoDiscountPercent) {
+      setZohoDiscountPercent(next);
+    }
+  }, [subtotal, zohoDiscountMode, zohoDiscountPercent]);
+
   // Handle discount selection — fill editable value from the catalog entry
   const handleDiscountSelect = (discount) => {
     if (
@@ -3189,14 +3250,25 @@ function MakeSale() {
     }
     setSelectedDiscount(discount);
     if (discount) {
-      const raw = parseFloat(discount.value);
-      setZohoDiscountPercent(
-        Number.isFinite(raw) ? String(raw) : "",
-      );
+      const raw = parseDiscountNumber(discount.value);
       const isPct =
         discount.discount_type === "Percentage" ||
         String(discount.discount_type || "").toLowerCase() === "percentage";
-      setZohoDiscountMode(isPct ? "%" : "flat");
+      if (isPct) {
+        if (raw > 100) {
+          toast.error("Discount cannot be more than 100%.");
+        }
+        setZohoDiscountPercent(String(Math.min(Math.max(raw, 0), 100)));
+        setZohoDiscountMode("%");
+      } else {
+        if (raw > subtotal + 0.009) {
+          toast.error("Discount cannot be more than the invoice total.");
+        }
+        setZohoDiscountPercent(
+          String(Math.min(Math.max(raw, 0), Math.max(0, subtotal))),
+        );
+        setZohoDiscountMode("flat");
+      }
     } else {
       setZohoDiscountPercent("");
       setZohoDiscountMode("%");
@@ -5836,9 +5908,14 @@ function MakeSale() {
                       inputMode="decimal"
                       value={zohoDiscountPercent}
                       onChange={(e) => {
-                        const v = e.target.value.replace(/[^\d.]/g, "");
-                        setZohoDiscountPercent(v);
+                        const { next, capped, reason } = capDiscountInputValue(
+                          e.target.value,
+                          zohoDiscountMode,
+                          subtotal,
+                        );
+                        setZohoDiscountPercent(next);
                         if (selectedDiscount) setSelectedDiscount(null);
+                        if (capped && reason) toast.error(reason);
                       }}
                       className="w-14 rounded border border-slate-300 px-1.5 py-1.5 text-right text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                       placeholder="0"
@@ -5847,10 +5924,19 @@ function MakeSale() {
                     <select
                       value={zohoDiscountMode === "%" ? "%" : "NGN"}
                       onChange={(e) => {
-                        setZohoDiscountMode(
-                          e.target.value === "%" ? "%" : "flat",
-                        );
+                        const nextMode =
+                          e.target.value === "%" ? "%" : "flat";
+                        setZohoDiscountMode(nextMode);
                         if (selectedDiscount) setSelectedDiscount(null);
+                        const { next, capped, reason } = capDiscountInputValue(
+                          zohoDiscountPercent,
+                          nextMode,
+                          subtotal,
+                        );
+                        if (next !== zohoDiscountPercent) {
+                          setZohoDiscountPercent(next);
+                        }
+                        if (capped && reason) toast.error(reason);
                       }}
                       className="rounded border border-slate-300 px-1 py-1.5 text-xs text-slate-600 outline-none focus:border-[var(--aa-accent)]"
                     >
