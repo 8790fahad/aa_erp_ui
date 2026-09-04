@@ -1644,110 +1644,181 @@ export default function CreditSaleInvoice({
                 </table>
               </div>
 
-              {/* Mode of Payment — after totals */}
-              <div
-                className={`bg-emerald-50 border border-emerald-200 shrink-0 ${
-                  isA5 ? "p-0.5 px-1 mb-0.5 mt-0.5" : "p-1 mb-1 mt-1"
-                }`}
-              >
-                <h6
-                  className={`font-semibold text-emerald-800 uppercase tracking-wide ${
-                    isA5 ? "text-[10px] mb-0" : "text-xs mb-0.5"
-                  }`}
-                >
-                  Mode of Payment
-                </h6>
-                <div
-                  className={`${
-                    isA5
-                      ? "text-[10px] leading-snug"
-                      : "text-xs leading-relaxed"
-                  } text-gray-700 space-y-0.5`}
-                >
-                  <p>
-                    <span className="font-semibold text-gray-600">
-                      Payment Mode:
-                    </span>{" "}
-                    <span className="text-gray-900 font-semibold">
-                      {paymentModeLabel}
-                    </span>
-                    <span className="text-gray-400 mx-1">|</span>
-                    <span className="font-semibold text-gray-600">
-                      Total Paid:
-                    </span>{" "}
-                    <span className="text-gray-900 font-semibold">
-                      ₦{formatNumber(amountPaid)}
-                    </span>
-                    <span className="text-gray-400 mx-1">|</span>
-                    <span className="font-semibold text-gray-600">
-                      Balance:
-                    </span>{" "}
-                    <span className="text-gray-900 font-semibold">
-                      ₦{formatNumber(balanceDue)}
-                    </span>
-                  </p>
-                  {(cashPaid > 0 ||
-                    transferPaid > 0 ||
-                    creditAmount > 0 ||
-                    paymentBreakdown.length > 0) && (
-                    <p className="flex flex-wrap gap-x-3 gap-y-0.5">
-                      {cashPaid > 0 && (
-                        <span>
-                          <span className="font-semibold text-gray-600">
-                            Cash:
-                          </span>{" "}
-                          <span className="text-gray-900 font-semibold">
-                            ₦{formatNumber(cashPaid)}
-                          </span>
-                        </span>
-                      )}
-                      {transferLines.length > 0
-                        ? transferLines.map((line, idx) => (
-                            <span key={`xfer-${idx}`}>
-                              <span className="font-semibold text-gray-600">
-                                Transfer:
-                              </span>{" "}
-                              <span className="text-gray-900 font-semibold">
-                                ₦{formatNumber(line.amount)}
-                              </span>
-                              {line.bank_name ? (
-                                <span className="text-gray-700">
-                                  {" "}
-                                  ({line.bank_name})
-                                </span>
-                              ) : null}
-                            </span>
-                          ))
-                        : transferPaid > 0 && (
-                            <span>
-                              <span className="font-semibold text-gray-600">
-                                Transfer:
-                              </span>{" "}
-                              <span className="text-gray-900 font-semibold">
-                                ₦{formatNumber(transferPaid)}
-                              </span>
-                              {transferBanks.length > 0 ? (
-                                <span className="text-gray-700">
-                                  {" "}
-                                  ({transferBanks.join(", ")})
-                                </span>
-                              ) : null}
-                            </span>
-                          )}
-                      {creditAmount > 0.05 && (
-                        <span>
-                          <span className="font-semibold text-gray-600">
-                            Credit:
-                          </span>{" "}
-                          <span className="text-gray-900 font-semibold">
-                            ₦{formatNumber(creditAmount)}
-                          </span>
-                        </span>
-                      )}
+              {/* How this invoice is paid — after totals */}
+              {(() => {
+                const collectedNow = Number(
+                  (cashPaid + transferPaid > 0.05
+                    ? cashPaid + transferPaid
+                    : amountPaid
+                  ).toFixed(2),
+                );
+                const onCredit = Number(creditAmount.toFixed(2));
+                const outstanding = Number(balanceDue.toFixed(2));
+                const isCreditOnly =
+                  onCredit > 0.05 && collectedNow <= 0.05;
+                const isSettledNow =
+                  collectedNow > 0.05 && onCredit <= 0.05;
+                const paymentNote = isCreditOnly
+                  ? "Nothing was collected at sale. The full amount is charged to the customer’s account and is still outstanding."
+                  : isSettledNow
+                    ? "This invoice was settled at sale. There is no credit balance."
+                    : onCredit > 0.05
+                      ? `₦${formatNumber(collectedNow)} was collected now. ₦${formatNumber(onCredit)} is charged to the customer’s account.`
+                      : null;
+                const metricBox = (label, value, hint) => (
+                  <div
+                    className={`min-w-0 rounded border border-emerald-100 bg-white ${
+                      isA5 ? "px-1 py-0.5" : "px-2 py-1"
+                    }`}
+                  >
+                    <p
+                      className={`font-medium uppercase tracking-wide text-gray-500 ${
+                        isA5 ? "text-[8px]" : "text-[10px]"
+                      }`}
+                    >
+                      {label}
                     </p>
-                  )}
-                </div>
-              </div>
+                    <p
+                      className={`font-bold tabular-nums text-gray-900 ${
+                        isA5 ? "text-[10px]" : "text-sm"
+                      }`}
+                    >
+                      ₦{formatNumber(value)}
+                    </p>
+                    {hint ? (
+                      <p
+                        className={`text-gray-500 ${
+                          isA5 ? "text-[8px] leading-tight" : "text-[10px]"
+                        }`}
+                      >
+                        {hint}
+                      </p>
+                    ) : null}
+                  </div>
+                );
+
+                return (
+                  <div
+                    className={`shrink-0 rounded border border-emerald-200 bg-emerald-50 ${
+                      isA5 ? "p-1 mb-0.5 mt-0.5" : "p-2 mb-1 mt-1"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-1">
+                      <h6
+                        className={`font-semibold text-emerald-900 ${
+                          isA5 ? "text-[10px]" : "text-xs"
+                        }`}
+                      >
+                        How this invoice is paid
+                      </h6>
+                      <span
+                        className={`rounded-full bg-emerald-700 px-2 py-0.5 font-semibold uppercase tracking-wide text-white ${
+                          isA5 ? "text-[8px]" : "text-[10px]"
+                        }`}
+                      >
+                        {paymentModeLabel}
+                      </span>
+                    </div>
+                    {paymentNote ? (
+                      <p
+                        className={`text-emerald-900/80 ${
+                          isA5
+                            ? "mt-0.5 text-[9px] leading-tight"
+                            : "mt-1 text-[11px] leading-snug"
+                        }`}
+                      >
+                        {paymentNote}
+                      </p>
+                    ) : null}
+
+                    <div
+                      className={`grid gap-1 ${
+                        isCreditOnly || isSettledNow
+                          ? "grid-cols-2"
+                          : "grid-cols-3"
+                      } ${isA5 ? "mt-0.5" : "mt-1.5"}`}
+                    >
+                      {metricBox(
+                        "Paid at sale",
+                        collectedNow,
+                        "Cash / transfer collected now",
+                      )}
+                      {isCreditOnly || onCredit > 0.05
+                        ? metricBox(
+                            "On credit",
+                            isCreditOnly ? outstanding : onCredit,
+                            "Billed to the customer’s account",
+                          )
+                        : metricBox(
+                            "Still outstanding",
+                            outstanding,
+                            outstanding > 0.05
+                              ? "Amount not yet collected"
+                              : "Fully paid",
+                          )}
+                      {!isCreditOnly && !isSettledNow
+                        ? metricBox(
+                            "Still outstanding",
+                            outstanding,
+                            "Amount left to collect",
+                          )
+                        : null}
+                    </div>
+
+                    {(cashPaid > 0.05 ||
+                      transferPaid > 0.05 ||
+                      transferLines.length > 0) && (
+                      <div
+                        className={`flex flex-wrap gap-x-3 gap-y-0.5 text-gray-700 ${
+                          isA5 ? "mt-0.5 text-[9px]" : "mt-1.5 text-[11px]"
+                        }`}
+                      >
+                        {cashPaid > 0.05 && (
+                          <span>
+                            <span className="text-gray-500">Cash received:</span>{" "}
+                            <span className="font-semibold text-gray-900">
+                              ₦{formatNumber(cashPaid)}
+                            </span>
+                          </span>
+                        )}
+                        {transferLines.length > 0
+                          ? transferLines.map((line, idx) => (
+                              <span key={`xfer-${idx}`}>
+                                <span className="text-gray-500">
+                                  Transfer received:
+                                </span>{" "}
+                                <span className="font-semibold text-gray-900">
+                                  ₦{formatNumber(line.amount)}
+                                </span>
+                                {line.bank_name ? (
+                                  <span className="text-gray-600">
+                                    {" "}
+                                    · {line.bank_name}
+                                  </span>
+                                ) : null}
+                              </span>
+                            ))
+                          : transferPaid > 0.05 && (
+                              <span>
+                                <span className="text-gray-500">
+                                  Transfer received:
+                                </span>{" "}
+                                <span className="font-semibold text-gray-900">
+                                  ₦{formatNumber(transferPaid)}
+                                </span>
+                                {transferBanks.length > 0 ? (
+                                  <span className="text-gray-600">
+                                    {" "}
+                                    · {transferBanks.join(", ")}
+                                  </span>
+                                ) : null}
+                              </span>
+                            )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div
                 className={`invoice-page-half-fill min-h-0 ${isA5 ? "hidden" : "hidden print:block print:flex-1 print:min-h-[1rem]"}`}
