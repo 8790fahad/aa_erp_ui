@@ -1234,7 +1234,7 @@ function MakeSale() {
   const [payWithTransfer, setPayWithTransfer] = useState(false);
   const [cashPayAmount, setCashPayAmount] = useState("");
   const [transferPayAmount, setTransferPayAmount] = useState("");
-  /** Multi-select: cash | transfer | credit | deposit — none until customer is selected */
+  /** Multi-select: cash | transfer | credit | deposit — none until a customer or walk-in name is set */
   const [selectedPaymentModes, setSelectedPaymentModes] = useState([]);
   const [chequeNumber, setChequeNumber] = useState("");
 
@@ -1247,6 +1247,9 @@ function MakeSale() {
   const [creditOutstanding, setCreditOutstanding] = useState(null);
   const [creditLimitDisplay, setCreditLimitDisplay] = useState(null);
   const [balancesLoading, setBalancesLoading] = useState(false);
+  const hasInvoiceParty =
+    Boolean(selectedCustomer) ||
+    (isWalkIn && String(walkInName || "").trim().length > 0);
 
   const applyPaymentModes = useCallback(
     (modes) => {
@@ -4476,7 +4479,7 @@ function MakeSale() {
                 </div>
               </div>
 
-              {selectedCustomer ? (
+              {hasInvoiceParty ? (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,1fr)] lg:items-start">
                 <label className="pt-1.5 text-sm font-medium text-slate-600 lg:text-right">
                   Mode of Payment <span className="text-red-500">*</span>
@@ -4553,7 +4556,7 @@ function MakeSale() {
               {/* Search and Filters */}
               <div className="px-4 py-2 bg-gray-50 border-b">
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {selectedCustomer ? (
+                  {hasInvoiceParty ? (
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">
                       Mode of Payment <span className="text-red-500">*</span>
