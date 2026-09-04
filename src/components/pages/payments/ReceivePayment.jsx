@@ -91,16 +91,16 @@ const METHOD_TABS = [
     privilege: "Transfer Collection",
   },
   {
-    id: "deposit",
-    label: "Apply Deposit",
-    icon: Wallet,
-    privilege: "Apply Deposit",
-  },
-  {
     id: "credit",
     label: "Credit",
     icon: CreditCard,
     privilege: "Credit Collection",
+  },
+  {
+    id: "deposit",
+    label: "Apply Deposit",
+    icon: Wallet,
+    privilege: "Apply Deposit",
   },
   {
     id: "discount",
@@ -264,6 +264,13 @@ function creditStateLabel(row) {
   return "Awaiting credit";
 }
 
+function depositApplyPreview(row) {
+  const due = Number(row?.amount) || 0;
+  const available = Number(row?.deposit_available) || 0;
+  const apply = Math.min(Math.max(0, due), Math.max(0, available));
+  return { due, available, apply };
+}
+
 function creditStateBadgeClass(row) {
   if (isDepositPendingCredit(row))
     return "bg-teal-50 text-teal-800 ring-teal-200";
@@ -421,11 +428,14 @@ export default function ReceivePayment() {
           return canSwitchPaymentMode || canApprovePaymentMode;
         }
         if (t.id === "deposit") {
-          return canViewCollectionTab(APPLY_DEPOSIT_PRIVILEGE);
+          return (
+            canViewCollectionTab(APPLY_DEPOSIT_PRIVILEGE) ||
+            canUseHeaderAction(APPLY_DEPOSIT_PRIVILEGE)
+          );
         }
         return canViewCollectionTab(t.privilege);
       }),
-    [canViewCollectionTab, canSwitchPaymentMode, canApprovePaymentMode],
+    [canViewCollectionTab, canUseHeaderAction, canSwitchPaymentMode, canApprovePaymentMode],
   );
 
   const [methodTab, setMethodTab] = useState(() => {
@@ -483,6 +493,7 @@ export default function ReceivePayment() {
   const [modeChangeNext, setModeChangeNext] = useState("");
   const [modeApproveRow, setModeApproveRow] = useState(null);
   const [modeRejectRow, setModeRejectRow] = useState(null);
+  const [depositConfirmRow, setDepositConfirmRow] = useState(null);
   const [cashAmount, setCashAmount] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
   const collectOpen = hubOpen && hubAction === "collect";
@@ -1235,28 +1246,51 @@ export default function ReceivePayment() {
     [methodTab],
   );
 
-  const goApplyDeposit = useCallback(
-    (row) => {
-      if (!row) return;
-      const params = new URLSearchParams();
-      if (row.customer_no) params.set("customerNo", row.customer_no);
-      if (row.customer_name) params.set("customerName", row.customer_name);
-      if (row.sale_code) params.set("sale_code", row.sale_code);
-      navigate(`/app/payments/apply-advance?${params.toString()}`);
-    },
-    [navigate],
-  );
+  const confirmApplyDeposit = useCallback(() => {
+    const row = depositConfirmRow || selected;
+    if (!row?.sale_code || !activeBusiness?.id || !user?.id) return;
+    const { apply } = depositApplyPreview(row);
+    if (apply <= 0.05) {
+      toast.error("Nothing due on this invoice to apply deposit against.");
+      return;
+    }
+    setSubmitting(true);
+    _postApi(
+      "/api/v1/apply-customer-advance",
+      {
+        facilityId: activeBusiness.id,
+        userId: user.id,
+        customer_no: row.customer_no,
+        transaction_date: moment().format("YYYY-MM-DD"),
+        narration: `Apply deposit to ${row.sale_code}`,
+        applications: [{ invoice_ref: row.sale_code, amount: apply }],
+      },
+      (res) => {
+        setSubmitting(false);
+        if (res?.success) {
+          toast.success(
+            res.message ||
+              `Deposit of ₦${formatNumber1(apply)} applied to ${row.sale_code}`,
+          );
+          setDepositConfirmRow(null);
+          setHubOpen(false);
+          fetchDashboard();
+        } else {
+          toast.error(res?.error || res?.message || "Failed to apply deposit");
+        }
+      },
+      (err) => {
+        setSubmitting(false);
+        toast.error(err?.error || err?.message || "Failed to apply deposit");
+      },
+    );
+  }, [depositConfirmRow, selected, activeBusiness?.id, user?.id, fetchDashboard]);
 
   const openHub = useCallback(
     (row, preferredAction = null) => {
       if (!row?.sale_code) return;
       const action = resolveHubAction(row, preferredAction);
       const pt = String(row?.payment_type || "").toLowerCase();
-
-      if (action === "deposit") {
-        goApplyDeposit(row);
-        return;
-      }
 
       if (action === "collect" && pt === "credit") {
         toast.info(
@@ -1269,6 +1303,7 @@ export default function ReceivePayment() {
       setHubAction(action);
       setHubOpen(true);
       loadHubInvoice(row.sale_code);
+      if (action === "deposit") setDepositConfirmRow(row);
 
       if (action === "collect") {
         const due = Number(row.amount) || 0;
@@ -1284,7 +1319,7 @@ export default function ReceivePayment() {
         }
       }
     },
-    [loadHubInvoice, resolveHubAction, goApplyDeposit],
+    [loadHubInvoice, resolveHubAction],
   );
 
   const openCollect = (row) => openHub(row, "collect");
@@ -1312,7 +1347,7 @@ export default function ReceivePayment() {
         const pt = String(pendingMatch.payment_type || "").toLowerCase();
         if (pt === "deposit" || depositPending.includes(pendingMatch)) {
           setMethodTab("deposit");
-          goApplyDeposit(pendingMatch);
+          openHub(pendingMatch, "deposit");
           if (fromScan) toast.success(`Scanned ${pendingMatch.sale_code}`);
           return;
         }
@@ -1373,7 +1408,7 @@ export default function ReceivePayment() {
     },
     // openHub only uses setters + row data; safe across renders
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [history, pending, creditPending, depositPending, canViewCollectionTab, methodTab, openHub, goApplyDeposit],
+    [history, pending, creditPending, depositPending, canViewCollectionTab, methodTab, openHub],
   );
 
   // Deep-link: /verification-points?sale_code=INV-…&tab=credit|cash|transfer
@@ -2006,8 +2041,8 @@ export default function ReceivePayment() {
             </h1>
             <p className="mt-1 text-sm text-slate-500">
               Customer collection hub: open any invoice to view it and collect,
-              approve credit/discount, or switch mode in the same modal. Make
-              Deposit for prepaid funds, and Apply Deposit to open invoices.
+              approve credit/discount, or switch mode in the same modal. Use
+              Apply Deposit to apply prepaid funds to open invoices.
               Supplier payments are handled under Purchase → Pay Bills.
               {hasCashCollection || hasTransferCollection ? (
                 <span className="ml-1 font-medium text-[var(--aa-navy)]">
@@ -2024,32 +2059,6 @@ export default function ReceivePayment() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {canUseHeaderAction(MAKE_DEPOSIT_PRIVILEGE) &&
-            methodTab !== "credit" &&
-            methodTab !== "discount" &&
-            methodTab !== "deposit" ? (
-              <button
-                type="button"
-                onClick={() => openAdvanceSheet()}
-                className="inline-flex items-center gap-2 rounded-md border border-[var(--aa-navy)] bg-white px-3 py-2 text-sm font-medium text-[var(--aa-navy)] shadow-sm hover:bg-slate-50"
-              >
-                <Plus className="h-4 w-4" />
-                Make Deposit
-              </button>
-            ) : null}
-            {canUseHeaderAction(APPLY_DEPOSIT_PRIVILEGE) ? (
-            <button
-              type="button"
-              onClick={() => {
-                setMethodTab("deposit");
-                setActiveTab("pending");
-              }}
-              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              <Wallet className="h-4 w-4" />
-              Apply Deposit
-            </button>
-            ) : null}
             {canUseHeaderAction(RECONCILIATION_PRIVILEGE) ? (
             <Link
               to="/app/payments/collection-reconciliation"
@@ -2071,7 +2080,7 @@ export default function ReceivePayment() {
         </div>
 
         {/* Method sub-tabs */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
           {visibleMethodTabs.map((tab) => {
             const Icon = tab.icon;
             const active = methodTab === tab.id;
@@ -2775,7 +2784,7 @@ export default function ReceivePayment() {
                               <button
                                 type="button"
                                 disabled={submitting}
-                                onClick={() => goApplyDeposit(row)}
+                                onClick={() => openHub(row, "deposit")}
                                 className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
                               >
                                 <Wallet className="h-3.5 w-3.5" />
@@ -2799,7 +2808,7 @@ export default function ReceivePayment() {
                               <button
                                 type="button"
                                 disabled={submitting}
-                                onClick={() => goApplyDeposit(row)}
+                                onClick={() => openHub(row, "deposit")}
                                 className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
                               >
                                 <Wallet className="h-3.5 w-3.5" />
@@ -3033,7 +3042,9 @@ export default function ReceivePayment() {
                   ? "View & Approve Credit"
                   : hubAction === "discount"
                     ? "View & Approve Discount"
-                    : hubAction === "mode"
+                    : hubAction === "deposit"
+                      ? "View & Apply Deposit"
+                      : hubAction === "mode"
                       ? "View & Review Mode"
                       : "Invoice"}{" "}
               {selected?.sale_code ? `· ${selected.sale_code}` : ""}
@@ -3140,6 +3151,31 @@ export default function ReceivePayment() {
                       </span>
                     </div>
                   ) : null}
+                  {hubAction === "deposit" ? (
+                    <div className="mt-3 space-y-1 border-t border-slate-200 pt-2 text-sm text-slate-600">
+                      <div className="flex justify-between gap-3">
+                        <span>Deposit available</span>
+                        <span className="font-semibold tabular-nums text-teal-700">
+                          ₦
+                          {formatNumber1(
+                            depositApplyPreview(selected).available,
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span>Will apply</span>
+                        <span className="font-semibold tabular-nums text-teal-800">
+                          ₦{formatNumber1(depositApplyPreview(selected).apply)}
+                        </span>
+                      </div>
+                      {depositApplyPreview(selected).available <= 0.05 ? (
+                        <p className="pt-1 text-xs text-amber-800">
+                          This customer has no available deposit.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   {hubAction === "collect" && isSplit ? (
                     <div className="mt-3 space-y-1 border-t border-slate-200 pt-2 text-xs text-slate-600">
                       <p>
@@ -3408,6 +3444,12 @@ export default function ReceivePayment() {
                     for collection.
                   </p>
                 ) : null}
+                {hubAction === "deposit" ? (
+                  <p className="text-sm text-slate-600">
+                    Review the invoice, then approve to apply the customer
+                    deposit to this invoice.
+                  </p>
+                ) : null}
                 {hubAction === "mode" ? (
                   <p className="text-sm text-slate-600">
                     {selected?.status === "awaiting_payment_mode_approval" ||
@@ -3435,6 +3477,29 @@ export default function ReceivePayment() {
                   >
                     Close
                   </button>
+
+                  {hubAction === "deposit" ? (
+                    <button
+                      type="button"
+                      disabled={
+                        submitting ||
+                        !selected ||
+                        depositApplyPreview(selected).apply <= 0.05
+                      }
+                      onClick={confirmApplyDeposit}
+                      className="inline-flex items-center gap-2 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                    >
+                      {submitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Wallet className="h-4 w-4" />
+                      )}
+                      Approve & apply
+                      {selected
+                        ? ` · ₦${formatNumber1(depositApplyPreview(selected).apply)}`
+                        : ""}
+                    </button>
+                  ) : null}
 
                   {hubAction === "collect" ? (
                     <>
