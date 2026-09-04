@@ -25,7 +25,7 @@ import CustomersUpload from "./components/CustomersUpload";
 import CustomerRegistartion from "./CustomerRegistration";
 import { _fetchApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
-import { customerKindLabel, isWalkInCustomer } from "@/utils/customerKind";
+import { customerKindLabel, isWalkInCustomer, isUnlimitedCreditLimit } from "@/utils/customerKind";
 
 const AVATAR_BG = [
   "linear-gradient(155deg,#4d6bff,#141c56)",
@@ -453,9 +453,11 @@ export default function CustomerTable() {
                     const company = item.company_name || item.fullname || "—";
                     const email = String(item.email || "").trim();
                     const phone = formatDisplayPhone(item.phone || item.mobile || "");
-                    const limit = parseFloat(item.credit_limit) || 0;
+                    const limit = parseFloat(item.credit_limit);
                     const walkIn = isWalkInCustomer(item);
-                    const unlimited = !walkIn && !(limit > 0);
+                    const unlimited = isUnlimitedCreditLimit(item.credit_limit, {
+                      walkIn,
+                    });
                     const pct = unlimited ? null : Number(item.credit_used_percent ?? 0);
                     const deposit = parseFloat(
                       item.deposit ?? item.unearned_deposit ?? item.unused_credits,

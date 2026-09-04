@@ -27,6 +27,7 @@ import {
 import {
   isWalkInCustomer,
   normalizeCustomerKind,
+  parseCreditLimitValue,
 } from "@/utils/customerKind";
 
 const SALUTATIONS = [
@@ -170,7 +171,8 @@ const CustomerRegistartion = ({
   const [contactPersons, setContactPersons] = useState([emptyContactPerson()]);
 
   const formatNumberWithCommas = (value) => {
-    if (!value || value === "") return "";
+    if (value === null || value === undefined || String(value).trim() === "")
+      return "";
     const isNegative = String(value).trim().startsWith("-");
     let cleanedValue = String(value).replace(/[^0-9.-]/g, "");
     if (cleanedValue.includes("-")) {
@@ -194,7 +196,8 @@ const CustomerRegistartion = ({
   };
 
   const parseNumberFromFormatted = (value) => {
-    if (!value || value === "") return "";
+    if (value === null || value === undefined || String(value).trim() === "")
+      return "";
     return String(value).replace(/,/g, "");
   };
 
@@ -211,64 +214,109 @@ const CustomerRegistartion = ({
     return parts.join(", ");
   };
 
-  useEffect(() => {
-    if (selectedCustomer) {
+  const applyCustomerToForm = useCallback(
+    (customer) => {
+      if (!customer) {
+        setForm(getInitialFormValues());
+        return;
+      }
       const openingBalance =
-        selectedCustomer.opening_balance || selectedCustomer.balance || null;
+        customer.opening_balance || customer.balance || null;
       const existingName =
-        selectedCustomer.name ||
-        selectedCustomer.fullname ||
-        selectedCustomer.company_name ||
+        customer.name || customer.fullname || customer.company_name || "";
+      const rawEmail = String(
+        customer.email || customer.customer_email || "",
+      ).trim();
+      const rawPhone =
+        customer.phone ||
+        customer.work_phone ||
+        customer.mobile ||
         "";
+      const companyIdRaw = String(customer.company_id || "").trim();
+      const companyNameRaw = String(
+        customer.company_name || customer.fullname || "",
+      ).trim();
       setForm({
         ...getInitialFormValues(),
-        customerNo: selectedCustomer.customerNo || "",
-        entity_type: selectedCustomer.entity_type || "business",
+        customerNo: customer.customerNo || "",
+        entity_type: customer.entity_type || "business",
         name: existingName,
-        company_name: selectedCustomer.company_name || existingName,
-        salutation: selectedCustomer.salutation || "",
-        first_name: selectedCustomer.first_name || "",
-        last_name: selectedCustomer.last_name || "",
-        email: selectedCustomer.email || "",
-        work_phone: toNationalPhoneInput(selectedCustomer.phone || ""),
-        mobile: toNationalPhoneInput(selectedCustomer.mobile || ""),
-        language: selectedCustomer.language || "English",
-        tin: selectedCustomer.tin || "",
-        company_id: selectedCustomer.company_id || "",
-        tax_rate: selectedCustomer.tax_rate || "",
-        currency: selectedCustomer.currency || "NGN - Nigerian Naira",
-        payment_terms: selectedCustomer.payment_terms || "Due on Receipt",
-        enable_portal: Boolean(selectedCustomer.enable_portal),
-        remarks: selectedCustomer.remarks || "",
-        customer_type: normalizeCustomerKind(selectedCustomer),
-        credit_limit:
-          isWalkInCustomer(selectedCustomer)
-            ? "0"
-            : selectedCustomer.credit_limit != null &&
-                selectedCustomer.credit_limit !== ""
-              ? formatNumberWithCommas(String(selectedCustomer.credit_limit))
-              : "",
+        company_name: customer.company_name || existingName,
+        salutation: customer.salutation || "",
+        first_name: customer.first_name || "",
+        last_name: customer.last_name || "",
+        email: rawEmail,
+        work_phone: toNationalPhoneInput(rawPhone),
+        mobile: toNationalPhoneInput(customer.mobile || ""),
+        language: customer.language || "English",
+        tin: customer.tin || "",
+        company_id:
+          companyIdRaw && companyIdRaw !== companyNameRaw ? companyIdRaw : "",
+        tax_rate: customer.tax_rate || "",
+        currency: customer.currency || "NGN - Nigerian Naira",
+        payment_terms: customer.payment_terms || "Due on Receipt",
+        enable_portal: Boolean(customer.enable_portal),
+        remarks: customer.remarks || "",
+        customer_type: normalizeCustomerKind(customer),
+        credit_limit: isWalkInCustomer(customer)
+          ? "0"
+          : customer.credit_limit != null && customer.credit_limit !== ""
+            ? formatNumberWithCommas(String(customer.credit_limit))
+            : "",
         opening_balance: openingBalance
           ? formatNumberWithCommas(String(openingBalance))
           : "",
-        receivable_code: selectedCustomer.receivable_code || "",
-        receivable_accural_code: selectedCustomer.receivable_accural_code || "",
+        receivable_code: customer.receivable_code || "",
+        receivable_accural_code: customer.receivable_accural_code || "",
         branch_id:
-          selectedCustomer.branch_id != null &&
-          String(selectedCustomer.branch_id).trim() !== ""
-            ? String(selectedCustomer.branch_id)
+          customer.branch_id != null &&
+          String(customer.branch_id).trim() !== ""
+            ? String(customer.branch_id)
             : userBranchId
               ? String(userBranchId)
               : "",
-        billing_street1: selectedCustomer.address || "",
+        billing_street1: customer.address || "",
       });
-    } else {
-      setForm(getInitialFormValues());
+    },
+    [getInitialFormValues, userBranchId],
+  );
+
+  useEffect(() => {
+    if (!selectedCustomer) {
+      applyCustomerToForm(null);
+      setContactPersons([emptyContactPerson()]);
+      setErrors({});
+      setActiveTab("other");
+      return undefined;
     }
+
+    applyCustomerToForm(selectedCustomer);
     setContactPersons([emptyContactPerson()]);
     setErrors({});
     setActiveTab("other");
-  }, [selectedCustomer, getInitialFormValues, userBranchId]);
+
+    const customerNo = selectedCustomer.customerNo;
+    if (!customerNo || !facilityId) return undefined;
+
+    let cancelled = false;
+    _fetchApi(
+      `/api/v1/customer-one?facilityId=${encodeURIComponent(
+        facilityId,
+      )}&customerNo=${encodeURIComponent(customerNo)}`,
+      (res) => {
+        if (cancelled || !res?.success || !res.data) return;
+        applyCustomerToForm({ ...selectedCustomer, ...res.data });
+      },
+      () => {},
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedCustomer,
+    facilityId,
+    applyCustomerToForm,
+  ]);
 
   useEffect(() => {
     if (!visibleBranches.length || selectedCustomer) return;
@@ -503,11 +551,10 @@ const CustomerRegistartion = ({
         language: form.language || "English",
         currency: form.currency || "NGN - Nigerian Naira",
         payment_terms: form.payment_terms || "Due on Receipt",
-        credit_limit: isWalkInCustomer(form.customer_type)
-          ? 0
-          : form.credit_limit && form.credit_limit !== ""
-            ? parseFloat(parseNumberFromFormatted(form.credit_limit)) || 0
-            : 0,
+        credit_limit: parseCreditLimitValue(
+          parseNumberFromFormatted(form.credit_limit),
+          { walkIn: isWalkInCustomer(form.customer_type) },
+        ),
         customer_type: normalizeCustomerKind(form.customer_type),
         remarks: form.remarks || "",
         billing_address,
@@ -800,6 +847,7 @@ const CustomerRegistartion = ({
                   id="email"
                   name="email"
                   type="email"
+                  autoComplete="off"
                   value={form.email}
                   onChange={handleChange}
                   placeholder="Email address"
@@ -898,6 +946,7 @@ const CustomerRegistartion = ({
                       name="company_id"
                       value={form.company_id}
                       onChange={handleChange}
+                      autoComplete="off"
                       placeholder="RC / Company ID"
                       className={inputClass}
                     />
@@ -926,11 +975,13 @@ const CustomerRegistartion = ({
                     value={
                       isWalkInCustomer(form.customer_type)
                         ? "0"
-                        : form.credit_limit || ""
+                        : form.credit_limit == null
+                          ? ""
+                          : String(form.credit_limit)
                     }
                     onChange={handleChange}
                     inputMode="decimal"
-                    placeholder="0.00"
+                    placeholder="Blank = unlimited, 0 = no credit"
                     disabled={isWalkInCustomer(form.customer_type)}
                     className={cn(
                       inputClass,
@@ -942,7 +993,11 @@ const CustomerRegistartion = ({
                     <p className="mt-1 text-xs text-slate-500">
                       Walk-in customers cannot be invoiced on credit.
                     </p>
-                  ) : null}
+                  ) : (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Leave blank for unlimited. Enter 0 to allow no credit.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <ShadcnLabel className={labelClass}>

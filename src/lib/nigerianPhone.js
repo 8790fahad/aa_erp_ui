@@ -8,6 +8,8 @@ export function normalizeNigerianPhone(phone) {
   if (digits.startsWith("00")) digits = digits.slice(2);
   if (digits.startsWith("0") && digits.length === 11) {
     digits = `234${digits.slice(1)}`;
+  } else if (digits.startsWith("2340") && digits.length === 14) {
+    digits = `234${digits.slice(4)}`;
   } else if (!digits.startsWith("234") && digits.length === 10) {
     digits = `234${digits}`;
   }
@@ -24,9 +26,15 @@ export function isValidNigerianPhone(phone) {
 export function toNationalPhoneInput(phone) {
   const normalized = normalizeNigerianPhone(phone);
   if (/^234\d{10}$/.test(normalized)) return normalized.slice(3);
-  return String(phone || "")
-    .replace(/\D/g, "")
-    .slice(0, 11);
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.startsWith("2340") && digits.length >= 14) {
+    return digits.slice(4, 14);
+  }
+  if (digits.startsWith("234") && digits.length >= 13) {
+    return digits.slice(3, 13);
+  }
+  if (digits.startsWith("0")) return digits.slice(0, 11);
+  return digits.slice(0, 11);
 }
 
 /** Restrict live input to digits useful for Nigerian numbers. */

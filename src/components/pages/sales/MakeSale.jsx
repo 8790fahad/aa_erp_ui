@@ -57,7 +57,7 @@ function encodePaymentModes(modes) {
   const hasTransfer = set.has("transfer");
   const hasCredit = set.has("credit");
   const hasDeposit = set.has("deposit");
-  if (hasDeposit && !hasCash && !hasTransfer) return "deposit";
+  if (hasDeposit) return "deposit";
   if (hasCredit && (hasCash || hasTransfer)) return "credit_split";
   if (hasCredit && !hasCash && !hasTransfer) return "CREDIT";
   if (hasCash && hasTransfer) return "split";
@@ -107,9 +107,11 @@ function invoiceCoverageError({
   const invoiceTotal = Number(total) || 0;
   if (!(invoiceTotal > 0.009)) return "Invoice total must be greater than zero.";
   const deposit = Math.max(0, Number(depositBalance) || 0);
-  const limit = Number(creditLimit) || 0;
   const outstanding = Math.max(0, Number(creditOutstanding) || 0);
-  const unlimitedCredit = !(limit > 0);
+  const unlimitedCredit = isUnlimitedCreditLimit(creditLimit, {
+    walkIn: isWalkIn,
+  });
+  const limit = parseCreditLimitValue(creditLimit, { walkIn: isWalkIn }) ?? 0;
   const creditLeft = unlimitedCredit
     ? Infinity
     : Math.max(0, limit - outstanding);
@@ -342,6 +344,8 @@ import CustomerRegistartion from "@/components/pages/customer/CustomerRegistrati
 import {
   isWalkInCustomer,
   customerKindLabel,
+  parseCreditLimitValue,
+  isUnlimitedCreditLimit,
 } from "@/utils/customerKind";
 import {
   isValidNigerianPhone,
@@ -1310,7 +1314,7 @@ function MakeSale() {
       setCreditLimitDisplay(
         isWalkIn || isWalkInCustomer(selectedCustomer)
           ? 0
-          : parseFloat(selectedCustomer?.credit_limit || 0) || 0,
+          : parseCreditLimitValue(selectedCustomer?.credit_limit),
       );
       setBalancesLoading(false);
       return undefined;
@@ -1330,7 +1334,7 @@ function MakeSale() {
         setCreditLimitDisplay(
           isWalkIn || isWalkInCustomer(selectedCustomer)
             ? 0
-            : parseFloat(selectedCustomer?.credit_limit || 0) || 0,
+            : parseCreditLimitValue(selectedCustomer?.credit_limit),
         );
         setBalancesLoading(false);
       },
@@ -1341,7 +1345,7 @@ function MakeSale() {
         setCreditLimitDisplay(
           isWalkIn || isWalkInCustomer(selectedCustomer)
             ? 0
-            : parseFloat(selectedCustomer?.credit_limit || 0) || 0,
+            : parseCreditLimitValue(selectedCustomer?.credit_limit),
         );
         setBalancesLoading(false);
       },

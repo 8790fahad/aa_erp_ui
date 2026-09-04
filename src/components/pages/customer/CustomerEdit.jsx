@@ -11,6 +11,7 @@ import useQuery from "@/hooks/useQuery";
 import { saveNewSupplier } from "@/redux/actions/suppliers";
 import { saveNewCustomer } from "@/redux/actions/customer";
 import { toast } from "sonner";
+import { parseCreditLimitValue } from "@/utils/customerKind";
 
 export default function CustomerEdit() {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
@@ -141,8 +142,9 @@ export default function CustomerEdit() {
       query_type: "update",
       customer_type:
         form.customer_type === "walk-in" ? "walk-in" : form.customer_type || "customer",
-      credit_limit:
-        form.customer_type === "walk-in" ? 0 : form.credit_limit,
+      credit_limit: parseCreditLimitValue(form.credit_limit, {
+        walkIn: form.customer_type === "walk-in",
+      }),
     };
 
     console.log(obj);

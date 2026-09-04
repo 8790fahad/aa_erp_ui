@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   CheckCircle2,
-  FileText,
+  History,
   Package,
-  Printer,
   RefreshCw,
   Warehouse,
 } from "lucide-react";
@@ -16,14 +15,13 @@ import { Button } from "@/components/ui/button";
 import { formatNumber1 } from "@/components/router/utilities";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  FULFILLMENT_STATUS_META,
   getFulfillmentStatusMeta,
-  WorkflowStatusBadge,
 } from "@/lib/saleWorkflowStatus.js";
 import SaleWorkflowSearchBar from "./SaleWorkflowSearchBar";
 
 export default function WarehouseRequests() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [collecting, setCollecting] = useState(null);
@@ -32,29 +30,43 @@ export default function WarehouseRequests() {
   const [branchFilter, setBranchFilter] = useState("all");
   const [invoiceItems, setInvoiceItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [listTab, setListTab] = useState("pending");
 
-  const userBranchId = useMemo(() => {
+  const userBranchIds = useMemo(() => {
+    if (Array.isArray(user?.branchIds) && user.branchIds.length > 0) {
+      return user.branchIds.map(Number).filter(Boolean);
+    }
+    if (Array.isArray(user?.branches) && user.branches.length > 0) {
+      return user.branches
+        .map((b) => Number(b.id || b.branch_id))
+        .filter(Boolean);
+    }
     const bid = parseInt(user?.branchId ?? user?.branch_id, 10);
-    return Number.isFinite(bid) && bid > 0 ? bid : null;
-  }, [user]);
+    return Number.isFinite(bid) && bid > 0 ? [bid] : [];
+  }, [user?.branchIds, user?.branches, user?.branchId, user?.branch_id]);
 
-  const roleLower = String(user?.role || "").toLowerCase();
-  const isAdmin =
-    roleLower.includes("admin") ||
-    roleLower.includes("owner") ||
-    roleLower.includes("manager");
+  const assignedWarehouses = useMemo(() => {
+    if (Array.isArray(user?.branches) && user.branches.length > 0) {
+      return user.branches
+        .map((b) => ({
+          id: Number(b.id || b.branch_id),
+          name: b.branch_name || b.name || `Warehouse ${b.id || b.branch_id}`,
+        }))
+        .filter((b) => Number.isFinite(b.id) && b.id > 0);
+    }
+    return userBranchIds.map((id) => ({ id, name: `Warehouse ${id}` }));
+  }, [user?.branches, userBranchIds]);
 
   const fetchList = useCallback(() => {
     if (!activeBusiness?.id) return;
     setLoading(true);
     const params = new URLSearchParams({ facilityId: activeBusiness.id });
-    const effectiveBranch =
-      branchFilter !== "all"
-        ? branchFilter
-        : !isAdmin && userBranchId
-          ? String(userBranchId)
-          : null;
-    if (effectiveBranch) params.set("branchId", effectiveBranch);
+    if (user?.id) params.set("userId", String(user.id));
+    if (branchFilter !== "all") {
+      params.set("branchId", String(branchFilter));
+    } else if (userBranchIds.length) {
+      params.set("branchId", userBranchIds.join(","));
+    }
 
     _fetchApi(
       `/api/v1/sale-workflows/warehouse-requests?${params.toString()}`,
@@ -65,7 +77,10 @@ export default function WarehouseRequests() {
           setRows(list);
           setSelectedId((prev) => {
             if (prev && list.some((r) => r.id === prev)) return prev;
-            return list[0]?.id || null;
+            const pending = list.filter(
+              (r) => String(r.status || "").toLowerCase() !== "collected",
+            );
+            return pending[0]?.id || list[0]?.id || null;
           });
         } else {
           toast.error(res.message || "Failed to load warehouse requests");
@@ -78,21 +93,85 @@ export default function WarehouseRequests() {
         setRows([]);
       },
     );
-  }, [activeBusiness?.id, branchFilter, isAdmin, userBranchId]);
+  }, [activeBusiness?.id, branchFilter, user?.id, userBranchIds]);
 
-  useEffect(() => {
-    fetchList();
-  }, [fetchList]);
+  const pendingRows = useMemo(
+    () =>
+      rows.filter(
+        (r) => String(r.status || "").toLowerCase() !== "collected",
+      ),
+    [rows],
+  );
+
+  const collectedRows = useMemo(() => {
+    const list = rows.filter(
+      (r) => String(r.status || "").toLowerCase() === "collected",
+    );
+    return list.sort((a, b) => {
+      const ta = new Date(a.collected_at || a.updated_at || 0).getTime();
+      const tb = new Date(b.collected_at || b.updated_at || 0).getTime();
+      return tb - ta;
+    });
+  }, [rows]);
 
   const selected = useMemo(
     () => rows.find((r) => r.id === selectedId) || null,
     [rows, selectedId],
   );
 
+  const selectedHistory = useMemo(() => {
+    if (!selected) return [];
+    const events = [];
+    if (selected.printed_at) {
+      events.push({
+        at: selected.printed_at,
+        status: "printed",
+        note: "Warehouse invoice printed",
+        by: null,
+      });
+    }
+    if (
+      String(selected.status || "").toLowerCase() === "collecting" &&
+      selected.updated_at
+    ) {
+      events.push({
+        at: selected.updated_at,
+        status: "collecting",
+        note: "Collection in progress",
+        by: selected.updated_by,
+      });
+    }
+    if (selected.collected_at) {
+      events.push({
+        at: selected.collected_at,
+        status: "collected",
+        note: "Goods collected on this branch invoice",
+        by: selected.updated_by,
+      });
+    }
+    return events.sort((a, b) => {
+      const ta = new Date(a.at || 0).getTime();
+      const tb = new Date(b.at || 0).getTime();
+      return tb - ta;
+    });
+  }, [selected]);
+
+  useEffect(() => {
+    fetchList();
+  }, [fetchList]);
+
+  useEffect(() => {
+    const pool = listTab === "history" ? collectedRows : pendingRows;
+    if (!pool.length) return;
+    if (selectedId && pool.some((r) => r.id === selectedId)) return;
+    setSelectedId(pool[0].id);
+  }, [listTab, collectedRows, pendingRows, selectedId]);
+
   const visibleRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
+    const source = listTab === "history" ? collectedRows : pendingRows;
+    if (!q) return source;
+    return source.filter(
       (r) =>
         String(r.sale_code || "")
           .toLowerCase()
@@ -100,17 +179,22 @@ export default function WarehouseRequests() {
         String(r.pack_code || "")
           .toLowerCase()
           .includes(q) ||
-        String(r.customer_name || "")
+        String(r.customer_name || r.workflow?.customer_name || "")
           .toLowerCase()
           .includes(q) ||
         String(r.branch_name || "")
           .toLowerCase()
           .includes(q),
     );
-  }, [rows, searchQuery]);
+  }, [rows, pendingRows, collectedRows, searchQuery, listTab]);
 
   const handleSearchSelect = useCallback((row) => {
     if (row?.id != null) {
+      if (String(row.status || "").toLowerCase() === "collected") {
+        setListTab("history");
+      } else {
+        setListTab("pending");
+      }
       setSelectedId(row.id);
       return;
     }
@@ -118,6 +202,11 @@ export default function WarehouseRequests() {
       setRows((prev) => {
         const match = prev.find((r) => r.sale_code === row.sale_code);
         if (match) {
+          if (String(match.status || "").toLowerCase() === "collected") {
+            setListTab("history");
+          } else {
+            setListTab("pending");
+          }
           setSelectedId(match.id);
           return prev;
         }
@@ -125,31 +214,6 @@ export default function WarehouseRequests() {
       });
     }
   }, []);
-
-  const branchInvoiceUrl = useMemo(() => {
-    if (!selected) return "";
-    return `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-      selected.sale_code,
-    )}&branch_id=${selected.branch_id}&pack_code=${encodeURIComponent(
-      selected.pack_code || "",
-    )}&branch_name=${encodeURIComponent(selected.branch_name || "")}`;
-  }, [selected]);
-
-  const openCollectionReceipt = useCallback(
-    (pack, { autoPrint = false } = {}) => {
-      if (!pack?.sale_code) return;
-      const params = new URLSearchParams({
-        sale_code: pack.sale_code,
-        branch_id: String(pack.branch_id || ""),
-        pack_code: pack.pack_code || "",
-        branch_name: pack.branch_name || "",
-        collect: "1",
-      });
-      if (autoPrint) params.set("auto_print", "1");
-      navigate(`/app/sales/invoice-preview?${params.toString()}`);
-    },
-    [navigate],
-  );
 
   /** Load this branch's invoice lines — collect qty comes from the invoice. */
   useEffect(() => {
@@ -245,6 +309,9 @@ export default function WarehouseRequests() {
   }, [invoiceItems, selected?.lines]);
 
   const branchOptions = useMemo(() => {
+    if (assignedWarehouses.length) {
+      return assignedWarehouses.map((w) => [w.id, w.name]);
+    }
     const map = new Map();
     rows.forEach((r) => {
       if (r.branch_id != null) {
@@ -252,7 +319,7 @@ export default function WarehouseRequests() {
       }
     });
     return [...map.entries()];
-  }, [rows]);
+  }, [rows, assignedWarehouses]);
 
   const collect = (pack, { collectAll = true, lineIds } = {}) => {
     if (!activeBusiness?.id || !pack) return;
@@ -275,16 +342,7 @@ export default function WarehouseRequests() {
             toast.success("All branch invoices collected — dual signature");
           }
           fetchList();
-          // After full collect, open warehouse collection receipt for printing.
-          if (collectAll || res.results?.status === "collected") {
-            openCollectionReceipt(
-              {
-                ...pack,
-                ...(res.results || {}),
-              },
-              { autoPrint: false },
-            );
-          }
+          setListTab("history");
         } else {
           toast.error(res.message || "Could not mark collected");
         }
@@ -307,18 +365,21 @@ export default function WarehouseRequests() {
                 Warehouse Collection
               </h1>
               <p className="text-gray-600 mt-1">
-                Print warehouse invoice copies and collect goods after Invoice
-                Separation. Collect items as shown on each branch invoice copy.
+                Collect goods after Invoice Separation for each branch invoice.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {(isAdmin || branchOptions.length > 1) && (
+              {branchOptions.length > 1 && (
                 <select
                   value={branchFilter}
                   onChange={(e) => setBranchFilter(e.target.value)}
                   className="rounded-md border border-slate-300 px-3 py-2 text-sm"
                 >
-                  <option value="all">All branches</option>
+                  <option value="all">
+                    {userBranchIds.length
+                      ? "My warehouses"
+                      : "All warehouses"}
+                  </option>
                   {branchOptions.map(([id, name]) => (
                     <option key={id} value={String(id)}>
                       {name}
@@ -348,8 +409,35 @@ export default function WarehouseRequests() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <div className="lg:col-span-2 bg-white rounded-lg shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+              <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setListTab("pending")}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium ${
+                    listTab === "pending"
+                      ? "bg-white text-[var(--aa-navy)] shadow-sm"
+                      : "text-slate-600 hover:text-slate-800"
+                  }`}
+                >
+                  Pending ({pendingRows.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setListTab("history")}
+                  className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium ${
+                    listTab === "history"
+                      ? "bg-white text-[var(--aa-navy)] shadow-sm"
+                      : "text-slate-600 hover:text-slate-800"
+                  }`}
+                >
+                  <History className="h-3.5 w-3.5" />
+                  History ({collectedRows.length})
+                </button>
+              </div>
               <div className="font-semibold text-gray-800">
-                Warehouse invoices to collect ({visibleRows.length})
+                {listTab === "history"
+                  ? "Collected invoices"
+                  : "Warehouse invoices to collect"}
               </div>
               <SaleWorkflowSearchBar
                 facilityId={activeBusiness?.id}
@@ -368,8 +456,9 @@ export default function WarehouseRequests() {
               </div>
             ) : visibleRows.length === 0 ? (
               <div className="p-8 text-center text-gray-500 text-sm">
-                No branch invoices waiting. After separation, each branch copy
-                appears here for collection.
+                {listTab === "history"
+                  ? "No collected invoices yet. Marked collections appear here."
+                  : "No branch invoices waiting. After separation, each branch copy appears here for collection."}
               </div>
             ) : (
               <ul className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
@@ -402,17 +491,20 @@ export default function WarehouseRequests() {
                             />
                             {fMeta.label}
                           </span>
-                          {row.workflow ? (
-                            <WorkflowStatusBadge
-                              status={row.workflow.status}
-                              paymentType={row.workflow.payment_type}
-                            />
-                          ) : null}
                         </div>
                         <div className="mt-1 text-xs text-gray-500">
-                          {Number(row.qty_collected || 0) > 0
-                            ? `${formatNumber1(Number(row.qty_collected || 0))} / ${formatNumber1(Number(row.qty_total || 0))} collected`
-                            : `${formatNumber1(Number(row.qty_total || 0))} to collect on invoice`}
+                          {String(row.status || "").toLowerCase() ===
+                          "collected"
+                            ? `Collected${
+                                row.collected_at
+                                  ? ` ${moment(row.collected_at).format(
+                                      "DD MMM, HH:mm",
+                                    )}`
+                                  : ""
+                              }`
+                            : Number(row.qty_collected || 0) > 0
+                              ? `${formatNumber1(Number(row.qty_collected || 0))} / ${formatNumber1(Number(row.qty_total || 0))} collected`
+                              : `${formatNumber1(Number(row.qty_total || 0))} to collect on invoice`}
                         </div>
                       </button>
                     </li>
@@ -426,14 +518,14 @@ export default function WarehouseRequests() {
             {!selected ? (
               <div className="h-64 flex flex-col items-center justify-center text-gray-500 gap-2">
                 <Package className="w-10 h-10 text-gray-300" />
-                Select a branch invoice to collect
+                Select a branch invoice
               </div>
             ) : (
               <>
                 <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2 text-orange-700 text-xs font-semibold uppercase tracking-wide mb-1">
-                      <FileText className="w-3.5 h-3.5" />
+                      <Package className="w-3.5 h-3.5" />
                       Warehouse invoice
                     </div>
                     <h2 className="text-xl font-bold text-gray-900 font-mono">
@@ -450,10 +542,12 @@ export default function WarehouseRequests() {
                         {selected.workflow.customer_name}
                       </p>
                     ) : null}
-                    <p className="text-xs text-amber-800 mt-2 rounded-md bg-amber-50 border border-amber-100 px-2.5 py-1.5 max-w-lg">
-                      Collect exactly the items and quantities on this branch
-                      invoice — not items for other branches on the same sale.
-                    </p>
+                    {selected.status !== "collected" ? (
+                      <p className="text-xs text-amber-800 mt-2 rounded-md bg-amber-50 border border-amber-100 px-2.5 py-1.5 max-w-lg">
+                        Collect exactly the items and quantities on this branch
+                        invoice — not items for other branches on the same sale.
+                      </p>
+                    ) : null}
                     <p className="text-xs text-gray-400 mt-1">
                       Updated{" "}
                       {selected.updated_at
@@ -462,25 +556,6 @@ export default function WarehouseRequests() {
                           )
                         : "—"}
                     </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openCollectionReceipt(selected)}
-                      className="inline-flex items-center gap-1.5"
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                      Collection receipt
-                    </Button>
-                    <Link
-                      to={branchInvoiceUrl}
-                      className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--aa-navy)] hover:underline"
-                    >
-                      Open branch invoice
-                      <FileText className="w-3.5 h-3.5" />
-                    </Link>
                   </div>
                 </div>
 
@@ -504,16 +579,13 @@ export default function WarehouseRequests() {
                           <th className="px-3 py-2 text-right font-semibold">
                             Collect qty
                           </th>
-                          <th className="px-3 py-2 text-right font-semibold">
-                            Action
-                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {invoiceCollectRows.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={4}
+                              colSpan={3}
                               className="px-3 py-6 text-center text-slate-500"
                             >
                               No items on this branch invoice.
@@ -553,27 +625,6 @@ export default function WarehouseRequests() {
                                   </span>
                                 )}
                               </td>
-                              <td className="px-3 py-2.5 text-right">
-                                {!row.done && row.pack_line_id ? (
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={collecting === selected.id}
-                                    onClick={() =>
-                                      collect(selected, {
-                                        collectAll: false,
-                                        lineIds: [row.pack_line_id],
-                                      })
-                                    }
-                                    className="h-8"
-                                  >
-                                    Collect
-                                  </Button>
-                                ) : (
-                                  <span className="text-xs text-slate-400">—</span>
-                                )}
-                              </td>
                             </tr>
                           ))
                         )}
@@ -583,47 +634,71 @@ export default function WarehouseRequests() {
                 )}
 
                 {selected.status !== "collected" ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-4">
                     <Button
                       type="button"
                       disabled={collecting === selected.id}
                       onClick={() => collect(selected, { collectAll: true })}
                       className="bg-orange-600 hover:bg-orange-700"
                     >
-                      {collecting === selected.id
-                        ? "Updating…"
-                        : "Collect all invoice items"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => openCollectionReceipt(selected)}
-                    >
-                      <Printer className="w-4 h-4 mr-1.5" />
-                      Print collection receipt
-                    </Button>
-                    <Button type="button" variant="outline" asChild>
-                      <Link to={branchInvoiceUrl}>
-                        <FileText className="w-4 h-4 mr-1.5" />
-                        View invoice
-                      </Link>
+                      {collecting === selected.id ? "Updating…" : "Collected"}
                     </Button>
                   </div>
                 ) : (
-                  <div className="mt-4 space-y-3">
-                    <div className="rounded-md bg-green-50 text-green-800 text-sm px-4 py-3">
-                      All items on this branch invoice are collected.
-                    </div>
-                    <Button
-                      type="button"
-                      className="bg-orange-600 hover:bg-orange-700"
-                      onClick={() => openCollectionReceipt(selected)}
-                    >
-                      <Printer className="w-4 h-4 mr-1.5" />
-                      Print collection receipt
-                    </Button>
+                  <div className="mt-4 rounded-md bg-green-50 text-green-800 text-sm px-4 py-3">
+                    All items on this branch invoice are collected
+                    {selected.collected_at
+                      ? ` · ${moment(selected.collected_at).format(
+                          "DD MMM YYYY, HH:mm",
+                        )}`
+                      : ""}
+                    .
                   </div>
                 )}
+
+                <div className="mt-8">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                    Collection history
+                  </h3>
+                  {selectedHistory.length ? (
+                    <ul className="text-xs text-gray-600 space-y-2 max-h-56 overflow-y-auto rounded-md border border-gray-100 bg-gray-50 p-3">
+                      {selectedHistory.map((h, i) => {
+                        const fMeta =
+                          FULFILLMENT_STATUS_META[h.status] ||
+                          FULFILLMENT_STATUS_META.pending;
+                        return (
+                          <li
+                            key={`${h.at}-${h.status}-${i}`}
+                            className="flex flex-wrap items-start gap-x-2 gap-y-1 border-b border-gray-100 pb-2 last:border-0 last:pb-0"
+                          >
+                            <span className="font-mono text-gray-400 shrink-0">
+                              {h.at
+                                ? moment(h.at).format("DD MMM YYYY HH:mm")
+                                : "—"}
+                            </span>
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2 py-0.5 font-medium ${fMeta.badge}`}
+                            >
+                              {fMeta.label}
+                            </span>
+                            {h.by ? (
+                              <span className="text-gray-500">by {h.by}</span>
+                            ) : null}
+                            {h.note ? (
+                              <span className="w-full text-gray-500">
+                                {h.note}
+                              </span>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-gray-500 rounded-md border border-dashed border-gray-200 px-3 py-4">
+                      No collection history recorded for this invoice yet.
+                    </p>
+                  )}
+                </div>
               </>
             )}
           </div>

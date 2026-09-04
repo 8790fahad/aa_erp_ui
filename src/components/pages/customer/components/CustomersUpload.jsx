@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { useSelector } from "react-redux";
 import PropTypes from "prop-types";
 import { formatNumber1 } from "@/components/router/utilities";
+import { parseCreditLimitValue } from "@/utils/customerKind";
 import {
   normalizeNigerianPhone,
   isValidNigerianPhone,
@@ -437,20 +438,18 @@ const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
 
                 // Filter out "active" and other invalid values for numeric fields
                 if (targetColumn === "credit_limit") {
-                  const stringValue = String(value || "")
+                  const stringValue = String(value ?? "")
                     .toLowerCase()
                     .trim();
-                  // Credit limit must be positive, so if value is "active" or other non-numeric text, set to 0
                   if (
                     stringValue === "active" ||
                     stringValue === "" ||
-                    isNaN(parseFloat(value))
+                    (value !== 0 && isNaN(parseFloat(value)))
                   ) {
-                    value = 0;
+                    value = null;
                   } else if (typeof value === "string") {
-                    // Try to parse as number (credit limit should be positive)
                     const parsed = parseFloat(value);
-                    value = isNaN(parsed) ? 0 : Math.max(0, parsed); // Ensure non-negative
+                    value = isNaN(parsed) ? null : Math.max(0, parsed);
                   }
                 } else if (targetColumn === "opening_balance") {
                   const stringValue = String(value || "")
@@ -646,7 +645,7 @@ const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
               : null,
           email: item.email && item.email.trim() !== "" ? item.email : null,
           branch_id: item.branch_id ?? resolveBranchId(item.branch),
-          credit_limit: item.credit_limit || 0,
+          credit_limit: parseCreditLimitValue(item.credit_limit),
           opening_balance: item.opening_balance || 0,
           obdate: item.opening_balance_date || "",
           receivable_code: item.receivable_code,

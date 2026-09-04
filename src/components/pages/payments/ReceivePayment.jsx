@@ -238,14 +238,35 @@ function isCreditedRow(row) {
   return CREDITED_STATUSES.has(String(row?.status || "").toLowerCase());
 }
 
-/** Verification Points Credit tab: Awaiting credit vs Credited. */
+/** True only for Apply Deposit workflows — not Credit / Credit+Cash+Transfer. */
+function isDepositWorkflowRow(row) {
+  const pt = normalizePaymentMode(row?.payment_type);
+  return (
+    pt === "deposit" ||
+    Boolean(row?.deposit_pending) ||
+    Boolean(row?.credit_after_deposit)
+  );
+}
+
+/** Verification Points Credit tab: deposit invoices that still need apply-then-credit. */
 function isCreditPlusDepositRow(row) {
-  if (!row) return false;
+  if (!row || !isDepositWorkflowRow(row)) return false;
   if (row.deposit_pending || row.credit_after_deposit) return true;
   if (Number(row.credit_remainder) > 0.05) return true;
   const due = Number(row.amount) || 0;
   const dep = Number(row.deposit_available) || 0;
   return due - dep > 0.05;
+}
+
+function isCreditAvailabilityRow(row) {
+  if (!row || isDepositPendingCredit(row)) return false;
+  const pt = normalizePaymentMode(row.payment_type);
+  const status = String(row.status || "").toLowerCase();
+  return (
+    status === "awaiting_credit_approval" ||
+    pt === "credit" ||
+    pt === "credit_split"
+  );
 }
 
 function isDepositPendingCredit(row) {
@@ -260,6 +281,9 @@ function isDepositPendingCredit(row) {
 function creditStateLabel(row) {
   if (isDepositPendingCredit(row)) return "Apply deposit first";
   if (isAwaitingCreditRow(row)) return "Awaiting credit";
+  if (normalizePaymentMode(row?.payment_type) === "credit_split") {
+    return "Confirm credit";
+  }
   if (isCreditedRow(row)) return "Credited";
   return "Awaiting credit";
 }
@@ -269,6 +293,38 @@ function depositApplyPreview(row) {
   const available = Number(row?.deposit_available) || 0;
   const apply = Math.min(Math.max(0, due), Math.max(0, available));
   return { due, available, apply };
+}
+
+function rowPaymentModes(row) {
+  const history = Array.isArray(row?.history) ? row.history : [];
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const raw = history[i]?.payment_modes;
+    if (Array.isArray(raw) && raw.length) {
+      return raw.map((m) => String(m || "").toLowerCase().trim()).filter(Boolean);
+    }
+  }
+  const pt = normalizePaymentMode(row?.payment_type);
+  if (pt === "deposit") return ["deposit"];
+  if (pt === "credit") return ["credit"];
+  if (pt === "credit_split") return ["credit", "cash", "transfer"];
+  if (pt === "split") return ["cash", "transfer"];
+  if (pt === "transfer") return ["transfer"];
+  if (pt === "cash") return ["cash"];
+  return [];
+}
+
+function postJson(url, body) {
+  return new Promise((resolve, reject) => {
+    _postApi(
+      url,
+      body,
+      (res) => {
+        if (res?.success) resolve(res);
+        else reject(new Error(res?.error || res?.message || "Request failed"));
+      },
+      (err) => reject(new Error(err?.message || "Request failed")),
+    );
+  });
 }
 
 function creditStateBadgeClass(row) {
@@ -496,7 +552,10 @@ export default function ReceivePayment() {
   const [depositConfirmRow, setDepositConfirmRow] = useState(null);
   const [cashAmount, setCashAmount] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
-  const collectOpen = hubOpen && hubAction === "collect";
+  const [creditAmount, setCreditAmount] = useState("");
+  const [depositAmount, setDepositAmount] = useState("");
+  const collectOpen =
+    hubOpen && (hubAction === "collect" || hubAction === "deposit");
 
   const [advanceOpen, setAdvanceOpen] = useState(false);
   const [advanceCustomer, setAdvanceCustomer] = useState(null);
@@ -536,21 +595,34 @@ export default function ReceivePayment() {
     ? Number(
         (
           amountDue -
-          (Number(splitProgress?.collected_total) || 0)
+          (Number(splitProgress?.collected_total) || 0) -
+          (Number(splitProgress?.credit_allocated) || 0)
+        ).toFixed(2),
+      )
+    : amountDue;
+  const unpaidBeforeCredit = isSplit
+    ? Number(
+        (
+          amountDue - (Number(splitProgress?.collected_total) || 0)
         ).toFixed(2),
       )
     : amountDue;
 
-  const cashAccounts = useAdvancePaymentAccounts(
+  const loadCashPayThrough =
     (collectOpen && showCashFields) ||
-      (advanceOpen && (advanceMode === "cash" || advanceMode === "split")),
+    (advanceOpen && (advanceMode === "cash" || advanceMode === "split"));
+  const loadBankPayThrough =
+    (collectOpen && showTransferFields) ||
+    (advanceOpen &&
+      (advanceMode === "transfer" || advanceMode === "split"));
+
+  const cashAccounts = useAdvancePaymentAccounts(
+    loadCashPayThrough,
     activeBusiness?.id,
     "cash",
   );
   const bankAccounts = useAdvancePaymentAccounts(
-    (collectOpen && showTransferFields) ||
-      (advanceOpen &&
-        (advanceMode === "transfer" || advanceMode === "split")),
+    loadBankPayThrough,
     activeBusiness?.id,
     "bank",
   );
@@ -645,6 +717,27 @@ export default function ReceivePayment() {
     setCashAmount("");
     setTransferAmount("");
   }, [collectOpen, selected?.sale_code, selected?.payment_type]);
+
+  // Prefill Apply Deposit with available balance when the hub opens.
+  useEffect(() => {
+    if (!hubOpen || hubAction !== "deposit" || !selected) return;
+    const due = Number(selected.amount) || 0;
+    const available = Number(selected.deposit_available) || 0;
+    const preset = Math.min(Math.max(0, due), Math.max(0, available));
+    if (preset <= 0.05) return;
+    setDepositAmount((prev) => {
+      if (String(prev || "").trim() !== "" && parseFormattedAmount(prev) > 0.05) {
+        return prev;
+      }
+      return formatNumberWithCommas(String(preset));
+    });
+  }, [
+    hubOpen,
+    hubAction,
+    selected?.sale_code,
+    selected?.amount,
+    selected?.deposit_available,
+  ]);
 
   useEffect(() => {
     if (!collectOpen && !advanceOpen) return;
@@ -749,27 +842,24 @@ export default function ReceivePayment() {
           needsCollectionSide(r, "credit"),
       );
       const depositCredit = depositPending.filter(isCreditPlusDepositRow);
-      const creditCodes = new Set(
-        [...creditPending, ...depositCredit]
-          .map((r) => r.sale_code)
-          .filter(Boolean),
-      );
-      const approvalCount = creditCodes.size;
-      const collectionCount = creditSplitPending.length;
-      const creditAmount =
-        Number(summary.pending_credit) ||
-        sumAmounts([
-          ...creditPending,
-          ...depositCredit.filter(
-            (r) =>
-              !creditPending.some((c) => String(c.sale_code) === String(r.sale_code)),
-          ),
-        ]);
+      const byCode = new Map();
+      for (const r of [
+        ...creditPending,
+        ...creditSplitPending,
+        ...depositCredit,
+      ]) {
+        if (!r?.sale_code) continue;
+        const existing = byCode.get(r.sale_code);
+        if (!existing || r.status === "awaiting_credit_approval") {
+          byCode.set(r.sale_code, r);
+        }
+      }
+      const awaitingRows = [...byCode.values()];
       return {
         showCash: false,
         showTransfer: false,
         showSplit: false,
-        showCredit: collectionCount > 0,
+        showCredit: false,
         showCreditApproval: true,
         showCredited: true,
         showDiscount: false,
@@ -777,7 +867,7 @@ export default function ReceivePayment() {
         pending_cash: 0,
         pending_transfer: 0,
         pending_split: 0,
-        pending_credit: creditAmount,
+        pending_credit: sumAmounts(awaitingRows),
         pending_discount: 0,
         pending_mode: 0,
         collected_cash_today: 0,
@@ -785,8 +875,8 @@ export default function ReceivePayment() {
         approved_credit_today: Number(summary.approved_credit_today) || 0,
         approved_credit_count_today:
           Number(summary.approved_credit_count_today) || 0,
-        awaiting_credit_count: approvalCount,
-        pending_count: approvalCount + collectionCount,
+        awaiting_credit_count: awaitingRows.length,
+        pending_count: awaitingRows.length,
       };
     }
     if (methodTab === "deposit") {
@@ -1229,7 +1319,15 @@ export default function ReceivePayment() {
     (row, preferred) => {
       if (preferred) return preferred;
       const pt = normalizePaymentMode(row?.payment_type);
-      // Credit + Cash + Transfer: collect (cash/transfer/remainder) on any tab
+      if (methodTab === "credit" && !isDepositPendingCredit(row)) {
+        if (
+          pt === "credit" ||
+          pt === "credit_split" ||
+          row?.status === "awaiting_credit_approval"
+        ) {
+          return "credit";
+        }
+      }
       if (pt === "credit_split" || pt === "split") return "collect";
       if (methodTab === "deposit" || pt === "deposit") return "deposit";
       if (
@@ -1246,56 +1344,73 @@ export default function ReceivePayment() {
     [methodTab],
   );
 
-  const confirmApplyDeposit = useCallback(() => {
+  const confirmApplyDeposit = useCallback(async () => {
     const row = depositConfirmRow || selected;
     if (!row?.sale_code || !activeBusiness?.id || !user?.id) return;
-    const { apply } = depositApplyPreview(row);
-    if (apply <= 0.05) {
-      toast.error("Nothing due on this invoice to apply deposit against.");
+
+    const available = Number(row.deposit_available) || 0;
+    const typedDep = parseFormattedAmount(depositAmount);
+    const previewApply = depositApplyPreview(row).apply;
+    const depAmt =
+      String(depositAmount || "").trim() === ""
+        ? previewApply
+        : typedDep;
+
+    if (depAmt <= 0.05) {
+      toast.error("Enter a deposit amount to apply");
       return;
     }
+    if (depAmt - available > 0.05) {
+      toast.error(
+        `Deposit cannot exceed available ₦${formatNumber1(available)}`,
+      );
+      return;
+    }
+
+    const saleCode = row.sale_code;
+    const due = Number(row.amount) || 0;
+    const remaining = Number((due - depAmt).toFixed(2));
+
     setSubmitting(true);
-    _postApi(
-      "/api/v1/apply-customer-advance",
-      {
+    try {
+      await postJson("/api/v1/apply-customer-advance", {
         facilityId: activeBusiness.id,
         userId: user.id,
         customer_no: row.customer_no,
         transaction_date: moment().format("YYYY-MM-DD"),
-        narration: `Apply deposit to ${row.sale_code}`,
-        applications: [{ invoice_ref: row.sale_code, amount: apply }],
-      },
-      (res) => {
-        setSubmitting(false);
-        if (res?.success) {
-          toast.success(
-            res.message ||
-              `Deposit of ₦${formatNumber1(apply)} applied to ${row.sale_code}`,
-          );
-          setDepositConfirmRow(null);
-          setHubOpen(false);
-          fetchDashboard();
-          if (row?.sale_code) {
-            navigate(
-              `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-                row.sale_code,
-              )}&doc=invoice`,
-            );
-          }
-        } else {
-          toast.error(res?.error || res?.message || "Failed to apply deposit");
-        }
-      },
-      (err) => {
-        setSubmitting(false);
-        toast.error(err?.error || err?.message || "Failed to apply deposit");
-      },
-    );
+        narration: `Apply deposit to ${saleCode}`,
+        applications: [{ invoice_ref: saleCode, amount: depAmt }],
+      });
+
+      toast.success(
+        remaining > 0.05
+          ? `Deposit applied · ₦${formatNumber1(remaining)} left — collect on Cash, then print`
+          : "Deposit applied — opening invoice to print",
+      );
+      setDepositConfirmRow(null);
+      setHubOpen(false);
+      fetchDashboard();
+      if (remaining > 0.05) {
+        setMethodTab("cash");
+        setActiveTab("pending");
+      } else {
+        navigate(
+          `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
+            saleCode,
+          )}&doc=invoice`,
+        );
+      }
+    } catch (err) {
+      toast.error(err?.message || "Could not apply deposit");
+    } finally {
+      setSubmitting(false);
+    }
   }, [
     depositConfirmRow,
     selected,
     activeBusiness?.id,
-    user?.id,
+    user,
+    depositAmount,
     fetchDashboard,
     navigate,
   ]);
@@ -1317,7 +1432,18 @@ export default function ReceivePayment() {
       setHubAction(action);
       setHubOpen(true);
       loadHubInvoice(row.sale_code);
-      if (action === "deposit") setDepositConfirmRow(row);
+      if (action === "deposit") {
+        setDepositConfirmRow(row);
+        const due = Number(row.amount) || 0;
+        const available = Number(row.deposit_available) || 0;
+        const preset = Math.min(Math.max(0, due), Math.max(0, available));
+        setDepositAmount(
+          preset > 0.05 ? formatNumberWithCommas(String(preset)) : "",
+        );
+        setCreditAmount("");
+        setTransferAmount("");
+        setCashAmount("");
+      }
 
       if (action === "collect") {
         const due = Number(row.amount) || 0;
@@ -1331,6 +1457,19 @@ export default function ReceivePayment() {
           setCashAmount("");
           setTransferAmount("");
         }
+      }
+      if (action === "credit") {
+        const due = Number(row.amount) || 0;
+        const collected = Number(row.split_progress?.collected_total) || 0;
+        const allocated = Number(row.split_progress?.credit_allocated) || 0;
+        const unpaid = Math.max(0, Number((due - collected).toFixed(2)));
+        const preset =
+          allocated > 0.05 ? allocated : Number(row.split_progress?.credit) > 0.05
+            ? Number(row.split_progress.credit)
+            : unpaid;
+        setCreditAmount(
+          preset > 0.05 ? formatNumberWithCommas(String(preset)) : "",
+        );
       }
     },
     [loadHubInvoice, resolveHubAction],
@@ -1764,8 +1903,15 @@ export default function ReceivePayment() {
       toast.error("Only Credit + Cash + Transfer invoices can confirm a credit amount");
       return;
     }
-    if (remainingDue <= 0.05) {
-      toast.error("Nothing left to confirm as credit");
+    const creditToSend = parseFormattedAmount(creditAmount);
+    if (creditToSend <= 0.05) {
+      toast.error("Enter a credit amount greater than zero");
+      return;
+    }
+    if (creditToSend > unpaidBeforeCredit + 0.05) {
+      toast.error(
+        `Credit cannot exceed the unpaid amount (₦${formatNumber1(unpaidBeforeCredit)})`,
+      );
       return;
     }
     const collected = Number(splitProgress?.collected_total) || 0;
@@ -1776,11 +1922,12 @@ export default function ReceivePayment() {
       {
         facilityId: activeBusiness.id,
         saleCode,
+        credit_amount: creditToSend,
         updated_by: user?.id,
         note:
-          collected <= 0.05
-            ? `Full amount ₦${remainingDue.toFixed(2)} confirmed as Credit`
-            : `Credit ₦${remainingDue.toFixed(2)} confirmed after cash/transfer collection`,
+          collected <= 0.05 && creditToSend >= unpaidBeforeCredit - 0.05
+            ? `Full amount ₦${creditToSend.toFixed(2)} confirmed as Credit`
+            : `Credit ₦${creditToSend.toFixed(2)} confirmed`,
       },
       (res) => {
         if (!res?.success) {
@@ -1788,7 +1935,13 @@ export default function ReceivePayment() {
           toast.error(res?.message || "Could not confirm credit amount");
           return;
         }
-        // Approve credit immediately, then open invoice to print and move on
+        if (res.allocated) {
+          setSubmitting(false);
+          toast.success(res.message || `Credit ₦${formatNumber1(creditToSend)} saved`);
+          closeHub();
+          fetchDashboard();
+          return;
+        }
         _postApi(
           "/api/v1/sale-workflows/advance",
           {
@@ -1802,9 +1955,9 @@ export default function ReceivePayment() {
             setSubmitting(false);
             if (advRes?.success) {
               toast.success(
-                `Credit ₦${formatNumber1(remainingDue)} confirmed — opening invoice to print`,
+                `Credit ₦${formatNumber1(creditToSend)} confirmed — opening invoice to print`,
               );
-              closeCollect();
+              closeHub();
               fetchDashboard();
               navigate(
                 `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
@@ -1814,9 +1967,9 @@ export default function ReceivePayment() {
             } else {
               toast.success(
                 res.message ||
-                  `Credit ₦${formatNumber1(remainingDue)} sent for approval`,
+                  `Credit ₦${formatNumber1(creditToSend)} sent for approval`,
               );
-              closeCollect();
+              closeHub();
               setMethodTab("credit");
               fetchDashboard();
             }
@@ -1825,9 +1978,9 @@ export default function ReceivePayment() {
             setSubmitting(false);
             toast.success(
               res.message ||
-                `Credit ₦${formatNumber1(remainingDue)} sent for approval`,
+                `Credit ₦${formatNumber1(creditToSend)} sent for approval`,
             );
-            closeCollect();
+            closeHub();
             setMethodTab("credit");
             fetchDashboard();
             toast.error(
@@ -1960,7 +2113,11 @@ export default function ReceivePayment() {
             (!isSplit && Math.abs(total - amountDue) <= 0.05) ||
             (isSplit && total + 0.05 >= remainingDue);
 
-          toast.success(res.message || "Payment confirmed");
+          toast.success(
+            fullyPaid
+              ? res.message || "Payment confirmed — opening invoice to print"
+              : res.message || "Payment recorded — balance still due",
+          );
           closeCollect();
           fetchDashboard();
 
@@ -2183,8 +2340,7 @@ export default function ReceivePayment() {
                   viewSummary.pending_count) === 1
                   ? ""
                   : "s"}{" "}
-                — apply deposit first if selected, then approve credit
-                remainder before Invoice Separation
+                — approve credit before Invoice Separation
               </p>
             </div>
           ) : null}
@@ -2547,7 +2703,7 @@ export default function ReceivePayment() {
                               </span>
                             </div>
                           ) : methodTab === "credit" &&
-                            row.status === "awaiting_credit_approval" ? (
+                            isCreditAvailabilityRow(row) ? (
                             row.credit_unlimited ? (
                               <div className="mt-1 text-[11px] text-slate-400">
                                 Credit unlimited
@@ -2843,7 +2999,7 @@ export default function ReceivePayment() {
                               ) : null}
                             </div>
                           ) : methodTab === "credit" &&
-                            row.status === "awaiting_credit_approval" ? (
+                            isCreditAvailabilityRow(row) ? (
                             <button
                               type="button"
                               disabled={submitting || row.credit_over_limit}
@@ -3168,8 +3324,8 @@ export default function ReceivePayment() {
                     </div>
                   ) : null}
                   {hubAction === "deposit" ? (
-                    <div className="mt-3 space-y-1 border-t border-slate-200 pt-2 text-sm text-slate-600">
-                      <div className="flex justify-between gap-3">
+                    <div className="mt-3 space-y-3 border-t border-slate-200 pt-3 text-sm">
+                      <div className="flex justify-between gap-3 text-slate-600">
                         <span>Deposit available</span>
                         <span className="font-semibold tabular-nums text-teal-700">
                           ₦
@@ -3178,14 +3334,46 @@ export default function ReceivePayment() {
                           )}
                         </span>
                       </div>
-                      <div className="flex justify-between gap-3">
-                        <span>Will apply</span>
-                        <span className="font-semibold tabular-nums text-teal-800">
-                          ₦{formatNumber1(depositApplyPreview(selected).apply)}
-                        </span>
+                      <div>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <label className="text-sm font-medium text-slate-700">
+                            Apply deposit
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDepositAmount(
+                                formatNumberWithCommas(
+                                  String(
+                                    depositApplyPreview(selected).apply || 0,
+                                  ),
+                                ),
+                              )
+                            }
+                            className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                          >
+                            Max (₦
+                            {formatNumber1(
+                              depositApplyPreview(selected).apply,
+                            )}
+                            )
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={depositAmount}
+                          onChange={(e) =>
+                            setDepositAmount(
+                              formatNumberWithCommas(e.target.value),
+                            )
+                          }
+                          className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                          placeholder="0.00"
+                        />
                       </div>
                       {depositApplyPreview(selected).available <= 0.05 ? (
-                        <p className="pt-1 text-xs text-amber-800">
+                        <p className="text-xs text-amber-800">
                           This customer has no available deposit.
                         </p>
                       ) : null}
@@ -3195,11 +3383,16 @@ export default function ReceivePayment() {
                   {hubAction === "collect" && isSplit ? (
                     <div className="mt-3 space-y-1 border-t border-slate-200 pt-2 text-xs text-slate-600">
                       <p>
-                        Collect cash and/or transfer as needed
                         {normalizePaymentMode(paymentType) === "credit_split"
-                          ? ". Any unpaid balance is Credit — confirm it to send for Credit Approval"
-                          : ". Both points can collect until the invoice is fully paid"}
-                        .
+                          ? methodTab === "cash"
+                            ? "Collect cash for this invoice. Remaining balance stays on credit."
+                            : methodTab === "transfer"
+                              ? "Collect transfer for this invoice. Remaining balance stays on credit."
+                              : "Collect cash and/or transfer as needed. Any unpaid balance is Credit — confirm it on the Credit tab."
+                          : "Collect cash and/or transfer as needed. Both points can collect until the invoice is fully paid"}
+                        {normalizePaymentMode(paymentType) === "credit_split"
+                          ? ""
+                          : "."}
                       </p>
                       <p>
                         Cash: ₦
@@ -3219,7 +3412,12 @@ export default function ReceivePayment() {
                         <p>
                           Credit:{" "}
                           <span className="font-semibold tabular-nums text-amber-800">
-                            ₦{formatNumber1(remainingDue)}
+                            ₦
+                            {formatNumber1(
+                              Number(splitProgress?.credit) > 0
+                                ? splitProgress.credit
+                                : unpaidBeforeCredit,
+                            )}
                           </span>
                         </p>
                       ) : (
@@ -3249,17 +3447,63 @@ export default function ReceivePayment() {
                         Transfer: ₦
                         {formatNumber1(selected.split_progress.transfer || 0)}
                       </p>
-                      <p>
-                        Credit:{" "}
-                        <span className="font-semibold text-amber-800">
-                          ₦
+                    </div>
+                  ) : null}
+                  {hubAction === "credit" &&
+                  normalizePaymentMode(selected?.payment_type) ===
+                    "credit_split" &&
+                  String(selected?.status || "").toLowerCase() ===
+                    "awaiting_cashier_confirm" ? (
+                    <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <label
+                          htmlFor="credit-amount"
+                          className="text-sm font-medium text-slate-700"
+                        >
+                          Credit amount
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCreditAmount(
+                              unpaidBeforeCredit > 0
+                                ? formatNumberWithCommas(
+                                    String(unpaidBeforeCredit),
+                                  )
+                                : "",
+                            )
+                          }
+                          className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                        >
+                          All (₦{formatNumber1(unpaidBeforeCredit)})
+                        </button>
+                      </div>
+                      <input
+                        id="credit-amount"
+                        type="text"
+                        inputMode="decimal"
+                        value={creditAmount}
+                        onChange={(e) =>
+                          setCreditAmount(
+                            formatNumberWithCommas(e.target.value),
+                          )
+                        }
+                        className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                        placeholder="0.00"
+                      />
+                      {unpaidBeforeCredit - parseFormattedAmount(creditAmount) >
+                      0.05 ? (
+                        <p className="text-xs text-slate-500">
+                          Left for cash/transfer: ₦
                           {formatNumber1(
-                            selected.split_progress.credit ??
-                              selected.amount ??
+                            Math.max(
                               0,
+                              unpaidBeforeCredit -
+                                parseFormattedAmount(creditAmount),
+                            ),
                           )}
-                        </span>
-                      </p>
+                        </p>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -3449,8 +3693,12 @@ export default function ReceivePayment() {
                       </p>
                     )}
                     <p className="text-sm text-slate-600">
-                      Review the invoice, then approve credit to send it to Invoice
-                      Separation.
+                      {normalizePaymentMode(selected?.payment_type) ===
+                        "credit_split" &&
+                      String(selected?.status || "").toLowerCase() ===
+                        "awaiting_cashier_confirm"
+                        ? "Enter the credit amount, then confirm. Anything left is collected as cash or transfer."
+                        : "Review the invoice, then approve credit to send it to Invoice Separation."}
                     </p>
                   </div>
                 ) : null}
@@ -3462,8 +3710,8 @@ export default function ReceivePayment() {
                 ) : null}
                 {hubAction === "deposit" ? (
                   <p className="text-sm text-slate-600">
-                    Review the invoice, then approve to apply the customer
-                    deposit to this invoice.
+                    Apply the deposit here. If anything is left, collect it on
+                    Cash — printing opens after that last payment.
                   </p>
                 ) : null}
                 {hubAction === "mode" ? (
@@ -3500,7 +3748,8 @@ export default function ReceivePayment() {
                       disabled={
                         submitting ||
                         !selected ||
-                        depositApplyPreview(selected).apply <= 0.05
+                        (parseFormattedAmount(depositAmount) <= 0.05 &&
+                          depositApplyPreview(selected).apply <= 0.05)
                       }
                       onClick={confirmApplyDeposit}
                       className="inline-flex items-center gap-2 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
@@ -3510,16 +3759,21 @@ export default function ReceivePayment() {
                       ) : (
                         <Wallet className="h-4 w-4" />
                       )}
-                      Approve & apply
-                      {selected
-                        ? ` · ₦${formatNumber1(depositApplyPreview(selected).apply)}`
-                        : ""}
+                      {`Approve & apply${
+                        selected
+                          ? ` · ₦${formatNumber1(
+                              parseFormattedAmount(depositAmount) ||
+                                depositApplyPreview(selected).apply,
+                            )}`
+                          : ""
+                      }`}
                     </button>
                   ) : null}
 
                   {hubAction === "collect" ? (
                     <>
-                      {normalizePaymentMode(paymentType) === "credit_split" &&
+                      {methodTab === "credit" &&
+                      normalizePaymentMode(paymentType) === "credit_split" &&
                       remainingDue > 0.05 ? (
                         <button
                           type="button"
@@ -3535,7 +3789,8 @@ export default function ReceivePayment() {
                           Confirm ₦{formatNumber1(remainingDue)} as Credit
                         </button>
                       ) : null}
-                      {normalizePaymentMode(paymentType) === "credit_split" &&
+                      {methodTab === "credit" &&
+                      normalizePaymentMode(paymentType) === "credit_split" &&
                       splitHintTotal <= 0.05 ? null : (
                         <button
                           type="button"
@@ -3558,14 +3813,32 @@ export default function ReceivePayment() {
                     <button
                       type="button"
                       disabled={
-                        submitting || !selected || selected.credit_over_limit
+                        submitting ||
+                        !selected ||
+                        selected.credit_over_limit ||
+                        (normalizePaymentMode(selected?.payment_type) ===
+                          "credit_split" &&
+                          String(selected?.status || "").toLowerCase() ===
+                            "awaiting_cashier_confirm" &&
+                          parseFormattedAmount(creditAmount) <= 0.05)
                       }
                       title={
                         selected?.credit_over_limit
                           ? "Invoice exceeds this customer's remaining credit"
                           : undefined
                       }
-                      onClick={() => approveCredit(selected)}
+                      onClick={() => {
+                        if (
+                          normalizePaymentMode(selected?.payment_type) ===
+                            "credit_split" &&
+                          String(selected?.status || "").toLowerCase() ===
+                            "awaiting_cashier_confirm"
+                        ) {
+                          sendCreditRemainder();
+                          return;
+                        }
+                        approveCredit(selected);
+                      }}
                       className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
                     >
                       {submitting ? (
@@ -3573,10 +3846,19 @@ export default function ReceivePayment() {
                       ) : (
                         <CheckCircle2 className="h-4 w-4" />
                       )}
-                      Approve Credit
-                      {selected?.amount > 0
-                        ? ` · ₦${formatNumber1(selected.amount)}`
-                        : ""}
+                      {normalizePaymentMode(selected?.payment_type) ===
+                        "credit_split" &&
+                      String(selected?.status || "").toLowerCase() ===
+                        "awaiting_cashier_confirm"
+                        ? `Confirm ₦${formatNumber1(
+                            parseFormattedAmount(creditAmount) ||
+                              unpaidBeforeCredit,
+                          )} as Credit`
+                        : `Approve Credit${
+                            selected?.amount > 0
+                              ? ` · ₦${formatNumber1(selected.amount)}`
+                              : ""
+                          }`}
                     </button>
                   ) : null}
 
