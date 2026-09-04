@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
+import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
 import CustomButton from "@/common/Custom/CustomButton";
 import SearchSupplierInput from "@/components/pages/purchase/SearchSuppliers";
 import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
@@ -867,6 +868,7 @@ export default function RecordSupplierPaymentForm() {
                 <tr className="border-b bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                   <th className="px-3 py-2">Date</th>
                   <th className="px-3 py-2">Bill#</th>
+                  <th className="px-3 py-2">Mode of payment</th>
                   <th className="px-3 py-2 text-right">Bill Amount</th>
                   <th className="px-3 py-2 text-right">Amount Due</th>
                   <th className="px-3 py-2">
@@ -893,6 +895,9 @@ export default function RecordSupplierPaymentForm() {
                       </td>
                       <td className="px-3 py-2 font-medium text-blue-600">
                         {inv.invoice_ref}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {formatExpensePaymentMode(inv.mode_of_payment)}
                       </td>
                       <td className="px-3 py-2 text-right text-gray-800">
                         {formatNumber1(inv.amount || 0)}
@@ -930,7 +935,7 @@ export default function RecordSupplierPaymentForm() {
               <tfoot>
                 <tr className="border-t bg-gray-50">
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     className="px-3 py-2 text-xs italic text-gray-500"
                   >
                     *List contains only unpaid bills

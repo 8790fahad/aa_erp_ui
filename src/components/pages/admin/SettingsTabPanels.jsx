@@ -5,6 +5,7 @@ import moment from "moment";
 import { toast } from "sonner";
 import { TabsContent } from "@/components/ui/tabs";
 import { _postApi } from "@/redux/actions/api";
+import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
 import CustomButton from "@/common/Custom/CustomButton";
 import PayableSettings from "./PayableSettings";
 import TripleSelectSettings from "./TripleSelectSettings";
@@ -1602,6 +1603,8 @@ export default function SettingsTabPanels({
                                 ? moment(row.transaction_date).format("DD MMM, YYYY")
                                 : "—"}{" "}
                               · ₦{Number(row.total_payment || 0).toLocaleString()}
+                              {" · "}
+                              {formatExpensePaymentMode(row.mode_of_payment)}
                             </small>
                           </div>
                           <div className="d-flex flex-wrap gap-2 align-items-center">

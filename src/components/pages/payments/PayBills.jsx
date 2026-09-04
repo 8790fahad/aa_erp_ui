@@ -28,6 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Typeahead } from "react-bootstrap-typeahead";
 import { formatNumber1 } from "@/components/router/utilities";
+import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
 import {
   POSTING_DATE_MIN,
   getPostingDateMax,
@@ -961,6 +962,15 @@ export default function PayBills() {
             : item.ref_number
             ? `Unknown Supplier (${item.ref_number})`
             : "Unknown Supplier"}
+        </span>
+      ),
+    },
+    {
+      title: "MODE OF PAYMENT",
+      custom: true,
+      component: (item) => (
+        <span className="whitespace-nowrap">
+          {formatExpensePaymentMode(item.mode_of_payment)}
         </span>
       ),
     },
@@ -1987,6 +1997,9 @@ export default function PayBills() {
                             <th className="px-4 py-2 text-left font-semibold">
                               Ref No.
                             </th>
+                            <th className="px-4 py-2 text-left font-semibold">
+                              Mode of payment
+                            </th>
                             <th className="px-4 py-2 text-right font-semibold">
                               Invoice Amount
                             </th>
@@ -2015,6 +2028,9 @@ export default function PayBills() {
                               <td className="px-4 py-3">
                                 {bill.invoice_ref || bill.ref_number || "-"}
                               </td>
+                              <td className="px-4 py-3">
+                                {formatExpensePaymentMode(bill.mode_of_payment)}
+                              </td>
                               <td className="px-4 py-3 text-right">
                                 {formatCurrency(bill.amount || 0)}
                               </td>
@@ -2035,7 +2051,7 @@ export default function PayBills() {
                         </tbody>
                         <tfoot className="bg-gray-100 font-semibold">
                           <tr>
-                            <td colSpan="3" className="px-4 py-3 text-right">
+                            <td colSpan="4" className="px-4 py-3 text-right">
                               Total:
                             </td>
                             <td

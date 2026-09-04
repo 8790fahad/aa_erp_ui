@@ -1275,6 +1275,13 @@ export default function ReceivePayment() {
           setDepositConfirmRow(null);
           setHubOpen(false);
           fetchDashboard();
+          if (row?.sale_code) {
+            navigate(
+              `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
+                row.sale_code,
+              )}&doc=invoice`,
+            );
+          }
         } else {
           toast.error(res?.error || res?.message || "Failed to apply deposit");
         }
@@ -1284,7 +1291,14 @@ export default function ReceivePayment() {
         toast.error(err?.error || err?.message || "Failed to apply deposit");
       },
     );
-  }, [depositConfirmRow, selected, activeBusiness?.id, user?.id, fetchDashboard]);
+  }, [
+    depositConfirmRow,
+    selected,
+    activeBusiness?.id,
+    user?.id,
+    fetchDashboard,
+    navigate,
+  ]);
 
   const openHub = useCallback(
     (row, preferredAction = null) => {
@@ -1661,13 +1675,15 @@ export default function ReceivePayment() {
         setSubmitting(false);
         if (res?.success) {
           toast.success(
-            res.message || "Credit approved — opening Sales Process",
+            res.message || "Credit approved — opening invoice to print",
           );
           closeHub();
           fetchDashboard();
           if (row?.sale_code) {
             navigate(
-              `/app/sales/process?sale_code=${encodeURIComponent(row.sale_code)}`,
+              `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
+                row.sale_code,
+              )}&doc=invoice`,
             );
           }
         } else {

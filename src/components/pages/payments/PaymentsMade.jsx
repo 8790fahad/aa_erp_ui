@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { _fetchApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
+import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -133,7 +134,17 @@ export default function PaymentsMade() {
     return rows.filter((r) => {
       if (modeFilter) {
         const mode = String(r.mode_of_payment || "").toLowerCase();
-        if (mode !== modeFilter) return false;
+        if (modeFilter === "cash+transfer") {
+          if (
+            mode !== "cash+transfer" &&
+            mode !== "split" &&
+            mode !== "cash_transfer"
+          ) {
+            return false;
+          }
+        } else if (mode !== modeFilter) {
+          return false;
+        }
       }
       if (!q) return true;
       const hay = [
@@ -201,10 +212,10 @@ export default function PaymentsMade() {
       ),
     },
     {
-      title: "Mode",
+      title: "Mode of payment",
       component: (item) => (
-        <span className="text-sm capitalize text-gray-700">
-          {item.mode_of_payment || "-"}
+        <span className="text-sm text-gray-700">
+          {formatExpensePaymentMode(item.mode_of_payment)}
         </span>
       ),
     },
@@ -276,6 +287,7 @@ export default function PaymentsMade() {
               <option value="cash">Cash</option>
               <option value="bank">Bank</option>
               <option value="cheque">Cheque</option>
+              <option value="cash+transfer">Cash + Transfer</option>
             </select>
             <Button
               variant="outline"

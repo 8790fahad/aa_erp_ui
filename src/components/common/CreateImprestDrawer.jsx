@@ -48,6 +48,7 @@ import AdvancePaymentPaymentFields from "@/components/common/AdvancePaymentPayme
 import { v4 as uuidv4 } from "uuid";
 import moment from "moment";
 import { isProductTaxable } from "@/utils/taxableStatus";
+import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
 
 const HISTORY_PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
 
@@ -1277,6 +1278,8 @@ export default function CreateImprestDrawer({
                           ? moment(row.transaction_date).format("DD MMM, YYYY")
                           : "—"}{" "}
                         · ₦{formatNumber1(row.total_payment ?? 0)}
+                        {" · "}
+                        {formatExpensePaymentMode(row.mode_of_payment)}
                       </p>
                     </div>
                     <Button

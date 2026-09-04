@@ -33,6 +33,7 @@ import moment from "moment";
 import { formatNumber1 } from "@/components/router/utilities";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
 
 const STATUS_ALL = "all";
 const STATUS_PAID = "paid";
@@ -271,6 +272,15 @@ export default function BillSources() {
       component: (item) => (
         <span className="font-semibold tabular-nums text-slate-900">
           ₦{formatNumber1(item.amount || 0)}
+        </span>
+      ),
+    },
+    {
+      title: "Mode of payment",
+      custom: true,
+      component: (item) => (
+        <span className="text-slate-700">
+          {formatExpensePaymentMode(item.mode_of_payment)}
         </span>
       ),
     },
