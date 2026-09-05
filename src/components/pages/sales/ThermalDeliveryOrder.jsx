@@ -69,6 +69,7 @@ export default function ThermalDeliveryOrder({
   preview = false,
   documentType = "delivery_order",
   importantNote = "",
+  poweredBy,
   preparedBy = "",
 }) {
   const [feedbackQr, setFeedbackQr] = useState("");
@@ -141,13 +142,20 @@ export default function ThermalDeliveryOrder({
   const docTitle = isGoodsIssue ? "GOODS ISSUE NOTE" : "DELIVERY ORDER";
   const docPrefix = isGoodsIssue ? "GIN" : "DO";
   const DEFAULT_GIN_NOTE =
-    "Thank you for patronizing us. We look forward to your return and to continuing to do business with you.";
+    "Thank you for patronizing us. We look forward to your return and to continuing to do business with you, and all goods sold in good condition are final. No refunds or exchanges will be accepted after purchase.";
+  const DEFAULT_POWERED_BY = "This solution is powered by Nexifour Limited";
   const noteText = String(
     importantNote !== undefined && importantNote !== null
       ? importantNote
       : DEFAULT_GIN_NOTE,
   ).trim();
   const showNote = isGoodsIssue && noteText.length > 0;
+  const poweredByText = String(
+    poweredBy !== undefined && poweredBy !== null
+      ? poweredBy
+      : DEFAULT_POWERED_BY,
+  ).trim();
+  const showPoweredBy = isGoodsIssue && poweredByText.length > 0;
   const preparedByName =
     String(preparedBy || "").trim() ||
     invoiceData?.user?.name ||
@@ -250,6 +258,13 @@ export default function ThermalDeliveryOrder({
           margin-top: 4px;
           line-height: 1.35;
           font-style: italic;
+          text-align: center;
+          color: #000;
+        }
+        .thermal-do-root .tr-powered {
+          font-size: 9px;
+          margin-top: 3px;
+          line-height: 1.3;
           text-align: center;
           color: #000;
         }
@@ -432,10 +447,15 @@ export default function ThermalDeliveryOrder({
           </>
         )}
 
-        {showNote ? (
+        {showNote || showPoweredBy ? (
           <>
             <div className="tr-divider" />
-            <div className="tr-note tr-center">{noteText}</div>
+            {showNote ? (
+              <div className="tr-note tr-center">{noteText}</div>
+            ) : null}
+            {showPoweredBy ? (
+              <div className="tr-powered tr-center">{poweredByText}</div>
+            ) : null}
           </>
         ) : null}
 
@@ -513,6 +533,13 @@ const THERMAL_DO_IFRAME_CSS = `
     margin-top: 4px;
     line-height: 1.35;
     font-style: italic;
+    text-align: center;
+    color: #000 !important;
+  }
+  .tr-powered {
+    font-size: 9px;
+    margin-top: 3px;
+    line-height: 1.3;
     text-align: center;
     color: #000 !important;
   }

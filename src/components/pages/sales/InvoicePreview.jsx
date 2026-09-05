@@ -452,7 +452,18 @@ function InvoicePreview() {
       activeBusiness?.terms_conditions,
     ].find((v) => v !== undefined && v !== null);
     if (configured === undefined) {
-      return "Thank you for patronizing us. We look forward to your return and to continuing to do business with you.";
+      return "Thank you for patronizing us. We look forward to your return and to continuing to do business with you, and all goods sold in good condition are final. No refunds or exchanges will be accepted after purchase.";
+    }
+    return String(configured).trim();
+  })();
+
+  const poweredByText = (() => {
+    const configured = [
+      invoiceData?.business?.invoice_powered_by,
+      activeBusiness?.invoice_powered_by,
+    ].find((v) => v !== undefined && v !== null);
+    if (configured === undefined) {
+      return "This solution is powered by Nexifour Limited";
     }
     return String(configured).trim();
   })();
@@ -738,6 +749,7 @@ function InvoicePreview() {
                             preview
                             documentType={deliveryDocumentType}
                             importantNote={importantNoteText}
+                            poweredBy={poweredByText}
                             preparedBy={
                               data?.user?.name ||
                               [data?.user?.firstname, data?.user?.lastname]
@@ -1046,6 +1058,7 @@ function InvoicePreview() {
                   preview
                   documentType={deliveryDocumentType}
                   importantNote={importantNoteText}
+                  poweredBy={poweredByText}
                   preparedBy={
                     resolvedInvoiceData?.user?.name ||
                     [

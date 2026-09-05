@@ -118,84 +118,64 @@ function TillSummaryCard({
         ₦{formatNumber1(retire)}
       </p>
       <p className="mt-1 text-xs text-slate-500">
-        Collected today minus till expenses — tap for Imprest and Pay Bill
+        Tap to open till
       </p>
     </button>
   );
 }
 
-function TillMetric({ label, value, hint, tone = "slate", onClick }) {
-  const tones = {
-    slate: "text-slate-900",
-    collect: "text-slate-900",
-    collected: "text-emerald-700",
-    retire: "text-emerald-700",
-  };
+function TillLine({ label, value, onClick, tone = "neutral", prefix = "" }) {
+  const isTotal = tone === "total";
+  const valueClass = isTotal
+    ? "font-semibold text-emerald-700"
+    : tone === "minus"
+      ? "font-medium text-slate-700"
+      : "font-medium text-slate-900";
   const Comp = onClick ? "button" : "div";
   return (
     <Comp
       type={onClick ? "button" : undefined}
       onClick={onClick}
-      className={`rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-left ${
-        onClick ? "hover:border-[var(--aa-accent)] hover:bg-white" : ""
+      className={`flex w-full items-baseline justify-between gap-4 py-1.5 text-sm ${
+        onClick
+          ? "-mx-1 rounded-md px-1 text-left hover:bg-slate-100"
+          : ""
       }`}
     >
-      <span className="block text-[11px] font-medium uppercase tracking-wide text-slate-500">
+      <span
+        className={`inline-flex items-center gap-1 ${
+          isTotal ? "font-semibold text-slate-800" : "text-slate-600"
+        }`}
+      >
         {label}
+        {onClick ? <History className="h-3.5 w-3.5 text-slate-400" /> : null}
       </span>
-      <span className={`mt-1 block text-xl font-semibold tabular-nums ${tones[tone]}`}>
+      <span className={`tabular-nums ${valueClass}`}>
+        {prefix}
         ₦{formatNumber1(value)}
       </span>
-      {hint ? (
-        <span className="mt-0.5 block text-[11px] text-slate-500">{hint}</span>
-      ) : null}
     </Comp>
   );
 }
 
-function TillActionCard({
-  title,
-  description,
-  icon: Icon,
-  iconClass,
-  allowed,
-  amount,
-  onClick,
-}) {
+function TillSpendButton({ title, icon: Icon, allowed, onClick }) {
   return (
     <button
       type="button"
       onClick={allowed ? onClick : undefined}
       disabled={!allowed}
-      className={`flex w-full items-start gap-3 rounded-xl border p-4 text-left transition ${
+      className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium transition ${
         allowed
-          ? "border-slate-200 bg-white hover:border-[var(--aa-accent)] hover:shadow-sm"
-          : "cursor-not-allowed border-slate-100 bg-slate-50 opacity-70"
+          ? "border-slate-200 bg-white text-slate-800 hover:border-[var(--aa-accent)] hover:bg-slate-50"
+          : "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
       }`}
     >
-      <span
-        className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-          allowed ? iconClass : "bg-slate-100 text-slate-400"
-        }`}
-      >
-        {allowed ? <Icon className="h-5 w-5" /> : <Lock className="h-4 w-4" />}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold text-slate-900">{title}</span>
-          {allowed ? (
-            <ChevronRight className="h-4 w-4 text-slate-400" />
-          ) : (
-            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
-              Needs permission
-            </span>
-          )}
-        </span>
-        <span className="mt-0.5 block text-lg font-semibold tabular-nums text-slate-900">
-          ₦{formatNumber1(amount)}
-        </span>
-        <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
-      </span>
+      {allowed ? (
+        <Icon className="h-4 w-4" />
+      ) : (
+        <Lock className="h-3.5 w-3.5" />
+      )}
+      {title}
     </button>
   );
 }
@@ -217,92 +197,74 @@ function TillHubDialog({
   onPayBill,
   onViewCollected,
 }) {
+  const showCollect = Number(collect) > 0.005 || Number(pendingCount) > 0;
+  const spendOver =
+    Number(expenses) - Number(collected) > 0.005
+      ? Number(expenses) - Number(collected)
+      : 0;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-xl">{modeLabel} till</DialogTitle>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+        <DialogHeader className="text-left">
+          <DialogTitle>{modeLabel} till</DialogTitle>
           <DialogDescription>
-            Your collections today, minus Imprest and Pay Bill you posted from
-            this till.
+            Collections minus Imprest and Pay Bill.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-2 sm:grid-cols-3">
-          <TillMetric
-            label={`${modeLabel} to collect`}
-            value={collect}
-            hint={`${pendingCount} pending invoice${pendingCount === 1 ? "" : "s"}`}
-            tone="collect"
-          />
-          <TillMetric
+        <div className="rounded-lg border border-slate-200 px-3 py-2">
+          {showCollect ? (
+            <TillLine
+              label={`To collect${pendingCount ? ` (${pendingCount})` : ""}`}
+              value={collect}
+            />
+          ) : null}
+          <TillLine
             label="Collected today"
             value={collected}
-            hint="Your collections — tap for history"
-            tone="collected"
             onClick={onViewCollected}
           />
-          <TillMetric
-            label={`${modeLabel} to retire`}
-            value={retire}
-            hint={`After Imprest + Pay Bill ₦${formatNumber1(expenses)}`}
-            tone="retire"
+          <TillLine
+            label="Imprest"
+            value={imprestTotal}
+            tone="minus"
+            prefix="− "
           />
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-          <div className="flex items-center justify-between gap-3 text-slate-600">
-            <span>Collected today</span>
-            <span className="tabular-nums font-medium text-slate-900">
-              ₦{formatNumber1(collected)}
-            </span>
-          </div>
-          <div className="mt-1.5 flex items-center justify-between gap-3 text-slate-600">
-            <span>Imprest (you)</span>
-            <span className="tabular-nums font-medium text-amber-800">
-              − ₦{formatNumber1(imprestTotal)}
-            </span>
-          </div>
-          <div className="mt-1.5 flex items-center justify-between gap-3 text-slate-600">
-            <span>Pay Bill (you)</span>
-            <span className="tabular-nums font-medium text-sky-800">
-              − ₦{formatNumber1(payBillTotal)}
-            </span>
-          </div>
-          <div className="mt-2 flex items-center justify-between gap-3 border-t border-slate-200 pt-2">
-            <span className="font-semibold text-slate-800">
-              {modeLabel} to retire
-            </span>
-            <span className="tabular-nums text-lg font-semibold text-emerald-700">
-              ₦{formatNumber1(retire)}
-            </span>
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Spend from this till
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <TillActionCard
-              title="Imprest"
-              amount={imprestTotal}
-              description={`Your ${modeLabel.toLowerCase()} imprest posted today.`}
-              icon={Receipt}
-              iconClass="bg-amber-50 text-amber-700"
-              allowed={canImprest}
-              onClick={onImprest}
-            />
-            <TillActionCard
-              title="Pay Bill"
-              amount={payBillTotal}
-              description={`Your ${modeLabel.toLowerCase()} supplier payments today.`}
-              icon={Landmark}
-              iconClass="bg-sky-50 text-sky-700"
-              allowed={canPayBill}
-              onClick={onPayBill}
+          <TillLine
+            label="Pay Bill"
+            value={payBillTotal}
+            tone="minus"
+            prefix="− "
+          />
+          <div className="mt-1 border-t border-slate-200 pt-1">
+            <TillLine
+              label={`${modeLabel} to retire`}
+              value={retire}
+              tone="total"
             />
           </div>
+          {spendOver > 0 ? (
+            <p className="pb-1 text-[11px] text-slate-500">
+              Spend exceeds collections by ₦{formatNumber1(spendOver)} — retire
+              is ₦0.00.
+            </p>
+          ) : null}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <TillSpendButton
+            title="Imprest"
+            icon={Receipt}
+            allowed={canImprest}
+            onClick={onImprest}
+          />
+          <TillSpendButton
+            title="Pay Bill"
+            icon={Landmark}
+            allowed={canPayBill}
+            onClick={onPayBill}
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -845,33 +807,6 @@ export default function ReceivePayment() {
     ];
   }, [activeBusiness?.functionalities, user?.functionalities]);
 
-  const hasCashCollection = functionalities.includes("Cash Collection");
-  const hasTransferCollection = functionalities.includes(
-    "Transfer Collection",
-  );
-  const hasCardCollection = functionalities.includes("Card Collection");
-  const collectionAccessLabels = [
-    hasCashCollection ? "Cash Collection" : null,
-    hasTransferCollection ? "Transfer Collection" : null,
-    hasCardCollection ? "POS Collection" : null,
-    functionalities.includes("Credit Collection") ? "Credit Collection" : null,
-    functionalities.includes("Apply Deposit") ? "Apply Deposit" : null,
-    functionalities.includes("Discount Collection")
-      ? "Discount Collection"
-      : null,
-    functionalities.includes(MAKE_DEPOSIT_PRIVILEGE) ? "Make Deposit" : null,
-    functionalities.includes(IMPREST_PRIVILEGE) ? "Imprest" : null,
-    functionalities.includes(PAY_BILL_PRIVILEGE) ? "Pay Bill" : null,
-    functionalities.includes(RECONCILIATION_PRIVILEGE)
-      ? "Collection Reconciliation"
-      : null,
-    functionalities.includes(SWITCH_PAYMENT_MODE_PRIVILEGE)
-      ? "Switch Payment Mode"
-      : null,
-    functionalities.includes(APPROVE_PAYMENT_MODE_PRIVILEGE)
-      ? "Approve Payment Mode Switch"
-      : null,
-  ].filter(Boolean);
   const hasFullCollectionAccess =
     hasFullAccess(functionalities) || !functionalities.length;
   const canSwitchPaymentMode =
@@ -1666,6 +1601,8 @@ export default function ReceivePayment() {
 
   const filteredHistory = useMemo(() => {
     let list = history.filter((r) => {
+      // Received Payment (AD-*) stays on Received Payment — not this hub
+      if (r.kind === "customer_advance") return false;
       if (methodTab === "credit") {
         return (
           matchesMethod(r.payment_type, "credit") ||
@@ -2930,19 +2867,8 @@ export default function ReceivePayment() {
               Verification Points
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Customer collection hub: open any invoice to view it and collect,
-              approve credit/discount, or switch mode in the same modal. Use
-              Apply Deposit to apply prepaid funds to open invoices.
-              Supplier payments are handled under Purchase → Pay Bills.
-              {hasFullCollectionAccess ? (
-                <span className="ml-1 font-medium text-[var(--aa-navy)]">
-                  Access: full collection.
-                </span>
-              ) : collectionAccessLabels.length ? (
-                <span className="ml-1 font-medium text-[var(--aa-navy)]">
-                  Access: {collectionAccessLabels.join(" · ")}.
-                </span>
-              ) : null}
+              Collect invoice payments. Apply Deposit uses prepaid customer
+              funds.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -3027,7 +2953,8 @@ export default function ReceivePayment() {
                 ₦{formatNumber1(viewSummary.pending_cash)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Awaiting cash payment (includes Transfer + Cash)
+                {viewSummary.pending_count || 0} invoice
+                {(viewSummary.pending_count || 0) === 1 ? "" : "s"}
               </p>
             </div>
           ) : null}
@@ -3042,7 +2969,8 @@ export default function ReceivePayment() {
                 ₦{formatNumber1(viewSummary.pending_transfer)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Awaiting bank transfer
+                {viewSummary.pending_count || 0} invoice
+                {(viewSummary.pending_count || 0) === 1 ? "" : "s"}
               </p>
             </div>
           ) : null}
@@ -3057,7 +2985,8 @@ export default function ReceivePayment() {
                 ₦{formatNumber1(viewSummary.pending_card)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Awaiting POS payment
+                {viewSummary.pending_count || 0} invoice
+                {(viewSummary.pending_count || 0) === 1 ? "" : "s"}
               </p>
             </div>
           ) : null}
@@ -3078,8 +3007,7 @@ export default function ReceivePayment() {
                 {(viewSummary.awaiting_credit_count ??
                   viewSummary.pending_count) === 1
                   ? ""
-                  : "s"}{" "}
-                — approve credit before Invoice Separation
+                  : "s"}
               </p>
             </div>
           ) : null}
@@ -3099,13 +3027,10 @@ export default function ReceivePayment() {
                 {viewSummary.approved_credit_count_today || 0} invoice
                 {(viewSummary.approved_credit_count_today || 0) === 1
                   ? ""
-                  : "s"}{" "}
-                posted to the customer account
+                  : "s"}
                 {historyFrom === todayYmd && historyTo === todayYmd
                   ? " today"
-                  : historyFrom === historyTo
-                    ? ` on ${moment(historyFrom).format("DD MMM")}`
-                    : " in range"}
+                  : ""}
               </p>
             </div>
           ) : null}
@@ -3121,8 +3046,7 @@ export default function ReceivePayment() {
               </p>
               <p className="mt-1 text-xs text-violet-800/80">
                 {viewSummary.pending_count} invoice
-                {viewSummary.pending_count === 1 ? "" : "s"} — collect cash /
-                transfer, then approve remaining credit here
+                {viewSummary.pending_count === 1 ? "" : "s"}
               </p>
             </div>
           ) : null}
@@ -3138,8 +3062,7 @@ export default function ReceivePayment() {
               </p>
               <p className="mt-1 text-xs text-teal-800/80">
                 {viewSummary.pending_count} invoice
-                {viewSummary.pending_count === 1 ? "" : "s"} — apply customer
-                deposit before credit approval or separation
+                {viewSummary.pending_count === 1 ? "" : "s"}
               </p>
             </div>
           ) : null}
@@ -3156,16 +3079,10 @@ export default function ReceivePayment() {
                 ₦{formatNumber1(viewSummary.applied_deposit_today)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                {viewSummary.applied_deposit_count_today || 0} invoice
-                {(viewSummary.applied_deposit_count_today || 0) === 1
-                  ? ""
-                  : "s"}{" "}
-                settled
+                {viewSummary.applied_deposit_count_today || 0} settled
                 {historyFrom === todayYmd && historyTo === todayYmd
                   ? " today"
-                  : historyFrom === historyTo
-                    ? ` on ${moment(historyFrom).format("DD MMM")}`
-                    : " in range"}
+                  : ""}
               </p>
             </div>
           ) : null}
@@ -3180,9 +3097,8 @@ export default function ReceivePayment() {
                 ₦{formatNumber1(viewSummary.pending_discount)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                {viewSummary.pending_count} discounted invoice
-                {viewSummary.pending_count === 1 ? "" : "s"} — approve before
-                collection
+                {viewSummary.pending_count} invoice
+                {viewSummary.pending_count === 1 ? "" : "s"}
               </p>
             </div>
           ) : null}
@@ -3198,8 +3114,7 @@ export default function ReceivePayment() {
               </p>
               <p className="mt-1 text-xs text-slate-500">
                 {viewSummary.pending_count} invoice
-                {viewSummary.pending_count === 1 ? "" : "s"} — approve or reject
-                the requested payment mode
+                {viewSummary.pending_count === 1 ? "" : "s"}
               </p>
             </div>
           ) : null}
@@ -3375,7 +3290,9 @@ export default function ReceivePayment() {
                     <tr>
                       <th className="px-4 py-3">Invoice</th>
                       <th className="px-4 py-3">Customer</th>
-                      <th className="px-4 py-3">Mode</th>
+                      {methodTab === "mode" ? (
+                        <th className="px-4 py-3">Mode</th>
+                      ) : null}
                       <th className="px-4 py-3 text-right">Amount due</th>
                       <th className="px-4 py-3">Created</th>
                       <th className="px-4 py-3 text-right">Action</th>
@@ -3393,6 +3310,7 @@ export default function ReceivePayment() {
                           >
                             {row.sale_code}
                           </button>
+                          {methodTab === "mode" || methodTab === "discount" ? (
                           <div className="mt-1.5">
                             {(() => {
                               const badge = tabWorkflowBadge(methodTab, row);
@@ -3405,6 +3323,7 @@ export default function ReceivePayment() {
                               );
                             })()}
                           </div>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3">
                           <div className="font-medium text-slate-900">
@@ -3461,30 +3380,15 @@ export default function ReceivePayment() {
                               </span>
                             </div>
                           ) : methodTab === "credit" &&
-                            isCreditAvailabilityRow(row) ? (
-                            row.credit_unlimited ? (
-                              <div className="mt-1 text-[11px] text-slate-400">
-                                Credit unlimited
+                            isCreditAvailabilityRow(row) &&
+                            row.credit_over_limit ? (
+                              <div className="mt-1 text-[11px] font-semibold text-red-600">
+                                Exceeds remaining credit
                               </div>
-                            ) : (
-                              <div
-                                className={`mt-1 text-[11px] ${
-                                  row.credit_over_limit
-                                    ? "font-semibold text-red-600"
-                                    : "text-slate-500"
-                                }`}
-                              >
-                                Limit ₦{formatNumber1(row.credit_limit)} · Left
-                                ₦{formatNumber1(row.credit_available)}
-                                {row.credit_over_limit ? (
-                                  <div>Exceeds remaining credit</div>
-                                ) : null}
-                              </div>
-                            )
                           ) : null}
                         </td>
+                        {methodTab === "mode" ? (
                         <td className="px-4 py-3">
-                          {methodTab === "mode" ? (
                             <div className="space-y-2">
                               {row.status === "awaiting_payment_mode_approval" ||
                               row.proposed_payment_type ||
@@ -3545,14 +3449,15 @@ export default function ReceivePayment() {
                                 </div>
                               )}
                             </div>
-                          ) : (
-                            <PaymentModeBreakdown row={row} />
-                          )}
                         </td>
+                        ) : null}
                         <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
                           ₦{formatNumber1(row.amount)}
                           {methodTab === "credit" &&
-                          Number(row.credit_remainder) > 0.05 ? (
+                          Number(row.credit_remainder) > 0.05 &&
+                          Math.abs(
+                            Number(row.credit_remainder) - Number(row.amount),
+                          ) > 0.05 ? (
                             <div className="mt-0.5 text-[11px] font-medium text-amber-800">
                               Credit ₦{formatNumber1(row.credit_remainder)}
                             </div>
@@ -3573,12 +3478,20 @@ export default function ReceivePayment() {
                             <div className="flex flex-col items-end gap-1.5">
                               <button
                                 type="button"
-                                disabled={submitting}
+                                disabled={
+                                  submitting ||
+                                  Number(row.deposit_available) <= 0.05
+                                }
+                                title={
+                                  Number(row.deposit_available) <= 0.05
+                                    ? "No deposit available — Apply is blocked"
+                                    : "Apply deposit"
+                                }
                                 onClick={() => openHub(row, "deposit")}
-                                className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                                className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 <Wallet className="h-3.5 w-3.5" />
-                                View & Apply Deposit
+                                Apply
                               </button>
                               {Number(row.deposit_available) <= 0.05 ? (
                                 <button
@@ -3603,7 +3516,7 @@ export default function ReceivePayment() {
                                   className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
                                 >
                                   <CreditCard className="h-3.5 w-3.5" />
-                                  View & Confirm Credit
+                                  Confirm
                                 </button>
                               ) : (
                                 <button
@@ -3613,7 +3526,7 @@ export default function ReceivePayment() {
                                   className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
                                 >
                                   <Wallet className="h-3.5 w-3.5" />
-                                  View & Apply Deposit
+                                  Apply
                                 </button>
                               )}
                             </div>
@@ -3631,7 +3544,7 @@ export default function ReceivePayment() {
                               className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
                             >
                               <Eye className="h-3.5 w-3.5" />
-                              View & Approve
+                              Approve
                             </button>
                           ) : methodTab === "credit" ? (
                             <button
@@ -3641,7 +3554,7 @@ export default function ReceivePayment() {
                               className="inline-flex items-center gap-1.5 rounded-md bg-[var(--aa-navy)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
                             >
                               <Eye className="h-3.5 w-3.5" />
-                              View & Collect
+                              Collect
                             </button>
                           ) : methodTab === "discount" ? (
                             <button
@@ -3651,7 +3564,7 @@ export default function ReceivePayment() {
                               className="inline-flex items-center gap-1.5 rounded-md bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
                             >
                               <Eye className="h-3.5 w-3.5" />
-                              View & Approve
+                              Approve
                             </button>
                           ) : methodTab === "mode" ? (
                             row.status === "awaiting_payment_mode_approval" ||
@@ -3696,7 +3609,7 @@ export default function ReceivePayment() {
                               className="inline-flex items-center gap-1.5 rounded-md bg-[var(--aa-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--aa-accent-hover)]"
                             >
                               <Eye className="h-3.5 w-3.5" />
-                              View & Collect
+                              Collect
                             </button>
                           ) : (
                             <button
@@ -3705,7 +3618,7 @@ export default function ReceivePayment() {
                               className="inline-flex items-center gap-1.5 rounded-md bg-[var(--aa-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--aa-accent-hover)]"
                             >
                               <Eye className="h-3.5 w-3.5" />
-                              View & Collect
+                              Collect
                             </button>
                           )}
                         </td>
@@ -3740,7 +3653,9 @@ export default function ReceivePayment() {
                   <tr>
                     <th className="px-4 py-3">Invoice</th>
                     <th className="px-4 py-3">Customer</th>
-                    <th className="px-4 py-3">Mode</th>
+                    {methodTab === "mode" ? (
+                      <th className="px-4 py-3">Mode</th>
+                    ) : null}
                     <th className="px-4 py-3 text-right">Amount</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Updated</th>
@@ -3775,6 +3690,7 @@ export default function ReceivePayment() {
                           {row.customer_no}
                         </div>
                       </td>
+                      {methodTab === "mode" ? (
                       <td className="px-4 py-3">
                         {isAdvance ? (
                           <span
@@ -3788,6 +3704,7 @@ export default function ReceivePayment() {
                           <PaymentModeBreakdown row={row} />
                         )}
                       </td>
+                      ) : null}
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">
                         ₦{formatNumber1(row.amount)}
                         {Number(row.discount_amount) > 0 ? (

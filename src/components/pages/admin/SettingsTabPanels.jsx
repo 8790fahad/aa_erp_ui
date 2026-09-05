@@ -42,13 +42,17 @@ import BusinessDocumentHeader, {
 
 function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
   const DEFAULT_IMPORTANT_NOTE =
-    "Thank you for patronizing us. We look forward to your return and to continuing to do business with you.";
+    "Thank you for patronizing us. We look forward to your return and to continuing to do business with you, and all goods sold in good condition are final. No refunds or exchanges will be accepted after purchase.";
+  const DEFAULT_POWERED_BY = "This solution is powered by Nexifour Limited";
 
   const [customerNotes, setCustomerNotes] = useState(
     () => activeBusiness?.customer_notes || "Thanks for your business.",
   );
   const [termsConditions, setTermsConditions] = useState(
     () => activeBusiness?.terms_conditions || DEFAULT_IMPORTANT_NOTE,
+  );
+  const [invoicePoweredBy, setInvoicePoweredBy] = useState(
+    () => activeBusiness?.invoice_powered_by || DEFAULT_POWERED_BY,
   );
   const [saving, setSaving] = useState(false);
 
@@ -59,17 +63,23 @@ function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
     setTermsConditions(
       activeBusiness?.terms_conditions || DEFAULT_IMPORTANT_NOTE,
     );
+    setInvoicePoweredBy(
+      activeBusiness?.invoice_powered_by || DEFAULT_POWERED_BY,
+    );
   }, [
     activeBusiness?.id,
     activeBusiness?.customer_notes,
     activeBusiness?.terms_conditions,
+    activeBusiness?.invoice_powered_by,
   ]);
 
   const dirty =
     customerNotes !==
       (activeBusiness?.customer_notes || "Thanks for your business.") ||
     termsConditions !==
-      (activeBusiness?.terms_conditions || DEFAULT_IMPORTANT_NOTE);
+      (activeBusiness?.terms_conditions || DEFAULT_IMPORTANT_NOTE) ||
+    invoicePoweredBy !==
+      (activeBusiness?.invoice_powered_by || DEFAULT_POWERED_BY);
 
   const save = () => {
     if (!activeBusiness?.id || saving || !dirty) return;
@@ -79,6 +89,7 @@ function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
       {
         customer_notes: customerNotes,
         terms_conditions: termsConditions,
+        invoice_powered_by: invoicePoweredBy,
       },
       (resp) => {
         setSaving(false);
@@ -91,6 +102,7 @@ function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
                 id: activeBusiness.id,
                 customer_notes: customerNotes,
                 terms_conditions: termsConditions,
+                invoice_powered_by: invoicePoweredBy,
               },
             },
           });
@@ -114,7 +126,8 @@ function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
           <div>
             <h5 className="mb-0 fw-bold">Invoice Notes</h5>
             <small className="text-muted">
-              Customer notes and the Important Note printed on Sales Invoice
+              Customer notes, Important Note, and Nexifour line printed on Sales
+              Invoice
             </small>
           </div>
         </div>
@@ -143,7 +156,7 @@ function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
             placeholder="Thanks for your business."
           />
         </div>
-        <div>
+        <div className="mb-3">
           <label className="form-label fw-semibold">
             Important Note (printed on invoice)
           </label>
@@ -155,8 +168,24 @@ function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
             placeholder={DEFAULT_IMPORTANT_NOTE}
           />
           <small className="text-muted">
-            Shown in the yellow Important Note box on the Sales Invoice. Leave
-            blank to hide the note.
+            Shown on the Sales Invoice and Goods Issue Note. Leave blank to hide
+            the note.
+          </small>
+        </div>
+        <div>
+          <label className="form-label fw-semibold">
+            Powered by (Nexifour)
+          </label>
+          <textarea
+            className="form-control"
+            rows={2}
+            value={invoicePoweredBy}
+            onChange={(e) => setInvoicePoweredBy(e.target.value)}
+            placeholder={DEFAULT_POWERED_BY}
+          />
+          <small className="text-muted">
+            Printed under the note on the Sales Invoice and Goods Issue Note.
+            Leave blank to hide it.
           </small>
         </div>
       </div>
@@ -1286,6 +1315,12 @@ export default function SettingsTabPanels({
             activeBusiness={activeBusiness}
             dispatch={dispatch}
           />
+          <div className="mt-4">
+            <InvoiceNotesSettingsPanel
+              activeBusiness={activeBusiness}
+              dispatch={dispatch}
+            />
+          </div>
         </TabsContent>
       )}
 

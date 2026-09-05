@@ -182,7 +182,8 @@ export default function CreditSaleInvoice({
   const preparedBySignature =
     invoiceCreator?.signature || currentUser?.signature || null;
   const DEFAULT_IMPORTANT_NOTE =
-    "Thank you for patronizing us. We look forward to your return and to continuing to do business with you.";
+    "Thank you for patronizing us. We look forward to your return and to continuing to do business with you, and all goods sold in good condition are final. No refunds or exchanges will be accepted after purchase.";
+  const DEFAULT_POWERED_BY = "This solution is powered by Nexifour Limited";
   const configuredImportantNote = [
     invoice?.business?.terms_conditions,
     business?.terms_conditions,
@@ -194,6 +195,17 @@ export default function CreditSaleInvoice({
       : String(configuredImportantNote).trim();
   const showImportantNote =
     configuredImportantNote === undefined ? true : importantNoteText.length > 0;
+  const configuredPoweredBy = [
+    invoice?.business?.invoice_powered_by,
+    business?.invoice_powered_by,
+    activeBusiness?.invoice_powered_by,
+  ].find((v) => v !== undefined && v !== null);
+  const poweredByText =
+    configuredPoweredBy === undefined
+      ? DEFAULT_POWERED_BY
+      : String(configuredPoweredBy).trim();
+  const showPoweredBy =
+    configuredPoweredBy === undefined ? true : poweredByText.length > 0;
   const printDeliveryOrderRaw = [
     invoice?.business?.print_delivery_order,
     business?.print_delivery_order,
@@ -2080,18 +2092,24 @@ export default function CreditSaleInvoice({
               </div>
 
               {/* Closing note — compact, proportional to invoice body */}
-              {showImportantNote ? (
+              {showImportantNote || showPoweredBy ? (
                 <div
                   className={`shrink-0 border-t border-dashed border-slate-300 ${isA5 ? "mt-1 px-1 py-1" : "mt-2 px-1.5 py-1.5"}`}
                 >
-                  <p
-                    className={`${isA5 ? "text-[9px] leading-snug" : "text-[11px] leading-snug"} text-center text-slate-600`}
-                  >
-                    <span className="font-semibold text-slate-700">
-                      Important note:{" "}
-                    </span>
-                    {importantNoteText}
-                  </p>
+                  {showImportantNote ? (
+                    <p
+                      className={`${isA5 ? "text-[9px] leading-snug" : "text-[11px] leading-snug"} text-center italic text-slate-600`}
+                    >
+                      {importantNoteText}
+                    </p>
+                  ) : null}
+                  {showPoweredBy ? (
+                    <p
+                      className={`${isA5 ? "text-[8px] leading-snug mt-0.5" : "text-[9px] leading-snug mt-1"} text-center text-slate-400`}
+                    >
+                      {poweredByText}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </section>
@@ -2310,12 +2328,19 @@ export default function CreditSaleInvoice({
                 </div>
               </div>
 
-              {/* Thank-you note on Goods Issue Note only */}
-              {isGoodsIssueNote && showImportantNote ? (
+              {/* Closing note — same as sales invoice */}
+              {isGoodsIssueNote && (showImportantNote || showPoweredBy) ? (
                 <div className="shrink-0 mt-auto px-1 py-1.5 border-t border-dashed border-gray-300">
-                  <p className="text-center italic text-xs text-gray-700 leading-snug">
-                    {importantNoteText}
-                  </p>
+                  {showImportantNote ? (
+                    <p className="text-center italic text-xs text-gray-700 leading-snug">
+                      {importantNoteText}
+                    </p>
+                  ) : null}
+                  {showPoweredBy ? (
+                    <p className="text-center text-[9px] text-gray-500 leading-snug mt-1">
+                      {poweredByText}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </section>

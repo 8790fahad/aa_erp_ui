@@ -73,7 +73,7 @@ function paymentModesHint(modes) {
   const set = new Set(modes);
   const parts = [];
   if (set.has("deposit")) {
-    parts.push("apply customer deposit after the invoice is created");
+    parts.push("apply customer deposit at Verification Points (Apply is blocked if the balance is ₦0)");
   }
   if (set.has("cash") || set.has("transfer") || set.has("card")) {
     const collect = [
