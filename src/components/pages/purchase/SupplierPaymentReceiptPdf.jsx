@@ -34,6 +34,40 @@ const receiptBwCss = `
   }
 `;
 
+function cleanReceiptNarration(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return { note: "", attachmentNames: [] };
+  const attachmentNames = [];
+  const noteParts = [];
+  for (const part of text.split(/\s*·\s*/)) {
+    const piece = part.trim();
+    if (!piece) continue;
+    if (/^Payment\s*#:/i.test(piece)) continue;
+    const att = piece.match(/^Attachments:\s*(.+)$/i);
+    if (att) {
+      attachmentNames.push(
+        ...att[1]
+          .split(",")
+          .map((name) => name.trim())
+          .filter(Boolean),
+      );
+      continue;
+    }
+    noteParts.push(piece);
+  }
+  return { note: noteParts.join(" · "), attachmentNames };
+}
+
+function receiptAttachmentLabels(paymentData, parsedNames = []) {
+  const docs = Array.isArray(paymentData?.attachments)
+    ? paymentData.attachments
+    : [];
+  const fromDocs = docs
+    .map((doc) => doc.document_name || doc.original_name || doc.name)
+    .filter(Boolean);
+  return fromDocs.length ? fromDocs : parsedNames;
+}
+
 function amountInWords(amountPaid) {
   const amount = parseFloat(amountPaid || 0);
   const amountStr = amount.toFixed(2);
@@ -108,6 +142,14 @@ const SupplierPaymentReceiptHTML = ({
   const size = String(paperSize || "a5").toLowerCase();
   const isThermal = size === "thermal";
   const isA5 = size === "a5";
+  const { note: narrationNote, attachmentNames: parsedAttachmentNames } =
+    cleanReceiptNarration(
+      paymentData?.narration || paymentData?.description,
+    );
+  const attachmentLabels = receiptAttachmentLabels(
+    paymentData,
+    parsedAttachmentNames,
+  );
   const companyData = {
     name: company?.business_name || "AA_ERP MANUFACTURING LTD",
     receiptNumber:
@@ -190,14 +232,20 @@ const SupplierPaymentReceiptHTML = ({
           <div className="mt-1 text-center text-[10px] leading-snug">
             {amountInWords(paymentData?.amount_paid || 0)}
           </div>
-          {(paymentData?.description || paymentData?.narration) && (
+          {narrationNote ? (
+            <>
+              <div className="my-2 border-t border-dashed border-black" />
+              <div className="text-[11px] leading-snug">{narrationNote}</div>
+            </>
+          ) : null}
+          {attachmentLabels.length > 0 ? (
             <>
               <div className="my-2 border-t border-dashed border-black" />
               <div className="text-[11px] leading-snug">
-                {paymentData?.narration || paymentData?.description}
+                Attachments: {attachmentLabels.join(", ")}
               </div>
             </>
-          )}
+          ) : null}
           <div className="my-2 border-t border-dashed border-black" />
           <div className="text-[11px]">
             Prepared: {paymentData?.createdBy?.name || " "}
@@ -343,16 +391,28 @@ const SupplierPaymentReceiptHTML = ({
             </div>
           </div>
         </div>
-        {(paymentData?.narration || paymentData?.description) && (
+        {narrationNote ? (
           <div className="mt-0.5 p-2 bg-yellow-50 border border-yellow-300 border-l-[4px] border-l-yellow-600 rounded-md">
             <p className="text-xs font-bold text-yellow-900 mb-0.5">
               Narration
             </p>
             <p className="text-xs text-yellow-800 leading-snug">
-              {paymentData.narration || paymentData.description}
+              {narrationNote}
             </p>
           </div>
-        )}
+        ) : null}
+        {attachmentLabels.length > 0 ? (
+          <div className="mt-0.5 p-2 bg-slate-50 border border-slate-200 rounded-md">
+            <p className="text-xs font-bold text-slate-800 mb-0.5">
+              Attachments
+            </p>
+            <ul className="text-xs text-slate-700 leading-snug list-disc pl-4 space-y-0.5">
+              {attachmentLabels.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {/* Signatures — Prepared By only */}
         {(() => {
@@ -457,6 +517,13 @@ SupplierPaymentReceiptHTML.propTypes = {
     amount_paid: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     description: PropTypes.string,
     narration: PropTypes.string,
+    attachments: PropTypes.arrayOf(
+      PropTypes.shape({
+        document_name: PropTypes.string,
+        original_name: PropTypes.string,
+        name: PropTypes.string,
+      }),
+    ),
     created_at: PropTypes.oneOfType([
       PropTypes.string,
       PropTypes.instanceOf(Date),

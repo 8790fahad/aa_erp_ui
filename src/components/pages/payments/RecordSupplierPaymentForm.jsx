@@ -477,22 +477,13 @@ export default function RecordSupplierPaymentForm() {
       .filter(Boolean);
 
     const notesParts = [];
-    if (paymentNumber) notesParts.push(`Payment #: ${paymentNumber}`);
     if (String(notes || "").trim()) notesParts.push(String(notes).trim());
-    if (attachments.length) {
-      notesParts.push(
-        `Attachments: ${attachments
-          .map((f) => f.document_name || f.original_name || f.name)
-          .filter(Boolean)
-          .join(", ")}`,
-      );
-    }
-    const baseDesc =
-      notesParts.filter(Boolean).join(" · ") ||
-      `Vendor payment${paymentNumber ? ` ${paymentNumber}` : ""}`;
+    const baseDesc = notesParts.filter(Boolean).join(" · ");
     const narration =
       modeOfPayment === "cheque" && String(chequeNumber || "").trim()
-        ? `${baseDesc} [Cheque: ${String(chequeNumber).trim()}]`
+        ? [baseDesc, `Cheque: ${String(chequeNumber).trim()}`]
+            .filter(Boolean)
+            .join(" · ")
         : baseDesc;
 
     const basePayload = {
