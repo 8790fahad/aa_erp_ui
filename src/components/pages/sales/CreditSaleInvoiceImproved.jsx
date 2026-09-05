@@ -45,6 +45,28 @@ export default function CreditSaleInvoice({
   const pageWidthMm = isA5 ? 148 : 210;
   const pageHeightMm = isA5 ? 210 : 297;
   const pageSizeLabel = isA5 ? "A5" : "A4";
+  const invoiceBwCss = `
+    .invoice-bw,
+    .invoice-bw *:not(img):not(svg):not(canvas):not(path) {
+      background: #fff !important;
+      background-color: #fff !important;
+      background-image: none !important;
+      color: #000 !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+    }
+    .invoice-bw,
+    .invoice-bw * {
+      border-color: #111 !important;
+      -webkit-print-color-adjust: economy !important;
+      print-color-adjust: economy !important;
+    }
+    .invoice-bw img,
+    .invoice-bw svg,
+    .invoice-bw canvas {
+      filter: grayscale(1) contrast(1.2) !important;
+    }
+  `;
   const saleCode =
     typeof window !== "undefined" && query ? query.get("sale_code") : null;
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
@@ -66,6 +88,8 @@ export default function CreditSaleInvoice({
   const [isSavingCustomerCopy, setIsSavingCustomerCopy] = useState(false);
   /** Customer print view: amount = VAT in unit price; vat = show VAT breakdown */
   const [customerPrintMode, setCustomerPrintMode] = useState("amount");
+  /** Invoice print ink: black-and-white by default; Color is opt-in on this screen. */
+  const [printInColor, setPrintInColor] = useState(false);
 
   const isInlineLoading = !propInvoiceData && loadingInvoice && !fetchedInvoice;
   useEffect(() => {
@@ -323,10 +347,6 @@ export default function CreditSaleInvoice({
   const showVatOnSalesInvoice =
     (business?.show_vat_on_sales_invoice ??
       activeBusiness?.show_vat_on_sales_invoice) !== false;
-  const printSalesInvoiceInColor = Boolean(
-    business?.sales_invoice_print_in_color ??
-      activeBusiness?.sales_invoice_print_in_color,
-  );
 
   const isItemTaxable = (item) => {
     const flag = String(item?.taxable || "").toLowerCase();
@@ -910,11 +930,11 @@ export default function CreditSaleInvoice({
         margin: 0 !important;
         padding: 0 !important;
         background: #fff !important;
-        print-color-adjust: ${printSalesInvoiceInColor ? "exact" : "economy"};
-        -webkit-print-color-adjust: ${printSalesInvoiceInColor ? "exact" : "economy"};
-        ${printSalesInvoiceInColor ? "" : "filter: grayscale(1) !important;"}
+        print-color-adjust: ${printInColor ? "exact" : "economy"};
+        -webkit-print-color-adjust: ${printInColor ? "exact" : "economy"};
         font-family: "Source Sans 3", "Segoe UI", "Helvetica Neue", Arial, sans-serif !important;
       }
+      ${printInColor ? "" : invoiceBwCss}
       .invoice-items-table {
         font-family: "Source Sans 3", "Segoe UI", "Helvetica Neue", Arial, sans-serif !important;
       }
@@ -1146,6 +1166,7 @@ export default function CreditSaleInvoice({
   return (
     <div className="bg-gray-50 pb-2 print:bg-white print:pb-0">
       <style>{`
+        ${printInColor ? "" : invoiceBwCss}
         @media print {
           .no-print { display: none !important; }
           .invoice-container {
@@ -1190,10 +1211,10 @@ export default function CreditSaleInvoice({
             size: ${pageSizeLabel} portrait;
           }
           body {
-            print-color-adjust: ${printSalesInvoiceInColor ? "exact" : "economy"};
-            -webkit-print-color-adjust: ${printSalesInvoiceInColor ? "exact" : "economy"};
-            ${printSalesInvoiceInColor ? "" : "filter: grayscale(1) !important;"}
+            print-color-adjust: ${printInColor ? "exact" : "economy"};
+            -webkit-print-color-adjust: ${printInColor ? "exact" : "economy"};
           }
+          ${printInColor ? "" : invoiceBwCss}
           .border-dashed {
             border-style: dashed !important;
           }
@@ -1290,6 +1311,40 @@ export default function CreditSaleInvoice({
                 </button>
               </div>
             ) : null}
+            {showPrintButton ? (
+              <div
+                className="inline-flex rounded-md border border-slate-300 overflow-hidden bg-white"
+                role="tablist"
+                aria-label="Print color"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={!printInColor}
+                  onClick={() => setPrintInColor(false)}
+                  className={`px-3 py-0.5 text-sm transition-colors ${
+                    !printInColor
+                      ? "bg-[var(--aa-navy)] text-white"
+                      : "bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  Black and white
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={printInColor}
+                  onClick={() => setPrintInColor(true)}
+                  className={`px-3 py-0.5 text-sm border-l border-slate-300 transition-colors ${
+                    printInColor
+                      ? "bg-[var(--aa-navy)] text-white"
+                      : "bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  Color
+                </button>
+              </div>
+            ) : null}
             {showPrintButton && (
               <button
                 onClick={handlePrint}
@@ -1327,7 +1382,9 @@ export default function CreditSaleInvoice({
         ref={invoiceRef}
         className={`${
           isA5 ? "max-w-[148mm] invoice-a5" : "max-w-5xl"
-        } mx-auto bg-white shadow-sm invoice-container border border-gray-200`}
+        } mx-auto bg-white shadow-sm invoice-container border border-gray-200${
+          printInColor ? "" : " invoice-bw"
+        }`}
         style={isA5 ? { width: "148mm" } : undefined}
       >
         <div
@@ -1695,96 +1752,84 @@ export default function CreditSaleInvoice({
                 </table>
               </div>
 
-              {/* How this invoice is paid — after totals */}
+              {/* How this invoice is paid — same presentation as Bill To */}
               {(() => {
                 const collectedNow = Number((cashPaid + transferPaid).toFixed(2));
                 const onCredit = Number(creditAmount.toFixed(2));
                 const outstanding = Number(balanceDue.toFixed(2));
                 const isCreditOnly =
                   onCredit > 0.05 && collectedNow <= 0.05;
-                const isSettledNow =
-                  collectedNow > 0.05 && outstanding <= 0.05;
-                const awaitingCollection =
-                  collectedNow <= 0.05 && outstanding > 0.05 && onCredit <= 0.05;
-                const paymentNote = isCreditOnly
-                  ? "Nothing was collected at sale. The full amount is charged to the customer’s account and is still outstanding."
-                  : isSettledNow
-                    ? "This invoice was settled at sale. There is no credit balance."
-                    : awaitingCollection
-                      ? "Cashier has not collected this payment yet. The amount below is still due."
-                      : onCredit > 0.05
-                        ? `₦${formatNumber(collectedNow)} was collected now. ₦${formatNumber(onCredit)} is charged to the customer’s account.`
-                        : null;
-                const lineCls = isA5
-                  ? "text-[9px] leading-tight text-gray-700"
-                  : "text-[11px] leading-snug text-gray-700";
+                const creditShown = isCreditOnly ? outstanding : onCredit;
+                const fields = [
+                  { label: "Mode", value: paymentModeLabel },
+                  {
+                    label: "Paid at sale",
+                    value: `₦${formatNumber(collectedNow)}`,
+                  },
+                ];
+                if (isCreditOnly || onCredit > 0.05) {
+                  fields.push({
+                    label: "On credit",
+                    value: `₦${formatNumber(creditShown)}`,
+                  });
+                } else {
+                  fields.push({
+                    label: "Still outstanding",
+                    value: `₦${formatNumber(outstanding)}`,
+                  });
+                }
+                if (cashPaid > 0.05) {
+                  fields.push({
+                    label: "Cash received",
+                    value: `₦${formatNumber(cashPaid)}`,
+                  });
+                }
+                if (transferLines.length > 0) {
+                  transferLines.forEach((line) => {
+                    fields.push({
+                      label: "Transfer received",
+                      value: `₦${formatNumber(line.amount)}${
+                        line.bank_name ? ` · ${line.bank_name}` : ""
+                      }`,
+                    });
+                  });
+                } else if (transferPaid > 0.05) {
+                  fields.push({
+                    label: "Transfer received",
+                    value: `₦${formatNumber(transferPaid)}${
+                      transferBanks.length > 0
+                        ? ` · ${transferBanks.join(", ")}`
+                        : ""
+                    }`,
+                  });
+                }
 
                 return (
-                  <div
-                    className={`shrink-0 ${
-                      isA5 ? "mb-0.5 mt-0.5 space-y-0.5" : "mb-1 mt-1 space-y-0.5"
-                    }`}
-                  >
-                    <p className={lineCls}>
-                      <span className="font-semibold text-gray-800">
-                        How this invoice is paid:
-                      </span>{" "}
-                      {paymentModeLabel}
-                    </p>
-                    {paymentNote ? <p className={lineCls}>{paymentNote}</p> : null}
-                    <p className={lineCls}>
-                      Paid at sale:{" "}
-                      <span className="font-semibold text-gray-900">
-                        ₦{formatNumber(collectedNow)}
-                      </span>
-                    </p>
-                    {isCreditOnly || onCredit > 0.05 ? (
-                      <p className={lineCls}>
-                        On credit:{" "}
-                        <span className="font-semibold text-gray-900">
-                          ₦
-                          {formatNumber(
-                            isCreditOnly ? outstanding : onCredit,
-                          )}
-                        </span>
+                  <div className={`grid gap-1 ${isA5 ? "mb-0.5" : "mb-1"}`}>
+                    <div
+                      className={`bg-blue-50 border border-blue-200 ${isA5 ? "p-0.5 px-1" : "p-1"}`}
+                    >
+                      <h6
+                        className={`font-semibold text-blue-800 uppercase tracking-wide ${isA5 ? "text-[10px] mb-0" : "text-xs mb-"}`}
+                      >
+                        How this invoice is paid
+                      </h6>
+                      <p
+                        className={`${isA5 ? "text-[10px] leading-snug" : "text-xs leading-relaxed"} text-gray-700`}
+                      >
+                        {fields.map((field, idx) => (
+                          <span key={`${field.label}-${idx}`}>
+                            {idx > 0 ? (
+                              <span className="text-gray-400 mx-1">|</span>
+                            ) : null}
+                            <span className="font-semibold text-gray-600">
+                              {field.label}:
+                            </span>{" "}
+                            <span className="text-gray-900">{field.value}</span>
+                          </span>
+                        ))}
                       </p>
-                    ) : (
-                      <p className={lineCls}>
-                        Still outstanding:{" "}
-                        <span className="font-semibold text-gray-900">
-                          ₦{formatNumber(outstanding)}
-                        </span>
-                      </p>
-                    )}
-                    {cashPaid > 0.05 && (
-                      <p className={lineCls}>
-                        Cash received:{" "}
-                        <span className="font-semibold text-gray-900">
-                          ₦{formatNumber(cashPaid)}
-                        </span>
-                      </p>
-                    )}
-                    {transferLines.length > 0
-                      ? transferLines.map((line, idx) => (
-                          <p key={`xfer-${idx}`} className={lineCls}>
-                            Transfer received:{" "}
-                            <span className="font-semibold text-gray-900">
-                              ₦{formatNumber(line.amount)}
-                            </span>
-                            {line.bank_name ? ` · ${line.bank_name}` : ""}
-                          </p>
-                        ))
-                      : transferPaid > 0.05 && (
-                          <p className={lineCls}>
-                            Transfer received:{" "}
-                            <span className="font-semibold text-gray-900">
-                              ₦{formatNumber(transferPaid)}
-                            </span>
-                            {transferBanks.length > 0
-                              ? ` · ${transferBanks.join(", ")}`
-                              : ""}
-                          </p>
-                        )}
+                    </div>
                   </div>
                 );
               })()}
