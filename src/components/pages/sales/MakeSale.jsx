@@ -47,7 +47,7 @@ function salesLimitPeriodLabel(period) {
 const PAYMENT_MODE_OPTIONS = [
   { id: "cash", label: "Cash" },
   { id: "transfer", label: "Transfer" },
-  { id: "card", label: "Card" },
+  { id: "card", label: "POS" },
   { id: "credit", label: "Credit" },
   { id: "deposit", label: "Apply Deposit" },
 ];
@@ -79,7 +79,7 @@ function paymentModesHint(modes) {
     const collect = [
       set.has("cash") ? "cash" : null,
       set.has("transfer") ? "transfer" : null,
-      set.has("card") ? "card" : null,
+      set.has("card") ? "POS" : null,
     ]
       .filter(Boolean)
       .join(" and ");
@@ -106,7 +106,7 @@ function invoiceCoverageError({
   isWalkIn = false,
 }) {
   if (isWalkIn && hasCredit) {
-    return "Walk-in customers cannot be invoiced on credit. Use Cash, Transfer, or Card.";
+    return "Walk-in customers cannot be invoiced on credit. Use Cash, Transfer, or POS.";
   }
   if (hasCash || hasTransfer || hasCard) return null;
   if (!hasCredit && !hasDeposit) return null;
@@ -453,7 +453,7 @@ function PaymentModePicker({
       <div className={className}>
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           You don&apos;t have permission to select a payment method. Ask an
-          admin to grant Cash Payment, Transfer Payment, Card Payment, Credit Payment, or
+          admin to grant Cash Payment, Transfer Payment, POS, Credit Payment, or
           Apply Deposit Payment under Create Invoice.
         </p>
       </div>
@@ -530,7 +530,7 @@ function CustomerPaymentBalances({
       ) : null}
       {showCard ? (
         <div className="rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs text-indigo-950">
-          <span className="font-semibold">Card: </span>
+          <span className="font-semibold">POS: </span>
           collect at Verification Points
         </div>
       ) : null}
@@ -2825,7 +2825,7 @@ function MakeSale() {
 
     if (saleType === "paid") {
       if (!payWithCash && !payWithTransfer && !hasCardMode) {
-        toast.error("Select Cash, Transfer, and/or Card to collect now, or Credit / Apply Deposit.");
+        toast.error("Select Cash, Transfer, and/or POS to collect now, or Credit / Apply Deposit.");
         return;
       }
       // Payment is collected at Verification Points — invoice only records the mode.

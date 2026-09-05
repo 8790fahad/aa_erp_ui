@@ -1866,10 +1866,6 @@ export default function CreditSaleInvoice({
                 const creditShown = isCreditOnly ? outstanding || onCredit : onCredit;
                 const fields = [
                   { label: "Mode", value: paymentModeLabel },
-                  {
-                    label: "Paid at sale",
-                    value: `₦${formatNumber(collectedNow)}`,
-                  },
                 ];
                 if (depositApplied > 0.05) {
                   fields.push({

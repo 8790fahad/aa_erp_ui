@@ -24,8 +24,32 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+function modeBreakdown(item) {
+  const cash = Number(item.cash_amount) || 0;
+  const transfer = Number(item.transfer_amount) || 0;
+  const card = Number(item.card_amount) || 0;
+  const lines = [];
+  if (cash > 0.05) lines.push({ label: "Cash", amount: cash });
+  if (transfer > 0.05) lines.push({ label: "Transfer", amount: transfer });
+  if (card > 0.05) lines.push({ label: "Card", amount: card });
+  if (lines.length) return lines;
+  const mode = String(item.mode_of_payment || "").toLowerCase();
+  const amount = Number(item.amount) || 0;
+  if (
+    mode.includes("cash") &&
+    (mode.includes("transfer") || mode.includes("bank"))
+  ) {
+    return [{ label: "Cash + Transfer", amount }];
+  }
+  if (mode === "card") return [{ label: "Card", amount }];
+  if (mode === "bank" || mode === "transfer")
+    return [{ label: "Transfer", amount }];
+  if (mode) return [{ label: "Cash", amount }];
+  return [{ label: "—", amount }];
+}
+
 /**
- * Received Funds — Payments Received list (Zoho-style), app table design.
+ * Customer deposits and prepaid funds (not supplier Pay Bills).
  */
 export default function ReceivedFunds() {
   const navigate = useNavigate();
@@ -90,8 +114,7 @@ export default function ReceivedFunds() {
     });
   }, [rows, search]);
 
-  const goNew = () =>
-    navigate("/app/payments/verification-points?action=deposit");
+  const goNew = () => navigate("/app/payments/receive-payment/new");
 
   const fields = useMemo(
     () => [
@@ -139,8 +162,15 @@ export default function ReceivedFunds() {
         title: "Mode",
         custom: true,
         component: (item) => (
-          <div className="text-sm capitalize text-gray-700">
-            {item.mode_of_payment || "-"}
+          <div className="space-y-0.5 text-[11px] leading-snug text-slate-600">
+            {modeBreakdown(item).map((line) => (
+              <div key={line.label} className="tabular-nums">
+                <span className="text-slate-500">{line.label}:</span>{" "}
+                <span className="font-medium text-slate-800">
+                  ₦{formatNumber1(line.amount)}
+                </span>
+              </div>
+            ))}
           </div>
         ),
       },
@@ -234,10 +264,9 @@ export default function ReceivedFunds() {
               Received Payment
             </h1>
             <p className="text-sm text-muted-foreground">
-              History of customer deposits and received funds. Create new
-              deposits and collect invoice payments at{" "}
+              Customer deposits and prepaid funds. Make a new deposit at{" "}
               <span className="font-medium text-gray-800">Verification Points</span>
-              .
+              . Supplier payments are under Purchase → Pay Bills.
               {totalCount > 0 && (
                 <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
                   {totalCount} total
@@ -248,7 +277,7 @@ export default function ReceivedFunds() {
         </div>
         <CustomButton className="!mb-0" onClick={goNew}>
           <FaPlus className="h-4 w-4" aria-hidden />
-          Make Deposit
+          Make Payment
         </CustomButton>
       </div>
 
@@ -330,7 +359,7 @@ export default function ReceivedFunds() {
             {!search && (
               <CustomButton className="!mb-0 mt-4" onClick={goNew}>
                 <FaPlus className="h-4 w-4" aria-hidden />
-                Make Deposit
+                Make Payment
               </CustomButton>
             )}
           </div>

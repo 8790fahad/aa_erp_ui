@@ -24,6 +24,7 @@ import { formatNumber1 } from "@/components/router/utilities";
 import { POSTING_DATE_MIN, getPostingDateMax, validatePostingDateClient } from "@/utilities";
 import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
 import AdvancePaymentPaymentFields from "@/components/common/AdvancePaymentPaymentFields";
+import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
 
 function parseNumberFromFormatted(value) {
   if (value === "" || value === null || value === undefined) return "";
@@ -315,8 +316,7 @@ export default function CustomerAdvancePaymentModal({
     return allocatedSum + 0.02 < minRequiredInvoiceAllocation;
   }, [allocatedSum, minRequiredInvoiceAllocation]);
 
-  const showCustomerPicker =
-    Array.isArray(customersList) && customersList.length > 0;
+  const showCustomerPicker = !party;
 
   const displayName =
     selectedCustomer?.fullname ||
@@ -507,9 +507,7 @@ export default function CustomerAdvancePaymentModal({
     _postApi(url, payload, onDone, onFail);
   };
 
-  if (!party && (!customersList || customersList.length === 0)) {
-    return null;
-  }
+  if (!open) return null;
 
   return (
     <Drawer
@@ -526,10 +524,11 @@ export default function CustomerAdvancePaymentModal({
           <div className="flex items-start justify-between gap-3 pb-4">
             <div className="min-w-0 text-left">
               <DrawerTitle className="text-gray-900 text-xl">
-                Make Deposit
+                Make Payment
               </DrawerTitle>
               <DrawerDescription className="text-gray-600 mt-1">
-                Record a customer deposit or prepayment
+                Record a customer payment against outstanding invoices, or as
+                prepaid funds
               </DrawerDescription>
               {displayName ? (
                 <p className="text-sm text-gray-700 mt-2 font-medium truncate">
@@ -547,7 +546,7 @@ export default function CustomerAdvancePaymentModal({
           {/* Tabs */}
           <div className="flex border-b border-gray-200 -mx-4 px-4 gap-1">
             {[
-              { id: "payment", label: "Make Deposit", icon: <Plus size={14} /> },
+              { id: "payment", label: "Make Payment", icon: <Plus size={14} /> },
               { id: "history", label: "History",     icon: <History size={14} /> },
               { id: "receipt", label: "Receipt",     icon: <Receipt size={14} /> },
             ].map((tab) => (
@@ -795,6 +794,7 @@ export default function CustomerAdvancePaymentModal({
             {activeTab === "payment" && showCustomerPicker && (
               <div className="space-y-2">
                 <Label className="text-gray-900 font-medium">Customer *</Label>
+                {Array.isArray(customersList) && customersList.length > 0 ? (
                 <Typeahead
                   id="customer-advance-payment-customer"
                   options={customersList}
@@ -823,6 +823,12 @@ export default function CustomerAdvancePaymentModal({
                   flip
                   className="w-full [&_.rbt-input-main]:rounded-md [&_.rbt-input-main]:border [&_.rbt-input-main]:border-gray-200 [&_.rbt-input-main]:min-h-10 [&_.rbt-input-main]:shadow-sm"
                 />
+                ) : (
+                  <SearchCustomerInput
+                    selected={selectedCustomer}
+                    onChange={(customer) => setSelectedCustomer(customer || null)}
+                  />
+                )}
               </div>
             )}
 
@@ -1197,13 +1203,13 @@ export default function CustomerAdvancePaymentModal({
                   </p>
                 ) : null}
                 <Button type="submit" disabled={submitting || allocationBlocksSubmit} className="w-full bg-[#2C5CC5] hover:bg-[#1e4ba8] text-white h-11 disabled:opacity-60">
-                  {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : "Make Deposit"}
+                  {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : "Make Payment"}
                 </Button>
               </>
             )}
             {activeTab === "history" && (
               <Button type="button" variant="outline" className="w-full h-11" onClick={() => setActiveTab("payment")}>
-                <Plus size={15} className="mr-2" /> Make Deposit
+                <Plus size={15} className="mr-2" /> Make Payment
               </Button>
             )}
             {activeTab === "receipt" && (
@@ -1219,7 +1225,7 @@ export default function CustomerAdvancePaymentModal({
                   </>
                 ) : (
                   <Button type="button" className="w-full h-11 bg-[#2C5CC5] hover:bg-[#1e4ba8] text-white gap-1.5" onClick={() => setActiveTab("payment")}>
-                    <Plus size={15} /> Make Deposit
+                    <Plus size={15} /> Make Payment
                   </Button>
                 )}
               </div>

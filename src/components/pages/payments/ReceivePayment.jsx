@@ -159,6 +159,7 @@ function TillActionCard({
   icon: Icon,
   iconClass,
   allowed,
+  amount,
   onClick,
 }) {
   return (
@@ -190,6 +191,9 @@ function TillActionCard({
             </span>
           )}
         </span>
+        <span className="mt-0.5 block text-lg font-semibold tabular-nums text-slate-900">
+          ₦{formatNumber1(amount)}
+        </span>
         <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
       </span>
     </button>
@@ -204,6 +208,8 @@ function TillHubDialog({
   collected,
   retire,
   expenses,
+  imprestTotal,
+  payBillTotal,
   pendingCount,
   canImprest,
   canPayBill,
@@ -217,8 +223,8 @@ function TillHubDialog({
         <DialogHeader>
           <DialogTitle className="text-xl">{modeLabel} till</DialogTitle>
           <DialogDescription>
-            Today&apos;s collection, what is left to retire, and spend from this
-            till.
+            Your collections today, minus Imprest and Pay Bill you posted from
+            this till.
           </DialogDescription>
         </DialogHeader>
 
@@ -232,16 +238,45 @@ function TillHubDialog({
           <TillMetric
             label="Collected today"
             value={collected}
-            hint="Tap to view history"
+            hint="Your collections — tap for history"
             tone="collected"
             onClick={onViewCollected}
           />
           <TillMetric
             label={`${modeLabel} to retire`}
             value={retire}
-            hint={`After expenses ₦${formatNumber1(expenses)}`}
+            hint={`After Imprest + Pay Bill ₦${formatNumber1(expenses)}`}
             tone="retire"
           />
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+          <div className="flex items-center justify-between gap-3 text-slate-600">
+            <span>Collected today</span>
+            <span className="tabular-nums font-medium text-slate-900">
+              ₦{formatNumber1(collected)}
+            </span>
+          </div>
+          <div className="mt-1.5 flex items-center justify-between gap-3 text-slate-600">
+            <span>Imprest (you)</span>
+            <span className="tabular-nums font-medium text-amber-800">
+              − ₦{formatNumber1(imprestTotal)}
+            </span>
+          </div>
+          <div className="mt-1.5 flex items-center justify-between gap-3 text-slate-600">
+            <span>Pay Bill (you)</span>
+            <span className="tabular-nums font-medium text-sky-800">
+              − ₦{formatNumber1(payBillTotal)}
+            </span>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 border-t border-slate-200 pt-2">
+            <span className="font-semibold text-slate-800">
+              {modeLabel} to retire
+            </span>
+            <span className="tabular-nums text-lg font-semibold text-emerald-700">
+              ₦{formatNumber1(retire)}
+            </span>
+          </div>
         </div>
 
         <div>
@@ -251,7 +286,8 @@ function TillHubDialog({
           <div className="grid gap-2 sm:grid-cols-2">
             <TillActionCard
               title="Imprest"
-              description={`Record a ${modeLabel.toLowerCase()} till expense against collections.`}
+              amount={imprestTotal}
+              description={`Your ${modeLabel.toLowerCase()} imprest posted today.`}
               icon={Receipt}
               iconClass="bg-amber-50 text-amber-700"
               allowed={canImprest}
@@ -259,7 +295,8 @@ function TillHubDialog({
             />
             <TillActionCard
               title="Pay Bill"
-              description={`Pay a supplier from ${modeLabel.toLowerCase()} collected today.`}
+              amount={payBillTotal}
+              description={`Your ${modeLabel.toLowerCase()} supplier payments today.`}
               icon={Landmark}
               iconClass="bg-sky-50 text-sky-700"
               allowed={canPayBill}
@@ -287,7 +324,7 @@ const METHOD_TABS = [
   },
   {
     id: "card",
-    label: "Card",
+    label: "POS",
     icon: Nfc,
     privilege: "Card Collection",
   },
@@ -322,7 +359,7 @@ function tabWorkflowBadge(methodTab, row) {
   if (methodTab === "cash") return { label: "Cash", paymentType: "cash" };
   if (methodTab === "transfer")
     return { label: "Transfer", paymentType: "transfer" };
-  if (methodTab === "card") return { label: "Card", paymentType: "card" };
+  if (methodTab === "card") return { label: "POS", paymentType: "card" };
   if (methodTab === "credit") return { label: "Credit", paymentType: "credit" };
   if (methodTab === "deposit")
     return { label: "Apply deposit", paymentType: "deposit" };
@@ -397,7 +434,7 @@ function normalizePaymentMode(type) {
 const PAYMENT_MODE_OPTIONS = [
   { value: "cash", label: "Cash", icon: Banknote },
   { value: "transfer", label: "Transfer", icon: Building2 },
-  { value: "card", label: "Card", icon: Nfc },
+  { value: "card", label: "POS", icon: Nfc },
   { value: "split", label: "Transfer + Cash", icon: Split },
   { value: "credit", label: "Credit", icon: CreditCard },
   { value: "credit_split", label: "Credit + Cash + Transfer", icon: Wallet },
@@ -407,7 +444,7 @@ const PAYMENT_MODE_OPTIONS = [
 const MODE_LABELS = {
   cash: "Cash",
   transfer: "Transfer",
-  card: "Card",
+  card: "POS",
   credit: "Credit",
   deposit: "Apply Deposit",
 };
@@ -816,7 +853,7 @@ export default function ReceivePayment() {
   const collectionAccessLabels = [
     hasCashCollection ? "Cash Collection" : null,
     hasTransferCollection ? "Transfer Collection" : null,
-    hasCardCollection ? "Card Collection" : null,
+    hasCardCollection ? "POS Collection" : null,
     functionalities.includes("Credit Collection") ? "Credit Collection" : null,
     functionalities.includes("Apply Deposit") ? "Apply Deposit" : null,
     functionalities.includes("Discount Collection")
@@ -1269,6 +1306,8 @@ export default function ReceivePayment() {
         collected_cash_today: summary.collected_cash_today,
         collected_transfer_today: 0,
         expenses_today: Number(summary.expenses_cash_today) || 0,
+        imprest_today: Number(summary.imprest_cash_today) || 0,
+        pay_bills_today: Number(summary.pay_bills_cash_today) || 0,
         retire_today: Number(
           summary.retire_cash_today ??
             Math.max(
@@ -1297,6 +1336,8 @@ export default function ReceivePayment() {
         collected_cash_today: 0,
         collected_transfer_today: summary.collected_transfer_today,
         expenses_today: Number(summary.expenses_transfer_today) || 0,
+        imprest_today: Number(summary.imprest_transfer_today) || 0,
+        pay_bills_today: Number(summary.pay_bills_transfer_today) || 0,
         retire_today: Number(
           summary.retire_transfer_today ??
             Math.max(
@@ -1328,6 +1369,8 @@ export default function ReceivePayment() {
         collected_transfer_today: 0,
         collected_card_today: summary.collected_card_today,
         expenses_today: Number(summary.expenses_card_today) || 0,
+        imprest_today: Number(summary.imprest_card_today) || 0,
+        pay_bills_today: Number(summary.pay_bills_card_today) || 0,
         retire_today: Number(
           summary.retire_card_today ??
             Math.max(
@@ -1477,7 +1520,7 @@ export default function ReceivePayment() {
     }
     if (methodTab === "card") {
       return {
-        modeLabel: "Card",
+        modeLabel: "POS",
         collect: viewSummary.pending_card,
         collected: viewSummary.collected_card_today,
       };
@@ -2756,7 +2799,7 @@ export default function ReceivePayment() {
         note: isSplit
           ? `${
               collectionSide === "card"
-                ? "Card"
+                ? "POS"
                 : collectionSide === "transfer"
                   ? "Transfer"
                   : "Cash"
@@ -2839,7 +2882,7 @@ export default function ReceivePayment() {
     if (isSplit) {
       const side =
         collectionSide === "card"
-          ? "Card"
+          ? "POS"
           : collectionSide === "transfer"
             ? "Transfer"
             : "Cash";
@@ -2868,7 +2911,7 @@ export default function ReceivePayment() {
           <div className="mt-6 rounded-xl border border-slate-200 bg-white p-8 text-center">
             <p className="text-sm font-medium text-slate-600">
               You do not have permission to collect payments. Ask an admin to
-              grant Cash Collection, Transfer Collection, Card Collection, Credit Collection,
+              grant Cash Collection, Transfer Collection, POS Collection, Credit Collection,
               Apply Deposit, Discount Collection, or Make Deposit under Sales →
               Verification Points.
             </p>
@@ -3008,13 +3051,13 @@ export default function ReceivePayment() {
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
                 <Nfc className="h-4 w-4 text-indigo-600" />
-                Card to collect
+                POS to collect
               </div>
               <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">
                 ₦{formatNumber1(viewSummary.pending_card)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Awaiting card / POS payment
+                Awaiting POS payment
               </p>
             </div>
           ) : null}
@@ -3185,7 +3228,7 @@ export default function ReceivePayment() {
 
           {viewSummary.showCard ? (
             <TillSummaryCard
-              modeLabel="Card"
+              modeLabel="POS"
               icon={Nfc}
               iconClass="text-indigo-600"
               amountClass="text-indigo-700"
@@ -3321,7 +3364,7 @@ export default function ReceivePayment() {
                         : methodTab === "transfer"
                           ? "transfer payment"
                           : methodTab === "card"
-                            ? "card payment"
+                            ? "POS payment"
                             : "cash payment"}
                 .
               </div>
@@ -3982,7 +4025,7 @@ export default function ReceivePayment() {
                           : ""}
                       </p>
                       <p>
-                        Card: ₦
+                        POS: ₦
                         {formatNumber1(splitProgress?.card || 0)}
                         {splitProgress?.card_by_name
                           ? ` · signed by ${splitProgress.card_by_name}`
@@ -4211,7 +4254,7 @@ export default function ReceivePayment() {
                           <>
                             <div className="flex items-center justify-between gap-2">
                               <label className="text-sm font-medium text-slate-700">
-                                Card amount
+                                POS amount
                               </label>
                               <button
                                 type="button"
@@ -5055,6 +5098,8 @@ export default function ReceivePayment() {
         collected={tillHub.collected}
         retire={viewSummary.retire_today}
         expenses={viewSummary.expenses_today}
+        imprestTotal={viewSummary.imprest_today || 0}
+        payBillTotal={viewSummary.pay_bills_today || 0}
         pendingCount={viewSummary.pending_count || 0}
         canImprest={canImprest}
         canPayBill={canPayBill}
