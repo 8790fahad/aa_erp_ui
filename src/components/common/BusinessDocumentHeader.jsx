@@ -119,7 +119,7 @@ export default function BusinessDocumentHeader({
             </div>
             {c.description ? (
               <p
-                className={`italic text-white/80 ${
+                className={`italic underline decoration-white/70 underline-offset-2 text-white/80 ${
                   compact
                     ? "text-[9px] leading-snug mt-0.5 line-clamp-2"
                     : "text-sm mt-0.5"

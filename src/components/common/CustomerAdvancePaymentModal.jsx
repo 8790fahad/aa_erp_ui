@@ -117,6 +117,7 @@ export default function CustomerAdvancePaymentModal({
   onSuccess,
   party,
   customersList = null,
+  asPage = false,
 }) {
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -507,40 +508,56 @@ export default function CustomerAdvancePaymentModal({
     _postApi(url, payload, onDone, onFail);
   };
 
-  if (!open) return null;
+  if (!open && !asPage) return null;
 
-  return (
-    <Drawer
-      open={open}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
-      }}
-    >
-      <DrawerContent
-        side="right"
-        className="bg-white border-gray-200 flex flex-col sm:max-w-2xl"
-      >
+  const formInner = (
+    <>
         <DrawerHeader className="border-b border-gray-200 shrink-0 pb-0">
           <div className="flex items-start justify-between gap-3 pb-4">
             <div className="min-w-0 text-left">
-              <DrawerTitle className="text-gray-900 text-xl">
-                Make Payment
-              </DrawerTitle>
-              <DrawerDescription className="text-gray-600 mt-1">
-                Record a customer payment against outstanding invoices, or as
-                prepaid funds
-              </DrawerDescription>
+              {asPage ? (
+                <>
+                  <h1 className="text-xl font-semibold leading-none tracking-tight text-gray-900">
+                    Make Payment
+                  </h1>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Record a customer payment against outstanding invoices, or as
+                    prepaid funds
+                  </p>
+                </>
+              ) : (
+                <>
+                  <DrawerTitle className="text-gray-900 text-xl">
+                    Make Payment
+                  </DrawerTitle>
+                  <DrawerDescription className="text-gray-600 mt-1">
+                    Record a customer payment against outstanding invoices, or as
+                    prepaid funds
+                  </DrawerDescription>
+                </>
+              )}
               {displayName ? (
                 <p className="text-sm text-gray-700 mt-2 font-medium truncate">
                   Customer: {displayName}
                 </p>
               ) : null}
             </div>
+            {asPage ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="shrink-0 text-sm font-medium text-slate-600 hover:text-slate-900"
+                onClick={onClose}
+              >
+                Cancel
+              </Button>
+            ) : (
             <DrawerClose asChild>
               <Button type="button" variant="ghost" size="icon" className="shrink-0 hover:bg-gray-100" aria-label="Close">
                 <X className="h-5 w-5 text-gray-500" />
               </Button>
             </DrawerClose>
+            )}
           </div>
 
           {/* Tabs */}
@@ -1232,6 +1249,31 @@ export default function CustomerAdvancePaymentModal({
             )}
           </DrawerFooter>
         </form>
+    </>
+  );
+
+  if (asPage) {
+    return (
+      <div className="flex min-h-screen flex-col bg-[#f5f7fb]">
+        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col bg-white shadow-sm">
+          {formInner}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Drawer
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose();
+      }}
+    >
+      <DrawerContent
+        side="right"
+        className="bg-white border-gray-200 flex flex-col sm:max-w-2xl"
+      >
+        {formInner}
       </DrawerContent>
     </Drawer>
   );
@@ -1243,4 +1285,5 @@ CustomerAdvancePaymentModal.propTypes = {
   onSuccess: PropTypes.func,
   party: PropTypes.object,
   customersList: PropTypes.array,
+  asPage: PropTypes.bool,
 };

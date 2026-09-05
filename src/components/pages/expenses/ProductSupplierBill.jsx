@@ -1284,7 +1284,7 @@ export default function ProductSupplierBill() {
                     : "text-slate-400"
                 }`}
               >
-                Cash
+                Instant Payment
               </span>
             </div>
           </div>

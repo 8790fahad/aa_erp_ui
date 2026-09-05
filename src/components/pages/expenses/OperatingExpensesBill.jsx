@@ -1194,7 +1194,7 @@ export default function OperatingExpenses() {
                     : "text-slate-400"
                 }`}
               >
-                Cash
+                Instant Payment
               </span>
             </div>
           </div>
