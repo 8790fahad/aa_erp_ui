@@ -759,6 +759,22 @@ export default function CreditSaleInvoice({
     });
   };
 
+  const formatPaymentWord = (word) => {
+    const lower = String(word || "")
+      .toLowerCase()
+      .trim();
+    if (
+      lower === "deposit" ||
+      lower === "apply deposit" ||
+      lower === "apply_deposit"
+    ) {
+      return "Apply Deposit";
+    }
+    if (lower === "card" || lower === "pos") return "POS";
+    if (!lower) return "";
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  };
+
   const formatPaymentMode = (mode) => {
     const raw = String(mode || "").trim();
     if (!raw) return "—";
@@ -767,11 +783,7 @@ export default function CreditSaleInvoice({
         .split("+")
         .map((w) => w.trim())
         .filter(Boolean)
-        .map((w) =>
-          w.toLowerCase() === "deposit" || w.toLowerCase() === "apply deposit"
-            ? "Apply Deposit"
-            : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
-        )
+        .map(formatPaymentWord)
         .join(" + ");
     }
     const lower = raw.toLowerCase();
@@ -786,11 +798,11 @@ export default function CreditSaleInvoice({
       return "Cash + Transfer";
     }
     if (lower === "deposit" || lower === "apply_deposit") return "Apply Deposit";
-    if (lower === "card") return "Card";
+    if (lower === "card" || lower === "pos") return "POS";
     return raw
       .replace(/_/g, " ")
       .split(" ")
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .map(formatPaymentWord)
       .join(" ");
   };
 
@@ -971,7 +983,7 @@ export default function CreditSaleInvoice({
     const order = [
       ["cash", "Cash"],
       ["transfer", "Transfer"],
-      ["card", "Card"],
+      ["card", "POS"],
       ["credit", "Credit"],
       ["deposit", "Apply Deposit"],
     ];
@@ -982,7 +994,7 @@ export default function CreditSaleInvoice({
       .map(([, label]) => label);
     if (fromModes.length) return fromModes.join(" + ");
     if (cardPaid > 0.05 && cashPaid <= 0.05 && transferPaid <= 0.05)
-      return hasCreditMode ? "Card + Credit" : "Card";
+      return hasCreditMode ? "POS + Credit" : "POS";
     if (cashPaid > 0.05 && transferPaid > 0.05 && creditAmount > 0.05) {
       return "Cash + Transfer + Credit";
     }
@@ -1912,7 +1924,7 @@ export default function CreditSaleInvoice({
                 if (cardLines.length > 0) {
                   cardLines.forEach((line) => {
                     fields.push({
-                      label: "Card received",
+                      label: "POS received",
                       value: `₦${formatNumber(line.amount)}${
                         line.bank_name ? ` · ${line.bank_name}` : ""
                       }`,
@@ -1920,7 +1932,7 @@ export default function CreditSaleInvoice({
                   });
                 } else if (cardPaid > 0.05) {
                   fields.push({
-                    label: "Card received",
+                    label: "POS received",
                     value: `₦${formatNumber(cardPaid)}`,
                   });
                 }
