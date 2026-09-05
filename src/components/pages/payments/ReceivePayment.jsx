@@ -118,6 +118,22 @@ const METHOD_TABS = [
 
 const COLLECTION_TAB_PRIVILEGES = METHOD_TABS.map((t) => t.privilege);
 
+/** Status chip under the invoice number follows the active Verification Points tab. */
+function tabWorkflowBadge(methodTab, row) {
+  if (methodTab === "cash") return { label: "Cash", paymentType: "cash" };
+  if (methodTab === "transfer")
+    return { label: "Transfer", paymentType: "transfer" };
+  if (methodTab === "credit") return { label: "Credit", paymentType: "credit" };
+  if (methodTab === "deposit")
+    return { label: "Apply deposit", paymentType: "deposit" };
+  return {
+    label: undefined,
+    paymentType:
+      row?.payment_type ||
+      (row?.status === "awaiting_credit_approval" ? "credit" : undefined),
+  };
+}
+
 const SWITCH_PAYMENT_MODE_PRIVILEGE = "Switch Payment Mode";
 const APPROVE_PAYMENT_MODE_PRIVILEGE = "Approve Payment Mode Switch";
 
@@ -2842,15 +2858,16 @@ export default function ReceivePayment() {
                             {row.sale_code}
                           </button>
                           <div className="mt-1.5">
-                            <WorkflowStatusBadge
-                              status={row.status}
-                              paymentType={
-                                row.payment_type ||
-                                (row.status === "awaiting_credit_approval"
-                                  ? "credit"
-                                  : undefined)
-                              }
-                            />
+                            {(() => {
+                              const badge = tabWorkflowBadge(methodTab, row);
+                              return (
+                                <WorkflowStatusBadge
+                                  status={row.status}
+                                  paymentType={badge.paymentType}
+                                  label={badge.label}
+                                />
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -3501,9 +3518,9 @@ export default function ReceivePayment() {
                     <WorkflowStatusBadge
                       status={selected?.status}
                       paymentType={
-                        selected?.payment_type ||
-                        (hubAction === "credit" ? "credit" : undefined)
+                        tabWorkflowBadge(methodTab, selected).paymentType
                       }
+                      label={tabWorkflowBadge(methodTab, selected).label}
                     />
                   </div>
                   <div className="mt-2 flex items-center justify-between text-sm">
