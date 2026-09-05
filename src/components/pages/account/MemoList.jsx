@@ -13,6 +13,7 @@ import CustomModal from "@/common/Custom/CustomModal";
 import Loading from "@/common/Custom/Loading";
 import CustomCard from "@/common/Custom/CustomCard2";
 import { formatNumber1 } from "@/components/router/utilities";
+import { cloudinaryDocumentHref } from "@/utils/cloudinaryDocuments";
 import CustomMemoModal from "@/common/Custom/CustomMemoModal";
 import { Input } from "antd";
 import {
@@ -205,7 +206,7 @@ function MemoList() {
             name: doc.original_name,
             type: doc.mime_type,
             size: doc.file_size,
-            preview: `${apiURL}/public/uploads/${doc.file_path}`,
+            preview: cloudinaryDocumentHref(doc),
             fromServer: true,
           }));
           setFiles(serverFiles);

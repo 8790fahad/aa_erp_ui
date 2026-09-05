@@ -12,6 +12,7 @@ import CustomMemoModal from "@/common/Custom/CustomMemoModal";
 import Loading from "@/common/Custom/Loading";
 
 import { _fetchApi, _postApi, apiURL } from "@/redux/actions/api";
+import { cloudinaryDocumentHref } from "@/utils/cloudinaryDocuments";
 import { toast } from "sonner";
 import { formatNumber1 } from "@/components/router/utilities";
 import CustomTable1 from "@/common/Custom/CustomTable1";
@@ -187,7 +188,7 @@ function ApprovalByMD() {
             name: doc.original_name,
             type: doc.mime_type,
             size: doc.file_size,
-            preview: `${apiURL}/public/uploads/${doc.file_path}`,
+            preview: cloudinaryDocumentHref(doc),
             fromServer: true,
           }));
           setFiles(serverFiles);

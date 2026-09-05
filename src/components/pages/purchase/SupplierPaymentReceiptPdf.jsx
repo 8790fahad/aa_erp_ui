@@ -6,12 +6,96 @@ import { _fetchApi } from "@/redux/actions/api";
 import { useSelector } from "react-redux";
 import moment from "moment";
 import { formatNumber1, toWordsconver } from "@/components/router/utilities";
-import { Printer, X, Info } from "lucide-react";
+import { Printer, X } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 
-const SupplierPaymentReceiptHTML = ({ paymentData, company, receiptRef }) => {
+const receiptBwCss = `
+  .receipt-bw,
+  .receipt-bw *:not(img):not(svg):not(canvas):not(path) {
+    background: #fff !important;
+    background-color: #fff !important;
+    background-image: none !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  .receipt-bw,
+  .receipt-bw * {
+    border-color: #111 !important;
+    -webkit-print-color-adjust: economy !important;
+    print-color-adjust: economy !important;
+  }
+  .receipt-bw img,
+  .receipt-bw svg,
+  .receipt-bw canvas {
+    filter: grayscale(1) contrast(1.2) !important;
+  }
+`;
+
+function amountInWords(amountPaid) {
+  const amount = parseFloat(amountPaid || 0);
+  const amountStr = amount.toFixed(2);
+  const parts = amountStr.split(".");
+  const nairaWords = toWordsconver(parts[0])?.toUpperCase() || "";
+  const koboPart = parts[1];
+  const koboWords =
+    koboPart && koboPart !== "00" && koboPart !== "0"
+      ? toWordsconver(koboPart)?.toUpperCase() || ""
+      : null;
+  return `${nairaWords} NAIRA${koboWords ? ` AND ${koboWords} KOBO` : ""} ONLY`;
+}
+
+function receiptPageStyle(paperSize, printInColor) {
+  const size = String(paperSize || "a5").toLowerCase();
+  const isThermal = size === "thermal";
+  const isA5 = size === "a5";
+  const pageWidthMm = isThermal ? 80 : isA5 ? 148 : 210;
+  const pageHeightMm = isThermal ? null : isA5 ? 210 : 297;
+  const pageSize = isThermal
+    ? "80mm auto"
+    : isA5
+      ? "A5 portrait"
+      : "A4 portrait";
+  const ink = printInColor ? "exact" : "economy";
+  return `
+    @page {
+      size: ${pageSize};
+      margin: ${isThermal ? "2mm" : isA5 ? "6mm" : "0"} !important;
+    }
+    html, body {
+      width: ${pageWidthMm}mm;
+      ${pageHeightMm ? `min-height: ${pageHeightMm}mm;` : ""}
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #fff !important;
+      print-color-adjust: ${ink};
+      -webkit-print-color-adjust: ${ink};
+    }
+    ${printInColor ? "" : receiptBwCss}
+    .receipt-container {
+      width: ${pageWidthMm}mm !important;
+      max-width: ${pageWidthMm}mm !important;
+      ${pageHeightMm ? `min-height: ${pageHeightMm}mm;` : ""}
+      margin: 0 auto !important;
+      padding: ${isThermal ? "2mm" : "0"} !important;
+      box-shadow: none !important;
+      border: ${isThermal ? "none" : "none"} !important;
+      background: #fff !important;
+    }
+    .border-dashed { border-style: dashed !important; }
+    .no-print { display: none !important; }
+  `;
+}
+
+const SupplierPaymentReceiptHTML = ({
+  paymentData,
+  company,
+  receiptRef,
+  paperSize = "a5",
+  printInColor = false,
+}) => {
   const formatDate = (date) => {
     if (!date) return "N/A";
     const momentDate = moment(date);
@@ -21,6 +105,9 @@ const SupplierPaymentReceiptHTML = ({ paymentData, company, receiptRef }) => {
   const query = useQuery();
   const invoice_ref = query.get("ref_number");
   const payment_ref = query.get("pv_code");
+  const size = String(paperSize || "a5").toLowerCase();
+  const isThermal = size === "thermal";
+  const isA5 = size === "a5";
   const companyData = {
     name: company?.business_name || "AA_ERP MANUFACTURING LTD",
     receiptNumber:
@@ -29,17 +116,113 @@ const SupplierPaymentReceiptHTML = ({ paymentData, company, receiptRef }) => {
       paymentData?.transaction_date || paymentData?.date || new Date(),
   };
 
+  if (isThermal) {
+    const biz = company || {};
+    return (
+      <div
+        ref={receiptRef}
+        className={`receipt-container mx-auto bg-white ${
+          printInColor ? "" : "receipt-bw"
+        }`}
+        style={{ width: "80mm", maxWidth: "80mm" }}
+      >
+        <div
+          className="px-2 py-2 text-black"
+          style={{
+            fontFamily: '"Courier New", Courier, monospace',
+            fontSize: "13px",
+            lineHeight: 1.3,
+          }}
+        >
+          <div className="text-center font-bold uppercase">
+            {biz.business_name || companyData.name}
+          </div>
+          {biz.business_address ? (
+            <div className="text-center text-[11px]">{biz.business_address}</div>
+          ) : null}
+          <div className="my-2 border-t border-dashed border-black" />
+          <div className="text-center font-bold">PAYMENT RECEIPT</div>
+          <div className="text-center text-[11px]">
+            No: PR-{payment_ref || companyData.receiptNumber}
+          </div>
+          <div className="text-center text-[11px]">
+            {formatDate(companyData.paymentDate)}
+          </div>
+          <div className="my-2 border-t border-dashed border-black" />
+          <div className="flex justify-between gap-1">
+            <span>Paid to</span>
+            <span className="text-right font-bold">
+              {paymentData?.supplier_name || "N/A"}
+            </span>
+          </div>
+          {paymentData?.supplier_no ? (
+            <div className="flex justify-between gap-1">
+              <span>Code</span>
+              <span>{paymentData.supplier_no}</span>
+            </div>
+          ) : null}
+          <div className="flex justify-between gap-1">
+            <span>Mode</span>
+            <span>{paymentData?.mode_of_payment?.toUpperCase() || "N/A"}</span>
+          </div>
+          {(String(paymentData?.mode_of_payment || "").toLowerCase() ===
+            "cash" ||
+            paymentData?.account_info?.kind === "cash") &&
+          (paymentData?.account_info?.name ||
+            paymentData?.account_info?.code) ? (
+            <div className="flex justify-between gap-1">
+              <span>Cash Head</span>
+              <span className="text-right">
+                {[
+                  paymentData.account_info.name,
+                  paymentData.account_info.code,
+                ]
+                  .filter(Boolean)
+                  .join(" | ")}
+              </span>
+            </div>
+          ) : null}
+          <div className="my-2 border-t border-dashed border-black" />
+          <div className="text-center text-[11px] uppercase">Amount Paid</div>
+          <div className="text-center text-lg font-bold">
+            ₦{formatNumber1(paymentData?.amount_paid || 0)}
+          </div>
+          <div className="mt-1 text-center text-[10px] leading-snug">
+            {amountInWords(paymentData?.amount_paid || 0)}
+          </div>
+          {(paymentData?.description || paymentData?.narration) && (
+            <>
+              <div className="my-2 border-t border-dashed border-black" />
+              <div className="text-[11px] leading-snug">
+                {paymentData?.narration || paymentData?.description}
+              </div>
+            </>
+          )}
+          <div className="my-2 border-t border-dashed border-black" />
+          <div className="text-[11px]">
+            Prepared: {paymentData?.createdBy?.name || " "}
+          </div>
+          <div className="mt-3 text-center text-[10px]">Thank you</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={receiptRef}
-      className="max-w-5xl mx-auto bg-white shadow-sm receipt-container border border-gray-200"
+      className={`mx-auto bg-white shadow-sm receipt-container border border-gray-200 ${
+        isA5 ? "max-w-[148mm]" : "max-w-5xl"
+      } ${printInColor ? "" : "receipt-bw"}`}
+      style={isA5 ? { width: "148mm" } : undefined}
     >
-      <div className="p-2">
+      <div className={isA5 ? "p-1.5" : "p-2"}>
         <BusinessDocumentHeader
           business={company}
           title="PAYMENT RECEIPT"
           numberLabel={`No: PR-${payment_ref}`}
           date={companyData.paymentDate}
+          compact={isA5}
         />
         {/* Supplier Information */}
         {paymentData?.supplier_name && (
@@ -116,8 +299,9 @@ const SupplierPaymentReceiptHTML = ({ paymentData, company, receiptRef }) => {
               </div>
               <div className="flex-1">
                 <p className="text-xs text-gray-600 mb-0.5 font-semibold">
-                  {paymentData?.account_info?.name
-                    ? "Account Head"
+                  {String(paymentData?.mode_of_payment || "").toLowerCase() ===
+                    "cash" || paymentData?.account_info?.kind === "cash"
+                    ? "Cash Head"
                     : "Bank Account"}
                 </p>
                 <div className="bg-white border border-blue-300 rounded px-2 py-1">
@@ -126,7 +310,7 @@ const SupplierPaymentReceiptHTML = ({ paymentData, company, receiptRef }) => {
                       paymentData?.bank_name ||
                       "N/A"}
                     {paymentData?.account_info?.code && (
-                      <> | Code: {paymentData.account_info.code}</>
+                      <> | {paymentData.account_info.code}</>
                     )}
                     {paymentData?.account_info?.account_number && (
                       <> | Account: {paymentData.account_info.account_number}</>
@@ -154,61 +338,23 @@ const SupplierPaymentReceiptHTML = ({ paymentData, company, receiptRef }) => {
                 ₦{formatNumber1(paymentData?.amount_paid || 0)}
               </p>
               <p className="text-xs text-gray-700 italic border-t border-green-200 pt-1 mt-1">
-                {(() => {
-                  const amount = parseFloat(paymentData?.amount_paid || 0);
-                  const amountStr = amount.toFixed(2);
-                  const parts = amountStr.split(".");
-                  const nairaPart = parts[0];
-                  const koboPart = parts[1];
-
-                  const nairaWords =
-                    toWordsconver(nairaPart)?.toUpperCase() || "";
-                  const koboWords =
-                    koboPart && koboPart !== "00" && koboPart !== "0"
-                      ? toWordsconver(koboPart)?.toUpperCase() || ""
-                      : null;
-
-                  return (
-                    <>
-                      {nairaWords} NAIRA
-                      {koboWords ? ` AND ${koboWords} KOBO` : ""} ONLY
-                    </>
-                  );
-                })()}
+                {amountInWords(paymentData?.amount_paid || 0)}
               </p>
             </div>
           </div>
         </div>
-        {/* Description */}
-        {paymentData?.description && (
-          <div className="bg-gradient-to-r from-green-50 to-indigo-50 border-r-2 border-l-2 border-green-500 p-2 ">
-            <div className="flex items-start gap-2">
-              <Info className="w-4 h-4 text-blue-700 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-bold text-blue-900 mb-1">
-                  Narration
-                </p>
-                <p className="text-sm text-blue-800 leading-snug">
-                  {paymentData.description}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Narration/Notes */}
-        {paymentData?.narration && (
+        {(paymentData?.narration || paymentData?.description) && (
           <div className="mt-0.5 p-2 bg-yellow-50 border border-yellow-300 border-l-[4px] border-l-yellow-600 rounded-md">
             <p className="text-xs font-bold text-yellow-900 mb-0.5">
-              NOTES / NARRATION
+              Narration
             </p>
             <p className="text-xs text-yellow-800 leading-snug">
-              {paymentData.narration || `Payment for Invoice ${invoice_ref} `}
+              {paymentData.narration || paymentData.description}
             </p>
           </div>
         )}
 
-        {/* Signatures */}
+        {/* Signatures — Prepared By only */}
         {(() => {
           const transactionDate =
             paymentData?.transaction_date ||
@@ -218,11 +364,10 @@ const SupplierPaymentReceiptHTML = ({ paymentData, company, receiptRef }) => {
             ? moment(transactionDate).format("DD/MM/YYYY")
             : "";
           return (
-            <div className="mt-2 flex justify-between gap-6">
-              <div className="flex-1 text-center">
+            <div className="mt-2 flex justify-start">
+              <div className="w-48 text-center">
                 <p className="text-xs text-gray-600 mb-1">Prepared By</p>
-                <div className="w-4/5 mx-auto space-y-0.5">
-                  {/* Signature space */}
+                <div className="space-y-0.5">
                   <div className="min-h-8 flex items-end justify-center">
                     {paymentData?.createdBy?.signature ? (
                       <img
@@ -235,52 +380,11 @@ const SupplierPaymentReceiptHTML = ({ paymentData, company, receiptRef }) => {
                       <div className="border-t border-gray-200 w-full pt-0.5" />
                     )}
                   </div>
-                  {/* Name space */}
                   <div className="border-t border-gray-200 pt-1 min-h-5">
                     <p className="text-sm font-bold text-gray-900">
                       {paymentData?.createdBy?.name ||
                         paymentData?.created_by ||
                         " "}
-                    </p>
-                  </div>
-                  <div className="pt-0.5">
-                    <p className="text-xs text-gray-600">
-                      Date: {formattedDate}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 text-center">
-                <p className="text-xs text-gray-600 mb-1">Approved By</p>
-                <div className="w-4/5 mx-auto space-y-0.5">
-                  {/* Signature space */}
-                  <div className="min-h-8 flex items-end justify-center">
-                    <div className="border-t border-gray-200 w-full pt-0.5" />
-                  </div>
-                  {/* Name space */}
-                  <div className="border-t border-gray-200 pt-1 min-h-5">
-                    <p className="text-sm font-bold text-gray-900"> </p>
-                  </div>
-                  <div className="pt-0.5">
-                    <p className="text-xs text-gray-600">
-                      Date: {formattedDate}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 text-center">
-                <p className="text-xs text-gray-600 mb-1">Received By</p>
-                <div className="w-4/5 mx-auto space-y-0.5">
-                  {/* Signature space */}
-                  <div className="min-h-8 flex items-end justify-center">
-                    <div className="border-t border-gray-200 w-full pt-0.5" />
-                  </div>
-                  {/* Name space */}
-                  <div className="pt-1 min-h-5">
-                    <p className="text-sm font-bold text-gray-900">
-                      {paymentData?.supplier_name || " "}
                     </p>
                   </div>
                   <div className="pt-0.5">
@@ -343,6 +447,7 @@ SupplierPaymentReceiptHTML.propTypes = {
     new_balance: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     mode_of_payment: PropTypes.string,
     account_info: PropTypes.shape({
+      kind: PropTypes.string,
       name: PropTypes.string,
       code: PropTypes.string,
       account_number: PropTypes.string,
@@ -375,6 +480,8 @@ SupplierPaymentReceiptHTML.propTypes = {
     PropTypes.func,
     PropTypes.shape({ current: PropTypes.any }),
   ]),
+  paperSize: PropTypes.oneOf(["a4", "a5", "thermal"]),
+  printInColor: PropTypes.bool,
 };
 
 const SupplierPaymentReceiptPdf = () => {
@@ -383,6 +490,8 @@ const SupplierPaymentReceiptPdf = () => {
   const pv_code = useQuery().get("pv_code");
   const [paymentData, setPaymentData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [paperSize, setPaperSize] = useState("a5");
+  const [printInColor, setPrintInColor] = useState(false);
   const receiptRef = useRef(null);
   const navigate = useNavigate();
 
@@ -413,32 +522,7 @@ const SupplierPaymentReceiptPdf = () => {
   const handleReactToPrint = useReactToPrint({
     contentRef: receiptRef,
     documentTitle: `Payment-Receipt-${ref_number || "N/A"}`,
-    pageStyle: `
-      @page {
-        size: A4;
-        margin: 0 !important;
-      }
-      html, body {
-        width: 210mm;
-        min-height: 297mm;
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #fff !important;
-        print-color-adjust: exact;
-        -webkit-print-color-adjust: exact;
-      }
-      .receipt-container {
-        width: 210mm !important;
-        min-height: 297mm;
-        margin: 0 auto !important;
-        padding: 0 !important;
-        box-shadow: none !important;
-        border: none !important;
-        background: #fff !important;
-      }
-      .border-dashed { border-style: dashed !important; }
-      .no-print { display: none !important; }
-    `,
+    pageStyle: receiptPageStyle(paperSize, printInColor),
     onBeforeGetContent: () => {
       return new Promise((resolve) => {
         if (!receiptRef.current) {
@@ -524,17 +608,11 @@ const SupplierPaymentReceiptPdf = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <style>{`
+        ${printInColor ? "" : receiptBwCss}
         @media print {
           .no-print { display: none !important; }
           .receipt-container { padding: 0px; box-shadow: none; }
-          @page {
-            margin: 0mm;
-            size: A4;
-          }
-          body {
-            print-color-adjust: exact;
-            -webkit-print-color-adjust: exact;
-          }
+          ${receiptPageStyle(paperSize, printInColor)}
           .border-dashed {
             border-style: dashed !important;
           }
@@ -549,7 +627,67 @@ const SupplierPaymentReceiptPdf = () => {
         >
           <X size={14} /> Cancel
         </button>
-        <div className="flex gap-2 ml-auto">
+        <div className="flex flex-wrap gap-2 ml-auto items-center">
+          <div
+            className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white"
+            role="tablist"
+            aria-label="Paper size"
+          >
+            {[
+              { id: "a4", label: "A4" },
+              { id: "a5", label: "A5" },
+              { id: "thermal", label: "Thermal" },
+            ].map((opt, idx) => (
+              <button
+                key={opt.id}
+                type="button"
+                role="tab"
+                aria-selected={paperSize === opt.id}
+                onClick={() => setPaperSize(opt.id)}
+                className={`px-3 py-0.5 text-sm transition-colors ${
+                  idx > 0 ? "border-l border-slate-300" : ""
+                } ${
+                  paperSize === opt.id
+                    ? "bg-[var(--aa-navy)] text-white"
+                    : "bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div
+            className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white"
+            role="tablist"
+            aria-label="Print color"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!printInColor}
+              onClick={() => setPrintInColor(false)}
+              className={`px-3 py-0.5 text-sm transition-colors ${
+                !printInColor
+                  ? "bg-[var(--aa-navy)] text-white"
+                  : "bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              Black and white
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={printInColor}
+              onClick={() => setPrintInColor(true)}
+              className={`px-3 py-0.5 text-sm border-l border-slate-300 transition-colors ${
+                printInColor
+                  ? "bg-[var(--aa-navy)] text-white"
+                  : "bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              Colour
+            </button>
+          </div>
           <button
             onClick={handlePrint}
             className="px-3 py-0.5 text-sm bg-[var(--aa-navy)] text-white rounded flex items-center gap-1 hover:bg-blue-700 transition-colors"
@@ -564,6 +702,8 @@ const SupplierPaymentReceiptPdf = () => {
         paymentData={paymentData}
         company={activeBusiness}
         receiptRef={receiptRef}
+        paperSize={paperSize}
+        printInColor={printInColor}
       />
     </div>
   );

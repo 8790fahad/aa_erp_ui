@@ -6,8 +6,10 @@ import { toast } from "sonner";
 import {
   AlertCircle,
   ChevronDown,
+  ExternalLink,
   FileText,
   Info,
+  Loader2,
   Paperclip,
   RefreshCw,
   Upload,
@@ -28,6 +30,11 @@ import {
   getPostingDateMax,
   validatePostingDateClient,
 } from "@/utilities";
+import {
+  cloudinaryDocumentHref,
+  formatCloudinaryFileSize,
+  pickAndStageCloudinaryFiles,
+} from "@/utils/cloudinaryDocuments";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -62,14 +69,6 @@ function formatNumberWithCommas(value) {
 
 function invoiceRowKey(inv) {
   return String(inv.invoice_id ?? inv.invoice_ref ?? "");
-}
-
-function formatFileSize(bytes) {
-  const size = Number(bytes);
-  if (!Number.isFinite(size) || size < 0) return "";
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 const PAYMENT_FILE_MAX_BYTES = 25 * 1024 * 1024;
@@ -152,6 +151,7 @@ export default function RecordSupplierPaymentForm() {
   const manualAllocationRef = useRef(false);
   const cashTypeaheadRef = useRef();
   const isSplitPayment = isCashTransferSplitMode(modeOfPayment);
+  const attachmentUploading = attachments.some((doc) => doc.uploading);
 
   const {
     accountHead,
@@ -457,6 +457,11 @@ export default function RecordSupplierPaymentForm() {
       return;
     }
 
+    if (attachments.some((f) => f.uploading)) {
+      toast.error("Wait for document uploads to finish");
+      return;
+    }
+
     const amountPaidNum = parseFloat(parseNumberFromFormatted(amountPaid)) || 0;
     const invoicesPayload = outstandingInvoices
       .map((invoice) => {
@@ -476,7 +481,10 @@ export default function RecordSupplierPaymentForm() {
     if (String(notes || "").trim()) notesParts.push(String(notes).trim());
     if (attachments.length) {
       notesParts.push(
-        `Attachments: ${attachments.map((f) => f.name).join(", ")}`,
+        `Attachments: ${attachments
+          .map((f) => f.document_name || f.original_name || f.name)
+          .filter(Boolean)
+          .join(", ")}`,
       );
     }
     const baseDesc =
@@ -503,6 +511,16 @@ export default function RecordSupplierPaymentForm() {
         selectedBranch && selectedBranch !== "all"
           ? parseInt(selectedBranch, 10) || null
           : null,
+      attachments: attachments
+        .filter((doc) => doc.file_path && !doc.uploading)
+        .map((doc) => ({
+          file_path: doc.file_path,
+          url: doc.url || doc.file_path,
+          document_name: doc.document_name || doc.original_name || doc.name,
+          original_name: doc.original_name || doc.name,
+          file_size: doc.file_size || doc.size,
+          mime_type: doc.mime_type,
+        })),
     };
     if (
       (modeOfPayment === "cash" || isSplitPayment) &&
@@ -876,72 +894,106 @@ export default function RecordSupplierPaymentForm() {
               onChange={(e) => {
                 const picked = Array.from(e.target.files || []);
                 e.target.value = "";
-                if (!picked.length) return;
-                const next = [];
-                for (const file of picked) {
-                  if (!PAYMENT_FILE_TYPES.has(file.type)) {
-                    toast.error(`${file.name}: only PDF, PNG, JPG, or DOCX`);
-                    continue;
-                  }
-                  if (file.size > PAYMENT_FILE_MAX_BYTES) {
-                    toast.error(`${file.name}: exceeds 25MB limit`);
-                    continue;
-                  }
-                  next.push(file);
-                }
-                if (!next.length) return;
-                setAttachments((prev) => [...prev, ...next]);
+                pickAndStageCloudinaryFiles({
+                  picked,
+                  kind: "payments",
+                  setItems: setAttachments,
+                  allowedTypes: PAYMENT_FILE_TYPES,
+                  maxBytes: PAYMENT_FILE_MAX_BYTES,
+                });
               }}
             />
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || attachmentUploading}
               onClick={() => fileInputRef.current?.click()}
               className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
-              <Upload className="h-4 w-4" />
-              Upload documents
+              {attachmentUploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              {attachmentUploading ? "Uploading…" : "Upload documents"}
             </button>
             <p className="mt-1.5 text-[11px] text-slate-500">
-              Add as many files as you need. 25MB each.
+              Files upload to Cloudinary as soon as you select them. 25MB each.
             </p>
             {attachments.length > 0 ? (
               <ul className="mt-3 space-y-1.5">
-                {attachments.map((file, idx) => (
-                  <li
-                    key={`${file.name}-${file.size}-${file.lastModified}-${idx}`}
-                    className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
-                  >
-                    <span className="flex min-w-0 items-center gap-1.5 truncate">
-                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-[var(--aa-accent)]" />
-                      <span className="truncate">
-                        {file.name}
-                        {formatFileSize(file.size) ? (
-                          <span className="text-slate-400">
-                            {" "}
-                            ({formatFileSize(file.size)})
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-                        Ready
-                      </span>
-                    </span>
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() =>
-                        setAttachments((prev) =>
-                          prev.filter((_, i) => i !== idx),
-                        )
-                      }
-                      className="shrink-0 text-red-600 hover:text-red-700"
-                      title="Remove"
+                {attachments.map((file, idx) => {
+                  const href = file.uploading
+                    ? null
+                    : cloudinaryDocumentHref(file);
+                  const label =
+                    file.document_name || file.original_name || file.name;
+                  const sizeBytes = file.file_size || file.size;
+                  return (
+                    <li
+                      key={file.clientId || `${label}-${idx}`}
+                      className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
                     >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
+                      <span className="flex min-w-0 items-center gap-1.5 truncate">
+                        {file.uploading ? (
+                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--aa-accent)]" />
+                        ) : (
+                          <Paperclip className="h-3.5 w-3.5 shrink-0 text-[var(--aa-accent)]" />
+                        )}
+                        {href ? (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="truncate text-[var(--aa-accent)] hover:text-[var(--aa-navy)] hover:underline"
+                          >
+                            {label}
+                            {formatCloudinaryFileSize(sizeBytes) ? (
+                              <span className="text-slate-400">
+                                {" "}
+                                ({formatCloudinaryFileSize(sizeBytes)})
+                              </span>
+                            ) : null}
+                          </a>
+                        ) : (
+                          <span className="truncate">
+                            {label}
+                            {formatCloudinaryFileSize(sizeBytes) ? (
+                              <span className="text-slate-400">
+                                {" "}
+                                ({formatCloudinaryFileSize(sizeBytes)})
+                              </span>
+                            ) : null}
+                          </span>
+                        )}
+                        {href ? (
+                          <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
+                        ) : null}
+                        {file.uploading ? (
+                          <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                            Uploading
+                          </span>
+                        ) : (
+                          <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                            Uploaded
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={saving || file.uploading}
+                        onClick={() =>
+                          setAttachments((prev) =>
+                            prev.filter((_, i) => i !== idx),
+                          )
+                        }
+                        className="shrink-0 text-red-600 hover:text-red-700"
+                        title="Remove"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             ) : null}
           </div>
@@ -1140,7 +1192,7 @@ export default function RecordSupplierPaymentForm() {
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || attachmentUploading}
               className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {saving ? (

@@ -28,6 +28,7 @@ import CustomModal from "@/common/Custom/CustomModal";
 
 import { formatNumber1 } from "@/components/router/utilities";
 import { toast } from "sonner";
+import { cloudinaryDocumentHref } from "@/utils/cloudinaryDocuments";
 import { Button } from "@/components/ui/button";
 import SearchSupplierInput from "../purchase/SearchSuppliers";
 import ImprovedTaxSelection from "./inproved-tax-selection";
@@ -829,7 +830,7 @@ export default function RecordExpenses() {
             name: doc.original_name,
             type: doc.mime_type,
             size: doc.file_size,
-            preview: `${apiURL}/public/uploads/${doc.file_path}`,
+            preview: cloudinaryDocumentHref(doc),
             fromServer: true,
           }));
           setAttachments(serverFiles);

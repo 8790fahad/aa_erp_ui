@@ -99,18 +99,20 @@ export class PurchaseRequisitionAPI {
    * Upload one document immediately (before the PO is created).
    * Returns the stored file record to link on submit.
    */
-  static stagePurchaseOrderDocument(file) {
+  static stagePurchaseOrderDocument(file, options = {}) {
     if (!file) {
       return Promise.reject(new Error("No file selected"));
     }
-    return this.stagePurchaseOrderDocuments([file]);
+    return this.stagePurchaseOrderDocuments([file], options);
   }
 
   /**
    * Upload documents immediately (before the PO is created).
    * Returns file paths to link on submit.
+   * @param {File[]} files
+   * @param {{ kind?: 'purchase_orders'|'payments'|'memos' }} [options]
    */
-  static stagePurchaseOrderDocuments(files = []) {
+  static stagePurchaseOrderDocuments(files = [], options = {}) {
     return new Promise((resolve, reject) => {
       if (!files.length) {
         reject(new Error("No files selected"));
@@ -120,7 +122,8 @@ export class PurchaseRequisitionAPI {
       files.forEach((file) => formData.append("po_documents", file));
 
       const token = localStorage.getItem("@@__token");
-      fetch(`${apiURL}/account/purchase-order-documents/stage`, {
+      const kind = options.kind ? `?kind=${encodeURIComponent(options.kind)}` : "";
+      fetch(`${apiURL}/account/purchase-order-documents/stage${kind}`, {
         method: "POST",
         headers: { authorization: token || "" },
         body: formData,

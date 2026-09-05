@@ -13,6 +13,7 @@ import Loading from "@/common/Custom/Loading";
 import CustomTable from "@/common/Custom/CustomTable";
 import CustomModal from "@/common/Custom/CustomModal";
 import CustomMemoModal from "@/common/Custom/CustomMemoModal";
+import { cloudinaryDocumentHref } from "@/utils/cloudinaryDocuments";
 
 import { formatNumber } from "@/utilities";
 import { formatNumber1 } from "@/components/router/utilities";
@@ -291,7 +292,7 @@ function MemoReviewal() {
             name: doc.original_name,
             type: doc.mime_type,
             size: doc.file_size,
-            preview: `${apiURL}/public/uploads/${doc.file_path}`,
+            preview: cloudinaryDocumentHref(doc),
             fromServer: true,
           }));
           setFiles(serverFiles);

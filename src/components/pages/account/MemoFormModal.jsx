@@ -4,7 +4,7 @@ import { useSelector } from "react-redux";
 import moment from "moment";
 import { _fetchApi, _postApi, apiURL } from "@/redux/actions/api";
 import { toast } from "sonner";
-import { FileText, Loader2, Paperclip, Plus, Trash2, Upload, X } from "lucide-react";
+import { FileText, Loader2, Paperclip, Plus, Trash2, Upload, X, ExternalLink } from "lucide-react";
 import { formatNumber1 } from "@/components/router/utilities";
 import {
   Sheet,
@@ -13,6 +13,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  cloudinaryDocumentHref,
+  formatCloudinaryFileSize,
+  pickAndStageCloudinaryFiles,
+} from "@/utils/cloudinaryDocuments";
 
 const inputClass =
   "h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-[var(--aa-navy,#0f2744)] focus:ring-1 focus:ring-[var(--aa-navy,#0f2744)]";
@@ -24,14 +29,6 @@ const MEMO_FILE_TYPES = new Set([
   "image/jpeg",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
-
-function formatFileSize(bytes) {
-  const size = Number(bytes);
-  if (!Number.isFinite(size) || size < 0) return "";
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 const emptyLine = () => ({
   item_name: "",
@@ -77,6 +74,7 @@ export default function MemoFormModal({
   const [files, setFiles] = useState([]);
   const [errors, setErrors] = useState({});
   const fileInputRef = useRef(null);
+  const attachmentUploading = files.some((doc) => doc.uploading);
 
   const grandTotal = useMemo(
     () =>
@@ -254,6 +252,10 @@ export default function MemoFormModal({
 
   const handleSubmit = async () => {
     if (!validate()) return;
+    if (files.some((doc) => doc.uploading)) {
+      toast.error("Wait for document uploads to finish");
+      return;
+    }
     setLoading(true);
 
     const submitData = {
@@ -290,6 +292,16 @@ export default function MemoFormModal({
       })),
       justificationPoints: [],
       existing_document_ids: [],
+      attachments: files
+        .filter((doc) => doc.file_path && !doc.uploading)
+        .map((doc) => ({
+          file_path: doc.file_path,
+          url: doc.url || doc.file_path,
+          document_name: doc.document_name || doc.original_name || doc.name,
+          original_name: doc.original_name || doc.name,
+          file_size: doc.file_size || doc.size,
+          mime_type: doc.mime_type,
+        })),
     };
 
     if (isEditMode && memoId) submitData.memo_id = memoId;
@@ -300,10 +312,6 @@ export default function MemoFormModal({
 
     const formData = new FormData();
     formData.append("memo_data", JSON.stringify(submitData));
-    files.forEach((file) => {
-      formData.append("memo_documents", file);
-      formData.append("document_names", file.name);
-    });
 
     try {
       const response = await fetch(`${apiURL}${endpoint}`, {
@@ -667,70 +675,106 @@ export default function MemoFormModal({
                   onChange={(e) => {
                     const picked = Array.from(e.target.files || []);
                     e.target.value = "";
-                    if (!picked.length) return;
-                    const next = [];
-                    for (const file of picked) {
-                      if (!MEMO_FILE_TYPES.has(file.type)) {
-                        toast.error(`${file.name}: only PDF, PNG, JPG, or DOCX`);
-                        continue;
-                      }
-                      if (file.size > MEMO_FILE_MAX_BYTES) {
-                        toast.error(`${file.name}: exceeds 25MB limit`);
-                        continue;
-                      }
-                      next.push(file);
-                    }
-                    if (!next.length) return;
-                    setFiles((prev) => [...prev, ...next]);
+                    pickAndStageCloudinaryFiles({
+                      picked,
+                      kind: "memos",
+                      setItems: setFiles,
+                      allowedTypes: MEMO_FILE_TYPES,
+                      maxBytes: MEMO_FILE_MAX_BYTES,
+                    });
                   }}
                 />
                 <button
                   type="button"
-                  disabled={loading}
+                  disabled={loading || attachmentUploading}
                   onClick={() => fileInputRef.current?.click()}
                   className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
-                  <Upload className="h-4 w-4" />
-                  Upload documents
+                  {attachmentUploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  {attachmentUploading ? "Uploading…" : "Upload documents"}
                 </button>
                 <p className="mt-1.5 text-[11px] text-slate-500">
-                  Add as many files as you need. 25MB each.
+                  Files upload to Cloudinary as soon as you select them. 25MB each.
                 </p>
                 {files.length > 0 ? (
                   <ul className="mt-3 space-y-1.5">
-                    {files.map((file, idx) => (
-                      <li
-                        key={`${file.name}-${file.size}-${file.lastModified}-${idx}`}
-                        className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
-                      >
-                        <span className="flex min-w-0 items-center gap-1.5 truncate">
-                          <Paperclip className="h-3.5 w-3.5 shrink-0 text-[var(--aa-accent)]" />
-                          <span className="truncate">
-                            {file.name}
-                            {formatFileSize(file.size) ? (
-                              <span className="text-slate-400">
-                                {" "}
-                                ({formatFileSize(file.size)})
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-                            Ready
-                          </span>
-                        </span>
-                        <button
-                          type="button"
-                          disabled={loading}
-                          onClick={() =>
-                            setFiles((prev) => prev.filter((_, i) => i !== idx))
-                          }
-                          className="shrink-0 text-red-600 hover:text-red-700"
-                          title="Remove"
+                    {files.map((file, idx) => {
+                      const href = file.uploading
+                        ? null
+                        : cloudinaryDocumentHref(file);
+                      const label =
+                        file.document_name || file.original_name || file.name;
+                      const sizeBytes = file.file_size || file.size;
+                      return (
+                        <li
+                          key={file.clientId || `${label}-${idx}`}
+                          className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
                         >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </li>
-                    ))}
+                          <span className="flex min-w-0 items-center gap-1.5 truncate">
+                            {file.uploading ? (
+                              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--aa-accent)]" />
+                            ) : (
+                              <Paperclip className="h-3.5 w-3.5 shrink-0 text-[var(--aa-accent)]" />
+                            )}
+                            {href ? (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="truncate text-[var(--aa-accent)] hover:text-[var(--aa-navy)] hover:underline"
+                              >
+                                {label}
+                                {formatCloudinaryFileSize(sizeBytes) ? (
+                                  <span className="text-slate-400">
+                                    {" "}
+                                    ({formatCloudinaryFileSize(sizeBytes)})
+                                  </span>
+                                ) : null}
+                              </a>
+                            ) : (
+                              <span className="truncate">
+                                {label}
+                                {formatCloudinaryFileSize(sizeBytes) ? (
+                                  <span className="text-slate-400">
+                                    {" "}
+                                    ({formatCloudinaryFileSize(sizeBytes)})
+                                  </span>
+                                ) : null}
+                              </span>
+                            )}
+                            {href ? (
+                              <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
+                            ) : null}
+                            {file.uploading ? (
+                              <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                                Uploading
+                              </span>
+                            ) : (
+                              <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                                Uploaded
+                              </span>
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={loading || file.uploading}
+                            onClick={() =>
+                              setFiles((prev) =>
+                                prev.filter((_, i) => i !== idx),
+                              )
+                            }
+                            className="shrink-0 text-red-600 hover:text-red-700"
+                            title="Remove"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : null}
               </div>
@@ -750,7 +794,7 @@ export default function MemoFormModal({
                 </button>
                 <button
                   type="button"
-                  disabled={loading}
+                  disabled={loading || attachmentUploading}
                   onClick={handleSubmit}
                   className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--aa-navy,#0f2744)] px-5 text-sm font-semibold text-white hover:bg-[var(--aa-navy-hover,#243a73)] disabled:opacity-60"
                 >
