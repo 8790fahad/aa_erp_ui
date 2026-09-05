@@ -452,12 +452,14 @@ export default function InvoiceSeparation() {
               >
                 Warehouse
               </Link>
+              {/* Sales Process is not used from Invoice Separation
               <Link
                 to="/app/sales/process"
                 className="inline-flex items-center rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
               >
                 Sales Process
               </Link>
+              */}
             </div>
           </div>
         </div>
@@ -598,6 +600,7 @@ export default function InvoiceSeparation() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    {/* Sales Invoice is printed at Verification Points, not here
                     <Link
                       to={`/app/sales/invoice-preview?sale_code=${encodeURIComponent(
                         selected.sale_code,
@@ -606,6 +609,7 @@ export default function InvoiceSeparation() {
                     >
                       Sales Invoice
                     </Link>
+                    */}
                     {needsCreditApproval && !isHistoryRecord ? (
                       <Link
                         to={`/app/payments/verification-points?tab=credit`}

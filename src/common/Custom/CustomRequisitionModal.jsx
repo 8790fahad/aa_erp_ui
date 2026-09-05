@@ -33,37 +33,44 @@ const tdClass = "border-b border-slate-100 px-3 py-2.5 text-sm text-slate-700";
 const trClass = "bg-white transition-colors hover:bg-slate-50/80";
 
 function attachmentHref(doc) {
-  if (doc?.url && /api\.cloudinary\.com\//i.test(doc.url)) return doc.url;
-  if (doc?.download_url && /api\.cloudinary\.com\//i.test(doc.download_url)) {
-    return doc.download_url;
-  }
-  const path = doc?.url || doc?.file_path;
-  if (!path) return null;
-  if (/^https?:\/\/res\.cloudinary\.com\//i.test(path)) {
+  const path = [doc?.file_path, doc?.url].find(
+    (value) => value && /^https?:\/\/res\.cloudinary\.com\//i.test(value),
+  );
+  if (path) {
     const token = localStorage.getItem("@@__token") || "";
     const qs = new URLSearchParams({
       file_path: path,
+      filename: doc.document_name || doc.original_name || doc.name || "",
       ...(token ? { access_token: token } : {}),
     });
     return `${apiURL}/account/purchase-order-documents/open?${qs.toString()}`;
   }
-  if (/^https?:\/\//i.test(path)) return path;
-  return `${apiURL}/public/uploads/${path}`;
-}
-
-function attachmentDownloadHref(doc) {
+  if (doc?.url && /api\.cloudinary\.com\//i.test(doc.url)) return doc.url;
   if (doc?.download_url && /api\.cloudinary\.com\//i.test(doc.download_url)) {
     return doc.download_url;
   }
-  if (doc?.file_path && /^https?:\/\/res\.cloudinary\.com\//i.test(doc.file_path)) {
+  const fallback = doc?.url || doc?.file_path;
+  if (!fallback) return null;
+  if (/^https?:\/\//i.test(fallback)) return fallback;
+  return `${apiURL}/public/uploads/${fallback}`;
+}
+
+function attachmentDownloadHref(doc) {
+  const path = [doc?.file_path, doc?.url].find(
+    (value) => value && /^https?:\/\/res\.cloudinary\.com\//i.test(value),
+  );
+  if (path) {
     const token = localStorage.getItem("@@__token") || "";
     const qs = new URLSearchParams({
-      file_path: doc.file_path,
+      file_path: path,
       download: "1",
       filename: doc.document_name || doc.original_name || "document",
       ...(token ? { access_token: token } : {}),
     });
     return `${apiURL}/account/purchase-order-documents/open?${qs.toString()}`;
+  }
+  if (doc?.download_url && /api\.cloudinary\.com\//i.test(doc.download_url)) {
+    return doc.download_url;
   }
   return attachmentHref(doc);
 }

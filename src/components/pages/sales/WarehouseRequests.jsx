@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
-import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   CheckCircle2,
@@ -396,12 +395,14 @@ export default function WarehouseRequests() {
                 <RefreshCw className="w-4 h-4" />
                 Refresh
               </Button>
+              {/* Sales Process is not used from Warehouse Collection
               <Link
                 to="/app/sales/process"
                 className="inline-flex items-center rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
               >
                 Sales Process
               </Link>
+              */}
             </div>
           </div>
         </div>

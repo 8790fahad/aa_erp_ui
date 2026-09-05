@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Button } from "reactstrap";
 import { Card } from "reactstrap/lib";
-import { Settings, Check, X, Save, ShoppingCart, Receipt } from "lucide-react";
+import { Settings, Check, X, Save, ShoppingCart, Receipt, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { _postApi } from "@/redux/actions/api";
 
@@ -27,6 +27,10 @@ const VATPolicySelector = ({
     activeBusiness?.show_vat_on_sales_invoice !== false
   );
   const [loadingShowVat, setLoadingShowVat] = useState(false);
+  const [printSalesInvoiceInColor, setPrintSalesInvoiceInColor] = useState(
+    Boolean(activeBusiness?.sales_invoice_print_in_color),
+  );
+  const [loadingPrintColor, setLoadingPrintColor] = useState(false);
   const dispatch = useDispatch();
 
   // VAT Policy options
@@ -68,6 +72,44 @@ const VATPolicySelector = ({
       activeBusiness?.show_vat_on_sales_invoice !== false,
     );
   }, [activeBusiness?.show_vat_on_sales_invoice]);
+
+  useEffect(() => {
+    setPrintSalesInvoiceInColor(
+      Boolean(activeBusiness?.sales_invoice_print_in_color),
+    );
+  }, [activeBusiness?.sales_invoice_print_in_color]);
+
+  const handlePrintColorToggle = () => {
+    if (!activeBusiness?.id || !user?.id || loadingPrintColor) return;
+    const newValue = !printSalesInvoiceInColor;
+    setLoadingPrintColor(true);
+    _postApi(
+      `/account/update-sales-invoice-print-color/${newValue ? "1" : "0"}/${activeBusiness.id}/${user.id}`,
+      { store: activeBusiness.business_name },
+      (resp) => {
+        setLoadingPrintColor(false);
+        if (resp?.success) {
+          dispatch({
+            type: "UPDATE_BUSINESS_SETTINGS",
+            payload: { business: resp.results },
+          });
+          setPrintSalesInvoiceInColor(newValue);
+          toast.success(
+            newValue
+              ? "Sales invoices will print in color"
+              : "Sales invoices will print black and white",
+          );
+        } else {
+          toast.error(resp?.message || "Failed to update print setting");
+        }
+      },
+      (err) => {
+        console.error("API Error:", err);
+        setLoadingPrintColor(false);
+        toast.error("Something went wrong while updating");
+      },
+    );
+  };
 
   const handleShowVatToggle = () => {
     if (!activeBusiness?.id || !user?.id || loadingShowVat) return;
@@ -469,6 +511,50 @@ const VATPolicySelector = ({
                 </div>
               </div>
               {loadingShowVat && (
+                <div className="text-center mt-2">
+                  <div
+                    className="spinner-border spinner-border-sm"
+                    role="status"
+                  ></div>
+                </div>
+              )}
+            </div>
+
+            {/* Sales invoice print color vs black and white */}
+            <div className="border-top pt-3 mt-3">
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <div className="flex-grow-1">
+                  <div className="d-flex align-items-center gap-2 mb-1">
+                    <Printer size={16} className="text-muted" />
+                    <label className="fw-semibold text-gray-700 mb-0">
+                      Print sales invoice in color
+                    </label>
+                  </div>
+                  <p className="text-muted small mb-0">
+                    Off by default (black and white). Turn on to print the sales
+                    invoice in color.
+                  </p>
+                </div>
+                <div className="form-check form-switch">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    role="switch"
+                    id="printSalesInvoiceInColorSwitch"
+                    checked={printSalesInvoiceInColor}
+                    onChange={handlePrintColorToggle}
+                    disabled={loadingPrintColor}
+                    style={{
+                      width: "3rem",
+                      height: "1.5rem",
+                      cursor: loadingPrintColor ? "not-allowed" : "pointer",
+                      accentColor:
+                        activeBusiness?.primary_color || "#1a2d5e",
+                    }}
+                  />
+                </div>
+              </div>
+              {loadingPrintColor && (
                 <div className="text-center mt-2">
                   <div
                     className="spinner-border spinner-border-sm"

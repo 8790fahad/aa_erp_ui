@@ -541,18 +541,19 @@ export const modules = [
           "contractors",
         ],
       },
-      {
-        title: "Sales Process",
-        url: "/app/sales/process",
-        functionality: ["Sales Process", "Make sales", "Invoices", "Sales"],
-        access: [
-          "services",
-          "retailers",
-          "recycling",
-          "manufacturing",
-          "contractors",
-        ],
-      },
+      // Sales Process is hidden from the Sales menu (still routed at /app/sales/process)
+      // {
+      //   title: "Sales Process",
+      //   url: "/app/sales/process",
+      //   functionality: ["Sales Process", "Make sales", "Invoices", "Sales"],
+      //   access: [
+      //     "services",
+      //     "retailers",
+      //     "recycling",
+      //     "manufacturing",
+      //     "contractors",
+      //   ],
+      // },
       {
         title: "Price Setup",
         url: "/app/sales/price-setup",

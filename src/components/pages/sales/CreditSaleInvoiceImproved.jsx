@@ -323,6 +323,10 @@ export default function CreditSaleInvoice({
   const showVatOnSalesInvoice =
     (business?.show_vat_on_sales_invoice ??
       activeBusiness?.show_vat_on_sales_invoice) !== false;
+  const printSalesInvoiceInColor = Boolean(
+    business?.sales_invoice_print_in_color ??
+      activeBusiness?.sales_invoice_print_in_color,
+  );
 
   const isItemTaxable = (item) => {
     const flag = String(item?.taxable || "").toLowerCase();
@@ -906,8 +910,9 @@ export default function CreditSaleInvoice({
         margin: 0 !important;
         padding: 0 !important;
         background: #fff !important;
-        print-color-adjust: exact;
-        -webkit-print-color-adjust: exact;
+        print-color-adjust: ${printSalesInvoiceInColor ? "exact" : "economy"};
+        -webkit-print-color-adjust: ${printSalesInvoiceInColor ? "exact" : "economy"};
+        ${printSalesInvoiceInColor ? "" : "filter: grayscale(1) !important;"}
         font-family: "Source Sans 3", "Segoe UI", "Helvetica Neue", Arial, sans-serif !important;
       }
       .invoice-items-table {
@@ -1185,8 +1190,9 @@ export default function CreditSaleInvoice({
             size: ${pageSizeLabel} portrait;
           }
           body {
-            print-color-adjust: exact;
-            -webkit-print-color-adjust: exact;
+            print-color-adjust: ${printSalesInvoiceInColor ? "exact" : "economy"};
+            -webkit-print-color-adjust: ${printSalesInvoiceInColor ? "exact" : "economy"};
+            ${printSalesInvoiceInColor ? "" : "filter: grayscale(1) !important;"}
           }
           .border-dashed {
             border-style: dashed !important;
