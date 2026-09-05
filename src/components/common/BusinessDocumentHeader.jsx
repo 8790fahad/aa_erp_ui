@@ -71,26 +71,29 @@ export default function BusinessDocumentHeader({
     : "flex flex-col gap-3 md:flex-row md:items-start md:justify-between";
 
   return (
-    <div
-      className={`bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white ${pad} mb-1.5 shadow-md print:bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] ${className}`}
-    >
+    <div className="border-2 border-[var(--aa-navy,#1a2d5e)] p-0.5 mb-1.5">
+      <div
+        className={`bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white ${pad} shadow-md border-2 border-[var(--aa-accent,#e8a317)] overflow-hidden print:bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] ${className}`}
+      >
       <div className={rowClass}>
         <div
           className={`min-w-0 ${compact ? "flex-[1.4]" : "flex-1"} ${
-            showLogo ? "flex gap-2 items-start" : ""
+            showLogo ? "flex gap-3 items-center" : ""
           }`}
         >
           {showLogo && (
             <div
-              className={`shrink-0 bg-white rounded-md shadow-sm ${
-                compact ? "p-0.5" : "p-1.5"
+              className={`shrink-0 overflow-hidden border-2 border-white bg-white shadow-sm ${
+                compact ? "p-0.5" : "p-1"
               }`}
             >
               <img
                 src={c.logo}
                 alt=""
                 className={
-                  compact ? "h-9 w-9 object-contain" : "h-16 w-16 object-contain"
+                  compact
+                    ? "h-14 w-14 object-contain"
+                    : "h-24 w-24 object-contain"
                 }
               />
             </div>
@@ -156,7 +159,7 @@ export default function BusinessDocumentHeader({
           }`}
         >
           <div
-            className={`w-full rounded-sm bg-white/15 text-center border border-white/20 ${
+            className={`w-full bg-white/15 text-center border border-white/20 ${
               compact ? "px-1.5 py-1.5" : "px-2 py-2"
             }`}
           >
@@ -206,6 +209,7 @@ export default function BusinessDocumentHeader({
             Date: {dateText}
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -722,6 +722,7 @@ export default function CreditSaleInvoice({
           description: item?.description,
           item_type: item?.item_type,
           uom_category: item?.uom_category,
+          unit_of_measure: item?.unit_of_measure || item?.uom_category,
           type: item?.type,
           quantity_sold: quantity,
           selling_price: price,
@@ -759,19 +760,33 @@ export default function CreditSaleInvoice({
   };
 
   const formatPaymentMode = (mode) => {
-    const raw = String(mode || "").trim().toLowerCase();
+    const raw = String(mode || "").trim();
     if (!raw) return "—";
+    if (raw.includes("+")) {
+      return raw
+        .split("+")
+        .map((w) => w.trim())
+        .filter(Boolean)
+        .map((w) =>
+          w.toLowerCase() === "deposit" || w.toLowerCase() === "apply deposit"
+            ? "Apply Deposit"
+            : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
+        )
+        .join(" + ");
+    }
+    const lower = raw.toLowerCase();
     if (
-      raw === "credit_split" ||
-      raw === "credit+cash+transfer" ||
-      raw === "credit + cash + transfer"
+      lower === "credit_split" ||
+      lower === "credit+cash+transfer" ||
+      lower === "credit + cash + transfer"
     ) {
       return "Credit + Cash + Transfer";
     }
-    if (raw === "split" || raw === "cash+transfer" || raw === "cash + transfer") {
+    if (lower === "split" || lower === "cash+transfer" || lower === "cash + transfer") {
       return "Cash + Transfer";
     }
-    return String(mode || "")
+    if (lower === "deposit" || lower === "apply_deposit") return "Apply Deposit";
+    return raw
       .replace(/_/g, " ")
       .split(" ")
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
@@ -809,6 +824,15 @@ export default function CreditSaleInvoice({
     invoice?.transaction?.payment_type ||
     items.find((it) => it.mode_of_payment)?.mode_of_payment ||
     "CREDIT";
+
+  const paymentModes = (() => {
+    const raw =
+      invoice?.payment_modes || invoice?.transaction?.payment_modes || [];
+    if (Array.isArray(raw) && raw.length) {
+      return raw.map((m) => String(m || "").toLowerCase().trim()).filter(Boolean);
+    }
+    return [];
+  })();
 
   const amountPaid = Number(
     invoice?.amount_paid ??
@@ -850,6 +874,17 @@ export default function CreditSaleInvoice({
     return [...new Set(transferLines.map((p) => p.bank_name).filter(Boolean))];
   })();
 
+  const depositPaid = Number(
+    invoice?.deposit_paid ??
+      invoice?.transaction?.deposit_paid ??
+      paymentBreakdown
+        .filter((p) => {
+          const m = String(p.mode || "").toLowerCase();
+          return m === "deposit" || m === "advance";
+        })
+        .reduce((s, p) => s + Number(p.amount || 0), 0),
+  );
+
   const invoiceTotalForBalance = Number(
     invoice?.invoice_total_amount ??
       invoice?.transaction?.invoice_total_amount ??
@@ -868,21 +903,34 @@ export default function CreditSaleInvoice({
       0,
   );
 
-  const isCreditMode = String(modeOfPayment || "")
-    .toLowerCase()
-    .includes("credit");
+  const hasCashMode = paymentModes.includes("cash");
+  const hasTransferMode =
+    paymentModes.includes("transfer") || paymentModes.includes("bank");
+  const hasCreditMode = paymentModes.includes("credit");
+  const hasDepositMode = paymentModes.includes("deposit");
+  const mixedPaymentModes =
+    [hasCashMode, hasTransferMode, hasCreditMode, hasDepositMode].filter(
+      Boolean,
+    ).length > 1;
+
+  const isCreditOnlyMode =
+    !mixedPaymentModes &&
+    (hasCreditMode ||
+      (!paymentModes.length &&
+        String(modeOfPayment || "").toLowerCase() === "credit"));
 
   const creditAmount =
     creditPaid > 0.05
       ? creditPaid
-      : isCreditMode
+      : isCreditOnlyMode
         ? Math.max(
             0,
             Number(
               (
                 invoiceTotalForBalance -
                 cashPaid -
-                transferPaid
+                transferPaid -
+                depositPaid
               ).toFixed(2),
             ),
           )
@@ -894,22 +942,38 @@ export default function CreditSaleInvoice({
       (
         invoiceTotalForBalance -
         cashPaid -
-        transferPaid
+        transferPaid -
+        depositPaid -
+        creditAmount
       ).toFixed(2),
     ),
   );
 
   const paymentModeLabel = (() => {
+    const order = [
+      ["cash", "Cash"],
+      ["transfer", "Transfer"],
+      ["credit", "Credit"],
+      ["deposit", "Apply Deposit"],
+    ];
+    const fromModes = order
+      .filter(([id]) =>
+        id === "transfer" ? hasTransferMode : paymentModes.includes(id),
+      )
+      .map(([, label]) => label);
+    if (fromModes.length) return fromModes.join(" + ");
     if (cashPaid > 0.05 && transferPaid > 0.05 && creditAmount > 0.05) {
-      return "Credit + Cash + Transfer";
+      return "Cash + Transfer + Credit";
     }
     if (cashPaid > 0.05 && transferPaid > 0.05) return "Cash + Transfer";
     if (cashPaid > 0.05 && creditAmount > 0.05 && transferPaid <= 0.05) {
-      return "Credit + Cash";
+      return "Cash + Credit";
     }
     if (transferPaid > 0.05 && creditAmount > 0.05 && cashPaid <= 0.05) {
-      return "Credit + Transfer";
+      return "Transfer + Credit";
     }
+    if (depositPaid > 0.05 && cashPaid <= 0.05 && transferPaid <= 0.05)
+      return hasCreditMode ? "Apply Deposit + Credit" : "Apply Deposit";
     if (cashPaid > 0 && transferPaid <= 0 && creditAmount <= 0.05) return "Cash";
     if (transferPaid > 0 && cashPaid <= 0 && creditAmount <= 0.05)
       return "Transfer";
@@ -952,9 +1016,9 @@ export default function CreditSaleInvoice({
         width: ${pageWidthMm}mm !important;
         max-width: ${pageWidthMm}mm !important;
         margin: 0 auto !important;
-        padding: 0 !important;
+        padding: 4px !important;
         box-shadow: none !important;
-        border: none !important;
+        border: 2px solid #1a2d5e !important;
         background: #fff !important;
         overflow: visible !important;
         ${isA5 ? "" : `height: ${pageHeightMm}mm !important; min-height: ${pageHeightMm}mm !important; max-height: ${pageHeightMm}mm !important; overflow: hidden !important;`}
@@ -1172,9 +1236,9 @@ export default function CreditSaleInvoice({
           .invoice-container {
             width: ${pageWidthMm}mm !important;
             max-width: ${pageWidthMm}mm !important;
-            padding: 0 !important;
+            padding: 4px !important;
             box-shadow: none !important;
-            border: none !important;
+            border: 2px solid #1a2d5e !important;
             ${
               isA5
                 ? "overflow: visible !important; height: auto !important; max-height: none !important;"
@@ -1382,7 +1446,7 @@ export default function CreditSaleInvoice({
         ref={invoiceRef}
         className={`${
           isA5 ? "max-w-[148mm] invoice-a5" : "max-w-5xl"
-        } mx-auto bg-white shadow-sm invoice-container border border-gray-200${
+        } mx-auto bg-white shadow-sm invoice-container border-2 border-[var(--aa-navy,#1a2d5e)] p-1.5${
           printInColor ? "" : " invoice-bw"
         }`}
         style={isA5 ? { width: "148mm" } : undefined}
@@ -1469,7 +1533,7 @@ export default function CreditSaleInvoice({
                       <th
                         className={`border-r border-[var(--aa-accent)] text-left font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
                       >
-                        Description
+                        Description/Size
                       </th>
                       <th
                         className={`border-r border-[var(--aa-accent)] text-center font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
@@ -1521,6 +1585,15 @@ export default function CreditSaleInvoice({
                       const unitVat = qty > 0 ? lineVat / qty : lineVat;
                       const displayUnitPrice = baseUnitPrice + unitVat;
                       const displayAmount = displayUnitPrice * qty;
+                      const itemUom = String(
+                        item.unit_of_measure ||
+                          item.uom_category ||
+                          item.uom ||
+                          item.unit_measure ||
+                          "",
+                      ).trim();
+                      const itemName =
+                        item.item_name || item.description || "N/A";
 
                       return (
                         <tr
@@ -1538,7 +1611,8 @@ export default function CreditSaleInvoice({
                             className={`border-r border-t border-gray-200 ${isA5 ? "px-1.5 py-1 text-[12px]" : "px-2.5 py-2 text-[15px]"}`}
                           >
                             <span className="font-semibold leading-snug text-gray-900">
-                              {item.item_name || item.description || "N/A"}
+                              {itemName}
+                              {itemUom ? ` (${itemUom})` : ""}
                             </span>
                           </td>
                           <td
@@ -1606,7 +1680,10 @@ export default function CreditSaleInvoice({
                       </tr>
                     )}
                     {resolvedTaxes.map((tax, index) => {
-                        if (!showVatOnSalesInvoice) {
+                        if (
+                          !showVatOnSalesInvoice ||
+                          customerPrintMode === "amount"
+                        ) {
                           return null;
                         }
                         const isTaxInclusive = !isExclusiveTaxRow(tax);
@@ -1754,12 +1831,18 @@ export default function CreditSaleInvoice({
 
               {/* How this invoice is paid — same presentation as Bill To */}
               {(() => {
-                const collectedNow = Number((cashPaid + transferPaid).toFixed(2));
+                const collectedNow = Number(
+                  (cashPaid + transferPaid).toFixed(2),
+                );
                 const onCredit = Number(creditAmount.toFixed(2));
+                const depositApplied = Number(depositPaid.toFixed(2));
                 const outstanding = Number(balanceDue.toFixed(2));
                 const isCreditOnly =
-                  onCredit > 0.05 && collectedNow <= 0.05;
-                const creditShown = isCreditOnly ? outstanding : onCredit;
+                  isCreditOnlyMode &&
+                  onCredit > 0.05 &&
+                  collectedNow <= 0.05 &&
+                  depositApplied <= 0.05;
+                const creditShown = isCreditOnly ? outstanding || onCredit : onCredit;
                 const fields = [
                   { label: "Mode", value: paymentModeLabel },
                   {
@@ -1767,12 +1850,18 @@ export default function CreditSaleInvoice({
                     value: `₦${formatNumber(collectedNow)}`,
                   },
                 ];
+                if (depositApplied > 0.05) {
+                  fields.push({
+                    label: "Deposit applied",
+                    value: `₦${formatNumber(depositApplied)}`,
+                  });
+                }
                 if (isCreditOnly || onCredit > 0.05) {
                   fields.push({
                     label: "On credit",
                     value: `₦${formatNumber(creditShown)}`,
                   });
-                } else {
+                } else if (outstanding > 0.05) {
                   fields.push({
                     label: "Still outstanding",
                     value: `₦${formatNumber(outstanding)}`,
