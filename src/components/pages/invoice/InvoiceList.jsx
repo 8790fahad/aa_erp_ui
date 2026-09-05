@@ -434,7 +434,15 @@ export default function InvoiceList() {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[52rem] border-collapse text-sm">
+                <table className="w-full table-fixed border-collapse text-sm">
+                  <colgroup>
+                    <col className="w-[7.5rem]" />
+                    <col className="w-[7.5rem]" />
+                    <col />
+                    <col className="w-[9.5rem]" />
+                    <col className="w-[8rem]" />
+                    <col className="w-[5.5rem]" />
+                  </colgroup>
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50/90 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                       <th className="whitespace-nowrap px-3 py-2 font-semibold">
@@ -499,14 +507,14 @@ export default function InvoiceList() {
                               ) : null}
                             </div>
                           </td>
-                          <td className={`px-3 py-2 align-middle ${bg}`}>
+                          <td className={`overflow-hidden px-3 py-2 align-middle ${bg}`}>
                             {item.workflow_status ? (
-                              <div className="flex max-w-[11rem] flex-col items-start gap-0.5 overflow-hidden">
+                              <div className="flex w-full min-w-0 flex-col items-start gap-0.5 overflow-hidden">
                                 <WorkflowStatusBadge
                                   status={item.workflow_status}
                                   paymentType={item.workflow_payment_type}
                                   compact
-                                  className="max-w-full"
+                                  className="w-full"
                                 />
                                 {statusMatchesProcessStage(
                                   item.workflow_status,
@@ -544,7 +552,7 @@ export default function InvoiceList() {
                             )}
                           </td>
                           <td
-                            className={`whitespace-nowrap px-3 py-2 align-middle text-right text-[13px] font-semibold tabular-nums text-slate-900 ${bg}`}
+                            className={`overflow-hidden whitespace-nowrap px-3 py-2 align-middle text-right text-[13px] font-semibold tabular-nums text-slate-900 ${bg}`}
                           >
                             ₦{formatNumber1(item.amount || 0)}
                           </td>

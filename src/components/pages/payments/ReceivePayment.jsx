@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   CreditCard,
+  Nfc,
   Eye,
   History,
   Loader2,
@@ -91,6 +92,12 @@ const METHOD_TABS = [
     privilege: "Transfer Collection",
   },
   {
+    id: "card",
+    label: "Card",
+    icon: Nfc,
+    privilege: "Card Collection",
+  },
+  {
     id: "credit",
     label: "Credit",
     icon: CreditCard,
@@ -123,6 +130,7 @@ function tabWorkflowBadge(methodTab, row) {
   if (methodTab === "cash") return { label: "Cash", paymentType: "cash" };
   if (methodTab === "transfer")
     return { label: "Transfer", paymentType: "transfer" };
+  if (methodTab === "card") return { label: "Card", paymentType: "card" };
   if (methodTab === "credit") return { label: "Credit", paymentType: "credit" };
   if (methodTab === "deposit")
     return { label: "Apply deposit", paymentType: "deposit" };
@@ -201,6 +209,7 @@ function normalizePaymentMode(type) {
   if (t === "deposit" || t === "apply_deposit" || t === "apply deposit")
     return "deposit";
   if (t === "transfer") return "transfer";
+  if (t === "card") return "card";
   if (t === "cash") return "cash";
   return t || "cash";
 }
@@ -208,6 +217,7 @@ function normalizePaymentMode(type) {
 const PAYMENT_MODE_OPTIONS = [
   { value: "cash", label: "Cash", icon: Banknote },
   { value: "transfer", label: "Transfer", icon: Building2 },
+  { value: "card", label: "Card", icon: Nfc },
   { value: "split", label: "Transfer + Cash", icon: Split },
   { value: "credit", label: "Credit", icon: CreditCard },
   { value: "credit_split", label: "Credit + Cash + Transfer", icon: Wallet },
@@ -217,13 +227,14 @@ const PAYMENT_MODE_OPTIONS = [
 const MODE_LABELS = {
   cash: "Cash",
   transfer: "Transfer",
+  card: "Card",
   credit: "Credit",
   deposit: "Apply Deposit",
 };
 
 function paymentTypeLabel(type, row = null) {
   const modes = row ? rowPaymentModes(row) : [];
-  const named = ["cash", "transfer", "credit", "deposit"].filter((id) =>
+  const named = ["cash", "transfer", "card", "credit", "deposit"].filter((id) =>
     modes.includes(id),
   );
   if (named.length > 1) {
@@ -244,6 +255,7 @@ function paymentTypeBadgeClass(type) {
   if (t === "split" || t === "credit_split")
     return "bg-violet-50 text-violet-700 ring-violet-200";
   if (t === "transfer") return "bg-sky-50 text-sky-700 ring-sky-200";
+  if (t === "card") return "bg-indigo-50 text-indigo-700 ring-indigo-200";
   if (t === "credit") return "bg-amber-50 text-amber-700 ring-amber-200";
   if (t === "deposit") return "bg-teal-50 text-teal-700 ring-teal-200";
   return "bg-emerald-50 text-emerald-700 ring-emerald-200";
@@ -285,7 +297,7 @@ function isCreditPlusDepositRow(row) {
   if (!row || !isDepositWorkflowRow(row)) return false;
   const modes = rowPaymentModes(row);
   if (row.credit_after_deposit || modes.includes("credit")) return true;
-  if (modes.includes("cash") || modes.includes("transfer")) return false;
+  if (modes.includes("cash") || modes.includes("transfer") || modes.includes("card")) return false;
   if (row.deposit_pending) return true;
   if (Number(row.credit_remainder) > 0.05) return true;
   const due = Number(row.amount) || 0;
@@ -302,9 +314,10 @@ function isCollectionPlusDepositRow(row, method) {
   const modes = rowPaymentModes(row);
   if (method === "cash") {
     if (modes.includes("cash")) return true;
-    return Boolean(row.collect_after_deposit) && !modes.includes("transfer");
+    return Boolean(row.collect_after_deposit) && !modes.includes("transfer") && !modes.includes("card");
   }
   if (method === "transfer") return modes.includes("transfer");
+  if (method === "card") return modes.includes("card");
   return false;
 }
 
@@ -376,6 +389,7 @@ function rowPaymentModes(row) {
   if (pt === "credit_split") return ["credit", "cash", "transfer"];
   if (pt === "split") return ["cash", "transfer"];
   if (pt === "transfer") return ["transfer"];
+  if (pt === "card") return ["card"];
   if (pt === "cash") return ["cash"];
   return [];
 }
@@ -383,12 +397,13 @@ function rowPaymentModes(row) {
 function nextTabAfterPortion(row, justPaid) {
   const modes = rowPaymentModes(row);
   const sp = row?.split_progress || {};
-  const order = ["cash", "transfer", "credit", "deposit"].filter((id) =>
+  const order = ["cash", "transfer", "card", "credit", "deposit"].filter((id) =>
     modes.includes(id),
   );
   const done = {
     cash: (Number(sp.cash) || 0) > 0.05,
     transfer: (Number(sp.transfer) || 0) > 0.05,
+    card: (Number(sp.card) || 0) > 0.05,
     credit:
       (Number(sp.credit_allocated) || Number(sp.credit) || 0) > 0.05,
     deposit: (Number(sp.deposit_applied) || 0) > 0.05,
@@ -441,13 +456,25 @@ function parseFormattedAmount(value) {
   return parseFloat(String(value || "").replace(/,/g, "")) || 0;
 }
 
-/** Cash / Transfer / Credit tabs — credit_split appears on all three. */
+/** Cash / Transfer / Card / Credit tabs — credit_split appears on matching sides. */
 function matchesMethod(paymentType, method, row = null) {
+  const modes = row ? rowPaymentModes(row) : [];
   const pt = normalizePaymentMode(paymentType);
-  if (method === "cash")
-    return pt === "cash" || pt === "split" || pt === "credit_split";
-  if (method === "transfer")
-    return pt === "transfer" || pt === "split" || pt === "credit_split";
+  const legacySplit = (pt === "split" || pt === "credit_split") && !modes.length;
+  if (method === "card") {
+    if (modes.includes("card")) return true;
+    return pt === "card";
+  }
+  if (method === "transfer") {
+    if (modes.includes("transfer")) return true;
+    if (modes.length) return false;
+    return pt === "transfer" || legacySplit;
+  }
+  if (method === "cash") {
+    if (modes.includes("cash")) return true;
+    if (modes.length) return false;
+    return pt === "cash" || legacySplit;
+  }
   if (method === "credit") return pt === "credit_split";
   if (method === "credit_approval") return pt === "credit";
   if (method === "deposit") return pt === "deposit";
@@ -481,7 +508,7 @@ function needsCollectionSide(row, method) {
   const remaining = Number((due - collected).toFixed(2));
   if (remaining <= 0.05) return false;
   // Cash, Transfer, and Credit tabs all show until fully settled
-  return method === "cash" || method === "transfer" || method === "credit";
+  return method === "cash" || method === "transfer" || method === "card" || method === "credit";
 }
 
 export default function ReceivePayment() {
@@ -577,6 +604,12 @@ export default function ReceivePayment() {
             canUseHeaderAction(APPLY_DEPOSIT_PRIVILEGE)
           );
         }
+        if (t.id === "card") {
+          return (
+            canViewCollectionTab("Card Collection") ||
+            canViewCollectionTab("Transfer Collection")
+          );
+        }
         return canViewCollectionTab(t.privilege);
       }),
     [canViewCollectionTab, canUseHeaderAction, canSwitchPaymentMode, canApprovePaymentMode],
@@ -660,7 +693,9 @@ export default function ReceivePayment() {
   const isSplit =
     isSplitPaymentType(paymentType) ||
     (paymentType === "deposit" &&
-      (selectedModes.includes("cash") || selectedModes.includes("transfer")));
+      (selectedModes.includes("cash") ||
+        selectedModes.includes("transfer") ||
+        selectedModes.includes("card")));
   const isCreditSplitHub =
     normalizePaymentMode(paymentType) === "credit_split" ||
     (paymentType === "deposit" && selectedModes.includes("credit"));
@@ -670,25 +705,33 @@ export default function ReceivePayment() {
   ].includes(String(selected?.status || "").toLowerCase());
   // Split invoices: show only the active tab’s side (cash person vs transfer person)
   const collectionSide = isSplit
-    ? methodTab === "transfer"
-      ? "transfer"
-      : "cash"
-    : methodTab === "transfer"
-      ? "transfer"
-      : methodTab === "cash"
-        ? "cash"
-        : "";
+    ? methodTab === "card"
+      ? "card"
+      : methodTab === "transfer"
+        ? "transfer"
+        : "cash"
+    : methodTab === "card"
+      ? "card"
+      : methodTab === "transfer"
+        ? "transfer"
+        : methodTab === "cash"
+          ? "cash"
+          : "";
   const showCashFields =
     paymentType === "cash" || (isSplit && collectionSide === "cash");
   const showTransferFields =
     paymentType === "transfer" ||
     paymentType === "bank" ||
     (isSplit && collectionSide === "transfer");
+  const showCardFields =
+    paymentType === "card" || (isSplit && collectionSide === "card");
   const isCashOnly = paymentType === "cash" || (isSplit && collectionSide === "cash");
   const isTransferOnly =
     paymentType === "transfer" ||
     paymentType === "bank" ||
     (isSplit && collectionSide === "transfer");
+  const isCardOnly =
+    paymentType === "card" || (isSplit && collectionSide === "card");
   const splitProgress = selected?.split_progress || null;
   const remainingDue = isSplit
     ? Number(
@@ -711,7 +754,7 @@ export default function ReceivePayment() {
     (collectOpen && showCashFields) ||
     (advanceOpen && (advanceMode === "cash" || advanceMode === "split"));
   const loadBankPayThrough =
-    (collectOpen && showTransferFields) ||
+    (collectOpen && (showTransferFields || showCardFields)) ||
     (advanceOpen &&
       (advanceMode === "transfer" || advanceMode === "split"));
 
@@ -866,6 +909,7 @@ export default function ReceivePayment() {
     if (!collectOpen && !advanceOpen) return;
     if (
       (showTransferFields ||
+        showCardFields ||
         (advanceOpen &&
           (advanceMode === "transfer" || advanceMode === "split"))) &&
       !bankAccounts.bankAccount?.id &&
@@ -878,6 +922,7 @@ export default function ReceivePayment() {
     advanceOpen,
     advanceMode,
     showTransferFields,
+    showCardFields,
     bankAccounts.bankAccount?.id,
     bankAccounts.accountList,
     bankAccounts.setBankAccount,
@@ -889,17 +934,25 @@ export default function ReceivePayment() {
     const cashQueue = [
       ...pending.filter(
         (r) =>
-          matchesMethod(r.payment_type, "cash") && needsCollectionSide(r, "cash"),
+          matchesMethod(r.payment_type, "cash", r) && needsCollectionSide(r, "cash"),
       ),
       ...depositPending.filter((r) => isCollectionPlusDepositRow(r, "cash")),
     ];
     const transferQueue = [
       ...pending.filter(
         (r) =>
-          matchesMethod(r.payment_type, "transfer") &&
+          matchesMethod(r.payment_type, "transfer", r) &&
           needsCollectionSide(r, "transfer"),
       ),
       ...depositPending.filter((r) => isCollectionPlusDepositRow(r, "transfer")),
+    ];
+    const cardQueue = [
+      ...pending.filter(
+        (r) =>
+          matchesMethod(r.payment_type, "card", r) &&
+          needsCollectionSide(r, "card"),
+      ),
+      ...depositPending.filter((r) => isCollectionPlusDepositRow(r, "card")),
     ];
 
     if (methodTab === "cash") {
@@ -938,6 +991,28 @@ export default function ReceivePayment() {
         collected_cash_today: 0,
         collected_transfer_today: summary.collected_transfer_today,
         pending_count: transferQueue.length,
+      };
+    }
+    if (methodTab === "card") {
+      return {
+        showCash: false,
+        showTransfer: false,
+        showCard: true,
+        showSplit: false,
+        showCredit: false,
+        showDiscount: false,
+        showMode: false,
+        pending_cash: 0,
+        pending_transfer: 0,
+        pending_card: sumAmounts(cardQueue),
+        pending_split: 0,
+        pending_credit: 0,
+        pending_discount: 0,
+        pending_mode: 0,
+        collected_cash_today: 0,
+        collected_transfer_today: 0,
+        collected_card_today: summary.collected_card_today,
+        pending_count: cardQueue.length,
       };
     }
     if (methodTab === "credit") {
@@ -1083,20 +1158,28 @@ export default function ReceivePayment() {
     );
     const cashCodes = new Set();
     const transferCodes = new Set();
+    const cardCodes = new Set();
     for (const r of pending) {
       if (
         r?.sale_code &&
-        matchesMethod(r.payment_type, "cash") &&
+        matchesMethod(r.payment_type, "cash", r) &&
         needsCollectionSide(r, "cash")
       ) {
         cashCodes.add(r.sale_code);
       }
       if (
         r?.sale_code &&
-        matchesMethod(r.payment_type, "transfer") &&
+        matchesMethod(r.payment_type, "transfer", r) &&
         needsCollectionSide(r, "transfer")
       ) {
         transferCodes.add(r.sale_code);
+      }
+      if (
+        r?.sale_code &&
+        matchesMethod(r.payment_type, "card", r) &&
+        needsCollectionSide(r, "card")
+      ) {
+        cardCodes.add(r.sale_code);
       }
     }
     for (const r of depositPending) {
@@ -1106,10 +1189,14 @@ export default function ReceivePayment() {
       if (r?.sale_code && isCollectionPlusDepositRow(r, "transfer")) {
         transferCodes.add(r.sale_code);
       }
+      if (r?.sale_code && isCollectionPlusDepositRow(r, "card")) {
+        cardCodes.add(r.sale_code);
+      }
     }
     const counts = {
       cash: cashCodes.size,
       transfer: transferCodes.size,
+      card: cardCodes.size,
       credit: creditCodes.size + creditSplitPending.length,
       deposit: depositPending.length,
       discount: discountPending.length,
@@ -1165,7 +1252,7 @@ export default function ReceivePayment() {
       for (const r of [
         ...pending.filter(
           (r) =>
-            matchesMethod(r.payment_type, methodTab) &&
+            matchesMethod(r.payment_type, methodTab, r) &&
             needsCollectionSide(r, methodTab),
         ),
         ...collectionDeposit,
@@ -1467,7 +1554,7 @@ export default function ReceivePayment() {
         return "credit";
       }
       if (pt === "credit_split" || pt === "split") return "collect";
-      if (methodTab === "cash" || methodTab === "transfer") {
+      if (methodTab === "cash" || methodTab === "transfer" || methodTab === "card") {
         if (
           pt === "deposit" &&
           isDepositPendingCollection(row, methodTab)
@@ -1709,6 +1796,13 @@ export default function ReceivePayment() {
           if (canViewCollectionTab("Transfer Collection")) {
             setMethodTab("transfer");
           }
+        } else if (pt === "card") {
+          if (
+            canViewCollectionTab("Card Collection") ||
+            canViewCollectionTab("Transfer Collection")
+          ) {
+            setMethodTab("card");
+          }
         } else if (pt === "cash") {
           if (canViewCollectionTab("Cash Collection")) {
             setMethodTab("cash");
@@ -1778,6 +1872,12 @@ export default function ReceivePayment() {
       canViewCollectionTab("Transfer Collection")
     ) {
       setMethodTab("transfer");
+    } else if (
+      tab === "card" &&
+      (canViewCollectionTab("Card Collection") ||
+        canViewCollectionTab("Transfer Collection"))
+    ) {
+      setMethodTab("card");
     } else if (tab === "cash" && canViewCollectionTab("Cash Collection")) {
       setMethodTab("cash");
     } else if (tab === "deposit") {
@@ -2227,6 +2327,18 @@ export default function ReceivePayment() {
       });
     }
 
+    if (showCardFields && transferAmt > 0) {
+      if (!bankAccounts.bankAccount?.id) {
+        toast.error("Select a bank account (Pay Through)");
+        return;
+      }
+      splits.push({
+        mode: "card",
+        amount: transferAmt,
+        bankAccount: bankAccounts.bankAccount,
+      });
+    }
+
     // Credit + Cash + Transfer: no cash/transfer entered → confirm full remaining as Credit
     if (
       !splits.length &&
@@ -2242,8 +2354,10 @@ export default function ReceivePayment() {
         isSplit
           ? collectionSide === "transfer"
             ? "Enter the transfer amount"
-            : "Enter the cash amount"
-          : "Enter cash and/or transfer amount",
+            : collectionSide === "card"
+              ? "Enter the card amount"
+              : "Enter the cash amount"
+          : "Enter cash, transfer, or card amount",
       );
       return;
     }
@@ -2284,22 +2398,32 @@ export default function ReceivePayment() {
           user?.username ||
           undefined,
         cashier_type:
-          methodTab === "transfer"
-            ? "transfer"
-            : methodTab === "cash"
-              ? "cash"
-              : undefined,
-        collection_side:
-          methodTab === "transfer"
-            ? "transfer"
-            : methodTab === "cash"
-              ? "cash"
-              : isSplit
-                ? collectionSide
+          methodTab === "card"
+            ? "card"
+            : methodTab === "transfer"
+              ? "transfer"
+              : methodTab === "cash"
+                ? "cash"
                 : undefined,
+        collection_side:
+          methodTab === "card"
+            ? "card"
+            : methodTab === "transfer"
+              ? "transfer"
+              : methodTab === "cash"
+                ? "cash"
+                : isSplit
+                  ? collectionSide
+                  : undefined,
         payment_splits: splits,
         note: isSplit
-          ? `${collectionSide === "transfer" ? "Transfer" : "Cash"} portion at Verification Points`
+          ? `${
+              collectionSide === "card"
+                ? "Card"
+                : collectionSide === "transfer"
+                  ? "Transfer"
+                  : "Cash"
+            } portion at Verification Points`
           : "Collected at Verification Points",
       },
       (res) => {
@@ -2316,7 +2440,12 @@ export default function ReceivePayment() {
             ].includes(status) ||
             (!isSplit && Math.abs(total - amountDue) <= 0.05);
           const remainingNow = Number(res.results?.remaining);
-          const justPaid = methodTab === "transfer" ? "transfer" : "cash";
+          const justPaid =
+            methodTab === "card"
+              ? "card"
+              : methodTab === "transfer"
+                ? "transfer"
+                : "cash";
 
           toast.success(
             lastPay
@@ -2355,13 +2484,13 @@ export default function ReceivePayment() {
   const fillAllRemaining = (side) => {
     const amt = remainingDue > 0 ? remainingDue : 0;
     const formatted = amt > 0 ? formatNumberWithCommas(String(amt)) : "";
-    if (side === "transfer") setTransferAmount(formatted);
+    if (side === "transfer" || side === "card") setTransferAmount(formatted);
     else setCashAmount(formatted);
   };
 
   const confirmButtonAmount = (() => {
     if (isSplit) {
-      return collectionSide === "transfer"
+      return collectionSide === "transfer" || collectionSide === "card"
         ? parseFormattedAmount(transferAmount)
         : parseFormattedAmount(cashAmount);
     }
@@ -2369,7 +2498,7 @@ export default function ReceivePayment() {
       const v = parseFormattedAmount(cashAmount);
       return v > 0 ? v : remainingDue;
     }
-    if (showTransferFields) {
+    if (showTransferFields || showCardFields) {
       const v = parseFormattedAmount(transferAmount);
       return v > 0 ? v : remainingDue;
     }
@@ -2383,7 +2512,11 @@ export default function ReceivePayment() {
         : null;
     if (isSplit) {
       const side =
-        collectionSide === "transfer" ? "Transfer" : "Cash";
+        collectionSide === "card"
+          ? "Card"
+          : collectionSide === "transfer"
+            ? "Transfer"
+            : "Cash";
       return amtLabel ? `Confirm ${amtLabel} ${side}` : `Confirm ${side}`;
     }
     return amtLabel ? `Confirm ${amtLabel}` : "Confirm Payment";
@@ -2404,7 +2537,7 @@ export default function ReceivePayment() {
           <div className="mt-6 rounded-xl border border-slate-200 bg-white p-8 text-center">
             <p className="text-sm font-medium text-slate-600">
               You do not have permission to collect payments. Ask an admin to
-              grant Cash Collection, Transfer Collection, Credit Collection,
+              grant Cash Collection, Transfer Collection, Card Collection, Credit Collection,
               Apply Deposit, Discount Collection, or Make Deposit under Sales →
               Verification Points.
             </p>
@@ -2528,7 +2661,22 @@ export default function ReceivePayment() {
                 ₦{formatNumber1(viewSummary.pending_transfer)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Awaiting bank transfer (includes Transfer + Cash)
+                Awaiting bank transfer
+              </p>
+            </div>
+          ) : null}
+
+          {viewSummary.showCard ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <Nfc className="h-4 w-4 text-indigo-600" />
+                Card to collect
+              </div>
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">
+                ₦{formatNumber1(viewSummary.pending_card)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Awaiting card / POS payment
               </p>
             </div>
           ) : null}
@@ -2702,6 +2850,20 @@ export default function ReceivePayment() {
               </p>
             </div>
           ) : null}
+
+          {viewSummary.showCard ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <Nfc className="h-4 w-4 text-indigo-600" />
+                {historyFrom === todayYmd && historyTo === todayYmd
+                  ? "Card collected today"
+                  : "Card collected"}
+              </div>
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-indigo-700">
+                ₦{formatNumber1(viewSummary.collected_card_today)}
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -2829,7 +2991,9 @@ export default function ReceivePayment() {
                         ? "payment mode approval"
                         : methodTab === "transfer"
                           ? "transfer payment"
-                          : "cash payment"}
+                          : methodTab === "card"
+                            ? "card payment"
+                            : "cash payment"}
                 .
               </div>
             ) : (
@@ -3640,6 +3804,13 @@ export default function ReceivePayment() {
                           ? ` · signed by ${splitProgress.transfer_by_name}`
                           : ""}
                       </p>
+                      <p>
+                        Card: ₦
+                        {formatNumber1(splitProgress?.card || 0)}
+                        {splitProgress?.card_by_name
+                          ? ` · signed by ${splitProgress.card_by_name}`
+                          : ""}
+                      </p>
                       {normalizePaymentMode(paymentType) === "credit_split" ? (
                         <p>
                           Credit:{" "}
@@ -3855,6 +4026,71 @@ export default function ReceivePayment() {
                         >
                           <SelectTrigger className={payThroughSelectTriggerClass}>
                             <SelectValue placeholder="Select bank account…" />
+                          </SelectTrigger>
+                          <SelectContent className={payThroughSelectContentClass}>
+                            {(bankAccounts.accountList || []).map((b) => (
+                              <SelectItem
+                                key={String(b.id)}
+                                value={String(b.id)}
+                              >
+                                {bankPayThroughLabel(b)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
+
+                    {showCardFields ? (
+                      <div className="space-y-2">
+                        {isSplit || !isCardOnly ? (
+                          <>
+                            <div className="flex items-center justify-between gap-2">
+                              <label className="text-sm font-medium text-slate-700">
+                                Card amount
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => fillAllRemaining("card")}
+                                className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                              >
+                                All (₦{formatNumber1(remainingDue)})
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={transferAmount}
+                              onChange={(e) =>
+                                setTransferAmount(
+                                  formatNumberWithCommas(e.target.value),
+                                )
+                              }
+                              className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                              placeholder="0.00"
+                            />
+                          </>
+                        ) : null}
+                        <label className="text-sm font-medium text-slate-700">
+                          {isCardOnly || isSplit
+                            ? "Pay Through"
+                            : "Bank account"}
+                        </label>
+                        <Select
+                          value={
+                            bankAccounts.bankAccount?.id != null
+                              ? String(bankAccounts.bankAccount.id)
+                              : undefined
+                          }
+                          onValueChange={(val) => {
+                            const found = (bankAccounts.accountList || []).find(
+                              (b) => String(b.id) === String(val),
+                            );
+                            bankAccounts.setBankAccount(found || null);
+                          }}
+                        >
+                          <SelectTrigger className={payThroughSelectTriggerClass}>
+                            <SelectValue placeholder="Select bank / POS account…" />
                           </SelectTrigger>
                           <SelectContent className={payThroughSelectContentClass}>
                             {(bankAccounts.accountList || []).map((b) => (

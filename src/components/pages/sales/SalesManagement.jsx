@@ -67,6 +67,7 @@ function paymentTypeLabel(type) {
   if (type === "credit") return "Credit";
   if (type === "deposit") return "Apply Deposit";
   if (type === "credit_split") return "Credit + Cash + Transfer";
+  if (type === "card") return "Card";
   if (type === "transfer" || type === "bank") return "Transfer";
   if (type === "split") return "Cash + Transfer";
   return "Cash";

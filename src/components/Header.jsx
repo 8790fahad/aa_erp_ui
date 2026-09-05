@@ -97,6 +97,7 @@ const QUICK_CREATE = [
       "Collection Points",
       "Cash Collection",
       "Transfer Collection",
+      "Card Collection",
       "Credit Collection",
       "Receive Payment",
       "Payments",

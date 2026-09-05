@@ -381,6 +381,7 @@ export const modules = [
         subFunctionalities: [
           { title: "Cash Payment" },
           { title: "Transfer Payment" },
+          { title: "Card Payment" },
           { title: "Credit Payment" },
           { title: "Apply Deposit Payment" },
         ],
@@ -400,6 +401,7 @@ export const modules = [
           "Collection Points",
           "Cash Collection",
           "Transfer Collection",
+          "Card Collection",
           "Switch Payment Mode",
           "Approve Payment Mode Switch",
           "Collection Reconciliation",
@@ -413,6 +415,7 @@ export const modules = [
           { title: "Collection Reconciliation" },
           { title: "Cash Collection" },
           { title: "Transfer Collection" },
+          { title: "Card Collection" },
           { title: "Credit Collection" },
           { title: "Discount Collection" },
           { title: "Switch Payment Mode" },

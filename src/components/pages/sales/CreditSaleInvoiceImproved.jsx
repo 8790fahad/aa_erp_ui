@@ -786,6 +786,7 @@ export default function CreditSaleInvoice({
       return "Cash + Transfer";
     }
     if (lower === "deposit" || lower === "apply_deposit") return "Apply Deposit";
+    if (lower === "card") return "Card";
     return raw
       .replace(/_/g, " ")
       .split(" ")
@@ -866,6 +867,16 @@ export default function CreditSaleInvoice({
       transferLines.reduce((s, p) => s + Number(p.amount || 0), 0),
   );
 
+  const cardLines = paymentBreakdown.filter(
+    (p) => String(p.mode || "").toLowerCase() === "card",
+  );
+
+  const cardPaid = Number(
+    invoice?.card_paid ??
+      invoice?.transaction?.card_paid ??
+      cardLines.reduce((s, p) => s + Number(p.amount || 0), 0),
+  );
+
   const transferBanks = (() => {
     const fromApi =
       invoice?.transfer_banks || invoice?.transaction?.transfer_banks || [];
@@ -906,12 +917,17 @@ export default function CreditSaleInvoice({
   const hasCashMode = paymentModes.includes("cash");
   const hasTransferMode =
     paymentModes.includes("transfer") || paymentModes.includes("bank");
+  const hasCardMode = paymentModes.includes("card");
   const hasCreditMode = paymentModes.includes("credit");
   const hasDepositMode = paymentModes.includes("deposit");
   const mixedPaymentModes =
-    [hasCashMode, hasTransferMode, hasCreditMode, hasDepositMode].filter(
-      Boolean,
-    ).length > 1;
+    [
+      hasCashMode,
+      hasTransferMode,
+      hasCardMode,
+      hasCreditMode,
+      hasDepositMode,
+    ].filter(Boolean).length > 1;
 
   const isCreditOnlyMode =
     !mixedPaymentModes &&
@@ -930,6 +946,7 @@ export default function CreditSaleInvoice({
                 invoiceTotalForBalance -
                 cashPaid -
                 transferPaid -
+                cardPaid -
                 depositPaid
               ).toFixed(2),
             ),
@@ -943,6 +960,7 @@ export default function CreditSaleInvoice({
         invoiceTotalForBalance -
         cashPaid -
         transferPaid -
+        cardPaid -
         depositPaid -
         creditAmount
       ).toFixed(2),
@@ -953,6 +971,7 @@ export default function CreditSaleInvoice({
     const order = [
       ["cash", "Cash"],
       ["transfer", "Transfer"],
+      ["card", "Card"],
       ["credit", "Credit"],
       ["deposit", "Apply Deposit"],
     ];
@@ -962,6 +981,8 @@ export default function CreditSaleInvoice({
       )
       .map(([, label]) => label);
     if (fromModes.length) return fromModes.join(" + ");
+    if (cardPaid > 0.05 && cashPaid <= 0.05 && transferPaid <= 0.05)
+      return hasCreditMode ? "Card + Credit" : "Card";
     if (cashPaid > 0.05 && transferPaid > 0.05 && creditAmount > 0.05) {
       return "Cash + Transfer + Credit";
     }
@@ -1832,7 +1853,7 @@ export default function CreditSaleInvoice({
               {/* How this invoice is paid — same presentation as Bill To */}
               {(() => {
                 const collectedNow = Number(
-                  (cashPaid + transferPaid).toFixed(2),
+                  (cashPaid + transferPaid + cardPaid).toFixed(2),
                 );
                 const onCredit = Number(creditAmount.toFixed(2));
                 const depositApplied = Number(depositPaid.toFixed(2));
@@ -1890,6 +1911,21 @@ export default function CreditSaleInvoice({
                         ? ` · ${transferBanks.join(", ")}`
                         : ""
                     }`,
+                  });
+                }
+                if (cardLines.length > 0) {
+                  cardLines.forEach((line) => {
+                    fields.push({
+                      label: "Card received",
+                      value: `₦${formatNumber(line.amount)}${
+                        line.bank_name ? ` · ${line.bank_name}` : ""
+                      }`,
+                    });
+                  });
+                } else if (cardPaid > 0.05) {
+                  fields.push({
+                    label: "Card received",
+                    value: `₦${formatNumber(cardPaid)}`,
                   });
                 }
 

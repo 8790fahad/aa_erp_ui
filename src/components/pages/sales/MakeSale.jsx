@@ -47,6 +47,7 @@ function salesLimitPeriodLabel(period) {
 const PAYMENT_MODE_OPTIONS = [
   { id: "cash", label: "Cash" },
   { id: "transfer", label: "Transfer" },
+  { id: "card", label: "Card" },
   { id: "credit", label: "Credit" },
   { id: "deposit", label: "Apply Deposit" },
 ];
@@ -55,12 +56,15 @@ function encodePaymentModes(modes) {
   const set = new Set(modes);
   const hasCash = set.has("cash");
   const hasTransfer = set.has("transfer");
+  const hasCard = set.has("card");
   const hasCredit = set.has("credit");
   const hasDeposit = set.has("deposit");
+  const hasBankLike = hasTransfer || hasCard;
   if (hasDeposit) return "deposit";
-  if (hasCredit && (hasCash || hasTransfer)) return "credit_split";
-  if (hasCredit && !hasCash && !hasTransfer) return "CREDIT";
-  if (hasCash && hasTransfer) return "split";
+  if (hasCredit && (hasCash || hasBankLike)) return "credit_split";
+  if (hasCredit && !hasCash && !hasBankLike) return "CREDIT";
+  if ((hasCash && hasBankLike) || (hasTransfer && hasCard)) return "split";
+  if (hasCard && !hasCash && !hasTransfer) return "card";
   if (hasTransfer) return "bank";
   return "cash";
 }
@@ -71,10 +75,11 @@ function paymentModesHint(modes) {
   if (set.has("deposit")) {
     parts.push("apply customer deposit after the invoice is created");
   }
-  if (set.has("cash") || set.has("transfer")) {
+  if (set.has("cash") || set.has("transfer") || set.has("card")) {
     const collect = [
       set.has("cash") ? "cash" : null,
       set.has("transfer") ? "transfer" : null,
+      set.has("card") ? "card" : null,
     ]
       .filter(Boolean)
       .join(" and ");
@@ -92,6 +97,7 @@ function invoiceCoverageError({
   total,
   hasCash,
   hasTransfer,
+  hasCard,
   hasCredit,
   hasDeposit,
   creditLimit,
@@ -100,9 +106,9 @@ function invoiceCoverageError({
   isWalkIn = false,
 }) {
   if (isWalkIn && hasCredit) {
-    return "Walk-in customers cannot be invoiced on credit. Use Cash or Transfer.";
+    return "Walk-in customers cannot be invoiced on credit. Use Cash, Transfer, or Card.";
   }
-  if (hasCash || hasTransfer) return null;
+  if (hasCash || hasTransfer || hasCard) return null;
   if (!hasCredit && !hasDeposit) return null;
   const invoiceTotal = Number(total) || 0;
   if (!(invoiceTotal > 0.009)) return "Invoice total must be greater than zero.";
@@ -447,7 +453,7 @@ function PaymentModePicker({
       <div className={className}>
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           You don&apos;t have permission to select a payment method. Ask an
-          admin to grant Cash Payment, Transfer Payment, Credit Payment, or
+          admin to grant Cash Payment, Transfer Payment, Card Payment, Credit Payment, or
           Apply Deposit Payment under Create Invoice.
         </p>
       </div>
@@ -491,6 +497,7 @@ function PaymentModePicker({
 function CustomerPaymentBalances({
   showCash,
   showTransfer,
+  showCard,
   showCredit,
   showDeposit,
   loading,
@@ -499,7 +506,8 @@ function CustomerPaymentBalances({
   depositBalance,
   currency = "₦",
 }) {
-  if (!showCash && !showTransfer && !showCredit && !showDeposit) return null;
+  if (!showCash && !showTransfer && !showCard && !showCredit && !showDeposit)
+    return null;
   const fmt = (n) =>
     `${currency}${formatNumber1(Math.max(0, Number(n) || 0))}`;
   const available =
@@ -517,6 +525,12 @@ function CustomerPaymentBalances({
       {showTransfer ? (
         <div className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs text-sky-950">
           <span className="font-semibold">Transfer: </span>
+          collect at Verification Points
+        </div>
+      ) : null}
+      {showCard ? (
+        <div className="rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs text-indigo-950">
+          <span className="font-semibold">Card: </span>
           collect at Verification Points
         </div>
       ) : null}
@@ -1258,6 +1272,7 @@ function MakeSale() {
 
   const hasCashMode = selectedPaymentModes.includes("cash");
   const hasTransferMode = selectedPaymentModes.includes("transfer");
+  const hasCardMode = selectedPaymentModes.includes("card");
   const hasCreditMode = selectedPaymentModes.includes("credit");
   const hasDepositMode = selectedPaymentModes.includes("deposit");
   const modeOfPayment = encodePaymentModes(selectedPaymentModes);
@@ -1277,9 +1292,10 @@ function MakeSale() {
       setSelectedPaymentModes(unique);
       const cash = unique.includes("cash");
       const transfer = unique.includes("transfer");
+      const card = unique.includes("card");
       setPayWithCash(cash);
       setPayWithTransfer(transfer);
-      setSaleType(cash || transfer ? "paid" : "credit");
+      setSaleType(cash || transfer || card ? "paid" : "credit");
     },
     [allowedPaymentModeIds],
   );
@@ -2688,6 +2704,7 @@ function MakeSale() {
       hasCreditMode,
       hasCashMode,
       hasTransferMode,
+      hasCardMode,
       cashPayAmount,
       transferPayAmount,
       accountHead,
@@ -2753,6 +2770,7 @@ function MakeSale() {
       (hasCreditMode || hasDepositMode) &&
       !hasCashMode &&
       !hasTransferMode &&
+      !hasCardMode &&
       balancesLoading
     ) {
       toast.error("Loading customer credit/deposit — try again in a moment.");
@@ -2763,6 +2781,7 @@ function MakeSale() {
       total: totalRef.current,
       hasCash: hasCashMode,
       hasTransfer: hasTransferMode,
+      hasCard: hasCardMode,
       hasCredit: hasCreditMode,
       hasDeposit: hasDepositMode,
       creditLimit: creditLimitDisplay,
@@ -2805,8 +2824,8 @@ function MakeSale() {
     }
 
     if (saleType === "paid") {
-      if (!payWithCash && !payWithTransfer) {
-        toast.error("Select Cash and/or Transfer to collect now, or Credit / Apply Deposit.");
+      if (!payWithCash && !payWithTransfer && !hasCardMode) {
+        toast.error("Select Cash, Transfer, and/or Card to collect now, or Credit / Apply Deposit.");
         return;
       }
       // Payment is collected at Verification Points — invoice only records the mode.
@@ -2828,6 +2847,7 @@ function MakeSale() {
     modeOfPayment,
     hasCashMode,
     hasTransferMode,
+    hasCardMode,
     hasCreditMode,
     hasDepositMode,
     creditLimitDisplay,
@@ -4511,6 +4531,7 @@ function MakeSale() {
                   <CustomerPaymentBalances
                     showCash={hasCashMode}
                     showTransfer={hasTransferMode}
+                    showCard={hasCardMode}
                     showCredit={hasCreditMode && Boolean(selectedCustomer)}
                     showDeposit={hasDepositMode && Boolean(selectedCustomer)}
                     loading={balancesLoading}
@@ -4589,6 +4610,7 @@ function MakeSale() {
                     <CustomerPaymentBalances
                       showCash={hasCashMode}
                       showTransfer={hasTransferMode}
+                      showCard={hasCardMode}
                       showCredit={hasCreditMode && Boolean(selectedCustomer)}
                       showDeposit={hasDepositMode && Boolean(selectedCustomer)}
                       loading={balancesLoading}

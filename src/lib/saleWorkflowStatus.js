@@ -26,7 +26,13 @@ export const PROCESS_STAGES = [
     badge: "bg-amber-100 text-amber-800 border-amber-200",
     dot: "bg-amber-500",
     row: "bg-amber-50",
-    statuses: ["awaiting_payment", "awaiting_cashier_confirm", "awaiting_payment_mode_approval", "awaiting_discount_approval"],
+    statuses: [
+      "awaiting_payment",
+      "awaiting_cashier_confirm",
+      "awaiting_payment_mode_approval",
+      "awaiting_payment_method",
+      "awaiting_discount_approval",
+    ],
   },
   {
     id: "paid",
@@ -166,6 +172,14 @@ export const SALE_WORKFLOW_STATUS_META = {
     dot: "bg-indigo-500",
     row: "bg-indigo-50",
   },
+  awaiting_payment_method: {
+    label: "Payment mode approval",
+    short: "Mode switch",
+    color: "indigo",
+    badge: "bg-indigo-100 text-indigo-800 border-indigo-200",
+    dot: "bg-indigo-500",
+    row: "bg-indigo-50",
+  },
   payment_confirmed: {
     label: "Separation",
     short: "Separation",
@@ -279,8 +293,17 @@ export const FULFILLMENT_STATUS_META = {
   },
 };
 
-export function getProcessStage(status, paymentType) {
+const STATUS_ALIASES = {
+  awaiting_payment_method: "awaiting_payment_mode_approval",
+};
+
+function normalizeWorkflowStatus(status) {
   const raw = String(status || "").trim();
+  return STATUS_ALIASES[raw] || raw;
+}
+
+export function getProcessStage(status, paymentType) {
+  const raw = normalizeWorkflowStatus(status);
   const pt = String(paymentType || "").toLowerCase();
   const isCredit = pt === "credit";
   const isDeposit = pt === "deposit" || pt === "apply_deposit";
@@ -319,7 +342,7 @@ export function getProcessStage(status, paymentType) {
         }
       : {
           id: "invoice",
-          short: raw.replace(/_/g, " ") || "—",
+          short: "In progress",
           label: raw.replace(/_/g, " ") || "Unknown",
           color: "slate",
           badge: "bg-slate-100 text-slate-700 border-slate-200",
@@ -331,7 +354,7 @@ export function getProcessStage(status, paymentType) {
 }
 
 export function getWorkflowStatusMeta(status, paymentType) {
-  const raw = String(status || "").trim();
+  const raw = normalizeWorkflowStatus(status);
   const process = getProcessStage(raw, paymentType);
   const detail = SALE_WORKFLOW_STATUS_META[raw];
   const pt = String(paymentType || "").toLowerCase();
@@ -339,9 +362,7 @@ export function getWorkflowStatusMeta(status, paymentType) {
   const isDeposit = pt === "deposit" || pt === "apply_deposit";
   if (
     isDeposit &&
-    ["awaiting_payment", "awaiting_cashier_confirm"].includes(
-      String(status || ""),
-    )
+    ["awaiting_payment", "awaiting_cashier_confirm"].includes(raw)
   ) {
     return {
       label: "Apply deposit",
@@ -357,7 +378,7 @@ export function getWorkflowStatusMeta(status, paymentType) {
   if (
     isCredit &&
     ["payment_confirmed", "invoice_separation", "credit_approved", "final_invoice"].includes(
-      String(status || ""),
+      raw,
     )
   ) {
     return {
@@ -384,8 +405,8 @@ export function getWorkflowStatusMeta(status, paymentType) {
     };
   }
   return {
-    label: status || "Unknown",
-    short: process.short || status || "—",
+    label: process.label || raw || "Unknown",
+    short: process.short || "In progress",
     color: process.color || "slate",
     badge: process.badge,
     dot: process.dot,
@@ -461,7 +482,7 @@ export function WorkflowStatusBadge({
     "span",
     {
       title: meta.processLabel || meta.label,
-      className: `inline-flex max-w-full items-center gap-1.5 overflow-hidden rounded-full border px-2 py-0.5 text-xs font-medium ${meta.badge} ${className}`,
+      className: `inline-flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden rounded-full border px-2 py-0.5 text-xs font-medium ${meta.badge} ${className}`,
     },
     React.createElement("span", {
       className: `h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot}`,

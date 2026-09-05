@@ -83,6 +83,7 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "Purchase Order History",
   "Cash Payment",
   "Transfer Payment",
+  "Card Payment",
   "Credit Payment",
   "Apply Deposit Payment",
   "Make Deposit",
@@ -96,16 +97,24 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
 export const INVOICE_PAYMENT_MODE_PRIVILEGES = {
   cash: "Cash Payment",
   transfer: "Transfer Payment",
+  card: "Card Payment",
   credit: "Credit Payment",
   deposit: "Apply Deposit Payment",
 };
 
-const ALL_INVOICE_PAYMENT_MODE_IDS = ["cash", "transfer", "credit", "deposit"];
+const ALL_INVOICE_PAYMENT_MODE_IDS = [
+  "cash",
+  "transfer",
+  "card",
+  "credit",
+  "deposit",
+];
 
 /**
  * Payment modes the user may select on Create Invoice.
- * If none of the four privileges are assigned yet, all modes stay available
+ * If none of the five privileges are assigned yet, all modes stay available
  * so existing Create Invoice users are not locked out.
+ * Card rides with Transfer Payment until Card Payment is granted on its own.
  */
 export function allowedInvoicePaymentModeIds(functionalities) {
   if (hasFullAccess(functionalities)) return [...ALL_INVOICE_PAYMENT_MODE_IDS];
@@ -113,6 +122,13 @@ export function allowedInvoicePaymentModeIds(functionalities) {
   const granted = ALL_INVOICE_PAYMENT_MODE_IDS.filter((id) =>
     funcs.includes(INVOICE_PAYMENT_MODE_PRIVILEGES[id]),
   );
+  if (
+    granted.includes("transfer") &&
+    !granted.includes("card") &&
+    !funcs.includes("Card Payment")
+  ) {
+    granted.push("card");
+  }
   return granted.length ? granted : [...ALL_INVOICE_PAYMENT_MODE_IDS];
 }
 
