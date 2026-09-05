@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 import moment from "moment";
 import { toast } from "sonner";
 import { FaPlus } from "react-icons/fa";
@@ -33,19 +33,40 @@ import {
 } from "@/components/ui/dropdown-menu";
 import CreditNoteCreateForm from "./CreditNoteCreateForm";
 
+function resolveCreditNoteParty(pathname, searchParams) {
+  const path = String(pathname || "").toLowerCase();
+  if (path.includes("/party-vendor")) return "vendor";
+  if (path.includes("/party-customer")) return "customer";
+  const q = String(searchParams?.get?.("party") || "").toLowerCase();
+  if (q === "vendor" || q === "supplier") return "vendor";
+  return "customer";
+}
+
+/** Old `/credit-note?party=` links → dedicated party routes. */
+export function CreditNoteIndexRedirect() {
+  const [searchParams] = useSearchParams();
+  const party = String(searchParams.get("party") || "").toLowerCase();
+  const to =
+    party === "vendor" || party === "supplier"
+      ? "/app/payments/credit-note/party-vendor"
+      : "/app/payments/credit-note/party-customer";
+  return <Navigate to={to} replace />;
+}
+
 /**
  * Credit Notes / Vendor Credits — app-standard table list
  * (same pattern as Payees / Suppliers), with Zoho lifecycle + apply/refund.
  */
 export default function CreditNote() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const facilityId = activeBusiness?.id;
   const userId = user?.id || user?.email;
   const businessName =
     activeBusiness?.business_name || activeBusiness?.name || "Business";
 
-  const partyParam = String(searchParams.get("party") || "").toLowerCase();
+  const partyParam = resolveCreditNoteParty(location.pathname, searchParams);
   const isVendor =
     partyParam === "vendor" || partyParam === "supplier";
   const apiType = isVendor ? "supplier" : "customer";

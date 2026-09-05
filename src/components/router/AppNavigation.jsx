@@ -227,7 +227,9 @@ import RedirectToPayBills from "../pages/payments/RedirectToPayBills";
 import PaymentsMade from "../pages/payments/PaymentsMade";
 import RecordSupplierPaymentForm from "../pages/payments/RecordSupplierPaymentForm";
 import PayBills from "../pages/payments/PayBills";
-import CreditNote from "../pages/payments/CreditNote";
+import CreditNote, {
+  CreditNoteIndexRedirect,
+} from "../pages/payments/CreditNote";
 import ApplyCustomerAdvance from "../pages/payments/ApplyCustomerAdvance";
 import ApplySupplierDeposit from "../pages/payments/ApplySupplierDeposit";
 import ProductSupplierBill from "../pages/expenses/ProductSupplierBill";
@@ -588,7 +590,21 @@ const routeModules = {
       },
       {
         path: "credit-note",
-        element: <CreditNote />,
+        element: <Outlet />,
+        children: [
+          {
+            index: true,
+            element: <CreditNoteIndexRedirect />,
+          },
+          {
+            path: "party-vendor",
+            element: <CreditNote />,
+          },
+          {
+            path: "party-customer",
+            element: <CreditNote />,
+          },
+        ],
       },
       {
         path: "apply-advance",

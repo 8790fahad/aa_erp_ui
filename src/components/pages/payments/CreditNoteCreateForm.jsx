@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import moment from "moment";
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Trash2, X } from "lucide-react";
@@ -29,9 +29,15 @@ export default function CreditNoteCreateForm({
   forcedParty,
 } = {}) {
   const { activeBusiness, user } = useSelector((state) => state.auth);
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const path = String(location.pathname || "").toLowerCase();
   const partyParam = String(
-    forcedParty || searchParams.get("party") || "",
+    forcedParty ||
+      (path.includes("/party-vendor") ? "vendor" : "") ||
+      (path.includes("/party-customer") ? "customer" : "") ||
+      searchParams.get("party") ||
+      "",
   ).toLowerCase();
   const isVendor =
     partyParam === "vendor" || partyParam === "supplier";

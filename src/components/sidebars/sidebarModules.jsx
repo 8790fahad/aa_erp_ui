@@ -288,7 +288,7 @@ export const modules = [
       },
       {
         title: "Vendor Credits",
-        url: "/app/payments/credit-note?party=vendor",
+        url: "/app/payments/credit-note/party-vendor",
         functionality: ["Credit & Debit Note", "Credit Note"],
         access: [
           "services",
@@ -571,7 +571,7 @@ export const modules = [
       },
       {
         title: "Credit Notes",
-        url: "/app/payments/credit-note?party=customer",
+        url: "/app/payments/credit-note/party-customer",
         functionality: ["Credit & Debit Note", "Credit Note"],
         access: [
           "services",
