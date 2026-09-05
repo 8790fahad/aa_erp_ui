@@ -231,7 +231,7 @@ export default function ReceivedFunds() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              Deposit History
+              Received Payment
             </h1>
             <p className="text-sm text-muted-foreground">
               History of customer deposits and received funds. Create new

@@ -114,7 +114,7 @@ export default function PurchaseOrderNav() {
   if (!visibleTabs.length) {
     return (
       <div className="border-b border-slate-200 px-4 py-3 text-sm text-slate-500">
-        You do not have permission to view Purchase Order tabs. Ask an admin to
+        You do not have permission to view Goods received tabs. Ask an admin to
         enable Create, Approve, or History under Staff permissions.
       </div>
     );

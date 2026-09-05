@@ -378,7 +378,7 @@ export default function PurchaseRequisitionList() {
                 : (data.results || []).length,
             );
           } else {
-            toast.error(data.message || "Failed to load purchase orders");
+            toast.error(data.message || "Failed to load goods received");
             setPr([]);
             setTotalCount(0);
           }
@@ -386,7 +386,7 @@ export default function PurchaseRequisitionList() {
         (err) => {
           setLoading(false);
           console.log(err);
-          toast.error(err?.message || "Failed to load purchase orders");
+          toast.error(err?.message || "Failed to load goods received");
           setPr([]);
           setTotalCount(0);
         },
@@ -459,8 +459,8 @@ export default function PurchaseRequisitionList() {
     if (!formSubmittedRef.current && storedCount > 0) {
       toast.info(
         storedCount === 1
-          ? "The document was uploaded and stored. Submit the purchase order to attach it."
-          : `${storedCount} documents were uploaded and stored. Submit the purchase order to attach them.`,
+          ? "The document was uploaded and stored. Submit the goods received to attach it."
+          : `${storedCount} documents were uploaded and stored. Submit the goods received to attach them.`,
       );
     }
     formSubmittedRef.current = false;
@@ -887,7 +887,7 @@ export default function PurchaseRequisitionList() {
       setIsFormModalOpen(false);
       getPR();
     } catch (error) {
-      toast.error(error.message || "Failed to submit purchase order");
+      toast.error(error.message || "Failed to submit goods received");
     } finally {
       setFormLoading(false);
     }
@@ -942,12 +942,12 @@ export default function PurchaseRequisitionList() {
               <div>
                 <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
                   <ClipboardList className="h-5 w-5 text-[var(--aa-accent)]" />
-                  Purchase Orders
+                  Goods received
                 </h1>
                 <p className="mt-0.5 text-xs text-slate-500">
                   {isHistory
-                    ? "Past purchase orders and requisitions"
-                    : "Create and track purchase requisitions pending approval"}
+                    ? "Past goods received records"
+                    : "Create and track goods received pending approval"}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -967,7 +967,7 @@ export default function PurchaseRequisitionList() {
                     className="h-9 gap-1.5 bg-[var(--aa-accent)] text-white hover:opacity-90"
                   >
                     <Plus className="h-4 w-4" />
-                    Create Purchase Order
+                    Create Goods received
                   </Button>
                 )}
               </div>
@@ -1090,8 +1090,8 @@ export default function PurchaseRequisitionList() {
                       >
                         <FileText className="mx-auto mb-2 h-8 w-8 text-slate-300" />
                         {isHistory
-                          ? "No purchase order history yet"
-                          : "No purchase orders to show"}
+                          ? "No goods received history yet"
+                          : "No goods received to show"}
                       </td>
                     </tr>
                   ) : (
@@ -1232,7 +1232,7 @@ export default function PurchaseRequisitionList() {
             className="border-0 text-white [&>.btn-close]:brightness-0 [&>.btn-close]:invert"
             style={{ background: "var(--aa-navy)" }}
           >
-            View purchase order
+            View goods received
           </ModalHeader>
           <ModalBody className="bg-white">
             <div style={{ marginBottom: 20 }}>
@@ -1434,7 +1434,7 @@ export default function PurchaseRequisitionList() {
             </div>
           </ModalBody>
         </Modal>
-      {/* Create Purchase Order — right sheet */}
+      {/* Create Goods received — right sheet */}
       <Sheet open={isFormModalOpen} onOpenChange={handleFormSheetChange}>
         <SheetContent
           side="right"
@@ -1442,10 +1442,10 @@ export default function PurchaseRequisitionList() {
         >
           <SheetHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-navy)] px-5 py-4 text-left pr-12">
             <SheetTitle className="text-lg font-semibold text-white">
-              Create Purchase Order
+              Create Goods received
             </SheetTitle>
             <SheetDescription className="text-sm text-white/70">
-              Add items and details for your purchase order
+              Add items and details for goods received
             </SheetDescription>
           </SheetHeader>
 
@@ -1961,7 +1961,7 @@ export default function PurchaseRequisitionList() {
                   attachmentUploading
                 }
               >
-                {formLoading ? "Submitting…" : "Submit Purchase Order"}
+                {formLoading ? "Submitting…" : "Submit Goods received"}
               </Button>
             </div>
           </div>

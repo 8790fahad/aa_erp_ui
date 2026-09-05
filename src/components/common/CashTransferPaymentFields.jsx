@@ -129,6 +129,7 @@ export default function CashTransferPaymentFields({
   cashTypeaheadRef,
   bankTypeaheadRef,
   disabled = false,
+  lockMode = false,
   /** Custom row wrapper for Pay Bills (Row component) */
   Row,
 }) {
@@ -198,10 +199,10 @@ export default function CashTransferPaymentFields({
     <select
       value={modeOfPayment || ""}
       onChange={(e) => onModeChange?.(e.target.value)}
-      disabled={disabled}
+      disabled={disabled || lockMode}
       className={
         layout === "grid"
-          ? "h-9 w-full max-w-xs rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+          ? "h-9 w-full max-w-xs rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)] disabled:bg-slate-50"
           : inputClass
       }
     >

@@ -382,7 +382,7 @@ function RequisitionApproval() {
               <div>
                 <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
                   <ClipboardList className="h-5 w-5 text-[var(--aa-accent)]" />
-                  Purchase Orders
+                  Goods received
                 </h1>
                 <p className="mt-0.5 text-xs text-slate-500">
                   Review and approve pending purchase requisitions
@@ -495,7 +495,7 @@ function RequisitionApproval() {
                         <p className="mt-1 text-xs text-slate-400">
                           {hasActiveFilters
                             ? "Try a different date range or status"
-                            : "New purchase orders will appear here for review"}
+                            : "New goods received will appear here for review"}
                         </p>
                       </td>
                     </tr>

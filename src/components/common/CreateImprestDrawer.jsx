@@ -303,6 +303,11 @@ export default function CreateImprestDrawer({
   facilityId,
   user,
   prefillLine,
+  defaultMode = "cash",
+  lockMode = false,
+  tillMode = null,
+  skipReceiptNavigate = false,
+  onSuccess,
 }) {
   const [lines, setLines] = useState([]);
   const [draft, setDraft] = useState(emptyDraft());
@@ -339,10 +344,14 @@ export default function CreateImprestDrawer({
     setLines([]);
     setDraft(emptyDraft());
     setPaymentDate(new Date().toISOString().slice(0, 10));
-    setModeOfPayment("cash");
+    setModeOfPayment(defaultMode || "cash");
     setNarration("");
     setChequeNumber("");
-  }, []);
+  }, [defaultMode]);
+
+  useEffect(() => {
+    if (open) setModeOfPayment(defaultMode || "cash");
+  }, [open, defaultMode]);
 
   const fetchImpressHistory = useCallback(() => {
     const fid = facilityId || activeBusiness?.id;
@@ -698,6 +707,7 @@ export default function CreateImprestDrawer({
       data,
       /** Imprest posts to direct-expenses but must not create a purchase invoice row */
       skip_invoice: true,
+      till_mode: tillMode || null,
     };
 
     _postApi(
@@ -723,7 +733,8 @@ export default function CreateImprestDrawer({
               : "Imprest expense recorded successfully"
           );
           onOpenChange(false);
-          if (refCode) {
+          onSuccess?.();
+          if (refCode && !skipReceiptNavigate) {
             navigate(
               `/app/expenses/billing/imprest-receipt?ref=${encodeURIComponent(refCode)}`
             );
@@ -788,7 +799,8 @@ export default function CreateImprestDrawer({
             <AdvancePaymentPaymentFields
               idPrefix="imprest"
               modeOfPayment={modeOfPayment}
-              onModeChange={setModeOfPayment}
+              onModeChange={lockMode ? () => {} : setModeOfPayment}
+              modeLocked={lockMode}
               accountHead={accountHead}
               onAccountHeadChange={setAccountHead}
               bankAccount={bankAccount}
@@ -1400,4 +1412,9 @@ CreateImprestDrawer.propTypes = {
   facilityId: PropTypes.string,
   user: PropTypes.object,
   prefillLine: PropTypes.object,
+  defaultMode: PropTypes.string,
+  lockMode: PropTypes.bool,
+  tillMode: PropTypes.string,
+  skipReceiptNavigate: PropTypes.bool,
+  onSuccess: PropTypes.func,
 };

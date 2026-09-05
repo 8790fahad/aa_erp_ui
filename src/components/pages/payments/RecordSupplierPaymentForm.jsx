@@ -116,7 +116,13 @@ function Field({ label, required, children, error, wide = false, alignStart = fa
 /**
  * New Payment — layout matches Inventory Bill (Product Supplier Bill).
  */
-export default function RecordSupplierPaymentForm() {
+export default function RecordSupplierPaymentForm({
+  onClose,
+  onSaved,
+  defaultMode,
+  lockMode = false,
+  embedded = false,
+} = {}) {
   const navigate = useNavigate();
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id;
@@ -130,7 +136,9 @@ export default function RecordSupplierPaymentForm() {
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentDate, setPaymentDate] = useState(moment().format("YYYY-MM-DD"));
   const [paymentNumber, setPaymentNumber] = useState("");
-  const [modeOfPayment, setModeOfPayment] = useState("cash");
+  const [modeOfPayment, setModeOfPayment] = useState(
+    () => defaultMode || "cash",
+  );
   const [chequeNumber, setChequeNumber] = useState("");
   const [cashAmount, setCashAmount] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
@@ -202,6 +210,10 @@ export default function RecordSupplierPaymentForm() {
     generatePaymentNumber();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facilityId]);
+
+  useEffect(() => {
+    if (defaultMode) setModeOfPayment(defaultMode);
+  }, [defaultMode]);
 
   useEffect(() => {
     if (!facilityId) return;
@@ -585,7 +597,9 @@ export default function RecordSupplierPaymentForm() {
               ? `Payment recorded (${referenceNumber})`
               : "Payment recorded",
           );
-          navigate("/app/payments/pay-bills", { replace: true });
+          if (typeof onSaved === "function") onSaved(res);
+          if (typeof onClose === "function") onClose();
+          else navigate("/app/payments/pay-bills", { replace: true });
         } else {
           toast.error(res?.message || "Failed to save payment");
         }
@@ -601,7 +615,10 @@ export default function RecordSupplierPaymentForm() {
     );
   };
 
-  const goBack = () => navigate("/app/payments/pay-bills");
+  const goBack = () => {
+    if (typeof onClose === "function") onClose();
+    else navigate("/app/payments/pay-bills");
+  };
 
   const supplierChipLabel = useMemo(() => {
     if (!selectedSupplier) return "";
@@ -621,7 +638,7 @@ export default function RecordSupplierPaymentForm() {
     missingSupplier || missingAmount || missingMode || errors.date;
 
   return (
-    <div className="relative min-h-screen bg-white">
+    <div className={embedded ? "relative bg-white" : "relative min-h-screen bg-white"}>
       <AlertDialog
         open={confirmOpen}
         onOpenChange={(open) => {
@@ -664,7 +681,7 @@ export default function RecordSupplierPaymentForm() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="flex min-h-screen flex-col bg-white">
+      <div className={embedded ? "flex flex-col bg-white" : "flex min-h-screen flex-col bg-white"}>
         <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -674,7 +691,7 @@ export default function RecordSupplierPaymentForm() {
               />
               <div>
                 <h1 className="text-xl font-semibold text-slate-900">
-                  New Payment
+                  {embedded ? "Pay Bill" : "New Payment"}
                 </h1>
                 <p className="text-xs text-slate-500">
                   Apply this payment to unpaid bills. Excess is kept as vendor
@@ -825,6 +842,7 @@ export default function RecordSupplierPaymentForm() {
             }}
             cashTypeaheadRef={cashTypeaheadRef}
             disabled={saving}
+            lockMode={lockMode}
           />
           {(errors.mode || errors.paidThrough || errors.cheque) && (
             <p className="ml-0 flex items-center gap-1 text-xs text-red-600 lg:ml-[9rem] lg:pl-4">

@@ -227,7 +227,7 @@ export const modules = [
       // },
 
       {
-        title: "Purchase Order",
+        title: "Goods received",
         url: "/app/purchase/purchase-requisition",
         functionality: [
           "Purchase Order",
@@ -410,6 +410,8 @@ export const modules = [
           { title: "Make Deposit" },
           { title: "Discount Collection" },
           { title: "Collection Reconciliation" },
+          { title: "Imprest" },
+          { title: "Pay Bill" },
           { title: "Switch Payment Mode" },
           { title: "Approve Payment Mode Switch" },
         ],
@@ -422,9 +424,15 @@ export const modules = [
         ],
       },
       {
-        title: "Deposit History",
+        title: "Received Payment",
         url: "/app/payments/receive-payment",
-        functionality: ["Receive Payment", "Payments", "Customer Deposit"],
+        functionality: [
+          "Received Payment",
+          "Receive Payment",
+          "Payments",
+          "Customer Deposit",
+          "Deposit History",
+        ],
         access: [
           "services",
           "retailers",

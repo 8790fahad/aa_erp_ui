@@ -84,12 +84,15 @@ export default function CollectionReconciliation() {
           list.forEach((c) => {
             const cashVal =
               c.received_cash != null ? c.received_cash : c.expected_cash ?? 0;
+            const cardVal =
+              c.received_card != null ? c.received_card : c.expected_card ?? 0;
             const transferVal =
               c.received_transfer != null
                 ? c.received_transfer
                 : c.expected_transfer ?? 0;
             next[c.cashier_user_id] = {
               received_cash: formatNumberWithCommas(String(cashVal)),
+              received_card: formatNumberWithCommas(String(cardVal)),
               received_transfer: formatNumberWithCommas(String(transferVal)),
               note: c.note || "",
             };
@@ -175,6 +178,7 @@ export default function CollectionReconciliation() {
       [cashierUserId]: {
         ...(prev[cashierUserId] || {
           received_cash: "",
+          received_card: "",
           received_transfer: "",
           note: "",
         }),
@@ -192,10 +196,17 @@ export default function CollectionReconciliation() {
     const received_cash = parseFloat(
       parseNumberFromFormatted(draft.received_cash),
     );
+    const received_card = parseFloat(
+      parseNumberFromFormatted(draft.received_card),
+    );
     const received_transfer = parseFloat(
       parseNumberFromFormatted(draft.received_transfer),
     );
-    if (!Number.isFinite(received_cash) || !Number.isFinite(received_transfer)) {
+    if (
+      !Number.isFinite(received_cash) ||
+      !Number.isFinite(received_card) ||
+      !Number.isFinite(received_transfer)
+    ) {
       toast.error("Enter valid received amounts");
       return;
     }
@@ -209,6 +220,7 @@ export default function CollectionReconciliation() {
         branchId: 0,
         cashierUserId: row.cashier_user_id,
         received_cash,
+        received_card,
         received_transfer,
         note: draft.note || null,
         confirmed_by: user.id,
@@ -249,14 +261,18 @@ export default function CollectionReconciliation() {
     if (cashierFilter === "all" && summary) {
       return {
         expected_cash: Number(summary.expected_cash) || 0,
+        expected_card: Number(summary.expected_card) || 0,
         expected_transfer: Number(summary.expected_transfer) || 0,
         expected_total:
           (Number(summary.expected_cash) || 0) +
+          (Number(summary.expected_card) || 0) +
           (Number(summary.expected_transfer) || 0),
         confirmed_cash: Number(summary.received_cash) || 0,
+        confirmed_card: Number(summary.received_card) || 0,
         confirmed_transfer: Number(summary.received_transfer) || 0,
         confirmed_total:
           (Number(summary.received_cash) || 0) +
+          (Number(summary.received_card) || 0) +
           (Number(summary.received_transfer) || 0),
         confirmed_count: Number(summary.confirmed_count) || 0,
         open_count: Number(summary.open_count) || 0,
@@ -265,18 +281,22 @@ export default function CollectionReconciliation() {
 
     const rows = filteredCashiers;
     let expected_cash = 0;
+    let expected_card = 0;
     let expected_transfer = 0;
     let confirmed_cash = 0;
+    let confirmed_card = 0;
     let confirmed_transfer = 0;
     let confirmed_count = 0;
     let open_count = 0;
 
     rows.forEach((c) => {
       expected_cash += Number(c.expected_cash) || 0;
+      expected_card += Number(c.expected_card) || 0;
       expected_transfer += Number(c.expected_transfer) || 0;
       if (isLocked(c.status)) {
         confirmed_count += 1;
         confirmed_cash += Number(c.received_cash) || 0;
+        confirmed_card += Number(c.received_card) || 0;
         confirmed_transfer += Number(c.received_transfer) || 0;
       } else {
         open_count += 1;
@@ -285,11 +305,13 @@ export default function CollectionReconciliation() {
 
     return {
       expected_cash,
+      expected_card,
       expected_transfer,
-      expected_total: expected_cash + expected_transfer,
+      expected_total: expected_cash + expected_card + expected_transfer,
       confirmed_cash,
+      confirmed_card,
       confirmed_transfer,
-      confirmed_total: confirmed_cash + confirmed_transfer,
+      confirmed_total: confirmed_cash + confirmed_card + confirmed_transfer,
       confirmed_count,
       open_count,
     };
@@ -298,15 +320,19 @@ export default function CollectionReconciliation() {
   const cards = useMemo(
     () => [
       {
-        label: "Expected total",
+        label: "To retire",
         value: viewSummary.expected_total,
       },
       {
-        label: "Expected cash",
+        label: "Cash to retire",
         value: viewSummary.expected_cash,
       },
       {
-        label: "Expected transfer",
+        label: "Card to retire",
+        value: viewSummary.expected_card,
+      },
+      {
+        label: "Transfer to retire",
         value: viewSummary.expected_transfer,
       },
       {
@@ -344,8 +370,9 @@ export default function CollectionReconciliation() {
               Collection Reconciliation
             </h1>
             <p className="mt-1 text-sm text-slate-600">
-              Supervisor confirms each cashier&apos;s hand-in for the day (not
-              bank reconciliation)
+              Supervisor confirms each cashier&apos;s hand-in for the day.
+              Cash / card / transfer to retire is collections minus till
+              expenses (not bank reconciliation).
             </p>
           </div>
           <Button
@@ -409,7 +436,7 @@ export default function CollectionReconciliation() {
           </div>
         </div>
 
-        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {cards.map((c) => (
             <div
               key={c.label}
@@ -444,18 +471,24 @@ export default function CollectionReconciliation() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-sm">
+              <table className="w-full min-w-[1100px] text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-3 py-2.5 font-semibold">Cashier</th>
                     <th className="px-3 py-2.5 font-semibold text-right">
-                      Exp. cash
+                      Cash to retire
                     </th>
                     <th className="px-3 py-2.5 font-semibold text-right">
-                      Exp. transfer
+                      Card to retire
+                    </th>
+                    <th className="px-3 py-2.5 font-semibold text-right">
+                      Transfer to retire
                     </th>
                     <th className="px-3 py-2.5 font-semibold text-right">
                       Received cash
+                    </th>
+                    <th className="px-3 py-2.5 font-semibold text-right">
+                      Received card
                     </th>
                     <th className="px-3 py-2.5 font-semibold text-right">
                       Received transfer
@@ -475,6 +508,10 @@ export default function CollectionReconciliation() {
                       parseFloat(
                         parseNumberFromFormatted(draft.received_cash),
                       ) || 0;
+                    const recvCard =
+                      parseFloat(
+                        parseNumberFromFormatted(draft.received_card),
+                      ) || 0;
                     const recvTransfer =
                       parseFloat(
                         parseNumberFromFormatted(draft.received_transfer),
@@ -483,6 +520,7 @@ export default function CollectionReconciliation() {
                       locked && row.variance_total != null
                         ? Number(row.variance_total)
                         : moneySafe(recvCash - row.expected_cash) +
+                          moneySafe(recvCard - (row.expected_card || 0)) +
                           moneySafe(recvTransfer - row.expected_transfer);
                     const expanded = expandedId === row.cashier_user_id;
                     const lines = linesByCashier[row.cashier_user_id] || [];
@@ -506,6 +544,15 @@ export default function CollectionReconciliation() {
                           </td>
                           <td className="px-3 py-2.5 text-right tabular-nums">
                             ₦{formatNumber1(row.expected_cash)}
+                            {Number(row.expenses_cash) > 0 ? (
+                              <div className="text-[10px] font-normal text-slate-400">
+                                coll. ₦{formatNumber1(row.collected_cash)} −
+                                exp. ₦{formatNumber1(row.expenses_cash)}
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">
+                            ₦{formatNumber1(row.expected_card || 0)}
                           </td>
                           <td className="px-3 py-2.5 text-right tabular-nums">
                             ₦{formatNumber1(row.expected_transfer)}
@@ -520,12 +567,34 @@ export default function CollectionReconciliation() {
                                 type="text"
                                 inputMode="decimal"
                                 placeholder="0.00"
-                                className="ml-auto h-8 w-[130px] text-right tabular-nums"
+                                className="ml-auto h-8 w-[110px] text-right tabular-nums"
                                 value={draft.received_cash ?? ""}
                                 onChange={(e) =>
                                   updateDraft(
                                     row.cashier_user_id,
                                     "received_cash",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-right">
+                            {locked ? (
+                              <span className="tabular-nums">
+                                ₦{formatNumber1(row.received_card)}
+                              </span>
+                            ) : (
+                              <Input
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="0.00"
+                                className="ml-auto h-8 w-[110px] text-right tabular-nums"
+                                value={draft.received_card ?? ""}
+                                onChange={(e) =>
+                                  updateDraft(
+                                    row.cashier_user_id,
+                                    "received_card",
                                     e.target.value,
                                   )
                                 }

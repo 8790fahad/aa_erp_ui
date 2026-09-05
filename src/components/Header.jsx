@@ -104,6 +104,8 @@ const QUICK_CREATE = [
       "Make Deposit",
       "Discount Collection",
       "Collection Reconciliation",
+      "Imprest",
+      "Pay Bill",
     ],
   },
 ];

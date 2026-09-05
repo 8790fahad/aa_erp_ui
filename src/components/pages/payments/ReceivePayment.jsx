@@ -12,14 +12,18 @@ import {
   Nfc,
   Eye,
   History,
+  Landmark,
   Loader2,
+  Lock,
   Percent,
   Plus,
   RefreshCw,
+  Receipt,
   ScanLine,
   Search,
   Split,
   Wallet,
+  ChevronRight,
 } from "lucide-react";
 import moment from "moment";
 import { toast } from "sonner";
@@ -68,6 +72,8 @@ import { WorkflowStatusBadge } from "@/lib/saleWorkflowStatus.js";
 import useScanDetection from "@/hooks/useScanDetection";
 import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
 import CreditSaleInvoiceImproved from "@/components/pages/sales/CreditSaleInvoiceImproved";
+import CreateImprestDrawer from "@/components/common/CreateImprestDrawer";
+import RecordSupplierPaymentForm from "@/components/pages/payments/RecordSupplierPaymentForm";
 
 const cashPayThroughLabel = (option) =>
   `${option?.description || option?.head || ""} (${option?.head || ""})`.trim();
@@ -77,6 +83,194 @@ const bankPayThroughLabel = (option) => {
   const num = option?.account_number || option?.head || "";
   return num ? `${name} (${num})` : String(name);
 };
+
+function tillPayBillMode(tab) {
+  if (tab === "transfer") return "bank";
+  if (tab === "card") return "card";
+  return "cash";
+}
+
+function TillSummaryCard({
+  modeLabel,
+  icon: Icon,
+  iconClass,
+  amountClass,
+  retire,
+  onOpen,
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-shadow hover:border-[var(--aa-accent)] hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+          <Icon className={`h-4 w-4 ${iconClass}`} />
+          {modeLabel} to retire
+        </div>
+        <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-[var(--aa-navy)]">
+          Open till
+          <ChevronRight className="h-3.5 w-3.5" />
+        </span>
+      </div>
+      <p className={`mt-2 text-2xl font-semibold tabular-nums ${amountClass}`}>
+        ₦{formatNumber1(retire)}
+      </p>
+      <p className="mt-1 text-xs text-slate-500">
+        Collected today minus till expenses — tap for Imprest and Pay Bill
+      </p>
+    </button>
+  );
+}
+
+function TillMetric({ label, value, hint, tone = "slate", onClick }) {
+  const tones = {
+    slate: "text-slate-900",
+    collect: "text-slate-900",
+    collected: "text-emerald-700",
+    retire: "text-emerald-700",
+  };
+  const Comp = onClick ? "button" : "div";
+  return (
+    <Comp
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className={`rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-left ${
+        onClick ? "hover:border-[var(--aa-accent)] hover:bg-white" : ""
+      }`}
+    >
+      <span className="block text-[11px] font-medium uppercase tracking-wide text-slate-500">
+        {label}
+      </span>
+      <span className={`mt-1 block text-xl font-semibold tabular-nums ${tones[tone]}`}>
+        ₦{formatNumber1(value)}
+      </span>
+      {hint ? (
+        <span className="mt-0.5 block text-[11px] text-slate-500">{hint}</span>
+      ) : null}
+    </Comp>
+  );
+}
+
+function TillActionCard({
+  title,
+  description,
+  icon: Icon,
+  iconClass,
+  allowed,
+  onClick,
+}) {
+  return (
+    <button
+      type="button"
+      onClick={allowed ? onClick : undefined}
+      disabled={!allowed}
+      className={`flex w-full items-start gap-3 rounded-xl border p-4 text-left transition ${
+        allowed
+          ? "border-slate-200 bg-white hover:border-[var(--aa-accent)] hover:shadow-sm"
+          : "cursor-not-allowed border-slate-100 bg-slate-50 opacity-70"
+      }`}
+    >
+      <span
+        className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+          allowed ? iconClass : "bg-slate-100 text-slate-400"
+        }`}
+      >
+        {allowed ? <Icon className="h-5 w-5" /> : <Lock className="h-4 w-4" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center justify-between gap-2">
+          <span className="text-sm font-semibold text-slate-900">{title}</span>
+          {allowed ? (
+            <ChevronRight className="h-4 w-4 text-slate-400" />
+          ) : (
+            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+              Needs permission
+            </span>
+          )}
+        </span>
+        <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
+      </span>
+    </button>
+  );
+}
+
+function TillHubDialog({
+  open,
+  onOpenChange,
+  modeLabel,
+  collect,
+  collected,
+  retire,
+  expenses,
+  pendingCount,
+  canImprest,
+  canPayBill,
+  onImprest,
+  onPayBill,
+  onViewCollected,
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-xl">{modeLabel} till</DialogTitle>
+          <DialogDescription>
+            Today&apos;s collection, what is left to retire, and spend from this
+            till.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-2 sm:grid-cols-3">
+          <TillMetric
+            label={`${modeLabel} to collect`}
+            value={collect}
+            hint={`${pendingCount} pending invoice${pendingCount === 1 ? "" : "s"}`}
+            tone="collect"
+          />
+          <TillMetric
+            label="Collected today"
+            value={collected}
+            hint="Tap to view history"
+            tone="collected"
+            onClick={onViewCollected}
+          />
+          <TillMetric
+            label={`${modeLabel} to retire`}
+            value={retire}
+            hint={`After expenses ₦${formatNumber1(expenses)}`}
+            tone="retire"
+          />
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Spend from this till
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <TillActionCard
+              title="Imprest"
+              description={`Record a ${modeLabel.toLowerCase()} till expense against collections.`}
+              icon={Receipt}
+              iconClass="bg-amber-50 text-amber-700"
+              allowed={canImprest}
+              onClick={onImprest}
+            />
+            <TillActionCard
+              title="Pay Bill"
+              description={`Pay a supplier from ${modeLabel.toLowerCase()} collected today.`}
+              icon={Landmark}
+              iconClass="bg-sky-50 text-sky-700"
+              allowed={canPayBill}
+              onClick={onPayBill}
+            />
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 /** Select menu must sit above Sheet (z-50) */
 const payThroughSelectContentClass = "z-[220] max-h-64";
@@ -145,6 +339,8 @@ const APPROVE_PAYMENT_MODE_PRIVILEGE = "Approve Payment Mode Switch";
 
 const MAKE_DEPOSIT_PRIVILEGE = "Make Deposit";
 const RECONCILIATION_PRIVILEGE = "Collection Reconciliation";
+const IMPREST_PRIVILEGE = "Imprest";
+const PAY_BILL_PRIVILEGE = "Pay Bill";
 
 function parseFunctionalities(raw) {
   if (Array.isArray(raw)) return raw.filter(Boolean);
@@ -348,6 +544,129 @@ function depositApplyPreview(row) {
   return { due, available, apply };
 }
 
+function collectModeIds(row) {
+  return ["cash", "transfer", "card", "credit", "deposit"].filter((id) =>
+    rowPaymentModes(row).includes(id),
+  );
+}
+
+/** Two or more modes → collect any portion; last completing payment opens print. */
+function rowCollectsAsSplit(row) {
+  if (!row) return false;
+  const pt = String(row.payment_type || "")
+    .toLowerCase()
+    .trim();
+  if (isSplitPaymentType(pt)) return true;
+  if (collectModeIds(row).length > 1) return true;
+  if (pt === "deposit" || pt === "apply_deposit" || pt === "apply deposit") {
+    const modes = rowPaymentModes(row);
+    return (
+      modes.includes("cash") ||
+      modes.includes("transfer") ||
+      modes.includes("card") ||
+      modes.includes("credit")
+    );
+  }
+  return false;
+}
+
+function unappliedDepositCover(row) {
+  if (!row) return 0;
+  if ((Number(row.split_progress?.deposit_applied) || 0) > 0.05) return 0;
+  if (!rowPaymentModes(row).includes("deposit")) return 0;
+  return Math.max(0, Number(row.deposit_available) || 0);
+}
+
+const MODE_BREAKDOWN_ORDER = ["cash", "transfer", "card", "deposit", "credit"];
+
+function fallbackModeIds(row) {
+  const pt = normalizePaymentMode(row?.payment_type);
+  if (pt === "credit_split") return ["cash", "transfer", "credit"];
+  if (pt === "split") return ["cash", "transfer"];
+  if (MODE_LABELS[pt]) return [pt];
+  return [];
+}
+
+/** Per-mode amounts for the Verification Points list (collected, or expected). */
+function rowPaymentModeBreakdown(row) {
+  if (!row) return [];
+  const selected = collectModeIds(row);
+  const ids = selected.length ? selected : fallbackModeIds(row);
+  if (!ids.length) return [];
+
+  const ordered = MODE_BREAKDOWN_ORDER.filter((id) => ids.includes(id));
+  const sp = row.split_progress || {};
+  const due = Number(row.amount) || 0;
+  const cash = Number(sp.cash) || 0;
+  const transfer = Number(sp.transfer) || 0;
+  const card = Number(sp.card) || 0;
+  const depositApplied = Number(sp.deposit_applied) || 0;
+  const depositExpected = Math.min(unappliedDepositCover(row), due);
+  const depositAmt =
+    depositApplied > 0.05 ? depositApplied : depositExpected;
+  const creditKnown =
+    Number(sp.credit_allocated) ||
+    Number(sp.credit) ||
+    Number(row.credit_remainder) ||
+    0;
+  const accounted =
+    cash +
+    transfer +
+    card +
+    (ordered.includes("deposit") ? depositAmt : 0);
+  const remaining = Math.max(0, Number((due - accounted).toFixed(2)));
+
+  return ordered.map((id) => {
+    let amount = 0;
+    if (id === "cash") amount = cash;
+    else if (id === "transfer") amount = transfer;
+    else if (id === "card") amount = card;
+    else if (id === "deposit") amount = depositAmt;
+    else if (id === "credit") {
+      amount = creditKnown > 0.05 ? creditKnown : remaining;
+    }
+    if (ordered.length === 1 && amount <= 0.05) amount = due;
+    const collected =
+      (id === "cash" && cash > 0.05) ||
+      (id === "transfer" && transfer > 0.05) ||
+      (id === "card" && card > 0.05) ||
+      (id === "deposit" && depositApplied > 0.05) ||
+      (id === "credit" &&
+        (Number(sp.credit_allocated) > 0.05 || Number(sp.credit) > 0.05));
+    return {
+      id,
+      label: MODE_LABELS[id] || id,
+      amount: Number(amount.toFixed(2)),
+      collected,
+    };
+  });
+}
+
+function PaymentModeBreakdown({ row, className = "" }) {
+  const items = rowPaymentModeBreakdown(row);
+  if (!items.length) return null;
+  return (
+    <div className={`space-y-0.5 text-[11px] leading-snug ${className}`}>
+      {items.map((item) => (
+        <div key={item.id} className="tabular-nums text-slate-600">
+          <span className="text-slate-500">{item.label}:</span>{" "}
+          <span
+            className={
+              item.amount > 0.05
+                ? item.collected
+                  ? "font-medium text-emerald-700"
+                  : "font-medium text-slate-800"
+                : "font-medium text-amber-700"
+            }
+          >
+            ₦{formatNumber1(item.amount)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function rowPaymentModes(row) {
   const top = Array.isArray(row?.payment_modes) ? row.payment_modes : [];
   if (top.length) {
@@ -376,28 +695,6 @@ function rowPaymentModes(row) {
   if (pt === "card") return ["card"];
   if (pt === "cash") return ["cash"];
   return [];
-}
-
-function nextTabAfterPortion(row, justPaid) {
-  const modes = rowPaymentModes(row);
-  const sp = row?.split_progress || {};
-  const order = ["cash", "transfer", "card", "credit", "deposit"].filter((id) =>
-    modes.includes(id),
-  );
-  const done = {
-    cash: (Number(sp.cash) || 0) > 0.05,
-    transfer: (Number(sp.transfer) || 0) > 0.05,
-    card: (Number(sp.card) || 0) > 0.05,
-    credit:
-      (Number(sp.credit_allocated) || Number(sp.credit) || 0) > 0.05,
-    deposit: (Number(sp.deposit_applied) || 0) > 0.05,
-  };
-  if (justPaid && done[justPaid] !== undefined) done[justPaid] = true;
-  return (
-    order.find((id) => id !== justPaid && !done[id]) ||
-    order.find((id) => id !== justPaid) ||
-    null
-  );
 }
 
 function postJson(url, body) {
@@ -526,6 +823,8 @@ export default function ReceivePayment() {
       ? "Discount Collection"
       : null,
     functionalities.includes(MAKE_DEPOSIT_PRIVILEGE) ? "Make Deposit" : null,
+    functionalities.includes(IMPREST_PRIVILEGE) ? "Imprest" : null,
+    functionalities.includes(PAY_BILL_PRIVILEGE) ? "Pay Bill" : null,
     functionalities.includes(RECONCILIATION_PRIVILEGE)
       ? "Collection Reconciliation"
       : null,
@@ -607,6 +906,10 @@ export default function ReceivePayment() {
   const [discountPending, setDiscountPending] = useState([]);
   const [modePending, setModePending] = useState([]);
   const [history, setHistory] = useState([]);
+  const [imprestOpen, setImprestOpen] = useState(false);
+  const [tillHubOpen, setTillHubOpen] = useState(false);
+  const [payBillOpen, setPayBillOpen] = useState(false);
+  const [expenseList, setExpenseList] = useState([]);
   const [summary, setSummary] = useState({
     pending_cash: 0,
     pending_transfer: 0,
@@ -662,12 +965,7 @@ export default function ReceivePayment() {
   const amountDue = Number(selected?.amount) || 0;
   const paymentType = String(selected?.payment_type || "").toLowerCase();
   const selectedModes = selected ? rowPaymentModes(selected) : [];
-  const isSplit =
-    isSplitPaymentType(paymentType) ||
-    (paymentType === "deposit" &&
-      (selectedModes.includes("cash") ||
-        selectedModes.includes("transfer") ||
-        selectedModes.includes("card")));
+  const isSplit = rowCollectsAsSplit(selected);
   const isCreditSplitHub =
     normalizePaymentMode(paymentType) === "credit_split" ||
     (paymentType === "deposit" && selectedModes.includes("credit"));
@@ -707,13 +1005,18 @@ export default function ReceivePayment() {
   const splitProgress = selected?.split_progress || null;
   const remainingDue = isSplit
     ? Number(
-        (
+        Math.max(
+          0,
           amountDue -
-          (Number(splitProgress?.collected_total) || 0) -
-          (Number(splitProgress?.credit_allocated) || 0)
+            (Number(splitProgress?.collected_total) || 0) -
+            (Number(splitProgress?.credit_allocated) || 0),
         ).toFixed(2),
       )
     : amountDue;
+  const depositCover = unappliedDepositCover(selected);
+  const suggestedPortion = isSplit
+    ? Number(Math.max(0, remainingDue - depositCover).toFixed(2))
+    : remainingDue;
   const unpaidBeforeCredit = isSplit
     ? Number(
         (
@@ -823,6 +1126,28 @@ export default function ReceivePayment() {
     setDashboardReady(false);
     fetchDashboard();
   }, [fetchDashboard]);
+
+  useEffect(() => {
+    if (!imprestOpen || !activeBusiness?.id || expenseList.length) return;
+    _postApi(
+      `/inventory/product-list?query_type=select_administrative_expenses`,
+      { facilityId: activeBusiness.id },
+      (resp) => {
+        if (resp?.success) {
+          setExpenseList(
+            (resp.results || []).map((item) => ({
+              name: item.description,
+              code: item.head,
+              chart_code: item.subhead,
+              account_type: item.account_type || "",
+              show: item.show || "",
+            })),
+          );
+        }
+      },
+      () => {},
+    );
+  }, [imprestOpen, activeBusiness?.id, expenseList.length]);
 
   // Cash + Transfer: always start amounts at empty when opening collect
   useEffect(() => {
@@ -943,6 +1268,15 @@ export default function ReceivePayment() {
         pending_mode: 0,
         collected_cash_today: summary.collected_cash_today,
         collected_transfer_today: 0,
+        expenses_today: Number(summary.expenses_cash_today) || 0,
+        retire_today: Number(
+          summary.retire_cash_today ??
+            Math.max(
+              0,
+              (Number(summary.collected_cash_today) || 0) -
+                (Number(summary.expenses_cash_today) || 0),
+            ),
+        ),
         pending_count: cashQueue.length,
       };
     }
@@ -962,6 +1296,15 @@ export default function ReceivePayment() {
         pending_mode: 0,
         collected_cash_today: 0,
         collected_transfer_today: summary.collected_transfer_today,
+        expenses_today: Number(summary.expenses_transfer_today) || 0,
+        retire_today: Number(
+          summary.retire_transfer_today ??
+            Math.max(
+              0,
+              (Number(summary.collected_transfer_today) || 0) -
+                (Number(summary.expenses_transfer_today) || 0),
+            ),
+        ),
         pending_count: transferQueue.length,
       };
     }
@@ -984,6 +1327,15 @@ export default function ReceivePayment() {
         collected_cash_today: 0,
         collected_transfer_today: 0,
         collected_card_today: summary.collected_card_today,
+        expenses_today: Number(summary.expenses_card_today) || 0,
+        retire_today: Number(
+          summary.retire_card_today ??
+            Math.max(
+              0,
+              (Number(summary.collected_card_today) || 0) -
+                (Number(summary.expenses_card_today) || 0),
+            ),
+        ),
         pending_count: cardQueue.length,
       };
     }
@@ -1114,6 +1466,28 @@ export default function ReceivePayment() {
       pending_count: summary.pending_count,
     };
   }, [methodTab, pending, creditPending, depositPending, discountPending, modePending, summary]);
+
+  const tillHub = useMemo(() => {
+    if (methodTab === "transfer") {
+      return {
+        modeLabel: "Transfer",
+        collect: viewSummary.pending_transfer,
+        collected: viewSummary.collected_transfer_today,
+      };
+    }
+    if (methodTab === "card") {
+      return {
+        modeLabel: "Card",
+        collect: viewSummary.pending_card,
+        collected: viewSummary.collected_card_today,
+      };
+    }
+    return {
+      modeLabel: "Cash",
+      collect: viewSummary.pending_cash,
+      collected: viewSummary.collected_cash_today,
+    };
+  }, [methodTab, viewSummary]);
 
   const methodPendingCounts = useMemo(() => {
     const creditSplitPending = pending.filter(
@@ -1561,23 +1935,9 @@ export default function ReceivePayment() {
     [navigate],
   );
 
-  const routeAfterPortion = useCallback(
-    (row, remaining, justPaid, saleCode) => {
-      if (remaining <= 0.05) {
-        openInvoicePrint(saleCode);
-        return;
-      }
-      const next = nextTabAfterPortion(
-        {
-          ...row,
-          split_progress: row?.split_progress,
-        },
-        justPaid,
-      );
-      if (next) {
-        setMethodTab(next);
-        setActiveTab("pending");
-      }
+  const printIfLastPay = useCallback(
+    (remaining, saleCode) => {
+      if (remaining <= 0.05 && saleCode) openInvoicePrint(saleCode);
     },
     [openInvoicePrint],
   );
@@ -1626,25 +1986,13 @@ export default function ReceivePayment() {
 
       toast.success(
         remaining > 0.05
-          ? `Deposit applied · ₦${formatNumber1(remaining)} left — next portion, last payment opens print`
+          ? `Deposit applied · ₦${formatNumber1(remaining)} left`
           : "Last payment (deposit) — opening invoice to print",
       );
       setDepositConfirmRow(null);
       setHubOpen(false);
       fetchDashboard();
-      routeAfterPortion(
-        {
-          ...row,
-          split_progress: {
-            ...(row.split_progress || {}),
-            deposit_applied:
-              (Number(row.split_progress?.deposit_applied) || 0) + depAmt,
-          },
-        },
-        remaining,
-        "deposit",
-        saleCode,
-      );
+      printIfLastPay(remaining, saleCode);
     } catch (err) {
       toast.error(err?.message || "Could not apply deposit");
     } finally {
@@ -1657,8 +2005,7 @@ export default function ReceivePayment() {
     user,
     depositAmount,
     fetchDashboard,
-    navigate,
-    routeAfterPortion,
+    printIfLastPay,
   ]);
 
   const openHub = useCallback(
@@ -1692,29 +2039,37 @@ export default function ReceivePayment() {
       }
 
       if (action === "collect") {
-        const due = Number(row.amount) || 0;
-        const collected = Number(row.split_progress?.collected_total) || 0;
-        const creditAlloc = Number(row.split_progress?.credit_allocated) || 0;
-        const leftover = Math.max(
-          0,
-          Number((due - collected - creditAlloc).toFixed(2)),
-        );
-        const fill = leftover > 0.05 ? leftover : due;
-        if (pt === "cash" || methodTab === "cash") {
-          setCashAmount(fill > 0 ? formatNumberWithCommas(String(fill)) : "");
-          setTransferAmount("");
-        } else if (
-          pt === "transfer" ||
-          pt === "bank" ||
-          methodTab === "transfer"
-        ) {
+        // Mixed modes: leave amount blank so any portion can be entered.
+        // Single-mode invoices still pre-fill the full amount due.
+        if (rowCollectsAsSplit(row)) {
           setCashAmount("");
-          setTransferAmount(
-            fill > 0 ? formatNumberWithCommas(String(fill)) : "",
-          );
+          setTransferAmount("");
         } else {
-          setCashAmount("");
-          setTransferAmount("");
+          const due = Number(row.amount) || 0;
+          const collected = Number(row.split_progress?.collected_total) || 0;
+          const creditAlloc = Number(row.split_progress?.credit_allocated) || 0;
+          const leftover = Math.max(
+            0,
+            Number((due - collected - creditAlloc).toFixed(2)),
+          );
+          const fill = leftover > 0.05 ? leftover : due;
+          if (pt === "cash" || methodTab === "cash") {
+            setCashAmount(fill > 0 ? formatNumberWithCommas(String(fill)) : "");
+            setTransferAmount("");
+          } else if (
+            pt === "transfer" ||
+            pt === "bank" ||
+            methodTab === "transfer" ||
+            methodTab === "card"
+          ) {
+            setCashAmount("");
+            setTransferAmount(
+              fill > 0 ? formatNumberWithCommas(String(fill)) : "",
+            );
+          } else {
+            setCashAmount("");
+            setTransferAmount("");
+          }
         }
       }
       if (action === "credit") {
@@ -2227,14 +2582,12 @@ export default function ReceivePayment() {
           setSubmitting(false);
           toast.success(
             res.message ||
-              `Credit ₦${formatNumber1(creditToSend)} saved — next portion, last payment opens print`,
+              `Credit ₦${formatNumber1(creditToSend)} saved`,
           );
           closeHub();
           fetchDashboard();
-          routeAfterPortion(
-            selected,
+          printIfLastPay(
             Number(res.results?.leftover ?? res.results?.remaining) || 0,
-            "credit",
             saleCode,
           );
           return;
@@ -2423,33 +2776,17 @@ export default function ReceivePayment() {
               "final_invoice",
             ].includes(status) ||
             (!isSplit && Math.abs(total - amountDue) <= 0.05);
-          const remainingNow = Number(res.results?.remaining);
-          const justPaid =
-            methodTab === "card"
-              ? "card"
-              : methodTab === "transfer"
-                ? "transfer"
-                : "cash";
 
           toast.success(
             lastPay
               ? res.message || "Last payment — opening invoice to print"
-              : res.message || "Payment recorded — collect the next portion",
+              : res.message || "Payment recorded",
           );
           closeCollect();
           fetchDashboard();
 
           if (lastPay && saleCode) {
             openInvoicePrint(saleCode);
-          } else if (saleCode) {
-            routeAfterPortion(
-              selected,
-              Number.isFinite(remainingNow)
-                ? remainingNow
-                : Number((remainingDue - total).toFixed(2)),
-              justPaid,
-              saleCode,
-            );
           }
         } else {
           toast.error(res?.message || "Could not confirm payment");
@@ -2466,7 +2803,12 @@ export default function ReceivePayment() {
     parseFormattedAmount(cashAmount) + parseFormattedAmount(transferAmount);
 
   const fillAllRemaining = (side) => {
-    const amt = remainingDue > 0 ? remainingDue : 0;
+    const amt =
+      suggestedPortion > 0.05
+        ? suggestedPortion
+        : remainingDue > 0
+          ? remainingDue
+          : 0;
     const formatted = amt > 0 ? formatNumberWithCommas(String(amt)) : "";
     if (side === "transfer" || side === "card") setTransferAmount(formatted);
     else setCashAmount(formatted);
@@ -2513,6 +2855,8 @@ export default function ReceivePayment() {
 
   const canMakeDeposit = canUseHeaderAction(MAKE_DEPOSIT_PRIVILEGE);
   const canReconcileCollections = canUseHeaderAction(RECONCILIATION_PRIVILEGE);
+  const canImprest = canUseHeaderAction(IMPREST_PRIVILEGE);
+  const canPayBill = canUseHeaderAction(PAY_BILL_PRIVILEGE);
 
   if (!visibleMethodTabs.length && !canMakeDeposit && !canReconcileCollections) {
     return (
@@ -2818,45 +3162,36 @@ export default function ReceivePayment() {
           ) : null}
 
           {viewSummary.showCash ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-                <Wallet className="h-4 w-4 text-emerald-600" />
-                {historyFrom === todayYmd && historyTo === todayYmd
-                  ? "Cash collected today"
-                  : "Cash collected"}
-              </div>
-              <p className="mt-2 text-2xl font-semibold tabular-nums text-emerald-700">
-                ₦{formatNumber1(viewSummary.collected_cash_today)}
-              </p>
-            </div>
+            <TillSummaryCard
+              modeLabel="Cash"
+              icon={Wallet}
+              iconClass="text-emerald-600"
+              amountClass="text-emerald-700"
+              retire={viewSummary.retire_today}
+              onOpen={() => setTillHubOpen(true)}
+            />
           ) : null}
 
           {viewSummary.showTransfer ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-                <Building2 className="h-4 w-4 text-sky-600" />
-                {historyFrom === todayYmd && historyTo === todayYmd
-                  ? "Transfer collected today"
-                  : "Transfer collected"}
-              </div>
-              <p className="mt-2 text-2xl font-semibold tabular-nums text-sky-700">
-                ₦{formatNumber1(viewSummary.collected_transfer_today)}
-              </p>
-            </div>
+            <TillSummaryCard
+              modeLabel="Transfer"
+              icon={Building2}
+              iconClass="text-sky-600"
+              amountClass="text-sky-700"
+              retire={viewSummary.retire_today}
+              onOpen={() => setTillHubOpen(true)}
+            />
           ) : null}
 
           {viewSummary.showCard ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-                <Nfc className="h-4 w-4 text-indigo-600" />
-                {historyFrom === todayYmd && historyTo === todayYmd
-                  ? "Card collected today"
-                  : "Card collected"}
-              </div>
-              <p className="mt-2 text-2xl font-semibold tabular-nums text-indigo-700">
-                ₦{formatNumber1(viewSummary.collected_card_today)}
-              </p>
-            </div>
+            <TillSummaryCard
+              modeLabel="Card"
+              icon={Nfc}
+              iconClass="text-indigo-600"
+              amountClass="text-indigo-700"
+              retire={viewSummary.retire_today}
+              onOpen={() => setTillHubOpen(true)}
+            />
           ) : null}
         </div>
 
@@ -3119,7 +3454,7 @@ export default function ReceivePayment() {
                                         row.payment_type,
                                       )}`}
                                     >
-                                      {paymentTypeLabel(row.payment_type)}
+                                      {paymentTypeLabel(row.payment_type, row)}
                                     </span>
                                   </div>
                                   <div>
@@ -3144,7 +3479,7 @@ export default function ReceivePayment() {
                                       row.payment_type,
                                     )}`}
                                   >
-                                    {paymentTypeLabel(row.payment_type)}
+                                    {paymentTypeLabel(row.payment_type, row)}
                                   </span>
                                   {canSwitchPaymentMode ? (
                                     <button
@@ -3167,149 +3502,9 @@ export default function ReceivePayment() {
                                 </div>
                               )}
                             </div>
-                          ) : methodTab === "credit" ? (
-                            <span
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${creditStateBadgeClass(
-                                row,
-                              )}`}
-                            >
-                              {creditStateLabel(row)}
-                            </span>
                           ) : (
-                            <span
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
-                                row.payment_type ||
-                                  (methodTab === "credit" ? "credit" : ""),
-                              )}`}
-                            >
-                              {paymentTypeLabel(
-                                row.payment_type ||
-                                  (methodTab === "credit" ? "credit" : ""),
-                                row,
-                              )}
-                            </span>
+                            <PaymentModeBreakdown row={row} />
                           )}
-                          {methodTab !== "mode" &&
-                          (isSplitPaymentType(row.payment_type) ||
-                            normalizePaymentMode(row.payment_type) ===
-                              "credit_split" ||
-                            (String(row.payment_type || "").toLowerCase() ===
-                              "credit" &&
-                              row.split_progress &&
-                              (Number(row.split_progress.cash) > 0 ||
-                                Number(row.split_progress.transfer) > 0 ||
-                                Number(row.split_progress.credit) > 0))) ? (
-                            <div className="mt-1.5 space-y-0.5 text-[11px] text-slate-500">
-                              <div>
-                                Cash:{" "}
-                                {Number(row.split_progress?.cash) > 0 ? (
-                                  <span className="font-medium text-emerald-600">
-                                    ₦{formatNumber1(row.split_progress.cash)}
-                                    {row.split_progress?.cash_by_name ? (
-                                      <span className="ml-1 font-normal text-slate-500">
-                                        · signed by{" "}
-                                        {row.split_progress.cash_by_name}
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                ) : normalizePaymentMode(row.payment_type) ===
-                                    "credit_split" ||
-                                  String(row.payment_type || "").toLowerCase() ===
-                                    "credit" ? (
-                                  <span className="font-medium text-slate-600">
-                                    ₦0.00
-                                  </span>
-                                ) : (
-                                  <span className="font-medium text-amber-600">
-                                    Pending
-                                  </span>
-                                )}
-                              </div>
-                              <div>
-                                Transfer:{" "}
-                                {Number(row.split_progress?.transfer) > 0 ? (
-                                  <span className="font-medium text-emerald-600">
-                                    ₦
-                                    {formatNumber1(row.split_progress.transfer)}
-                                    {row.split_progress?.transfer_by_name ? (
-                                      <span className="ml-1 font-normal text-slate-500">
-                                        · signed by{" "}
-                                        {row.split_progress.transfer_by_name}
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                ) : normalizePaymentMode(row.payment_type) ===
-                                    "credit_split" ||
-                                  String(row.payment_type || "").toLowerCase() ===
-                                    "credit" ? (
-                                  <span className="font-medium text-slate-600">
-                                    ₦0.00
-                                  </span>
-                                ) : (
-                                  <span className="font-medium text-amber-600">
-                                    Pending
-                                  </span>
-                                )}
-                              </div>
-                              {(normalizePaymentMode(row.payment_type) ===
-                                "credit_split" ||
-                                String(row.payment_type || "").toLowerCase() ===
-                                  "credit") && (
-                                <div>
-                                  Credit:{" "}
-                                  <span className="font-medium text-amber-700">
-                                    ₦
-                                    {formatNumber1(
-                                      Number(row.split_progress?.credit) > 0
-                                        ? row.split_progress.credit
-                                        : Math.max(
-                                            0,
-                                            Number(
-                                              (
-                                                (Number(
-                                                  row.split_progress
-                                                    ?.original_amount,
-                                                ) ||
-                                                  Number(row.amount) ||
-                                                  0) -
-                                                (Number(
-                                                  row.split_progress
-                                                    ?.collected_total,
-                                                ) || 0)
-                                              ).toFixed(2),
-                                            ),
-                                          ),
-                                    )}
-                                  </span>
-                                </div>
-                              )}
-                              {normalizePaymentMode(row.payment_type) !==
-                                "credit_split" &&
-                                String(row.payment_type || "").toLowerCase() !==
-                                  "credit" && (
-                                <div>
-                                  Remaining:{" "}
-                                  <span className="font-medium text-slate-700">
-                                    ₦
-                                    {formatNumber1(
-                                      Math.max(
-                                        0,
-                                        Number(
-                                          (
-                                            (Number(row.amount) || 0) -
-                                            (Number(
-                                              row.split_progress
-                                                ?.collected_total,
-                                            ) || 0)
-                                          ).toFixed(2),
-                                        ),
-                                      ),
-                                    )}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          ) : null}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
                           ₦{formatNumber1(row.amount)}
@@ -3538,24 +3733,16 @@ export default function ReceivePayment() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        {methodTab === "credit" && !isAdvance ? (
-                          <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${creditStateBadgeClass(
-                              row,
-                            )}`}
-                          >
-                            {creditStateLabel(row)}
-                          </span>
-                        ) : (
+                        {isAdvance ? (
                           <span
                             className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
                               row.payment_type,
                             )}`}
                           >
-                            {isAdvance
-                              ? `Deposit · ${paymentTypeLabel(row.payment_type)}`
-                              : paymentTypeLabel(row.payment_type)}
+                            Deposit · {paymentTypeLabel(row.payment_type)}
                           </span>
+                        ) : (
+                          <PaymentModeBreakdown row={row} />
                         )}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">
@@ -3683,16 +3870,8 @@ export default function ReceivePayment() {
                   </div>
                   <div className="mt-2 flex items-center justify-between text-sm">
                     <span className="text-slate-600">Mode of payment</span>
-                    <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
-                        paymentType ||
-                          (hubAction === "credit" ? "credit" : ""),
-                      )}`}
-                    >
-                      {paymentTypeLabel(
-                        paymentType ||
-                          (hubAction === "credit" ? "credit" : ""),
-                      )}
+                    <span className="text-right">
+                      <PaymentModeBreakdown row={selected} />
                     </span>
                   </div>
                   {hubAction === "mode" &&
@@ -3775,15 +3954,19 @@ export default function ReceivePayment() {
                       <p>
                         {normalizePaymentMode(paymentType) === "credit_split"
                           ? methodTab === "cash"
-                            ? "Collect cash for this invoice. Remaining balance stays on credit."
+                            ? "Collect any cash amount. Remaining balance can stay on credit or other modes."
                             : methodTab === "transfer"
-                              ? "Collect transfer for this invoice. Remaining balance stays on credit."
-                              : "Collect cash and/or transfer as needed. Any unpaid balance is Credit — confirm it on the Credit tab."
-                          : "Collect cash and/or transfer as needed. Both points can collect until the invoice is fully paid"}
-                        {normalizePaymentMode(paymentType) === "credit_split"
-                          ? ""
-                          : "."}
+                              ? "Collect any transfer amount. Remaining balance can stay on credit or other modes."
+                              : "Collect any portion in this mode. Any unpaid balance can be Credit — confirm it on the Credit tab."
+                          : "Enter any portion. You do not need to pay the full invoice in this mode. The last payment that completes it opens the invoice."}
                       </p>
+                      {depositCover > 0.05 ? (
+                        <p className="text-teal-700">
+                          Deposit available ₦{formatNumber1(depositCover)} · ₦
+                          {formatNumber1(suggestedPortion)} still open after
+                          deposit
+                        </p>
+                      ) : null}
                       <p>
                         Cash: ₦
                         {formatNumber1(splitProgress?.cash || 0)}
@@ -3823,27 +4006,14 @@ export default function ReceivePayment() {
                           <span className="font-semibold tabular-nums text-slate-900">
                             ₦{formatNumber1(remainingDue)}
                           </span>
+                          {suggestedPortion + 0.05 < remainingDue ? (
+                            <span className="block text-teal-700">
+                              After deposit: ₦
+                              {formatNumber1(suggestedPortion)}
+                            </span>
+                          ) : null}
                         </p>
                       )}
-                    </div>
-                  ) : null}
-                  {hubAction === "credit" &&
-                  selected?.split_progress &&
-                  (Number(selected.split_progress.cash) > 0 ||
-                    Number(selected.split_progress.transfer) > 0 ||
-                    Number(selected.split_progress.credit) > 0) ? (
-                    <div className="mt-3 space-y-1 border-t border-slate-200 pt-2 text-xs text-slate-600">
-                      <p className="font-medium text-slate-700">
-                        Payment breakdown
-                      </p>
-                      <p>
-                        Cash: ₦
-                        {formatNumber1(selected.split_progress.cash || 0)}
-                      </p>
-                      <p>
-                        Transfer: ₦
-                        {formatNumber1(selected.split_progress.transfer || 0)}
-                      </p>
                     </div>
                   ) : null}
                   {hubAction === "credit" &&
@@ -3918,7 +4088,7 @@ export default function ReceivePayment() {
                                 onClick={() => fillAllRemaining("cash")}
                                 className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
                               >
-                                All (₦{formatNumber1(remainingDue)})
+                                All (₦{formatNumber1(suggestedPortion > 0.05 ? suggestedPortion : remainingDue)})
                               </button>
                             </div>
                             <input
@@ -3931,7 +4101,7 @@ export default function ReceivePayment() {
                                 )
                               }
                               className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                              placeholder="0.00"
+                              placeholder={isSplit ? "Enter any amount" : "0.00"}
                             />
                           </>
                         ) : null}
@@ -3983,7 +4153,7 @@ export default function ReceivePayment() {
                                 onClick={() => fillAllRemaining("transfer")}
                                 className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
                               >
-                                All (₦{formatNumber1(remainingDue)})
+                                All (₦{formatNumber1(suggestedPortion > 0.05 ? suggestedPortion : remainingDue)})
                               </button>
                             </div>
                             <input
@@ -3996,7 +4166,7 @@ export default function ReceivePayment() {
                                 )
                               }
                               className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                              placeholder="0.00"
+                              placeholder={isSplit ? "Enter any amount" : "0.00"}
                             />
                           </>
                         ) : null}
@@ -4048,7 +4218,7 @@ export default function ReceivePayment() {
                                 onClick={() => fillAllRemaining("card")}
                                 className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
                               >
-                                All (₦{formatNumber1(remainingDue)})
+                                All (₦{formatNumber1(suggestedPortion > 0.05 ? suggestedPortion : remainingDue)})
                               </button>
                             </div>
                             <input
@@ -4061,7 +4231,7 @@ export default function ReceivePayment() {
                                 )
                               }
                               className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                              placeholder="0.00"
+                              placeholder={isSplit ? "Enter any amount" : "0.00"}
                             />
                           </>
                         ) : null}
@@ -4877,6 +5047,64 @@ export default function ReceivePayment() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <TillHubDialog
+        open={tillHubOpen}
+        onOpenChange={setTillHubOpen}
+        modeLabel={tillHub.modeLabel}
+        collect={tillHub.collect}
+        collected={tillHub.collected}
+        retire={viewSummary.retire_today}
+        expenses={viewSummary.expenses_today}
+        pendingCount={viewSummary.pending_count || 0}
+        canImprest={canImprest}
+        canPayBill={canPayBill}
+        onImprest={() => {
+          setTillHubOpen(false);
+          setImprestOpen(true);
+        }}
+        onPayBill={() => {
+          setTillHubOpen(false);
+          setPayBillOpen(true);
+        }}
+        onViewCollected={() => {
+          setTillHubOpen(false);
+          setHistoryFrom(todayYmd);
+          setHistoryTo(todayYmd);
+          setActiveTab("history");
+        }}
+      />
+      <Sheet open={payBillOpen} onOpenChange={setPayBillOpen}>
+        <SheetContent
+          side="right"
+          className="w-full overflow-y-auto p-0 sm:max-w-3xl"
+        >
+          {payBillOpen ? (
+            <RecordSupplierPaymentForm
+              embedded
+              lockMode
+              defaultMode={tillPayBillMode(methodTab)}
+              onClose={() => setPayBillOpen(false)}
+              onSaved={fetchDashboard}
+            />
+          ) : null}
+        </SheetContent>
+      </Sheet>
+      <CreateImprestDrawer
+        open={imprestOpen}
+        onOpenChange={setImprestOpen}
+        expenseList={expenseList}
+        facilityId={activeBusiness?.id}
+        user={user}
+        defaultMode={methodTab === "cash" ? "cash" : "bank"}
+        lockMode
+        tillMode={
+          methodTab === "card" || methodTab === "transfer" || methodTab === "cash"
+            ? methodTab
+            : "cash"
+        }
+        skipReceiptNavigate
+        onSuccess={fetchDashboard}
+      />
     </div>
   );
 }

@@ -40,6 +40,13 @@ function collectNavEntries(modules) {
 const RELATED_PAGE_PRIVILEGES = {
   "/app/inventory/inventory-list": ["Goods", "Goods List", "Goods list"],
   "/app/payments/verification-points": ["Receive Payment"],
+  "/app/payments/pay-bills": ["Pay Bill"],
+  "/app/payments/receive-payment": [
+    "Received Payment",
+    "Receive Payment",
+    "Deposit History",
+    "Customer Deposit",
+  ],
 };
 
 /**

@@ -72,6 +72,7 @@ export default function AdvancePaymentPaymentFields({
   onTransferAmountChange,
   expectedTotal = null,
   allowCashTransfer = true,
+  modeLocked = false,
 }) {
   const cashAccountTypeaheadRef = useRef();
   const isSplit = isCashTransferSplitMode(modeOfPayment);
@@ -112,7 +113,11 @@ export default function AdvancePaymentPaymentFields({
         <Label className="text-sm font-medium text-gray-700">
           Mode of payment *
         </Label>
-        <Select value={modeOfPayment} onValueChange={onModeChange}>
+        <Select
+          value={modeOfPayment}
+          onValueChange={onModeChange}
+          disabled={modeLocked}
+        >
           <SelectTrigger className="w-full h-10 bg-gray-200 border-0 text-gray-900 hover:bg-gray-300 focus:ring-2 focus:ring-gray-400">
             <SelectValue placeholder="Mode of payment" />
           </SelectTrigger>
@@ -365,4 +370,5 @@ AdvancePaymentPaymentFields.propTypes = {
   onTransferAmountChange: PropTypes.func,
   expectedTotal: PropTypes.number,
   allowCashTransfer: PropTypes.bool,
+  modeLocked: PropTypes.bool,
 };
