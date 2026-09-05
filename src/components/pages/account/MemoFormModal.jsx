@@ -1,10 +1,10 @@
 /* eslint-disable no-unused-vars */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import moment from "moment";
 import { _fetchApi, _postApi, apiURL } from "@/redux/actions/api";
 import { toast } from "sonner";
-import { FileText, Loader2, Plus, Trash2 } from "lucide-react";
+import { FileText, Loader2, Paperclip, Plus, Trash2, Upload, X } from "lucide-react";
 import { formatNumber1 } from "@/components/router/utilities";
 import {
   Sheet,
@@ -16,6 +16,22 @@ import {
 
 const inputClass =
   "h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-[var(--aa-navy,#0f2744)] focus:ring-1 focus:ring-[var(--aa-navy,#0f2744)]";
+
+const MEMO_FILE_MAX_BYTES = 25 * 1024 * 1024;
+const MEMO_FILE_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+
+function formatFileSize(bytes) {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size < 0) return "";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const emptyLine = () => ({
   item_name: "",
@@ -60,6 +76,7 @@ export default function MemoFormModal({
   const [draft, setDraft] = useState(emptyLine());
   const [files, setFiles] = useState([]);
   const [errors, setErrors] = useState({});
+  const fileInputRef = useRef(null);
 
   const grandTotal = useMemo(
     () =>
@@ -627,23 +644,96 @@ export default function MemoFormModal({
                 </div>
               </div>
 
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium text-slate-700">
-                  Attachments (optional)
-                </span>
+              <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Attachments
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Supporting documents (PDF, PNG, JPG, DOCX)
+                    </p>
+                  </div>
+                  <span className="text-xs text-slate-500">
+                    {files.length} {files.length === 1 ? "file" : "files"}
+                  </span>
+                </div>
                 <input
+                  ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  onChange={(e) => setFiles(Array.from(e.target.files || []))}
-                  className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-[var(--aa-navy,#0f2744)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+                  accept=".pdf,.png,.jpg,.jpeg,.docx,application/pdf,image/png,image/jpeg,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  className="hidden"
+                  onChange={(e) => {
+                    const picked = Array.from(e.target.files || []);
+                    e.target.value = "";
+                    if (!picked.length) return;
+                    const next = [];
+                    for (const file of picked) {
+                      if (!MEMO_FILE_TYPES.has(file.type)) {
+                        toast.error(`${file.name}: only PDF, PNG, JPG, or DOCX`);
+                        continue;
+                      }
+                      if (file.size > MEMO_FILE_MAX_BYTES) {
+                        toast.error(`${file.name}: exceeds 25MB limit`);
+                        continue;
+                      }
+                      next.push(file);
+                    }
+                    if (!next.length) return;
+                    setFiles((prev) => [...prev, ...next]);
+                  }}
                 />
-                {files.length > 0 && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    {files.length} file(s) selected
-                  </p>
-                )}
-              </label>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload documents
+                </button>
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  Add as many files as you need. 25MB each.
+                </p>
+                {files.length > 0 ? (
+                  <ul className="mt-3 space-y-1.5">
+                    {files.map((file, idx) => (
+                      <li
+                        key={`${file.name}-${file.size}-${file.lastModified}-${idx}`}
+                        className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5 truncate">
+                          <Paperclip className="h-3.5 w-3.5 shrink-0 text-[var(--aa-accent)]" />
+                          <span className="truncate">
+                            {file.name}
+                            {formatFileSize(file.size) ? (
+                              <span className="text-slate-400">
+                                {" "}
+                                ({formatFileSize(file.size)})
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                            Ready
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          disabled={loading}
+                          onClick={() =>
+                            setFiles((prev) => prev.filter((_, i) => i !== idx))
+                          }
+                          className="shrink-0 text-red-600 hover:text-red-700"
+                          title="Remove"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             </div>
 
             <div className="shrink-0 border-t border-slate-200 bg-white px-5 py-3">

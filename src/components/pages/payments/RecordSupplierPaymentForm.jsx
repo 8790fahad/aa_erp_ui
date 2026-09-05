@@ -5,9 +5,10 @@ import moment from "moment";
 import { toast } from "sonner";
 import {
   AlertCircle,
-  Calendar,
   ChevronDown,
+  FileText,
   Info,
+  Paperclip,
   RefreshCw,
   Upload,
   X,
@@ -15,7 +16,6 @@ import {
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
-import CustomButton from "@/common/Custom/CustomButton";
 import SearchSupplierInput from "@/components/pages/purchase/SearchSuppliers";
 import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
 import CashTransferPaymentFields, {
@@ -28,7 +28,6 @@ import {
   getPostingDateMax,
   validatePostingDateClient,
 } from "@/utilities";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -65,22 +64,44 @@ function invoiceRowKey(inv) {
   return String(inv.invoice_id ?? inv.invoice_ref ?? "");
 }
 
-const inputClass =
-  "w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)] disabled:bg-gray-50 disabled:text-gray-500";
+function formatFileSize(bytes) {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size < 0) return "";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
 
-/** Label-left / field-right row, Zoho-style. */
-function Row({ label, required, children, error }) {
+const PAYMENT_FILE_MAX_BYTES = 25 * 1024 * 1024;
+const PAYMENT_FILE_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+
+const inputClass =
+  "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)] disabled:bg-slate-50 disabled:text-slate-500";
+
+/** Invoice-style label | control row — matches Inventory Bill. */
+function Field({ label, required, children, error, wide = false, alignStart = false }) {
   return (
-    <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-6">
+    <div
+      className={`grid grid-cols-1 gap-4 ${
+        wide
+          ? "lg:grid-cols-[9rem_minmax(0,1fr)]"
+          : "lg:grid-cols-[9rem_minmax(0,28rem)]"
+      } ${alignStart ? "lg:items-start" : "lg:items-center"}`}
+    >
       <label
-        className={`w-full shrink-0 pt-1.5 text-[13px] sm:w-40 ${
-          required ? "text-red-600" : "text-gray-700"
+        className={`text-sm font-medium text-slate-600 lg:text-right ${
+          alignStart ? "pt-2" : ""
         }`}
       >
         {label}
-        {required ? "*" : ""}
+        {required ? <span className="text-red-500"> *</span> : null}
       </label>
-      <div className="min-w-0 flex-1 sm:max-w-[420px]">
+      <div className="min-w-0">
         {children}
         {error ? (
           <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
@@ -94,7 +115,7 @@ function Row({ label, required, children, error }) {
 }
 
 /**
- * Zoho-style New Payment (Payments Made) — vendor-first form with unpaid bills table.
+ * New Payment — layout matches Inventory Bill (Product Supplier Bill).
  */
 export default function RecordSupplierPaymentForm() {
   const navigate = useNavigate();
@@ -106,7 +127,6 @@ export default function RecordSupplierPaymentForm() {
     activeBusiness?.base_currency ||
     "NGN";
 
-  const [showBanner, setShowBanner] = useState(true);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentDate, setPaymentDate] = useState(moment().format("YYYY-MM-DD"));
@@ -397,7 +417,7 @@ export default function RecordSupplierPaymentForm() {
       if (modeOfPayment === "cash" && !accountHead?.head) {
         next.paidThrough = "Paid Through is required";
       }
-      if (["bank", "cheque"].includes(modeOfPayment) && !bankAccount?.id) {
+      if (["bank", "cheque", "card"].includes(modeOfPayment) && !bankAccount?.id) {
         next.paidThrough = "Paid Through is required";
       }
       if (modeOfPayment === "cheque" && !String(chequeNumber || "").trim()) {
@@ -494,7 +514,7 @@ export default function RecordSupplierPaymentForm() {
       };
     }
     if (
-      (["bank", "cheque"].includes(modeOfPayment) || isSplitPayment) &&
+      (["bank", "cheque", "card"].includes(modeOfPayment) || isSplitPayment) &&
       bankAccount?.id
     ) {
       basePayload.bankAccount = { id: bankAccount.id };
@@ -584,8 +604,15 @@ export default function RecordSupplierPaymentForm() {
     return name.length > 18 ? `${name.slice(0, 18)}…` : name;
   }, [selectedSupplier]);
 
+  const missingSupplier = !selectedSupplier;
+  const missingAmount =
+    !(parseFloat(parseNumberFromFormatted(amountPaid)) > 0);
+  const missingMode = !modeOfPayment;
+  const showValidation =
+    missingSupplier || missingAmount || missingMode || errors.date;
+
   return (
-    <div className="bg-white">
+    <div className="relative min-h-screen bg-white">
       <AlertDialog
         open={confirmOpen}
         onOpenChange={(open) => {
@@ -628,80 +655,84 @@ export default function RecordSupplierPaymentForm() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="mx-auto max-w-8xl">
-        <div className="mb-1.5 flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-gray-900">
-            New Payment
-          </h1>
-          <button
-            type="button"
-            onClick={goBack}
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {showBanner && (
-          <div className="mb-3 flex items-start gap-2 rounded border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
-            <p className="flex-1">
-              Apply this payment directly to unpaid bills below. Any amount in
-              excess is kept as a vendor advance / credit.
-            </p>
+      <div className="flex min-h-screen flex-col bg-white">
+        <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <FileText
+                className="size-6 text-[var(--aa-accent)]"
+                strokeWidth={1.75}
+              />
+              <div>
+                <h1 className="text-xl font-semibold text-slate-900">
+                  New Payment
+                </h1>
+                <p className="text-xs text-slate-500">
+                  Apply this payment to unpaid bills. Excess is kept as vendor
+                  advance.
+                </p>
+              </div>
+            </div>
             <button
               type="button"
-              onClick={() => setShowBanner(false)}
-              className="text-blue-400 hover:text-blue-600"
-              aria-label="Dismiss"
+              onClick={goBack}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
             >
-              <X className="h-4 w-4" />
+              Cancel
             </button>
           </div>
-        )}
-
-        <div className="mb-3 flex flex-col items-start justify-between gap-2 sm:flex-row">
-          <div className="w-full flex-1">
-            <Row label="Vendor Name" required error={errors.supplier}>
-              <SearchSupplierInput
-                onChange={handleSupplierChange}
-                disabled={saving}
-              />
-            </Row>
-          </div>
-          {selectedSupplier && (
-            <div className="shrink-0 rounded bg-slate-800 px-4 py-2 text-xs font-semibold text-white">
-              {supplierChipLabel}
-              <span className="ml-1.5">›</span>
+          {showValidation && (
+            <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {missingSupplier && (
+                <span className="mr-3">Select a supplier.</span>
+              )}
+              {missingAmount && (
+                <span className="mr-3">Enter the payment amount.</span>
+              )}
+              {missingMode && (
+                <span className="mr-3">Choose a payment mode.</span>
+              )}
+              {errors.date && <span>{errors.date}</span>}
             </div>
           )}
         </div>
 
-        <Row label="Payment Made" required error={errors.amount}>
-          <div className="flex overflow-hidden rounded border border-gray-300 focus-within:border-[var(--aa-accent)] focus-within:ring-1 focus-within:ring-[var(--aa-accent)]">
-            <span className="flex items-center border-r border-gray-300 bg-gray-50 px-3 text-sm font-medium text-gray-600">
-              {currency}
-            </span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={amountPaid}
-              onChange={(e) => handleAmountPaidChange(e.target.value)}
+        <div className="shrink-0 space-y-4 border-b border-slate-100 bg-white px-6 py-5">
+          <Field label="Vendor" required error={errors.supplier}>
+            <SearchSupplierInput
+              onChange={handleSupplierChange}
               disabled={saving}
-              placeholder="0.00"
-              className="w-full border-0 px-3 py-1.5 text-sm outline-none"
             />
-          </div>
-          <p className="mt-1 text-[11px] text-gray-500">
-            Apply to bills below, or leave payments at 0 to record the full
-            amount as vendor advance. Any Amount in Excess also becomes advance.
-          </p>
-        </Row>
+            {selectedSupplier && (
+              <p className="mt-1 text-[11px] text-slate-500">
+                Supplier:{" "}
+                <span className="font-medium">{supplierChipLabel}</span>
+              </p>
+            )}
+          </Field>
 
-        <Row label="Payment Date" required error={errors.date}>
-          <div className="relative">
-            <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Field label="Payment Made" required error={errors.amount}>
+            <div className="flex h-9 max-w-md overflow-hidden rounded-md border border-slate-300 bg-white focus-within:border-[var(--aa-accent)] focus-within:ring-1 focus-within:ring-[var(--aa-accent)]">
+              <span className="flex items-center border-r border-slate-300 bg-slate-50 px-3 text-sm font-medium text-slate-600">
+                {currency}
+              </span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={amountPaid}
+                onChange={(e) => handleAmountPaidChange(e.target.value)}
+                disabled={saving}
+                placeholder="0.00"
+                className="w-full border-0 px-3 text-sm outline-none"
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Apply to bills below, or leave payments at 0 to record the full
+              amount as vendor advance.
+            </p>
+          </Field>
+
+          <Field label="Payment Date" required error={errors.date}>
             <input
               type="date"
               value={paymentDate}
@@ -712,329 +743,130 @@ export default function RecordSupplierPaymentForm() {
                 setErrors((prev) => ({ ...prev, date: undefined }));
               }}
               disabled={saving}
-              className={`${inputClass} pl-9 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:opacity-0`}
+              className={`${inputClass} max-w-xs`}
             />
-          </div>
-        </Row>
+          </Field>
 
-        <Row label="Payment #" required>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={paymentNumber}
-              onChange={(e) => setPaymentNumber(e.target.value)}
-              disabled={saving}
-              className={inputClass}
-            />
-            <button
-              type="button"
-              onClick={generatePaymentNumber}
-              disabled={saving}
-              title="Generate new number"
-              className="flex shrink-0 items-center justify-center rounded border border-gray-300 bg-white px-2.5 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </Row>
-
-        <CashTransferPaymentFields
-          Row={({ label, required, children }) => (
-            <Row
-              label={label}
-              required={required}
-              error={
-                label === "Payment Mode"
-                  ? errors.mode
-                  : label === "Cheque Number"
-                    ? errors.cheque
-                    : errors.paidThrough
-              }
-            >
-              {children}
-            </Row>
-          )}
-          modeOfPayment={modeOfPayment}
-          onModeChange={(value) => {
-            setModeOfPayment(value);
-            setAccountHead({});
-            setBankAccount(null);
-            setChequeNumber("");
-            setCashAmount("");
-            setTransferAmount("");
-            setErrors((prev) => ({
-              ...prev,
-              mode: undefined,
-              paidThrough: undefined,
-              cheque: undefined,
-            }));
-          }}
-          cashAmount={cashAmount}
-          onCashAmountChange={(v) => {
-            setCashAmount(v);
-            setErrors((prev) => ({ ...prev, paidThrough: undefined }));
-          }}
-          transferAmount={transferAmount}
-          onTransferAmountChange={(v) => {
-            setTransferAmount(v);
-            setErrors((prev) => ({ ...prev, paidThrough: undefined }));
-          }}
-          expectedTotal={
-            parseFloat(parseNumberFromFormatted(amountPaid)) || 0
-          }
-          accountHead={accountHead}
-          onAccountHeadChange={(v) => {
-            setAccountHead(v || {});
-            setErrors((prev) => ({ ...prev, paidThrough: undefined }));
-          }}
-          bankAccount={bankAccount}
-          onBankAccountChange={(acc) => {
-            setBankAccount(acc || null);
-            setErrors((prev) => ({ ...prev, paidThrough: undefined }));
-          }}
-          accountList={accountList}
-          headList={headList}
-          chequeNumber={chequeNumber}
-          onChequeNumberChange={(v) => {
-            setChequeNumber(v);
-            setErrors((prev) => ({ ...prev, cheque: undefined }));
-          }}
-          cashTypeaheadRef={cashTypeaheadRef}
-          disabled={saving}
-        />
-
-        {visibleBranches.length > 1 && (
-          <Row label="Warehouse">
-            <select
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              disabled={saving}
-              className={inputClass}
-            >
-              {visibleBranches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.branch_name}
-                </option>
-              ))}
-            </select>
-          </Row>
-        )}
-
-        <div className="my-4 border-t border-gray-200" />
-
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">
-            Unpaid Bills
-          </h2>
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              disabled
-              title="Coming soon"
-              className="inline-flex items-center gap-1 text-sm text-gray-400"
-            >
-              Filter by Date Range
-              <ChevronDown className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={clearApplied}
-              disabled={saving || allocatedSum <= 0}
-              className="text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-40"
-            >
-              Clear Applied Amount
-            </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto rounded border border-gray-200">
-          {!selectedSupplier ? (
-            <div className="px-4 py-10 text-center text-sm text-gray-500">
-              There are no bills for this vendor.
-            </div>
-          ) : loadingInvoices ? (
-            <div className="space-y-2 p-3">
-              {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-8 w-full" />
-              ))}
-            </div>
-          ) : outstandingInvoices.length === 0 ? (
-            <div className="px-4 py-10 text-center text-sm text-gray-500">
-              There are no bills for this vendor.
-            </div>
-          ) : (
-            <table className="w-full min-w-[760px] text-sm">
-              <thead>
-                <tr className="border-b bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                  <th className="px-3 py-2">Date</th>
-                  <th className="px-3 py-2">Bill#</th>
-                  <th className="px-3 py-2">Mode of payment</th>
-                  <th className="px-3 py-2 text-right">Bill Amount</th>
-                  <th className="px-3 py-2 text-right">Amount Due</th>
-                  <th className="px-3 py-2">
-                    <span className="inline-flex items-center gap-1">
-                      Payment
-                      <Info
-                        className="h-3 w-3 text-slate-400"
-                        title="Amount of this payment applied to the bill"
-                      />
-                    </span>
-                  </th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {outstandingInvoices.map((inv) => {
-                  const k = invoiceRowKey(inv);
-                  return (
-                    <tr key={k} className="hover:bg-slate-50/60">
-                      <td className="px-3 py-2 text-gray-700">
-                        {inv.transaction_date
-                          ? moment(inv.transaction_date).format("DD MMM YYYY")
-                          : "-"}
-                      </td>
-                      <td className="px-3 py-2 font-medium text-blue-600">
-                        {inv.invoice_ref}
-                      </td>
-                      <td className="px-3 py-2 text-gray-700">
-                        {formatExpensePaymentMode(inv.mode_of_payment)}
-                      </td>
-                      <td className="px-3 py-2 text-right text-gray-800">
-                        {formatNumber1(inv.amount || 0)}
-                      </td>
-                      <td className="px-3 py-2 text-right font-medium text-gray-900">
-                        {formatNumber1(inv.amount_due ?? inv.balance_due ?? 0)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={invoicePayments[k] || ""}
-                          onChange={(e) =>
-                            setInvoicePayment(inv, e.target.value)
-                          }
-                          disabled={saving}
-                          placeholder="0.00"
-                          className="ml-auto w-28 rounded border border-gray-300 px-2 py-1 text-right text-sm outline-none focus:ring-1 focus:ring-[var(--aa-accent)]"
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => applyFull(inv)}
-                          disabled={saving}
-                          className="text-xs font-medium text-blue-600 hover:text-blue-700 disabled:opacity-40"
-                        >
-                          Apply Full
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="border-t bg-gray-50">
-                  <td
-                    colSpan={5}
-                    className="px-3 py-2 text-xs italic text-gray-500"
-                  >
-                    *List contains only unpaid bills
-                  </td>
-                  <td
-                    colSpan={2}
-                    className="px-3 py-2 text-right text-sm font-semibold text-gray-900"
-                  >
-                    Total {formatNumber1(allocatedSum)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          )}
-        </div>
-
-        <div
-          className={`my-4 w-full rounded border px-3 py-3 ${
-            excess > 0
-              ? "border-red-200 bg-red-50/60"
-              : "border-gray-200 bg-gray-50"
-          }`}
-        >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:divide-x sm:divide-gray-200">
-            <div className="flex min-w-0 flex-col gap-1 px-2">
-              <span className="text-[12px] text-gray-600">Amount Paid :</span>
-              <div className="flex overflow-hidden rounded border border-gray-300 bg-white focus-within:border-[var(--aa-accent)] focus-within:ring-1 focus-within:ring-[var(--aa-accent)]">
-                <span className="flex items-center border-r border-gray-200 bg-gray-50 px-2 text-xs font-medium text-gray-600">
-                  {currency}
-                </span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={amountPaid}
-                  onChange={(e) => handleAmountPaidChange(e.target.value)}
-                  disabled={saving}
-                  placeholder="0.00"
-                  className="w-full min-w-0 border-0 px-2 py-1.5 text-right text-sm font-semibold tabular-nums outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex min-w-0 flex-col gap-1 px-2">
-              <span className="text-[12px] text-gray-600">
-                Amount used for Payments :
-              </span>
-              <span className="py-1.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:text-left">
-                {formatNumber1(allocatedSum)}
-              </span>
-            </div>
-
-            <div
-              className={`flex min-w-0 flex-col gap-1 rounded px-2 ${
-                excess > 0 ? "bg-red-100/70" : ""
-              }`}
-            >
-              <span
-                className={`text-[12px] ${
-                  excess > 0 ? "font-semibold text-red-600" : "text-gray-600"
-                }`}
+          <Field label="Payment #">
+            <div className="flex max-w-md gap-2">
+              <input
+                type="text"
+                value={paymentNumber}
+                onChange={(e) => setPaymentNumber(e.target.value)}
+                disabled={saving}
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={generatePaymentNumber}
+                disabled={saving}
+                title="Generate new number"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50"
               >
-                Amount in Excess :
-              </span>
-              <span
-                className={`py-1.5 text-right text-sm font-semibold tabular-nums sm:text-left ${
-                  excess > 0 ? "text-red-600" : "text-gray-900"
-                }`}
-              >
-                {excess > 0 ? "⚠ " : ""}
-                {currency} {formatNumber1(excess)}
-              </span>
+                <RefreshCw className="h-3.5 w-3.5" />
+              </button>
             </div>
-          </div>
-          {excess > 0 ? (
-            <p className="mt-2 px-2 text-[11px] font-medium text-red-600">
-              Excess {currency} {formatNumber1(excess)} will be kept as vendor
-              advance / credit.
+          </Field>
+
+          <CashTransferPaymentFields
+            modeOfPayment={modeOfPayment}
+            onModeChange={(value) => {
+              setModeOfPayment(value);
+              setAccountHead({});
+              setBankAccount(null);
+              setChequeNumber("");
+              setCashAmount("");
+              setTransferAmount("");
+              setErrors((prev) => ({
+                ...prev,
+                mode: undefined,
+                paidThrough: undefined,
+                cheque: undefined,
+              }));
+            }}
+            cashAmount={cashAmount}
+            onCashAmountChange={(v) => {
+              setCashAmount(v);
+              setErrors((prev) => ({ ...prev, paidThrough: undefined }));
+            }}
+            transferAmount={transferAmount}
+            onTransferAmountChange={(v) => {
+              setTransferAmount(v);
+              setErrors((prev) => ({ ...prev, paidThrough: undefined }));
+            }}
+            expectedTotal={
+              parseFloat(parseNumberFromFormatted(amountPaid)) || 0
+            }
+            accountHead={accountHead}
+            onAccountHeadChange={(v) => {
+              setAccountHead(v || {});
+              setErrors((prev) => ({ ...prev, paidThrough: undefined }));
+            }}
+            bankAccount={bankAccount}
+            onBankAccountChange={(acc) => {
+              setBankAccount(acc || null);
+              setErrors((prev) => ({ ...prev, paidThrough: undefined }));
+            }}
+            accountList={accountList}
+            headList={headList}
+            chequeNumber={chequeNumber}
+            onChequeNumberChange={(v) => {
+              setChequeNumber(v);
+              setErrors((prev) => ({ ...prev, cheque: undefined }));
+            }}
+            cashTypeaheadRef={cashTypeaheadRef}
+            disabled={saving}
+          />
+          {(errors.mode || errors.paidThrough || errors.cheque) && (
+            <p className="ml-0 flex items-center gap-1 text-xs text-red-600 lg:ml-[9rem] lg:pl-4">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              {errors.mode || errors.paidThrough || errors.cheque}
             </p>
-          ) : null}
-        </div>
+          )}
 
-        <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 md:items-start">
-          <div className="min-w-0">
-            <label className="mb-1 block text-[13px] text-gray-700">
-              Notes (Internal use. Not visible to vendor)
-            </label>
+          {visibleBranches.length > 1 && (
+            <Field label="Warehouse">
+              <select
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                disabled={saving}
+                className="h-9 w-full max-w-xs rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+              >
+                {visibleBranches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.branch_name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+
+          <Field label="Notes" alignStart>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               disabled={saving}
               rows={3}
-              className="w-full resize-y rounded border border-gray-300 px-2.5 py-1.5 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+              placeholder="Internal use. Not visible to vendor"
+              className="w-full max-w-md resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
             />
-          </div>
+          </Field>
 
-          <div className="min-w-0">
-            <label className="mb-1 block text-[13px] text-gray-700">
-              Attachments
-            </label>
+          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Attachments
+                </p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Receipts and other payment documents (PDF, PNG, JPG, DOCX)
+                </p>
+              </div>
+              <span className="text-xs text-slate-500">
+                {attachments.length}{" "}
+                {attachments.length === 1 ? "file" : "files"}
+              </span>
+            </div>
             <input
               ref={fileInputRef}
               type="file"
@@ -1045,53 +877,55 @@ export default function RecordSupplierPaymentForm() {
                 const picked = Array.from(e.target.files || []);
                 e.target.value = "";
                 if (!picked.length) return;
-                const maxBytes = 25 * 1024 * 1024;
-                const allowed = new Set([
-                  "application/pdf",
-                  "image/png",
-                  "image/jpeg",
-                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                ]);
-                const next = [...attachments];
+                const next = [];
                 for (const file of picked) {
-                  if (next.length >= 5) {
-                    toast.error("You can upload a maximum of 5 files");
-                    break;
-                  }
-                  if (!allowed.has(file.type)) {
+                  if (!PAYMENT_FILE_TYPES.has(file.type)) {
                     toast.error(`${file.name}: only PDF, PNG, JPG, or DOCX`);
                     continue;
                   }
-                  if (file.size > maxBytes) {
+                  if (file.size > PAYMENT_FILE_MAX_BYTES) {
                     toast.error(`${file.name}: exceeds 25MB limit`);
                     continue;
                   }
                   next.push(file);
                 }
-                setAttachments(next);
+                if (!next.length) return;
+                setAttachments((prev) => [...prev, ...next]);
               }}
             />
             <button
               type="button"
-              disabled={saving || attachments.length >= 5}
+              disabled={saving}
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded border border-gray-300 bg-white px-3.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               <Upload className="h-4 w-4" />
-              Upload File
+              Upload documents
             </button>
-            <p className="mt-1 text-xs text-gray-500">
-              Maximum 5 files, 25MB each (PDF, PNG, JPG, DOCX)
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              Add as many files as you need. 25MB each.
             </p>
             {attachments.length > 0 ? (
-              <ul className="mt-2 space-y-1">
+              <ul className="mt-3 space-y-1.5">
                 {attachments.map((file, idx) => (
                   <li
-                    key={`${file.name}-${idx}`}
-                    className="flex items-center justify-between gap-2 rounded border border-gray-100 bg-gray-50 px-2 py-1 text-xs text-gray-700"
+                    key={`${file.name}-${file.size}-${file.lastModified}-${idx}`}
+                    className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
                   >
-                    <span className="truncate">
-                      {file.name} ({(file.size / (1024 * 1024)).toFixed(1)} MB)
+                    <span className="flex min-w-0 items-center gap-1.5 truncate">
+                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-[var(--aa-accent)]" />
+                      <span className="truncate">
+                        {file.name}
+                        {formatFileSize(file.size) ? (
+                          <span className="text-slate-400">
+                            {" "}
+                            ({formatFileSize(file.size)})
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                        Ready
+                      </span>
                     </span>
                     <button
                       type="button"
@@ -1101,7 +935,8 @@ export default function RecordSupplierPaymentForm() {
                           prev.filter((_, i) => i !== idx),
                         )
                       }
-                      className="text-red-600 hover:text-red-700"
+                      className="shrink-0 text-red-600 hover:text-red-700"
+                      title="Remove"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -1112,33 +947,239 @@ export default function RecordSupplierPaymentForm() {
           </div>
         </div>
 
-        <div className="my-4 border-t border-gray-200" />
+        <div className="flex w-full flex-1 flex-col bg-white">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-6 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Unpaid Bills
+            </p>
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                disabled
+                title="Coming soon"
+                className="inline-flex items-center gap-1 text-xs text-slate-400"
+              >
+                Filter by Date Range
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={clearApplied}
+                disabled={saving || allocatedSum <= 0}
+                className="text-sm font-medium text-[var(--aa-accent)] hover:underline disabled:opacity-40"
+              >
+                Clear Applied Amount
+              </button>
+            </div>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-3 pb-4">
-          <Button
-            type="button"
-            variant="outline"
-            disabled
-            title="Draft saving isn't available yet"
-          >
-            Save as Draft
-          </Button>
-          <CustomButton
-            className="!mb-0"
-            onClick={handleSave}
-            loading={saving}
-            disabled={saving}
-          >
-            Save as Paid
-          </CustomButton>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={goBack}
-            disabled={saving}
-          >
-            Cancel
-          </Button>
+          <div className="w-full overflow-x-auto px-4 sm:px-6">
+            {!selectedSupplier ? (
+              <div className="px-3 py-8 text-center text-sm text-slate-500">
+                Select a vendor to load unpaid bills.
+              </div>
+            ) : loadingInvoices ? (
+              <div className="space-y-2 py-4">
+                {[...Array(4)].map((_, i) => (
+                  <Skeleton key={i} className="h-9 w-full" />
+                ))}
+              </div>
+            ) : outstandingInvoices.length === 0 ? (
+              <div className="px-3 py-8 text-center text-sm text-slate-500">
+                There are no bills for this vendor.
+              </div>
+            ) : (
+              <table className="min-w-full">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                    <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
+                      Date
+                    </th>
+                    <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
+                      Bill#
+                    </th>
+                    <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
+                      Mode of payment
+                    </th>
+                    <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
+                      Bill Amount
+                    </th>
+                    <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
+                      Amount Due
+                    </th>
+                    <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
+                      <span className="inline-flex items-center gap-1">
+                        Payment
+                        <Info
+                          className="h-3 w-3 text-slate-400"
+                          title="Amount of this payment applied to the bill"
+                        />
+                      </span>
+                    </th>
+                    <th className="w-10 px-1 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {outstandingInvoices.map((inv) => {
+                    const k = invoiceRowKey(inv);
+                    return (
+                      <tr key={k} className="bg-white hover:bg-slate-50/80">
+                        <td className="px-3 py-3 text-sm text-slate-700">
+                          {inv.transaction_date
+                            ? moment(inv.transaction_date).format("DD MMM YYYY")
+                            : "-"}
+                        </td>
+                        <td className="px-3 py-3 text-sm font-medium text-[var(--aa-accent)]">
+                          {inv.invoice_ref}
+                        </td>
+                        <td className="px-3 py-3 text-sm text-slate-700">
+                          {formatExpensePaymentMode(inv.mode_of_payment)}
+                        </td>
+                        <td className="px-3 py-3 text-right text-sm tabular-nums text-slate-800">
+                          {formatNumber1(inv.amount || 0)}
+                        </td>
+                        <td className="px-3 py-3 text-right text-sm font-medium tabular-nums text-slate-900">
+                          {formatNumber1(
+                            inv.amount_due ?? inv.balance_due ?? 0,
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={invoicePayments[k] || ""}
+                            onChange={(e) =>
+                              setInvoicePayment(inv, e.target.value)
+                            }
+                            disabled={saving}
+                            placeholder="0.00"
+                            className="ml-auto h-9 w-28 rounded-md border border-slate-300 bg-white px-3 text-right text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                          />
+                        </td>
+                        <td className="px-2 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => applyFull(inv)}
+                            disabled={saving}
+                            className="text-xs font-medium text-[var(--aa-accent)] hover:underline disabled:opacity-40"
+                          >
+                            Apply Full
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-slate-200 bg-slate-50">
+                    <td
+                      colSpan={5}
+                      className="px-3 py-2.5 text-xs italic text-slate-500"
+                    >
+                      *List contains only unpaid bills
+                    </td>
+                    <td
+                      colSpan={2}
+                      className="px-3 py-2.5 text-right text-sm font-semibold tabular-nums text-slate-900"
+                    >
+                      Total {formatNumber1(allocatedSum)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            )}
+          </div>
+
+          <div className="mt-4 flex justify-end px-6 pb-4">
+            <div className="w-full max-w-xs space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-slate-600">Amount Paid</span>
+                <span className="tabular-nums text-slate-900">
+                  {formatNumber1(
+                    parseFloat(parseNumberFromFormatted(amountPaid)) || 0,
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-slate-600">Applied to Bills</span>
+                <span className="tabular-nums text-slate-900">
+                  {formatNumber1(allocatedSum)}
+                </span>
+              </div>
+              <div
+                className={`flex items-center justify-between gap-4 border-t border-slate-200 pt-3 ${
+                  excess > 0 ? "text-red-600" : ""
+                }`}
+              >
+                <span
+                  className={`text-base font-semibold ${
+                    excess > 0 ? "text-red-600" : "text-slate-900"
+                  }`}
+                >
+                  Excess ({currency})
+                </span>
+                <span
+                  className={`text-lg font-bold tabular-nums ${
+                    excess > 0 ? "text-red-600" : "text-slate-900"
+                  }`}
+                >
+                  {formatNumber1(excess)}
+                </span>
+              </div>
+              {excess > 0 ? (
+                <p className="text-[11px] font-medium text-red-600">
+                  Excess will be kept as vendor advance / credit.
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-[#f7f7f8] px-6 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {saving ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white" />
+                  Saving...
+                </>
+              ) : (
+                "Save as Paid"
+              )}
+            </button>
+            <button
+              type="button"
+              disabled
+              title="Draft saving isn't available yet"
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-400"
+            >
+              Save as Draft
+            </button>
+            <button
+              type="button"
+              onClick={goBack}
+              disabled={saving}
+              className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+          <div className="text-right text-sm">
+            <div className="font-semibold text-slate-900">
+              Payment Amount:{" "}
+              <span className="tabular-nums">
+                {currency}{" "}
+                {formatNumber1(
+                  parseFloat(parseNumberFromFormatted(amountPaid)) || 0,
+                )}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

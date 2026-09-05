@@ -8,7 +8,7 @@ import {
   canAccessDashboard,
   canAccessPrivileges,
   getUserFunctionalities,
-  privilegeKeysForItem,
+  privilegeKeysForNavItem,
 } from "@/lib/access";
 
 const CAT_META = {
@@ -92,7 +92,7 @@ function collectGroupedActions(modules, functionalities, user, activeBusiness) {
     const items = [];
     for (const item of mod.items || []) {
       if (!item?.url || item.url === "#") continue;
-      if (!canAccessPrivileges(privilegeKeysForItem(item), functionalities)) {
+      if (!canAccessPrivileges(privilegeKeysForNavItem(item), functionalities)) {
         continue;
       }
       if (seen.has(item.url)) continue;
@@ -107,7 +107,7 @@ function collectGroupedActions(modules, functionalities, user, activeBusiness) {
       const allowed =
         mod.title === "Dashboard"
           ? canAccessDashboard(user, activeBusiness)
-          : canAccessPrivileges(privilegeKeysForItem(mod), functionalities);
+          : canAccessPrivileges(privilegeKeysForNavItem(mod), functionalities);
       if (allowed && !seen.has(mod.url)) {
         seen.add(mod.url);
         items.push({ title: mod.title, url: mod.url, icon: mod.icon });

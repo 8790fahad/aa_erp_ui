@@ -4,7 +4,7 @@ import "react-bootstrap-typeahead/css/Typeahead.css";
 
 /**
  * Cash + Transfer split payment fields for supplier bills / pay bills.
- * Mode options include cash | bank | cheque | cash+transfer.
+ * Mode options include cash | bank | cheque | card | cash+transfer.
  */
 export function isCashTransferSplitMode(mode) {
   const m = String(mode || "")
@@ -210,6 +210,7 @@ export default function CashTransferPaymentFields({
       <option value="bank">Bank Transfer</option>
       <option value="cash+transfer">Cash + Transfer</option>
       <option value="cheque">Cheque</option>
+      <option value="card">Card</option>
     </select>
   );
 
@@ -320,7 +321,8 @@ export default function CashTransferPaymentFields({
           <>
             {(modeOfPayment === "cash" ||
               modeOfPayment === "bank" ||
-              modeOfPayment === "cheque") && (
+              modeOfPayment === "cheque" ||
+              modeOfPayment === "card") && (
               <Row
                 label={modeOfPayment === "cash" ? "Cash Account" : "Paid Through"}
                 required
@@ -383,7 +385,9 @@ export default function CashTransferPaymentFields({
         </>
       ) : (
         <>
-          {(modeOfPayment === "bank" || modeOfPayment === "cheque") && (
+          {(modeOfPayment === "bank" ||
+            modeOfPayment === "cheque" ||
+            modeOfPayment === "card") && (
             <div className={rowClass}>
               <label className={labelClass}>
                 Bank Account <span className="text-red-500">*</span>

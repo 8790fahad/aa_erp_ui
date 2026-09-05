@@ -13,6 +13,7 @@ export function formatExpensePaymentMode(mode) {
     return "Cash + Transfer";
   }
   if (raw === "bank") return "Bank / Transfer";
+  if (raw === "card") return "Card";
   return raw
     .replace(/[_-]+/g, " ")
     .split(" ")

@@ -307,6 +307,11 @@ export default function WarehouseRequests() {
     }));
   }, [invoiceItems, selected?.lines]);
 
+  const remainingCollectRows = useMemo(
+    () => invoiceCollectRows.filter((row) => !row.done),
+    [invoiceCollectRows],
+  );
+
   const branchOptions = useMemo(() => {
     if (assignedWarehouses.length) {
       return assignedWarehouses.map((w) => [w.id, w.name]);
@@ -322,7 +327,10 @@ export default function WarehouseRequests() {
 
   const collect = (pack, { collectAll = true, lineIds } = {}) => {
     if (!activeBusiness?.id || !pack) return;
-    setCollecting(pack.id);
+    const collectingKey = collectAll
+      ? `all-${pack.id}`
+      : `line-${pack.id}-${(lineIds || []).join("-")}`;
+    setCollecting(collectingKey);
     _postApi(
       "/api/v1/sale-workflows/fulfillment/collect",
       {
@@ -336,12 +344,21 @@ export default function WarehouseRequests() {
       (res) => {
         setCollecting(null);
         if (res.success) {
-          toast.success(res.message || "Invoice items collected");
+          const fullyCollected =
+            res.results?.status === "collected" ||
+            String(res.message || "")
+              .toLowerCase()
+              .includes("fully collected");
+          toast.success(
+            fullyCollected
+              ? res.message || "All items collected"
+              : res.message || "Item collected",
+          );
           if (res.workflow?.status === "dual_signature") {
             toast.success("All branch invoices collected — dual signature");
           }
           fetchList();
-          setListTab("history");
+          if (fullyCollected) setListTab("history");
         } else {
           toast.error(res.message || "Could not mark collected");
         }
@@ -580,13 +597,18 @@ export default function WarehouseRequests() {
                           <th className="px-3 py-2 text-right font-semibold">
                             Collect qty
                           </th>
+                          {selected.status !== "collected" ? (
+                            <th className="px-3 py-2 text-right font-semibold">
+                              Action
+                            </th>
+                          ) : null}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {invoiceCollectRows.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={3}
+                              colSpan={selected.status !== "collected" ? 4 : 3}
                               className="px-3 py-6 text-center text-slate-500"
                             >
                               No items on this branch invoice.
@@ -626,6 +648,40 @@ export default function WarehouseRequests() {
                                   </span>
                                 )}
                               </td>
+                              {selected.status !== "collected" ? (
+                                <td className="px-3 py-2.5 text-right">
+                                  {row.done ? (
+                                    <span className="text-xs text-slate-400">
+                                      Collected
+                                    </span>
+                                  ) : (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      disabled={
+                                        Boolean(collecting) || !row.pack_line_id
+                                      }
+                                      title={
+                                        row.pack_line_id
+                                          ? "Collect this item"
+                                          : "This item is not linked to the warehouse pack"
+                                      }
+                                      onClick={() =>
+                                        collect(selected, {
+                                          collectAll: false,
+                                          lineIds: [row.pack_line_id],
+                                        })
+                                      }
+                                      className="h-8 bg-orange-600 px-3 hover:bg-orange-700"
+                                    >
+                                      {collecting ===
+                                      `line-${selected.id}-${row.pack_line_id}`
+                                        ? "Collecting…"
+                                        : "Collect"}
+                                    </Button>
+                                  )}
+                                </td>
+                              ) : null}
                             </tr>
                           ))
                         )}
@@ -635,15 +691,29 @@ export default function WarehouseRequests() {
                 )}
 
                 {selected.status !== "collected" ? (
-                  <div className="mt-4">
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
                     <Button
                       type="button"
-                      disabled={collecting === selected.id}
+                      disabled={
+                        Boolean(collecting) || remainingCollectRows.length === 0
+                      }
                       onClick={() => collect(selected, { collectAll: true })}
                       className="bg-orange-600 hover:bg-orange-700"
                     >
-                      {collecting === selected.id ? "Updating…" : "Collected"}
+                      {collecting === `all-${selected.id}`
+                        ? "Updating…"
+                        : remainingCollectRows.length > 1
+                          ? `Collect All (${remainingCollectRows.length})`
+                          : remainingCollectRows.length === 1
+                            ? "Collect All"
+                            : "Collected"}
                     </Button>
+                    {remainingCollectRows.length > 0 ? (
+                      <span className="text-xs text-slate-500">
+                        Collect one item from the table, or collect all remaining
+                        items.
+                      </span>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="mt-4 rounded-md bg-green-50 text-green-800 text-sm px-4 py-3">

@@ -7,7 +7,7 @@ import {
   canAccessPrivileges,
   getUserFunctionalities,
   hasFullAccess,
-  privilegeKeysForItem,
+  privilegeKeysForNavItem,
 } from "@/lib/access";
 import { getMergedSidebarForBusiness } from "@/components/sidebars/sidebarModules";
 
@@ -17,7 +17,7 @@ function collectNavEntries(modules) {
     if (mod?.url && mod.url !== "#") {
       entries.push({
         path: String(mod.url).split("?")[0],
-        keys: privilegeKeysForItem(mod),
+        keys: privilegeKeysForNavItem(mod),
         title: mod.title,
       });
     }
@@ -25,7 +25,7 @@ function collectNavEntries(modules) {
       if (item?.url && item.url !== "#") {
         entries.push({
           path: String(item.url).split("?")[0],
-          keys: privilegeKeysForItem(item),
+          keys: privilegeKeysForNavItem(item),
           title: item.title,
         });
       }
@@ -39,6 +39,7 @@ function collectNavEntries(modules) {
 /** Extra privileges that may open a path even if the sidebar item is hidden. */
 const RELATED_PAGE_PRIVILEGES = {
   "/app/inventory/inventory-list": ["Goods", "Goods List", "Goods list"],
+  "/app/payments/verification-points": ["Receive Payment"],
 };
 
 /**

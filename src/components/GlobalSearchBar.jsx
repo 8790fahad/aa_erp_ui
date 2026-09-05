@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { _fetchApi } from "@/redux/actions/api";
 import { getMergedSidebarForBusiness } from "@/components/sidebars/sidebarModules";
-import { canAccessPrivileges, getUserFunctionalities, privilegeKeysForItem } from "@/lib/access";
+import { canAccessPrivileges, getUserFunctionalities, privilegeKeysForNavItem } from "@/lib/access";
 
 const DEBOUNCE_MS = 280;
 const MIN_QUERY = 1;
@@ -29,7 +29,7 @@ function buildPageShortcuts(businessType, functionalities) {
           : [];
     for (const item of leafItems) {
       if (!item?.url || item.url === "#") continue;
-      if (!canAccessPrivileges(privilegeKeysForItem(item), functionalities)) {
+      if (!canAccessPrivileges(privilegeKeysForNavItem(item), functionalities)) {
         continue;
       }
       pages.push({

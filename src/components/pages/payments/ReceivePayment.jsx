@@ -123,8 +123,6 @@ const METHOD_TABS = [
   },
 ];
 
-const COLLECTION_TAB_PRIVILEGES = METHOD_TABS.map((t) => t.privilege);
-
 /** Status chip under the invoice number follows the active Verification Points tab. */
 function tabWorkflowBadge(methodTab, row) {
   if (methodTab === "cash") return { label: "Cash", paymentType: "cash" };
@@ -145,22 +143,8 @@ function tabWorkflowBadge(methodTab, row) {
 const SWITCH_PAYMENT_MODE_PRIVILEGE = "Switch Payment Mode";
 const APPROVE_PAYMENT_MODE_PRIVILEGE = "Approve Payment Mode Switch";
 
-const LEGACY_COLLECTION_PRIVILEGES = [
-  "Verification Points",
-  "Collection Points",
-  "Receive Payment",
-  "Payments",
-  "Cashier",
-];
-
 const MAKE_DEPOSIT_PRIVILEGE = "Make Deposit";
-const APPLY_DEPOSIT_PRIVILEGE = "Apply Deposit";
 const RECONCILIATION_PRIVILEGE = "Collection Reconciliation";
-const HEADER_ACTION_PRIVILEGES = [
-  MAKE_DEPOSIT_PRIVILEGE,
-  APPLY_DEPOSIT_PRIVILEGE,
-  RECONCILIATION_PRIVILEGE,
-];
 
 function parseFunctionalities(raw) {
   if (Array.isArray(raw)) return raw.filter(Boolean);
@@ -531,6 +515,27 @@ export default function ReceivePayment() {
   const hasTransferCollection = functionalities.includes(
     "Transfer Collection",
   );
+  const hasCardCollection = functionalities.includes("Card Collection");
+  const collectionAccessLabels = [
+    hasCashCollection ? "Cash Collection" : null,
+    hasTransferCollection ? "Transfer Collection" : null,
+    hasCardCollection ? "Card Collection" : null,
+    functionalities.includes("Credit Collection") ? "Credit Collection" : null,
+    functionalities.includes("Apply Deposit") ? "Apply Deposit" : null,
+    functionalities.includes("Discount Collection")
+      ? "Discount Collection"
+      : null,
+    functionalities.includes(MAKE_DEPOSIT_PRIVILEGE) ? "Make Deposit" : null,
+    functionalities.includes(RECONCILIATION_PRIVILEGE)
+      ? "Collection Reconciliation"
+      : null,
+    functionalities.includes(SWITCH_PAYMENT_MODE_PRIVILEGE)
+      ? "Switch Payment Mode"
+      : null,
+    functionalities.includes(APPROVE_PAYMENT_MODE_PRIVILEGE)
+      ? "Approve Payment Mode Switch"
+      : null,
+  ].filter(Boolean);
   const hasFullCollectionAccess =
     hasFullAccess(functionalities) || !functionalities.length;
   const canSwitchPaymentMode =
@@ -540,21 +545,12 @@ export default function ReceivePayment() {
     hasFullCollectionAccess ||
     functionalities.includes(APPROVE_PAYMENT_MODE_PRIVILEGE);
 
-  const hasAnyHeaderActionPrivilege = HEADER_ACTION_PRIVILEGES.some((p) =>
-    functionalities.includes(p),
-  );
   const canUseHeaderAction = useCallback(
     (privilege) => {
       if (hasFullCollectionAccess) return true;
-      if (functionalities.includes(privilege)) return true;
-      if (!hasAnyHeaderActionPrivilege) {
-        return LEGACY_COLLECTION_PRIVILEGES.some((p) =>
-          functionalities.includes(p),
-        );
-      }
-      return false;
+      return functionalities.includes(privilege);
     },
-    [functionalities, hasFullCollectionAccess, hasAnyHeaderActionPrivilege],
+    [functionalities, hasFullCollectionAccess],
   );
 
   const canViewCollectionTab = useCallback(
@@ -575,17 +571,6 @@ export default function ReceivePayment() {
         );
       }
 
-      const hasAnyTabPriv = COLLECTION_TAB_PRIVILEGES.filter(
-        (p) =>
-          p !== APPROVE_PAYMENT_MODE_PRIVILEGE &&
-          p !== SWITCH_PAYMENT_MODE_PRIVILEGE,
-      ).some((p) => functionalities.includes(p));
-      // Parent / legacy keys only (no Cash/Transfer/Credit yet) → collection tabs
-      if (!hasAnyTabPriv) {
-        return LEGACY_COLLECTION_PRIVILEGES.some((p) =>
-          functionalities.includes(p),
-        );
-      }
       return false;
     },
     [functionalities],
@@ -595,24 +580,11 @@ export default function ReceivePayment() {
     () =>
       METHOD_TABS.filter((t) => {
         if (t.id === "mode") {
-          // Explicit Switch or Approve only — not Cash/Transfer/legacy alone
           return canSwitchPaymentMode || canApprovePaymentMode;
-        }
-        if (t.id === "deposit") {
-          return (
-            canViewCollectionTab(APPLY_DEPOSIT_PRIVILEGE) ||
-            canUseHeaderAction(APPLY_DEPOSIT_PRIVILEGE)
-          );
-        }
-        if (t.id === "card") {
-          return (
-            canViewCollectionTab("Card Collection") ||
-            canViewCollectionTab("Transfer Collection")
-          );
         }
         return canViewCollectionTab(t.privilege);
       }),
-    [canViewCollectionTab, canUseHeaderAction, canSwitchPaymentMode, canApprovePaymentMode],
+    [canViewCollectionTab, canSwitchPaymentMode, canApprovePaymentMode],
   );
 
   const [methodTab, setMethodTab] = useState(() => {
@@ -1334,6 +1306,7 @@ export default function ReceivePayment() {
   useEffect(() => {
     const action = String(searchParams.get("action") || "").toLowerCase();
     if (action !== "deposit" && action !== "make-deposit") return;
+    if (!canUseHeaderAction(MAKE_DEPOSIT_PRIVILEGE)) return;
     if (methodTab === "credit") setMethodTab("cash");
     const customerNo = searchParams.get("customerNo") || "";
     const customerName = searchParams.get("customerName") || "";
@@ -1352,7 +1325,7 @@ export default function ReceivePayment() {
     next.delete("customerNo");
     next.delete("customerName");
     setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams, openAdvanceSheet, methodTab]);
+  }, [searchParams, setSearchParams, openAdvanceSheet, methodTab, canUseHeaderAction]);
 
   const closeAdvanceSheet = () => {
     setAdvanceOpen(false);
@@ -1797,10 +1770,7 @@ export default function ReceivePayment() {
             setMethodTab("transfer");
           }
         } else if (pt === "card") {
-          if (
-            canViewCollectionTab("Card Collection") ||
-            canViewCollectionTab("Transfer Collection")
-          ) {
+          if (canViewCollectionTab("Card Collection")) {
             setMethodTab("card");
           }
         } else if (pt === "cash") {
@@ -1811,12 +1781,27 @@ export default function ReceivePayment() {
           // Prefer a side this user can collect via privileges
           if (
             canViewCollectionTab("Transfer Collection") &&
-            !canViewCollectionTab("Cash Collection")
+            !canViewCollectionTab("Cash Collection") &&
+            !canViewCollectionTab("Card Collection")
           ) {
             setMethodTab("transfer");
+          } else if (
+            canViewCollectionTab("Card Collection") &&
+            !canViewCollectionTab("Cash Collection") &&
+            !canViewCollectionTab("Transfer Collection")
+          ) {
+            setMethodTab("card");
           } else if (canViewCollectionTab("Cash Collection")) {
             setMethodTab("cash");
-          } else if (methodTab !== "cash" && methodTab !== "transfer") {
+          } else if (canViewCollectionTab("Transfer Collection")) {
+            setMethodTab("transfer");
+          } else if (canViewCollectionTab("Card Collection")) {
+            setMethodTab("card");
+          } else if (
+            methodTab !== "cash" &&
+            methodTab !== "transfer" &&
+            methodTab !== "card"
+          ) {
             setMethodTab("cash");
           }
         }
@@ -1874,8 +1859,7 @@ export default function ReceivePayment() {
       setMethodTab("transfer");
     } else if (
       tab === "card" &&
-      (canViewCollectionTab("Card Collection") ||
-        canViewCollectionTab("Transfer Collection"))
+      canViewCollectionTab("Card Collection")
     ) {
       setMethodTab("card");
     } else if (tab === "cash" && canViewCollectionTab("Cash Collection")) {
@@ -2527,7 +2511,10 @@ export default function ReceivePayment() {
       ? "xl:grid-cols-1 sm:grid-cols-1"
       : "xl:grid-cols-2";
 
-  if (!visibleMethodTabs.length) {
+  const canMakeDeposit = canUseHeaderAction(MAKE_DEPOSIT_PRIVILEGE);
+  const canReconcileCollections = canUseHeaderAction(RECONCILIATION_PRIVILEGE);
+
+  if (!visibleMethodTabs.length && !canMakeDeposit && !canReconcileCollections) {
     return (
       <div className="min-h-full bg-[#f5f7fb] px-4 py-5 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
@@ -2560,22 +2547,29 @@ export default function ReceivePayment() {
               approve credit/discount, or switch mode in the same modal. Use
               Apply Deposit to apply prepaid funds to open invoices.
               Supplier payments are handled under Purchase → Pay Bills.
-              {hasCashCollection || hasTransferCollection ? (
+              {hasFullCollectionAccess ? (
                 <span className="ml-1 font-medium text-[var(--aa-navy)]">
-                  Access:{" "}
-                  {[
-                    hasCashCollection ? "Cash Collection" : null,
-                    hasTransferCollection ? "Transfer Collection" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                  .
+                  Access: full collection.
+                </span>
+              ) : collectionAccessLabels.length ? (
+                <span className="ml-1 font-medium text-[var(--aa-navy)]">
+                  Access: {collectionAccessLabels.join(" · ")}.
                 </span>
               ) : null}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {canUseHeaderAction(RECONCILIATION_PRIVILEGE) ? (
+            {canMakeDeposit ? (
+              <button
+                type="button"
+                onClick={() => openAdvanceSheet()}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                <Plus className="h-4 w-4" />
+                Make Deposit
+              </button>
+            ) : null}
+            {canReconcileCollections ? (
             <Link
               to="/app/payments/collection-reconciliation"
               className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"

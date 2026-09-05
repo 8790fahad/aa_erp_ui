@@ -35,7 +35,8 @@ export function useAdvancePaymentAccounts(open, facilityId, modeOfPayment) {
     const isSplit =
       mode === "cash+transfer" || mode === "split" || mode === "cash_transfer";
     const needCash = mode === "cash" || isSplit;
-    const needBank = mode === "bank" || mode === "cheque" || isSplit;
+    const needBank =
+      mode === "bank" || mode === "cheque" || mode === "card" || isSplit;
 
     if (needCash) {
       _postApi(

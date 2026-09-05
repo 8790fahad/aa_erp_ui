@@ -170,12 +170,17 @@ export default function SalesManagement() {
           ];
           const hasCash = privs.includes("Cash Collection");
           const hasTransfer = privs.includes("Transfer Collection");
+          const hasCard = privs.includes("Card Collection");
           const hasAnyCollectionTab =
             hasCash ||
             hasTransfer ||
+            hasCard ||
             privs.includes("Credit Collection");
-          // Only restrict when user has an explicit Cash/Transfer collection privilege
-          if (hasAnyCollectionTab && (hasCash || hasTransfer) && !(hasCash && hasTransfer)) {
+          const collectSideCount = [hasCash, hasTransfer, hasCard].filter(
+            Boolean,
+          ).length;
+          // Only restrict when user has exactly one collection-side privilege
+          if (hasAnyCollectionTab && collectSideCount === 1) {
             list = list.filter((r) => {
               if (
                 r.status !== "awaiting_cashier_confirm" &&
@@ -184,17 +189,24 @@ export default function SalesManagement() {
                 return true;
               }
               const pt = String(r.payment_type || "").toLowerCase();
-              if (hasCash && !hasTransfer) {
+              if (hasCash) {
                 return (
                   pt === "cash" ||
                   pt === "split" ||
                   pt === "credit_split"
                 );
               }
-              if (hasTransfer && !hasCash) {
+              if (hasTransfer) {
                 return (
                   pt === "transfer" ||
                   pt === "bank" ||
+                  pt === "split" ||
+                  pt === "credit_split"
+                );
+              }
+              if (hasCard) {
+                return (
+                  pt === "card" ||
                   pt === "split" ||
                   pt === "credit_split"
                 );

@@ -95,12 +95,15 @@ const QUICK_CREATE = [
     privileges: [
       "Verification Points",
       "Collection Points",
+      "Cashier",
       "Cash Collection",
       "Transfer Collection",
       "Card Collection",
       "Credit Collection",
-      "Receive Payment",
-      "Payments",
+      "Apply Deposit",
+      "Make Deposit",
+      "Discount Collection",
+      "Collection Reconciliation",
     ],
   },
 ];

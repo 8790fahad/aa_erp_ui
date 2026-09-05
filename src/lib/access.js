@@ -86,11 +86,14 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "Card Payment",
   "Credit Payment",
   "Apply Deposit Payment",
+  "Cash Collection",
+  "Transfer Collection",
+  "Card Collection",
+  "Credit Collection",
+  "Discount Collection",
   "Make Deposit",
   "Apply Deposit",
   "Collection Reconciliation",
-  "Credit Collection",
-  "Discount Collection",
 ];
 
 /** Create Invoice → Mode of Payment checkboxes. */
@@ -114,7 +117,6 @@ const ALL_INVOICE_PAYMENT_MODE_IDS = [
  * Payment modes the user may select on Create Invoice.
  * If none of the five privileges are assigned yet, all modes stay available
  * so existing Create Invoice users are not locked out.
- * Card rides with Transfer Payment until Card Payment is granted on its own.
  */
 export function allowedInvoicePaymentModeIds(functionalities) {
   if (hasFullAccess(functionalities)) return [...ALL_INVOICE_PAYMENT_MODE_IDS];
@@ -122,13 +124,6 @@ export function allowedInvoicePaymentModeIds(functionalities) {
   const granted = ALL_INVOICE_PAYMENT_MODE_IDS.filter((id) =>
     funcs.includes(INVOICE_PAYMENT_MODE_PRIVILEGES[id]),
   );
-  if (
-    granted.includes("transfer") &&
-    !granted.includes("card") &&
-    !funcs.includes("Card Payment")
-  ) {
-    granted.push("card");
-  }
   return granted.length ? granted : [...ALL_INVOICE_PAYMENT_MODE_IDS];
 }
 
@@ -187,6 +182,20 @@ export function privilegeKeysForItem(item) {
   ];
 }
 
+/**
+ * Keys that may open a sidebar/page item. Includes child switches so a
+ * cashier with only Cash Collection can still open Verification Points.
+ * Do not use this for the Manage Users parent toggle — that must stay
+ * independent of explicit-only children.
+ */
+export function privilegeKeysForNavItem(item) {
+  const keys = privilegeKeysForItem(item);
+  const subs = (item?.subFunctionalities || [])
+    .map((sub) => String(sub?.title || "").trim())
+    .filter(Boolean);
+  return [...new Set([...keys, ...subs])];
+}
+
 function moduleFunctionalityKeys(module) {
   if (!module) return [];
   const fromField = Array.isArray(module.functionality)
@@ -218,7 +227,7 @@ export function filterSidebarModulesForUser(modules, user, activeBusiness) {
         const allowedByModule =
           !moduleAccess.length || moduleAccess.includes(item.title);
         const allowedByFn = canAccessPrivileges(
-          privilegeKeysForItem(item),
+          privilegeKeysForNavItem(item),
           funcs,
         );
         return allowedByModule || allowedByFn ? item : null;
@@ -230,7 +239,7 @@ export function filterSidebarModulesForUser(modules, user, activeBusiness) {
         moduleFunctionalityKeys(item).some((key) => funcs.includes(key));
 
       const children = item.items.filter((subItem) =>
-        canAccessPrivileges(privilegeKeysForItem(subItem), funcs),
+        canAccessPrivileges(privilegeKeysForNavItem(subItem), funcs),
       );
 
       if (!parentGranted && !children.length) return null;

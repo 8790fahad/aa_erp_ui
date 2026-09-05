@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import {
   canAccessPrivileges,
   getUserFunctionalities,
-  privilegeKeysForItem,
+  privilegeKeysForNavItem,
 } from "@/lib/access";
 
 const MODULE_ACCENT = {
@@ -67,14 +67,14 @@ export function NavMain({ items }) {
       .map((item) => {
         if (!item.items?.length) return item;
         const children = item.items.filter((subItem) =>
-          canAccessPrivileges(privilegeKeysForItem(subItem), functionalities),
+          canAccessPrivileges(privilegeKeysForNavItem(subItem), functionalities),
         );
         return { ...item, items: children };
       })
       .filter((item) => {
         if (item.items) return item.items.length > 0;
         if (!item.url || item.url === "#") return false;
-        return canAccessPrivileges(privilegeKeysForItem(item), functionalities);
+        return canAccessPrivileges(privilegeKeysForNavItem(item), functionalities);
       });
   }, [items, functionalities]);
 
