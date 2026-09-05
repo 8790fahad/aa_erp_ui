@@ -376,16 +376,16 @@ function CreditSaleInvoicePDFViewer({
 
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <Text style={[styles.col1, { fontFamily: "Times-Bold" }]}>
-              Description / Size
+            <Text style={[styles.col1, { fontFamily: "Times-Bold", fontSize: 11 }]}>
+              Description
             </Text>
-            <Text style={[styles.col2, { fontFamily: "Times-Bold" }]}>
+            <Text style={[styles.col2, { fontFamily: "Times-Bold", fontSize: 11 }]}>
               Quantity
             </Text>
-            <Text style={[styles.col3, { fontFamily: "Times-Bold" }]}>
+            <Text style={[styles.col3, { fontFamily: "Times-Bold", fontSize: 11 }]}>
               Unit Price
             </Text>
-            <Text style={[styles.col4, { fontFamily: "Times-Bold" }]}>
+            <Text style={[styles.col4, { fontFamily: "Times-Bold", fontSize: 11 }]}>
               Amount
             </Text>
           </View>
@@ -409,12 +409,12 @@ function CreditSaleInvoicePDFViewer({
 
             return (
               <View key={item.id} style={styles.tableRow}>
-                <Text style={styles.col1}>
+                <Text style={[styles.col1, { fontSize: 11, fontFamily: "Times-Bold" }]}>
                   {item.item_name} {item.multiplier_type}
                 </Text>
-                <Text style={styles.col2}>{item.quantity_sold}</Text>
-                <Text style={styles.col3}>{formatNumber1(displayPrice)}</Text>
-                <Text style={styles.col4}>{formatNumber1(displayAmount)}</Text>
+                <Text style={[styles.col2, { fontSize: 10 }]}>{item.quantity_sold}</Text>
+                <Text style={[styles.col3, { fontSize: 10 }]}>{formatNumber1(displayPrice)}</Text>
+                <Text style={[styles.col4, { fontSize: 10 }]}>{formatNumber1(displayAmount)}</Text>
               </View>
             );
           })}

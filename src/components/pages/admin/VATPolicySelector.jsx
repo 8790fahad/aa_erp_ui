@@ -4,10 +4,9 @@ import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Button } from "reactstrap";
 import { Card } from "reactstrap/lib";
-import { Settings, Check, X, Save, ShoppingCart } from "lucide-react";
+import { Settings, Check, X, Save, ShoppingCart, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { _postApi } from "@/redux/actions/api";
-import { Receipt } from "lucide-react";
 
 const VATPolicySelector = ({
   title = "Company VAT Policy",
@@ -24,6 +23,10 @@ const VATPolicySelector = ({
     activeBusiness?.allow_sales_without_stock || false
   );
   const [loadingStockSetting, setLoadingStockSetting] = useState(false);
+  const [showVatOnSalesInvoice, setShowVatOnSalesInvoice] = useState(
+    activeBusiness?.show_vat_on_sales_invoice !== false
+  );
+  const [loadingShowVat, setLoadingShowVat] = useState(false);
   const dispatch = useDispatch();
 
   // VAT Policy options
@@ -59,6 +62,44 @@ const VATPolicySelector = ({
   useEffect(() => {
     setAllowSalesWithoutStock(activeBusiness?.allow_sales_without_stock || false);
   }, [activeBusiness?.allow_sales_without_stock]);
+
+  useEffect(() => {
+    setShowVatOnSalesInvoice(
+      activeBusiness?.show_vat_on_sales_invoice !== false,
+    );
+  }, [activeBusiness?.show_vat_on_sales_invoice]);
+
+  const handleShowVatToggle = () => {
+    if (!activeBusiness?.id || !user?.id || loadingShowVat) return;
+    const newValue = !showVatOnSalesInvoice;
+    setLoadingShowVat(true);
+    _postApi(
+      `/account/update-show-vat-on-sales-invoice/${newValue ? "1" : "0"}/${activeBusiness.id}/${user.id}`,
+      { store: activeBusiness.business_name },
+      (resp) => {
+        setLoadingShowVat(false);
+        if (resp?.success) {
+          dispatch({
+            type: "UPDATE_BUSINESS_SETTINGS",
+            payload: { business: resp.results },
+          });
+          setShowVatOnSalesInvoice(newValue);
+          toast.success(
+            newValue
+              ? "VAT will show on sales invoices"
+              : "VAT hidden on sales invoices (exclusive VAT goes into unit price)",
+          );
+        } else {
+          toast.error(resp?.message || "Failed to update setting");
+        }
+      },
+      (err) => {
+        console.error("API Error:", err);
+        setLoadingShowVat(false);
+        toast.error("Something went wrong while updating");
+      },
+    );
+  };
 
   const handleSubmit = () => {
     if (!form.policy) {
@@ -390,6 +431,51 @@ const VATPolicySelector = ({
               <div className="text-muted small mt-1">
                 {currentPolicy?.description}
               </div>
+            </div>
+
+            {/* Show VAT on Sales Invoice */}
+            <div className="border-top pt-3 mt-3">
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <div className="flex-grow-1">
+                  <div className="d-flex align-items-center gap-2 mb-1">
+                    <Receipt size={16} className="text-muted" />
+                    <label className="fw-semibold text-gray-700 mb-0">
+                      Show VAT on Sales Invoice
+                    </label>
+                  </div>
+                  <p className="text-muted small mb-0">
+                    When off, exclusive VAT is included in unit price and VAT
+                    lines are hidden. Inclusive VAT stays in the price and is
+                    not listed separately.
+                  </p>
+                </div>
+                <div className="form-check form-switch">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    role="switch"
+                    id="showVatOnSalesInvoiceSwitch"
+                    checked={showVatOnSalesInvoice}
+                    onChange={handleShowVatToggle}
+                    disabled={loadingShowVat}
+                    style={{
+                      width: "3rem",
+                      height: "1.5rem",
+                      cursor: loadingShowVat ? "not-allowed" : "pointer",
+                      accentColor:
+                        activeBusiness?.primary_color || "#1a2d5e",
+                    }}
+                  />
+                </div>
+              </div>
+              {loadingShowVat && (
+                <div className="text-center mt-2">
+                  <div
+                    className="spinner-border spinner-border-sm"
+                    role="status"
+                  ></div>
+                </div>
+              )}
             </div>
 
             {/* Allow Sales Without Stock Setting */}

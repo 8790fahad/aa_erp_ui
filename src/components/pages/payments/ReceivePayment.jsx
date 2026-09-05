@@ -198,8 +198,23 @@ const PAYMENT_MODE_OPTIONS = [
   { value: "deposit", label: "Apply Deposit", icon: Wallet },
 ];
 
+const MODE_LABELS = {
+  cash: "Cash",
+  transfer: "Transfer",
+  credit: "Credit",
+  deposit: "Apply Deposit",
+};
+
 function paymentTypeLabel(type, row = null) {
+  const modes = row ? rowPaymentModes(row) : [];
+  const named = ["cash", "transfer", "credit", "deposit"].filter((id) =>
+    modes.includes(id),
+  );
+  if (named.length > 1) {
+    return named.map((id) => MODE_LABELS[id]).join(" + ");
+  }
   if (row?.credit_after_deposit) return "Apply Deposit + Credit";
+  if (row?.collect_after_deposit) return "Apply Deposit + Cash/Transfer";
   const t = normalizePaymentMode(type);
   const opt = PAYMENT_MODE_OPTIONS.find((o) => o.value === t);
   if (opt) return opt.label;
@@ -244,18 +259,41 @@ function isDepositWorkflowRow(row) {
   return (
     pt === "deposit" ||
     Boolean(row?.deposit_pending) ||
-    Boolean(row?.credit_after_deposit)
+    Boolean(row?.credit_after_deposit) ||
+    Boolean(row?.collect_after_deposit)
   );
 }
 
 /** Verification Points Credit tab: deposit invoices that still need apply-then-credit. */
 function isCreditPlusDepositRow(row) {
   if (!row || !isDepositWorkflowRow(row)) return false;
-  if (row.deposit_pending || row.credit_after_deposit) return true;
+  const modes = rowPaymentModes(row);
+  if (row.credit_after_deposit || modes.includes("credit")) return true;
+  if (modes.includes("cash") || modes.includes("transfer")) return false;
+  if (row.deposit_pending) return true;
   if (Number(row.credit_remainder) > 0.05) return true;
   const due = Number(row.amount) || 0;
   const dep = Number(row.deposit_available) || 0;
   return due - dep > 0.05;
+}
+
+/** Deposit invoices that also selected Cash and/or Transfer. */
+function isCollectionPlusDepositRow(row, method) {
+  if (!row || !isDepositWorkflowRow(row)) return false;
+  if (String(row.status || "").toLowerCase() === "awaiting_credit_approval") {
+    return false;
+  }
+  const modes = rowPaymentModes(row);
+  if (method === "cash") {
+    if (modes.includes("cash")) return true;
+    return Boolean(row.collect_after_deposit) && !modes.includes("transfer");
+  }
+  if (method === "transfer") return modes.includes("transfer");
+  return false;
+}
+
+function isDepositPendingCollection(row, method) {
+  return isCollectionPlusDepositRow(row, method);
 }
 
 function isCreditAvailabilityRow(row) {
@@ -279,7 +317,9 @@ function isDepositPendingCredit(row) {
 }
 
 function creditStateLabel(row) {
-  if (isDepositPendingCredit(row)) return "Apply deposit first";
+  if (isDepositPendingCredit(row)) {
+    return paymentTypeLabel(row.payment_type, row);
+  }
   if (isAwaitingCreditRow(row)) return "Awaiting credit";
   if (normalizePaymentMode(row?.payment_type) === "credit_split") {
     return "Confirm credit";
@@ -296,6 +336,12 @@ function depositApplyPreview(row) {
 }
 
 function rowPaymentModes(row) {
+  const top = Array.isArray(row?.payment_modes) ? row.payment_modes : [];
+  if (top.length) {
+    return top
+      .map((m) => String(m || "").toLowerCase().trim())
+      .filter(Boolean);
+  }
   const history = Array.isArray(row?.history) ? row.history : [];
   for (let i = history.length - 1; i >= 0; i -= 1) {
     const raw = history[i]?.payment_modes;
@@ -304,7 +350,12 @@ function rowPaymentModes(row) {
     }
   }
   const pt = normalizePaymentMode(row?.payment_type);
-  if (pt === "deposit") return ["deposit"];
+  if (pt === "deposit") {
+    const extra = [];
+    if (row?.collect_after_deposit) extra.push("cash");
+    if (row?.credit_after_deposit) extra.push("credit");
+    return ["deposit", ...extra];
+  }
   if (pt === "credit") return ["credit"];
   if (pt === "credit_split") return ["credit", "cash", "transfer"];
   if (pt === "split") return ["cash", "transfer"];
@@ -787,15 +838,21 @@ export default function ReceivePayment() {
   const viewSummary = useMemo(() => {
     const sumAmounts = (list) =>
       list.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-    const cashQueue = pending.filter(
-      (r) =>
-        matchesMethod(r.payment_type, "cash") && needsCollectionSide(r, "cash"),
-    );
-    const transferQueue = pending.filter(
-      (r) =>
-        matchesMethod(r.payment_type, "transfer") &&
-        needsCollectionSide(r, "transfer"),
-    );
+    const cashQueue = [
+      ...pending.filter(
+        (r) =>
+          matchesMethod(r.payment_type, "cash") && needsCollectionSide(r, "cash"),
+      ),
+      ...depositPending.filter((r) => isCollectionPlusDepositRow(r, "cash")),
+    ];
+    const transferQueue = [
+      ...pending.filter(
+        (r) =>
+          matchesMethod(r.payment_type, "transfer") &&
+          needsCollectionSide(r, "transfer"),
+      ),
+      ...depositPending.filter((r) => isCollectionPlusDepositRow(r, "transfer")),
+    ];
 
     if (methodTab === "cash") {
       return {
@@ -976,25 +1033,40 @@ export default function ReceivePayment() {
         .map((r) => r.sale_code)
         .filter(Boolean),
     );
+    const cashCodes = new Set();
+    const transferCodes = new Set();
+    for (const r of pending) {
+      if (
+        r?.sale_code &&
+        matchesMethod(r.payment_type, "cash") &&
+        needsCollectionSide(r, "cash")
+      ) {
+        cashCodes.add(r.sale_code);
+      }
+      if (
+        r?.sale_code &&
+        matchesMethod(r.payment_type, "transfer") &&
+        needsCollectionSide(r, "transfer")
+      ) {
+        transferCodes.add(r.sale_code);
+      }
+    }
+    for (const r of depositPending) {
+      if (r?.sale_code && isCollectionPlusDepositRow(r, "cash")) {
+        cashCodes.add(r.sale_code);
+      }
+      if (r?.sale_code && isCollectionPlusDepositRow(r, "transfer")) {
+        transferCodes.add(r.sale_code);
+      }
+    }
     const counts = {
-      cash: 0,
-      transfer: 0,
+      cash: cashCodes.size,
+      transfer: transferCodes.size,
       credit: creditCodes.size + creditSplitPending.length,
       deposit: depositPending.length,
       discount: discountPending.length,
       mode: modePending.length,
     };
-    for (const r of pending) {
-      if (matchesMethod(r.payment_type, "cash") && needsCollectionSide(r, "cash")) {
-        counts.cash += 1;
-      }
-      if (
-        matchesMethod(r.payment_type, "transfer") &&
-        needsCollectionSide(r, "transfer")
-      ) {
-        counts.transfer += 1;
-      }
-    }
     return counts;
   }, [pending, creditPending, depositPending, discountPending, modePending]);
 
@@ -1038,11 +1110,22 @@ export default function ReceivePayment() {
       }
       list = [...byCode.values()];
     } else {
-      list = pending.filter(
-        (r) =>
-          matchesMethod(r.payment_type, methodTab) &&
-          needsCollectionSide(r, methodTab),
+      const collectionDeposit = depositPending.filter((r) =>
+        isCollectionPlusDepositRow(r, methodTab),
       );
+      const byCode = new Map();
+      for (const r of [
+        ...pending.filter(
+          (r) =>
+            matchesMethod(r.payment_type, methodTab) &&
+            needsCollectionSide(r, methodTab),
+        ),
+        ...collectionDeposit,
+      ]) {
+        if (!r?.sale_code) continue;
+        if (!byCode.has(r.sale_code)) byCode.set(r.sale_code, r);
+      }
+      list = [...byCode.values()];
     }
     return list;
   }, [pending, creditPending, depositPending, discountPending, modePending, methodTab]);
@@ -1329,7 +1412,12 @@ export default function ReceivePayment() {
         }
       }
       if (pt === "credit_split" || pt === "split") return "collect";
-      if (methodTab === "deposit" || pt === "deposit") return "deposit";
+      if (
+        methodTab === "deposit" ||
+        pt === "deposit" ||
+        isDepositPendingCollection(row, methodTab)
+      )
+        return "deposit";
       if (
         row?.status === "awaiting_credit_approval" ||
         pt === "credit"
@@ -2675,13 +2763,14 @@ export default function ReceivePayment() {
                                 (Number(row.deposit_available) || 0) >
                                 0.05 ? (
                                 <span className="block text-teal-700">
-                                  Credit remainder ₦
+                                  Remainder ₦
                                   {formatNumber1(
                                     Number(row.credit_remainder) > 0
                                       ? row.credit_remainder
                                       : (Number(row.amount) || 0) -
                                           (Number(row.deposit_available) || 0),
-                                  )}
+                                  )}{" "}
+                                  after deposit
                                 </span>
                               ) : row.credit_after_deposit ? (
                                 <span className="block text-teal-700">
@@ -2694,12 +2783,22 @@ export default function ReceivePayment() {
                             <div className="mt-1 text-[11px] text-slate-500">
                               Deposit available ₦
                               {formatNumber1(row.deposit_available || 0)}
-                              <span className="block text-amber-800">
+                              {Number(row.credit_remainder) > 0.05 ? (
+                                <span className="block text-amber-800">
+                                  Credit remainder ₦
+                                  {formatNumber1(row.credit_remainder)} after
+                                  deposit
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : isDepositPendingCollection(row, methodTab) ? (
+                            <div className="mt-1 text-[11px] text-slate-500">
+                              Deposit available ₦
+                              {formatNumber1(row.deposit_available || 0)}
+                              <span className="block text-teal-700">
                                 {Number(row.credit_remainder) > 0.05
-                                  ? `Credit remainder ₦${formatNumber1(row.credit_remainder)} after deposit`
-                                  : row.credit_after_deposit
-                                    ? "Apply deposit first — then credit if anything remains"
-                                    : "Apply deposit first"}
+                                  ? `Apply deposit first — then collect ₦${formatNumber1(row.credit_remainder)}`
+                                  : "Apply deposit first — then collect remaining cash/transfer"}
                               </span>
                             </div>
                           ) : methodTab === "credit" &&
@@ -3070,6 +3169,18 @@ export default function ReceivePayment() {
                                 View
                               </button>
                             )
+                          ) : isDepositPendingCollection(row, methodTab) ? (
+                            <div className="flex flex-col items-end gap-1.5">
+                              <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => openHub(row, "deposit")}
+                                className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                              >
+                                <Wallet className="h-3.5 w-3.5" />
+                                View & Apply Deposit
+                              </button>
+                            </div>
                           ) : (
                             <button
                               type="button"

@@ -82,15 +82,49 @@ function isAllowedPoFile(file) {
 }
 
 function attachmentHref(doc) {
+  // Prefer a signed Cloudinary download URL (CDN raw/PDF links often return 401).
+  if (doc?.url && /api\.cloudinary\.com\//i.test(doc.url)) return doc.url;
+  if (doc?.download_url && /api\.cloudinary\.com\//i.test(doc.download_url)) {
+    return doc.download_url;
+  }
   const path = doc?.url || doc?.file_path;
   if (!path) return null;
+  // Raw CDN PDFs are restricted — ask our API to mint a signed open URL.
+  if (/^https?:\/\/res\.cloudinary\.com\//i.test(path)) {
+    const token = localStorage.getItem("@@__token") || "";
+    const qs = new URLSearchParams({
+      file_path: path,
+      ...(token ? { access_token: token } : {}),
+    });
+    return `${apiURL}/account/purchase-order-documents/open?${qs.toString()}`;
+  }
   if (/^https?:\/\//i.test(path)) return path;
   return `${apiURL}/public/uploads/${path}`;
 }
 
 function attachmentDownloadHref(doc) {
-  if (doc?.download_url) return doc.download_url;
+  if (doc?.download_url && /api\.cloudinary\.com\//i.test(doc.download_url)) {
+    return doc.download_url;
+  }
+  if (doc?.file_path && /^https?:\/\/res\.cloudinary\.com\//i.test(doc.file_path)) {
+    const token = localStorage.getItem("@@__token") || "";
+    const qs = new URLSearchParams({
+      file_path: doc.file_path,
+      download: "1",
+      filename: doc.document_name || doc.original_name || doc.name || "document",
+      ...(token ? { access_token: token } : {}),
+    });
+    return `${apiURL}/account/purchase-order-documents/open?${qs.toString()}`;
+  }
   return attachmentHref(doc);
+}
+
+function formatPoFileSize(bytes) {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size < 0) return "";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 const poInputClass =
@@ -774,7 +808,11 @@ export default function PurchaseRequisitionList() {
                 ? {
                     ...doc,
                     clientId: item.clientId,
-                    url: doc.url || attachmentHref(doc),
+                    // Prefer signed view URL from API (CDN raw PDFs return 401).
+                    url: doc.url || doc.file_path || attachmentHref(doc),
+                    file_path: doc.file_path,
+                    file_size: doc.file_size || item.file_size || item.size,
+                    size: doc.file_size || item.size,
                     uploading: false,
                   }
                 : row,
@@ -1844,21 +1882,21 @@ export default function PurchaseRequisitionList() {
                               className="truncate text-[var(--aa-accent)] hover:text-[var(--aa-navy)] hover:underline"
                             >
                               {label}
-                              {sizeBytes != null && (
+                              {sizeBytes != null && formatPoFileSize(sizeBytes) ? (
                                 <span className="text-slate-400">
                                   {" "}
-                                  ({(sizeBytes / (1024 * 1024)).toFixed(1)} MB)
+                                  ({formatPoFileSize(sizeBytes)})
                                 </span>
-                              )}
+                              ) : null}
                             </a>
                           ) : (
                             <span className="truncate">
                               {label}{" "}
-                              {sizeBytes != null && (
+                              {sizeBytes != null && formatPoFileSize(sizeBytes) ? (
                                 <span className="text-slate-400">
-                                  ({(sizeBytes / (1024 * 1024)).toFixed(1)} MB)
+                                  ({formatPoFileSize(sizeBytes)})
                                 </span>
-                              )}
+                              ) : null}
                             </span>
                           )}
                           {href ? (

@@ -489,6 +489,8 @@ function PaymentModePicker({
 }
 
 function CustomerPaymentBalances({
+  showCash,
+  showTransfer,
   showCredit,
   showDeposit,
   loading,
@@ -497,7 +499,7 @@ function CustomerPaymentBalances({
   depositBalance,
   currency = "₦",
 }) {
-  if (!showCredit && !showDeposit) return null;
+  if (!showCash && !showTransfer && !showCredit && !showDeposit) return null;
   const fmt = (n) =>
     `${currency}${formatNumber1(Math.max(0, Number(n) || 0))}`;
   const available =
@@ -506,6 +508,18 @@ function CustomerPaymentBalances({
       : null;
   return (
     <div className="mt-2 flex flex-wrap gap-2">
+      {showCash ? (
+        <div className="rounded-md border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs text-green-950">
+          <span className="font-semibold">Cash: </span>
+          collect at Verification Points
+        </div>
+      ) : null}
+      {showTransfer ? (
+        <div className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs text-sky-950">
+          <span className="font-semibold">Transfer: </span>
+          collect at Verification Points
+        </div>
+      ) : null}
       {showCredit ? (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-950">
           {loading ? (
@@ -4495,6 +4509,8 @@ function MakeSale() {
                     options={allowedPaymentModeOptions}
                   />
                   <CustomerPaymentBalances
+                    showCash={hasCashMode}
+                    showTransfer={hasTransferMode}
                     showCredit={hasCreditMode && Boolean(selectedCustomer)}
                     showDeposit={hasDepositMode && Boolean(selectedCustomer)}
                     loading={balancesLoading}
@@ -4571,6 +4587,8 @@ function MakeSale() {
                       options={allowedPaymentModeOptions}
                     />
                     <CustomerPaymentBalances
+                      showCash={hasCashMode}
+                      showTransfer={hasTransferMode}
                       showCredit={hasCreditMode && Boolean(selectedCustomer)}
                       showDeposit={hasDepositMode && Boolean(selectedCustomer)}
                       loading={balancesLoading}

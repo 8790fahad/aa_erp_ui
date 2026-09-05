@@ -320,6 +320,9 @@ export default function CreditSaleInvoice({
   const vatPolicy =
     business?.vat_policy || activeBusiness?.vat_policy || "vat_exclusive";
   const isInclusiveTax = vatPolicy === "vat_inclusive";
+  const showVatOnSalesInvoice =
+    (business?.show_vat_on_sales_invoice ??
+      activeBusiness?.show_vat_on_sales_invoice) !== false;
 
   const isItemTaxable = (item) => {
     const flag = String(item?.taxable || "").toLowerCase();
@@ -458,7 +461,8 @@ export default function CreditSaleInvoice({
     return 0;
   })();
   const foldVatIntoUnitPrice =
-    customerPrintMode === "amount" && Number(exclusiveTaxTotal) > 0;
+    Number(exclusiveTaxTotal) > 0 &&
+    (!showVatOnSalesInvoice || customerPrintMode === "amount");
   const vatToFold = Number(exclusiveTaxTotal) || 0;
   const displaySubtotal = foldVatIntoUnitPrice
     ? subtotal + vatToFold
@@ -904,6 +908,20 @@ export default function CreditSaleInvoice({
         background: #fff !important;
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
+        font-family: "Source Sans 3", "Segoe UI", "Helvetica Neue", Arial, sans-serif !important;
+      }
+      .invoice-items-table {
+        font-family: "Source Sans 3", "Segoe UI", "Helvetica Neue", Arial, sans-serif !important;
+      }
+      .invoice-items-table th {
+        font-size: ${isA5 ? "11px" : "13px"} !important;
+      }
+      .invoice-items-table td {
+        font-size: ${isA5 ? "12px" : "13px"} !important;
+      }
+      .invoice-items-table td:nth-child(2) {
+        font-size: ${isA5 ? "12.5px" : "14px"} !important;
+        font-weight: 600 !important;
       }
       .invoice-container {
         width: ${pageWidthMm}mm !important;
@@ -1179,9 +1197,35 @@ export default function CreditSaleInvoice({
             ? `
         .invoice-a5 .invoice-page-half-fill { display: none; }
         .invoice-a5 .invoice-page-divider { display: none; }
-        .invoice-a5 table th,
-        .invoice-a5 table td { padding: 2px 4px !important; font-size: 10px !important; }
+        .invoice-a5 .invoice-items-table th { padding: 4px 6px !important; font-size: 11px !important; }
+        .invoice-a5 .invoice-items-table td { padding: 4px 6px !important; font-size: 12px !important; }
+        .invoice-a5 .invoice-items-table td:nth-child(2) { font-size: 12.5px !important; }
         .invoice-a5 .a5-section { padding: 0 2px; }
+        .invoice-items-table {
+          font-family: "Source Sans 3", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        }
+        .invoice-items-table th {
+          letter-spacing: 0.02em;
+        }
+        .invoice-items-table td:nth-child(2) {
+          font-family: "Source Sans 3", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+          line-height: 1.35;
+        }
+        @media print {
+          .invoice-items-table {
+            font-family: "Source Sans 3", "Segoe UI", "Helvetica Neue", Arial, sans-serif !important;
+          }
+          .invoice-items-table th {
+            font-size: 13px !important;
+          }
+          .invoice-items-table td {
+            font-size: 13px !important;
+          }
+          .invoice-items-table td:nth-child(2) {
+            font-size: 14px !important;
+            font-weight: 600 !important;
+          }
+        }
         `
             : ""
         }
@@ -1203,6 +1247,7 @@ export default function CreditSaleInvoice({
           <div className="flex flex-wrap gap-2 ml-auto items-center">
             {showPrintButton &&
             showInvoiceSection &&
+            showVatOnSalesInvoice &&
             (Number(exclusiveTaxTotal) > 0 ||
               Number(totalTax) > 0 ||
               (resolvedTaxes && resolvedTaxes.length > 0)) ? (
@@ -1246,6 +1291,7 @@ export default function CreditSaleInvoice({
               >
                 <Printer size={14} /> Print
                 {showInvoiceSection &&
+                showVatOnSalesInvoice &&
                 (Number(exclusiveTaxTotal) > 0 ||
                   Number(totalTax) > 0 ||
                   (resolvedTaxes && resolvedTaxes.length > 0))
@@ -1349,31 +1395,31 @@ export default function CreditSaleInvoice({
 
               {/* Items Table */}
               <div className={isA5 ? "mb-0.5" : "mb-1"}>
-                <table className="w-full border-collapse border border-gray-300 overflow-hidden shadow-sm">
+                <table className="invoice-items-table w-full border-collapse border border-gray-300 overflow-hidden shadow-sm">
                   <thead>
                     <tr className="bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white">
                       <th
-                        className={`border-r border-[var(--aa-accent)] text-center font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
+                        className={`border-r border-[var(--aa-accent)] text-center font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
                       >
                         #
                       </th>
                       <th
-                        className={`border-r border-[var(--aa-accent)] text-left font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
+                        className={`border-r border-[var(--aa-accent)] text-left font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
                       >
-                        Description / Size
+                        Description
                       </th>
                       <th
-                        className={`border-r border-[var(--aa-accent)] text-center font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
+                        className={`border-r border-[var(--aa-accent)] text-center font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
                       >
                         Quantity
                       </th>
                       <th
-                        className={`border-r border-[var(--aa-accent)] text-right font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
+                        className={`border-r border-[var(--aa-accent)] text-right font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
                       >
                         Unit Price(₦)
                       </th>
                       <th
-                        className={`text-right font-semibold ${isA5 ? "px-1 py-0.5 text-[10px]" : "px-2 py-1.5 text-xs"}`}
+                        className={`text-right font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
                       >
                         Amount(₦)
                       </th>
@@ -1420,21 +1466,31 @@ export default function CreditSaleInvoice({
                             index % 2 === 0 ? "bg-white" : "bg-gray-50"
                           }
                         >
-                          <td className="border-r border-t border-gray-200 px-2 py-1.5 text-center text-xs font-semibold text-gray-600">
+                          <td
+                            className={`border-r border-t border-gray-200 text-center font-semibold text-gray-600 ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
+                          >
                             {index + 1}
                           </td>
-                          <td className="border-r border-t border-gray-200 px-2 py-1.5 text-xs">
-                            <strong className="text-gray-800">
+                          <td
+                            className={`border-r border-t border-gray-200 ${isA5 ? "px-1.5 py-1 text-[12px]" : "px-2.5 py-2 text-[15px]"}`}
+                          >
+                            <span className="font-semibold leading-snug text-gray-900">
                               {item.item_name || item.description || "N/A"}
-                            </strong>
+                            </span>
                           </td>
-                          <td className="border-r border-t border-gray-200 px-2 py-1.5 text-center text-xs text-gray-700">
+                          <td
+                            className={`border-r border-t border-gray-200 text-center tabular-nums text-gray-800 ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
+                          >
                             {formatNumber(item.quantity_sold)}
                           </td>
-                          <td className="border-r border-t border-gray-200 px-2 py-1.5 text-right text-xs text-gray-700">
+                          <td
+                            className={`border-r border-t border-gray-200 text-right tabular-nums text-gray-800 ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
+                          >
                             {formatNumber(displayUnitPrice)}
                           </td>
-                          <td className="border-t border-gray-200 px-2 py-1.5 text-right text-xs font-semibold text-gray-900">
+                          <td
+                            className={`border-t border-gray-200 text-right tabular-nums font-semibold text-gray-900 ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
+                          >
                             {formatNumber(displayAmount)}
                           </td>
                         </tr>
@@ -1487,6 +1543,9 @@ export default function CreditSaleInvoice({
                       </tr>
                     )}
                     {resolvedTaxes.map((tax, index) => {
+                        if (!showVatOnSalesInvoice) {
+                          return null;
+                        }
                         const isTaxInclusive = !isExclusiveTaxRow(tax);
                         if (foldVatIntoUnitPrice && !isTaxInclusive) {
                           return null;
@@ -1650,157 +1709,76 @@ export default function CreditSaleInvoice({
                       : onCredit > 0.05
                         ? `₦${formatNumber(collectedNow)} was collected now. ₦${formatNumber(onCredit)} is charged to the customer’s account.`
                         : null;
-                const metricBox = (label, value, hint) => (
-                  <div
-                    className={`min-w-0 rounded border border-emerald-100 bg-white ${
-                      isA5 ? "px-1 py-0.5" : "px-2 py-1"
-                    }`}
-                  >
-                    <p
-                      className={`font-medium uppercase tracking-wide text-gray-500 ${
-                        isA5 ? "text-[8px]" : "text-[10px]"
-                      }`}
-                    >
-                      {label}
-                    </p>
-                    <p
-                      className={`font-bold tabular-nums text-gray-900 ${
-                        isA5 ? "text-[10px]" : "text-sm"
-                      }`}
-                    >
-                      ₦{formatNumber(value)}
-                    </p>
-                    {hint ? (
-                      <p
-                        className={`text-gray-500 ${
-                          isA5 ? "text-[8px] leading-tight" : "text-[10px]"
-                        }`}
-                      >
-                        {hint}
-                      </p>
-                    ) : null}
-                  </div>
-                );
+                const lineCls = isA5
+                  ? "text-[9px] leading-tight text-gray-700"
+                  : "text-[11px] leading-snug text-gray-700";
 
                 return (
                   <div
-                    className={`shrink-0 rounded border border-emerald-200 bg-emerald-50 ${
-                      isA5 ? "p-1 mb-0.5 mt-0.5" : "p-2 mb-1 mt-1"
+                    className={`shrink-0 ${
+                      isA5 ? "mb-0.5 mt-0.5 space-y-0.5" : "mb-1 mt-1 space-y-0.5"
                     }`}
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-1">
-                      <h6
-                        className={`font-semibold text-emerald-900 ${
-                          isA5 ? "text-[10px]" : "text-xs"
-                        }`}
-                      >
-                        How this invoice is paid
-                      </h6>
-                      <span
-                        className={`rounded-full bg-emerald-700 px-2 py-0.5 font-semibold uppercase tracking-wide text-white ${
-                          isA5 ? "text-[8px]" : "text-[10px]"
-                        }`}
-                      >
-                        {paymentModeLabel}
+                    <p className={lineCls}>
+                      <span className="font-semibold text-gray-800">
+                        How this invoice is paid:
+                      </span>{" "}
+                      {paymentModeLabel}
+                    </p>
+                    {paymentNote ? <p className={lineCls}>{paymentNote}</p> : null}
+                    <p className={lineCls}>
+                      Paid at sale:{" "}
+                      <span className="font-semibold text-gray-900">
+                        ₦{formatNumber(collectedNow)}
                       </span>
-                    </div>
-                    {paymentNote ? (
-                      <p
-                        className={`text-emerald-900/80 ${
-                          isA5
-                            ? "mt-0.5 text-[9px] leading-tight"
-                            : "mt-1 text-[11px] leading-snug"
-                        }`}
-                      >
-                        {paymentNote}
-                      </p>
-                    ) : null}
-
-                    <div
-                      className={`grid gap-1 ${
-                        isCreditOnly || isSettledNow || awaitingCollection
-                          ? "grid-cols-2"
-                          : "grid-cols-3"
-                      } ${isA5 ? "mt-0.5" : "mt-1.5"}`}
-                    >
-                      {metricBox(
-                        "Paid at sale",
-                        collectedNow,
-                        "Cash / transfer collected now",
-                      )}
-                      {isCreditOnly || onCredit > 0.05
-                        ? metricBox(
-                            "On credit",
+                    </p>
+                    {isCreditOnly || onCredit > 0.05 ? (
+                      <p className={lineCls}>
+                        On credit:{" "}
+                        <span className="font-semibold text-gray-900">
+                          ₦
+                          {formatNumber(
                             isCreditOnly ? outstanding : onCredit,
-                            "Billed to the customer’s account",
-                          )
-                        : metricBox(
-                            "Still outstanding",
-                            outstanding,
-                            outstanding > 0.05
-                              ? "Amount not yet collected"
-                              : "Fully paid",
                           )}
-                      {!isCreditOnly && !isSettledNow && !awaitingCollection
-                        ? metricBox(
-                            "Still outstanding",
-                            outstanding,
-                            "Amount left to collect",
-                          )
-                        : null}
-                    </div>
-
-                    {(cashPaid > 0.05 ||
-                      transferPaid > 0.05 ||
-                      transferLines.length > 0) && (
-                      <div
-                        className={`flex flex-wrap gap-x-3 gap-y-0.5 text-gray-700 ${
-                          isA5 ? "mt-0.5 text-[9px]" : "mt-1.5 text-[11px]"
-                        }`}
-                      >
-                        {cashPaid > 0.05 && (
-                          <span>
-                            <span className="text-gray-500">Cash received:</span>{" "}
-                            <span className="font-semibold text-gray-900">
-                              ₦{formatNumber(cashPaid)}
-                            </span>
-                          </span>
-                        )}
-                        {transferLines.length > 0
-                          ? transferLines.map((line, idx) => (
-                              <span key={`xfer-${idx}`}>
-                                <span className="text-gray-500">
-                                  Transfer received:
-                                </span>{" "}
-                                <span className="font-semibold text-gray-900">
-                                  ₦{formatNumber(line.amount)}
-                                </span>
-                                {line.bank_name ? (
-                                  <span className="text-gray-600">
-                                    {" "}
-                                    · {line.bank_name}
-                                  </span>
-                                ) : null}
-                              </span>
-                            ))
-                          : transferPaid > 0.05 && (
-                              <span>
-                                <span className="text-gray-500">
-                                  Transfer received:
-                                </span>{" "}
-                                <span className="font-semibold text-gray-900">
-                                  ₦{formatNumber(transferPaid)}
-                                </span>
-                                {transferBanks.length > 0 ? (
-                                  <span className="text-gray-600">
-                                    {" "}
-                                    · {transferBanks.join(", ")}
-                                  </span>
-                                ) : null}
-                              </span>
-                            )}
-                      </div>
+                        </span>
+                      </p>
+                    ) : (
+                      <p className={lineCls}>
+                        Still outstanding:{" "}
+                        <span className="font-semibold text-gray-900">
+                          ₦{formatNumber(outstanding)}
+                        </span>
+                      </p>
                     )}
+                    {cashPaid > 0.05 && (
+                      <p className={lineCls}>
+                        Cash received:{" "}
+                        <span className="font-semibold text-gray-900">
+                          ₦{formatNumber(cashPaid)}
+                        </span>
+                      </p>
+                    )}
+                    {transferLines.length > 0
+                      ? transferLines.map((line, idx) => (
+                          <p key={`xfer-${idx}`} className={lineCls}>
+                            Transfer received:{" "}
+                            <span className="font-semibold text-gray-900">
+                              ₦{formatNumber(line.amount)}
+                            </span>
+                            {line.bank_name ? ` · ${line.bank_name}` : ""}
+                          </p>
+                        ))
+                      : transferPaid > 0.05 && (
+                          <p className={lineCls}>
+                            Transfer received:{" "}
+                            <span className="font-semibold text-gray-900">
+                              ₦{formatNumber(transferPaid)}
+                            </span>
+                            {transferBanks.length > 0
+                              ? ` · ${transferBanks.join(", ")}`
+                              : ""}
+                          </p>
+                        )}
                   </div>
                 );
               })()}
