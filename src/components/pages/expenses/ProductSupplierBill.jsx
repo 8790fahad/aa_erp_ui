@@ -142,9 +142,11 @@ export default function ProductSupplierBill() {
     const isDefaultBranch = (b) =>
       b?.is_default === 1 || b?.is_default === "1" || b?.is_default === true;
     setTargetBranch((prev) => {
-      if (prev) return prev;
+      const prevId = parseInt(prev, 10);
+      if (Number.isFinite(prevId) && prevId > 0) return prevId;
       const defaultBranch = branches.find(isDefaultBranch) || branches[0];
-      return defaultBranch ? defaultBranch.id : 0;
+      const id = parseInt(defaultBranch?.id, 10);
+      return Number.isFinite(id) && id > 0 ? id : 0;
     });
   }, [branches]);
 
@@ -627,6 +629,13 @@ export default function ProductSupplierBill() {
       return;
     }
 
+    const warehouseId = parseInt(targetBranch, 10);
+    if (!Number.isFinite(warehouseId) || warehouseId <= 0) {
+      toast.error("Please select a warehouse");
+      resetSaving();
+      return;
+    }
+
     if (items.length === 0) {
       toast.error("Please add at least one item");
       resetSaving();
@@ -747,7 +756,7 @@ export default function ProductSupplierBill() {
       endpoint,
       {
         target_department: null,
-        target_branch_id: targetBranch || 0,
+        target_branch_id: warehouseId,
         data: purchaseData,
         facilityId: activeBusiness._id || activeBusiness.id,
         payable_code: activeBusiness.payable_code,
@@ -1454,7 +1463,7 @@ export default function ProductSupplierBill() {
             >
               <option value={0}>Select warehouse...</option>
               {branches.map((b) => (
-                <option key={b.id} value={b.id}>
+                <option key={b.id} value={String(b.id)}>
                   {b.branch_name}
                 </option>
               ))}
