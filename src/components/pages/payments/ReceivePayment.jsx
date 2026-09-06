@@ -1102,6 +1102,17 @@ export default function ReceivePayment() {
     }
   }, [visibleMethodTabs, methodTab]);
 
+  const removeCollectedInvoice = useCallback((saleCode) => {
+    const code = String(saleCode || "").trim();
+    if (!code) return;
+    const keep = (r) => String(r?.sale_code || "").trim() !== code;
+    setPending((rows) => rows.filter(keep));
+    setCreditPending((rows) => rows.filter(keep));
+    setDepositPending((rows) => rows.filter(keep));
+    setDiscountPending((rows) => rows.filter(keep));
+    setModePending((rows) => rows.filter(keep));
+  }, []);
+
   const fetchDashboard = useCallback(() => {
     if (!activeBusiness?.id) return;
     setLoading(true);
@@ -2098,12 +2109,15 @@ export default function ReceivePayment() {
         applications: [{ invoice_ref: saleCode, amount: depAmt }],
       });
 
-      toast.success(
-        remaining > 0.05
-          ? `Deposit applied · ₦${formatNumber1(remaining)} left`
-          : "Last payment (deposit) recorded",
-      );
-      setSearch("");
+          toast.success(
+            remaining > 0.05
+              ? `Deposit applied · ₦${formatNumber1(remaining)} left`
+              : "Last payment (deposit) recorded",
+          );
+          if (remaining <= 0.05) {
+            removeCollectedInvoice(saleCode);
+          }
+          setSearch("");
       setActiveTab("pending");
       setDepositConfirmRow(null);
       setHubOpen(false);
@@ -2120,6 +2134,7 @@ export default function ReceivePayment() {
     user,
     depositAmount,
     fetchDashboard,
+    removeCollectedInvoice,
   ]);
 
   const openHub = useCallback(
@@ -2704,12 +2719,14 @@ export default function ReceivePayment() {
             setSubmitting(false);
             if (advRes?.success) {
               toast.success("Last payment (credit) recorded");
+              removeCollectedInvoice(saleCode);
               setSearch("");
               setActiveTab("pending");
               closeHub();
               fetchDashboard();
             } else {
               toast.success("Last payment (credit) recorded");
+              removeCollectedInvoice(saleCode);
               setSearch("");
               setActiveTab("pending");
               closeHub();
@@ -2719,6 +2736,7 @@ export default function ReceivePayment() {
           (err) => {
             setSubmitting(false);
             toast.success("Last payment (credit) recorded");
+            removeCollectedInvoice(saleCode);
             setSearch("");
             setActiveTab("pending");
             closeHub();
@@ -2884,6 +2902,9 @@ export default function ReceivePayment() {
               ? res.message || "Payment confirmed"
               : res.message || "Payment recorded",
           );
+          if (lastPay) {
+            removeCollectedInvoice(target.sale_code);
+          }
           setSearch("");
           setActiveTab("pending");
           closeCollect();
@@ -3425,7 +3446,7 @@ export default function ReceivePayment() {
                   <tbody className="divide-y divide-slate-100">
                     {filteredPending.map((row) => (
                       <tr
-                        key={`${row.id || "row"}-${row.sale_code}`}
+                        key={String(row.sale_code)}
                         className="hover:bg-slate-50/80"
                       >
                         <td className="px-4 py-3 font-mono text-xs font-medium">
@@ -3781,7 +3802,7 @@ export default function ReceivePayment() {
                     const updated =
                       row.updatedAt || row.updated_at || row.createdAt;
                     return (
-                    <tr key={row.id || row.sale_code} className="hover:bg-slate-50/80">
+                    <tr key={String(row.sale_code || row.id)} className="hover:bg-slate-50/80">
                       <td className="px-4 py-3 font-mono text-xs font-medium">
                         {isAdvance ? (
                           <span className="text-slate-800">{row.sale_code}</span>

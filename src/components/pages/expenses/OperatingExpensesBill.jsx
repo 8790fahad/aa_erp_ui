@@ -108,8 +108,8 @@ export default function OperatingExpenses() {
   const [loadingMemos, setLoadingMemos] = useState(false);
   const [selectedMemoIds, setSelectedMemoIds] = useState([]);
   const [closingMemoId, setClosingMemoId] = useState(null);
-  const [showCloseMemoModal, setShowCloseMemoModal] = useState(false);
-  const [memoToClose, setMemoToClose] = useState(null);
+  const [confirmDismissMemoId, setConfirmDismissMemoId] = useState(null);
+  const [dismissedMemoIds, setDismissedMemoIds] = useState([]);
   const [memosToClose, setMemosToClose] = useState([]);
 
   const [imprestOpen, setImprestOpen] = useState(false);
@@ -1854,7 +1854,15 @@ export default function OperatingExpenses() {
       </div>
 
       {/* Expenses Memo Drawer */}
-      <Drawer open={isMemoDrawerOpen} onOpenChange={setIsMemoDrawerOpen}>
+      <Drawer
+        open={isMemoDrawerOpen}
+        onOpenChange={(open) => {
+          setIsMemoDrawerOpen(open);
+          if (!open) {
+            setConfirmDismissMemoId(null);
+          }
+        }}
+      >
         <DrawerContent
           side="right"
           className="flex h-full !w-[600px] max-w-[600px] flex-col gap-0 overflow-hidden border-l border-slate-200 bg-white p-0 [&>button]:hidden"
@@ -1867,16 +1875,14 @@ export default function OperatingExpenses() {
                   View Expenses Memos
                 </DrawerTitle>
                 <DrawerDescription className="mt-0.5 text-xs text-white/70">
-                  Add approved memos to this bill. Closed / treated memos leave this list.
+                  Add one or more memos — drawer stays open until you close it.
+                  Memos are treated only after this bill is saved.
                 </DrawerDescription>
               </div>
               <DrawerClose asChild>
                 <button
                   type="button"
                   className="rounded-md p-2 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
-                  onClick={() => {
-                    setSelectedMemoIds([]);
-                  }}
                   aria-label="Close"
                 >
                   <X className="h-5 w-5" />
@@ -1890,7 +1896,11 @@ export default function OperatingExpenses() {
                 <Loader className="h-6 w-6 animate-spin text-[var(--aa-navy,#0f2744)]" />
                 <span className="ml-2 text-slate-600">Loading memos...</span>
               </div>
-            ) : memos.filter((m) => m.status !== "closed").length === 0 ? (
+            ) : memos.filter(
+                (m) =>
+                  m.status !== "closed" &&
+                  !dismissedMemoIds.includes(m.memo_id),
+              ).length === 0 ? (
               <div className="py-12 text-center">
                 <FileText className="mx-auto mb-4 h-12 w-12 text-slate-300" />
                 <p className="mb-2 text-slate-600">No memos found</p>
@@ -1901,16 +1911,59 @@ export default function OperatingExpenses() {
             ) : (
               <div className="space-y-4">
                 {memos
-                  .filter((memo) => memo.status !== "closed")
+                  .filter(
+                    (memo) =>
+                      memo.status !== "closed" &&
+                      !dismissedMemoIds.includes(memo.memo_id),
+                  )
                   .map((memo) => (
                     <div
                       key={memo.memo_id || memo._id}
                       className={`rounded-lg border-2 bg-white p-4 transition-all hover:shadow-md ${
-                        selectedMemoIds.includes(memo.memo_id)
-                          ? "cursor-not-allowed border-[var(--aa-navy,#0f2744)]/40 bg-[var(--aa-sidebar-active,#e8f1fc)] opacity-60"
-                          : "border-slate-200 hover:border-[var(--aa-navy,#0f2744)]/50"
+                        confirmDismissMemoId === memo.memo_id
+                          ? "border-rose-200 bg-rose-50/60"
+                          : selectedMemoIds.includes(memo.memo_id)
+                            ? "cursor-not-allowed border-[var(--aa-navy,#0f2744)]/40 bg-[var(--aa-sidebar-active,#e8f1fc)] opacity-60"
+                            : "border-slate-200 hover:border-[var(--aa-navy,#0f2744)]/50"
                       }`}
                     >
+                      {confirmDismissMemoId === memo.memo_id ? (
+                        <div className="flex flex-col items-center gap-3 py-2">
+                          <p className="text-center text-sm font-semibold text-rose-700">
+                            Hide{" "}
+                            <span className="font-bold">{memo.memo_id}</span>{" "}
+                            from this list?
+                          </p>
+                          <p className="text-center text-xs text-slate-500">
+                            Cancel to go back. The memo is not closed until you
+                            save this bill.
+                          </p>
+                          <div className="flex w-full gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDismissedMemoIds((prev) =>
+                                  prev.includes(memo.memo_id)
+                                    ? prev
+                                    : [...prev, memo.memo_id],
+                                );
+                                setConfirmDismissMemoId(null);
+                              }}
+                              className="flex flex-1 items-center justify-center rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-rose-700"
+                            >
+                              Hide from list
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDismissMemoId(null)}
+                              className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
                       <div className="mb-3 flex items-start justify-between">
                         <div className="flex-1">
                           <div className="mb-2 flex items-center gap-2">
@@ -1937,12 +1990,11 @@ export default function OperatingExpenses() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => {
-                            setMemoToClose(memo);
-                            setShowCloseMemoModal(true);
-                          }}
-                          className="rounded-full p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                          title="Close this memo"
+                          title="Hide from this list"
+                          onClick={() =>
+                            setConfirmDismissMemoId(memo.memo_id)
+                          }
+                          className="ml-2 shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
                         >
                           <X className="h-5 w-5" />
                         </button>
@@ -2012,102 +2064,60 @@ export default function OperatingExpenses() {
                           </div>
                         </div>
                       )}
-                      <div className="mt-2 space-y-2">
+                      <div className="mt-4 flex gap-2">
                         <button
                           type="button"
                           onClick={() => {
-                            // Keep drawer open so additional memos can be added
                             addMemoItems(memo);
                           }}
-                          className="w-full rounded-md bg-[var(--aa-navy,#0f2744)] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--aa-navy-hover,#243a73)] disabled:cursor-not-allowed disabled:opacity-50"
                           disabled={selectedMemoIds.includes(memo.memo_id)}
+                          className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-[var(--aa-navy,#0f2744)] transition hover:bg-[var(--aa-sidebar-active,#e8f1fc)] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {selectedMemoIds.includes(memo.memo_id)
-                            ? "✓ Added to List"
-                            : `Add to List (${memo.item_count || 0} items)`}
+                            ? "✓ Added"
+                            : `Add to List (${memo.item_count || memo.items?.length || 0} items)`}
                         </button>
                         <button
                           type="button"
                           onClick={() => {
-                            // Add lines if needed, then close memo so it leaves this list
                             if (!selectedMemoIds.includes(memo.memo_id)) {
                               const added = addMemoItems(memo);
                               if (!added) return;
                             }
-                            closeMemoStatus(memo, { addItems: false });
+                            setIsMemoDrawerOpen(false);
                           }}
-                          className="w-full rounded-md border border-[var(--aa-navy,#0f2744)] bg-white px-3 py-2 text-sm font-semibold text-[var(--aa-navy,#0f2744)] transition-colors hover:bg-[var(--aa-sidebar-active,#e8f1fc)] disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={closingMemoId === memo.memo_id}
+                          disabled={selectedMemoIds.includes(memo.memo_id)}
+                          className="flex-1 rounded-md border-0 bg-[var(--aa-navy,#0f2744)] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[var(--aa-navy-hover,#243a73)] disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {closingMemoId === memo.memo_id
-                            ? "Closing..."
-                            : selectedMemoIds.includes(memo.memo_id)
-                              ? "Close Memo"
-                              : "Add & Close"}
+                          Add &amp; Close
                         </button>
                       </div>
+                        </>
+                      )}
                     </div>
                   ))}
               </div>
             )}
           </div>
+
+          {selectedMemoIds.length > 0 && (
+            <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/90 px-5 py-3.5">
+              <p className="text-xs text-slate-500">
+                {selectedMemoIds.length} memo
+                {selectedMemoIds.length === 1 ? "" : "s"} added — you can still
+                add more
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsMemoDrawerOpen(false)}
+                className="rounded-md border-0 bg-[var(--aa-navy,#0f2744)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--aa-navy-hover,#243a73)]"
+              >
+                Done
+              </button>
+            </div>
+          )}
         </DrawerContent>
       </Drawer>
-      {/* Memo Close Confirmation Modal */}
-      {showCloseMemoModal && memoToClose && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">
-                  Close Memo
-                </h3>
-                <p className="text-sm text-slate-600 mt-1">
-                  Are you sure you want to close memo{" "}
-                  <span className="font-semibold">{memoToClose.memo_id}</span>?
-                  You will not be able to add items from this memo again.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCloseMemoModal(false);
-                  setMemoToClose(null);
-                }}
-                className="p-1 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="flex justify-end gap-3 mt-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCloseMemoModal(false);
-                  setMemoToClose(null);
-                }}
-                className="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (memoToClose) {
-                    closeMemoStatus(memoToClose, { addItems: false });
-                  }
-                  setShowCloseMemoModal(false);
-                  setMemoToClose(null);
-                }}
-                disabled={!!closingMemoId}
-                className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {closingMemoId ? "Closing..." : "Yes, Close Memo"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <CreateImprestDrawer
         open={imprestOpen}
