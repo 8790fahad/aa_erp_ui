@@ -490,6 +490,7 @@ function isCollectionPlusDepositRow(row, method) {
   if (String(row.status || "").toLowerCase() === "awaiting_credit_approval") {
     return false;
   }
+  if (collectionSideDone(row, method)) return false;
   const modes = rowPaymentModes(row);
   if (method === "cash") {
     if (modes.includes("cash")) return true;
@@ -549,6 +550,35 @@ function collectModeIds(row) {
   );
 }
 
+function collectionSideDone(row, method) {
+  const p = row?.split_progress || {};
+  if (method === "cash") {
+    if (Boolean(p.cash_done) || Number(p.cash) > 0.05) return true;
+  } else if (method === "transfer") {
+    if (Boolean(p.transfer_done) || Number(p.transfer) > 0.05) return true;
+  } else if (method === "card") {
+    if (Boolean(p.card_done) || Number(p.card) > 0.05) return true;
+  } else if (method === "credit") {
+    if (Number(p.credit_allocated) > 0.05) return true;
+  } else if (method === "deposit") {
+    if (Number(p.deposit_applied) > 0.05) return true;
+  }
+  const history = Array.isArray(row?.history) ? row.history : [];
+  if (method === "deposit") {
+    return history.some((h) => Number(h?.deposit_application?.amount) > 0.05);
+  }
+  if (method === "credit") {
+    return history.some((h) => Number(h?.credit_allocation?.amount) > 0.05);
+  }
+  return history.some((h) => {
+    const side = String(h?.collection?.side || "").toLowerCase();
+    const amt = Number(h?.collection?.amount) || 0;
+    if (amt <= 0.05) return false;
+    if (method === "transfer") return side === "transfer" || side === "bank";
+    return side === method;
+  });
+}
+
 /** Two or more modes → collect any portion; last completing payment opens print. */
 function rowCollectsAsSplit(row) {
   if (!row) return false;
@@ -603,17 +633,7 @@ function rowPaymentModeBreakdown(row) {
   const depositExpected = Math.min(unappliedDepositCover(row), due);
   const depositAmt =
     depositApplied > 0.05 ? depositApplied : depositExpected;
-  const creditKnown =
-    Number(sp.credit_allocated) ||
-    Number(sp.credit) ||
-    Number(row.credit_remainder) ||
-    0;
-  const accounted =
-    cash +
-    transfer +
-    card +
-    (ordered.includes("deposit") ? depositAmt : 0);
-  const remaining = Math.max(0, Number((due - accounted).toFixed(2)));
+  const creditKnown = Number(sp.credit_allocated) || 0;
 
   return ordered.map((id) => {
     let amount = 0;
@@ -622,7 +642,7 @@ function rowPaymentModeBreakdown(row) {
     else if (id === "card") amount = card;
     else if (id === "deposit") amount = depositAmt;
     else if (id === "credit") {
-      amount = creditKnown > 0.05 ? creditKnown : remaining;
+      amount = creditKnown;
     }
     if (ordered.length === 1 && amount <= 0.05) amount = due;
     const collected =
@@ -736,6 +756,34 @@ function parseFormattedAmount(value) {
   return parseFloat(String(value || "").replace(/,/g, "")) || 0;
 }
 
+function snapshotInvoiceRow(row) {
+  if (!row) return null;
+  const sale_code = String(row.sale_code || "").trim();
+  if (!sale_code) return null;
+  return {
+    ...row,
+    id: row.id,
+    sale_code,
+    history: Array.isArray(row.history)
+      ? row.history.map((h) => (h && typeof h === "object" ? { ...h } : h))
+      : [],
+    payment_modes: Array.isArray(row.payment_modes)
+      ? [...row.payment_modes]
+      : row.payment_modes,
+    split_progress:
+      row.split_progress && typeof row.split_progress === "object"
+        ? { ...row.split_progress }
+        : row.split_progress,
+  };
+}
+
+function isRowCreatedOn(row, ymd) {
+  const raw = row?.created_at || row?.createdAt;
+  if (!raw || !ymd) return false;
+  const m = moment(raw);
+  return m.isValid() && m.format("YYYY-MM-DD") === ymd;
+}
+
 /** Cash / Transfer / Card / Credit tabs — credit_split appears on matching sides. */
 function matchesMethod(paymentType, method, row = null) {
   const modes = row ? rowPaymentModes(row) : [];
@@ -780,15 +828,19 @@ function matchesMethod(paymentType, method, row = null) {
   return false;
 }
 
-/** Show split / credit_split while any balance remains to collect. */
+/** Show a mixed invoice on a tab only while that side is still unpaid. */
 function needsCollectionSide(row, method) {
-  if (!isSplitPaymentType(row?.payment_type)) return true;
+  if (!rowCollectsAsSplit(row)) return true;
   const due = Number(row?.amount) || 0;
   const collected = Number(row?.split_progress?.collected_total) || 0;
-  const remaining = Number((due - collected).toFixed(2));
+  const creditAlloc = Number(row?.split_progress?.credit_allocated) || 0;
+  const remaining = Number((due - collected - creditAlloc).toFixed(2));
   if (remaining <= 0.05) return false;
-  // Cash, Transfer, and Credit tabs all show until fully settled
-  return method === "cash" || method === "transfer" || method === "card" || method === "credit";
+  if (method === "cash" || method === "transfer" || method === "card") {
+    return !collectionSideDone(row, method);
+  }
+  if (method === "credit") return !collectionSideDone(row, "credit");
+  return true;
 }
 
 export default function ReceivePayment() {
@@ -878,6 +930,26 @@ export default function ReceivePayment() {
   const [discountPending, setDiscountPending] = useState([]);
   const [modePending, setModePending] = useState([]);
   const [history, setHistory] = useState([]);
+  const pendingToday = useMemo(
+    () => pending.filter((r) => isRowCreatedOn(r, todayYmd)),
+    [pending, todayYmd],
+  );
+  const creditPendingToday = useMemo(
+    () => creditPending.filter((r) => isRowCreatedOn(r, todayYmd)),
+    [creditPending, todayYmd],
+  );
+  const depositPendingToday = useMemo(
+    () => depositPending.filter((r) => isRowCreatedOn(r, todayYmd)),
+    [depositPending, todayYmd],
+  );
+  const discountPendingToday = useMemo(
+    () => discountPending.filter((r) => isRowCreatedOn(r, todayYmd)),
+    [discountPending, todayYmd],
+  );
+  const modePendingToday = useMemo(
+    () => modePending.filter((r) => isRowCreatedOn(r, todayYmd)),
+    [modePending, todayYmd],
+  );
   const [imprestOpen, setImprestOpen] = useState(false);
   const [tillHubOpen, setTillHubOpen] = useState(false);
   const [payBillOpen, setPayBillOpen] = useState(false);
@@ -904,6 +976,8 @@ export default function ReceivePayment() {
   });
   const [search, setSearch] = useState("");
   const searchInputRef = useRef(null);
+  const treatingInvoiceRef = useRef(null);
+  const hubInvoiceRequestRef = useRef(0);
 
   /** Unified view + action hub: collect | credit | discount | mode | view */
   const [hubOpen, setHubOpen] = useState(false);
@@ -1201,27 +1275,29 @@ export default function ReceivePayment() {
     const sumAmounts = (list) =>
       list.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
     const cashQueue = [
-      ...pending.filter(
+      ...pendingToday.filter(
         (r) =>
           matchesMethod(r.payment_type, "cash", r) && needsCollectionSide(r, "cash"),
       ),
-      ...depositPending.filter((r) => isCollectionPlusDepositRow(r, "cash")),
+      ...depositPendingToday.filter((r) => isCollectionPlusDepositRow(r, "cash")),
     ];
     const transferQueue = [
-      ...pending.filter(
+      ...pendingToday.filter(
         (r) =>
           matchesMethod(r.payment_type, "transfer", r) &&
           needsCollectionSide(r, "transfer"),
       ),
-      ...depositPending.filter((r) => isCollectionPlusDepositRow(r, "transfer")),
+      ...depositPendingToday.filter((r) =>
+        isCollectionPlusDepositRow(r, "transfer"),
+      ),
     ];
     const cardQueue = [
-      ...pending.filter(
+      ...pendingToday.filter(
         (r) =>
           matchesMethod(r.payment_type, "card", r) &&
           needsCollectionSide(r, "card"),
       ),
-      ...depositPending.filter((r) => isCollectionPlusDepositRow(r, "card")),
+      ...depositPendingToday.filter((r) => isCollectionPlusDepositRow(r, "card")),
     ];
 
     if (methodTab === "cash") {
@@ -1318,15 +1394,15 @@ export default function ReceivePayment() {
       };
     }
     if (methodTab === "credit") {
-      const creditSplitPending = pending.filter(
+      const creditSplitPending = pendingToday.filter(
         (r) =>
           normalizePaymentMode(r.payment_type) === "credit_split" &&
           needsCollectionSide(r, "credit"),
       );
-      const depositCredit = depositPending.filter(isCreditPlusDepositRow);
+      const depositCredit = depositPendingToday.filter(isCreditPlusDepositRow);
       const byCode = new Map();
       for (const r of [
-        ...creditPending,
+        ...creditPendingToday,
         ...creditSplitPending,
         ...depositCredit,
       ]) {
@@ -1375,7 +1451,7 @@ export default function ReceivePayment() {
         pending_split: 0,
         pending_credit: 0,
         pending_deposit:
-          Number(summary.pending_deposit) || sumAmounts(depositPending),
+          Number(summary.pending_deposit) || sumAmounts(depositPendingToday),
         pending_discount: 0,
         pending_mode: 0,
         collected_cash_today: 0,
@@ -1383,7 +1459,7 @@ export default function ReceivePayment() {
         applied_deposit_today: Number(summary.applied_deposit_today) || 0,
         applied_deposit_count_today:
           Number(summary.applied_deposit_count_today) || 0,
-        pending_count: depositPending.length,
+        pending_count: depositPendingToday.length,
       };
     }
     if (methodTab === "discount") {
@@ -1399,11 +1475,11 @@ export default function ReceivePayment() {
         pending_split: 0,
         pending_credit: 0,
         pending_discount:
-          Number(summary.pending_discount) || sumAmounts(discountPending),
+          Number(summary.pending_discount) || sumAmounts(discountPendingToday),
         pending_mode: 0,
         collected_cash_today: 0,
         collected_transfer_today: 0,
-        pending_count: discountPending.length,
+        pending_count: discountPendingToday.length,
       };
     }
     if (methodTab === "mode") {
@@ -1420,10 +1496,10 @@ export default function ReceivePayment() {
         pending_credit: 0,
         pending_discount: 0,
         pending_mode:
-          Number(summary.pending_mode) || sumAmounts(modePending),
+          Number(summary.pending_mode) || sumAmounts(modePendingToday),
         collected_cash_today: 0,
         collected_transfer_today: 0,
-        pending_count: modePending.length,
+        pending_count: modePendingToday.length,
       };
     }
     return {
@@ -1443,7 +1519,7 @@ export default function ReceivePayment() {
       collected_transfer_today: summary.collected_transfer_today,
       pending_count: summary.pending_count,
     };
-  }, [methodTab, pending, creditPending, depositPending, discountPending, modePending, summary]);
+  }, [methodTab, pendingToday, creditPendingToday, depositPendingToday, discountPendingToday, modePendingToday, summary]);
 
   const tillHub = useMemo(() => {
     if (methodTab === "transfer") {
@@ -1468,22 +1544,22 @@ export default function ReceivePayment() {
   }, [methodTab, viewSummary]);
 
   const methodPendingCounts = useMemo(() => {
-    const creditSplitPending = pending.filter(
+    const creditSplitPending = pendingToday.filter(
       (r) =>
         matchesMethod(r.payment_type, "credit") &&
         needsCollectionSide(r, "credit") &&
         normalizePaymentMode(r.payment_type) === "credit_split",
     );
-    const depositCredit = depositPending.filter(isCreditPlusDepositRow);
+    const depositCredit = depositPendingToday.filter(isCreditPlusDepositRow);
     const creditCodes = new Set(
-      [...creditPending, ...depositCredit]
+      [...creditPendingToday, ...depositCredit]
         .map((r) => r.sale_code)
         .filter(Boolean),
     );
     const cashCodes = new Set();
     const transferCodes = new Set();
     const cardCodes = new Set();
-    for (const r of pending) {
+    for (const r of pendingToday) {
       if (
         r?.sale_code &&
         matchesMethod(r.payment_type, "cash", r) &&
@@ -1506,7 +1582,7 @@ export default function ReceivePayment() {
         cardCodes.add(r.sale_code);
       }
     }
-    for (const r of depositPending) {
+    for (const r of depositPendingToday) {
       if (r?.sale_code && isCollectionPlusDepositRow(r, "cash")) {
         cashCodes.add(r.sale_code);
       }
@@ -1522,24 +1598,30 @@ export default function ReceivePayment() {
       transfer: transferCodes.size,
       card: cardCodes.size,
       credit: creditCodes.size + creditSplitPending.length,
-      deposit: depositPending.length,
-      discount: discountPending.length,
-      mode: modePending.length,
+      deposit: depositPendingToday.length,
+      discount: discountPendingToday.length,
+      mode: modePendingToday.length,
     };
     return counts;
-  }, [pending, creditPending, depositPending, discountPending, modePending]);
+  }, [
+    pendingToday,
+    creditPendingToday,
+    depositPendingToday,
+    discountPendingToday,
+    modePendingToday,
+  ]);
 
   const pendingForTab = useMemo(() => {
     let list;
     if (methodTab === "credit") {
-      const split = pending.filter(
+      const split = pendingToday.filter(
         (r) =>
           normalizePaymentMode(r.payment_type) === "credit_split" &&
           needsCollectionSide(r, "credit"),
       );
-      const depositCredit = depositPending.filter(isCreditPlusDepositRow);
+      const depositCredit = depositPendingToday.filter(isCreditPlusDepositRow);
       const byCode = new Map();
-      for (const r of [...creditPending, ...split, ...depositCredit]) {
+      for (const r of [...creditPendingToday, ...split, ...depositCredit]) {
         if (!r?.sale_code) continue;
         const existing = byCode.get(r.sale_code);
         if (!existing || r.status === "awaiting_credit_approval") {
@@ -1548,13 +1630,17 @@ export default function ReceivePayment() {
       }
       list = [...byCode.values()];
     } else if (methodTab === "deposit") {
-      list = depositPending;
+      list = depositPendingToday;
     } else if (methodTab === "discount") {
-      list = discountPending;
+      list = discountPendingToday;
     } else if (methodTab === "mode") {
       // Mode Switch: invoices you can change + those awaiting mode approval
       const byCode = new Map();
-      for (const r of [...pending, ...creditPending, ...modePending]) {
+      for (const r of [
+        ...pendingToday,
+        ...creditPendingToday,
+        ...modePendingToday,
+      ]) {
         if (!r?.sale_code) continue;
         const existing = byCode.get(r.sale_code);
         // Prefer mode-approval row when both exist
@@ -1569,12 +1655,12 @@ export default function ReceivePayment() {
       }
       list = [...byCode.values()];
     } else {
-      const collectionDeposit = depositPending.filter((r) =>
+      const collectionDeposit = depositPendingToday.filter((r) =>
         isCollectionPlusDepositRow(r, methodTab),
       );
       const byCode = new Map();
       for (const r of [
-        ...pending.filter(
+        ...pendingToday.filter(
           (r) =>
             matchesMethod(r.payment_type, methodTab, r) &&
             needsCollectionSide(r, methodTab),
@@ -1587,7 +1673,14 @@ export default function ReceivePayment() {
       list = [...byCode.values()];
     }
     return list;
-  }, [pending, creditPending, depositPending, discountPending, modePending, methodTab]);
+  }, [
+    pendingToday,
+    creditPendingToday,
+    depositPendingToday,
+    discountPendingToday,
+    modePendingToday,
+    methodTab,
+  ]);
 
   const filteredPending = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1620,6 +1713,15 @@ export default function ReceivePayment() {
       }
       if (methodTab === "mode") {
         return matchesMethod(r.payment_type, "mode", r);
+      }
+      if (
+        methodTab === "cash" ||
+        methodTab === "transfer" ||
+        methodTab === "card"
+      ) {
+        if (rowCollectsAsSplit(r) || rowPaymentModes(r).length > 1) {
+          return collectionSideDone(r, methodTab);
+        }
       }
       return matchesMethod(r.payment_type, methodTab, r);
     });
@@ -1830,6 +1932,8 @@ export default function ReceivePayment() {
   const loadHubInvoice = useCallback(
     (saleCode) => {
       const code = String(saleCode || "").trim();
+      const requestId = hubInvoiceRequestRef.current + 1;
+      hubInvoiceRequestRef.current = requestId;
       if (!code || !activeBusiness?.id) {
         setHubInvoiceData(null);
         setHubLoading(false);
@@ -1842,8 +1946,19 @@ export default function ReceivePayment() {
           code,
         )}&facility_id=${activeBusiness.id}`,
         (res) => {
+          if (hubInvoiceRequestRef.current !== requestId) return;
           setHubLoading(false);
           if (res?.success && res.data) {
+            const returned = String(
+              res.data.transaction?.reference ||
+                res.data.transaction?.id ||
+                res.data.sale_code ||
+                "",
+            ).trim();
+            if (returned && returned !== code) {
+              setHubInvoiceData(null);
+              return;
+            }
             setHubInvoiceData(res.data);
           } else {
             toast.error(res?.message || "Failed to load invoice");
@@ -1851,6 +1966,7 @@ export default function ReceivePayment() {
           }
         },
         () => {
+          if (hubInvoiceRequestRef.current !== requestId) return;
           setHubLoading(false);
           toast.error("Failed to load invoice");
           setHubInvoiceData(null);
@@ -1904,27 +2020,32 @@ export default function ReceivePayment() {
     [methodTab],
   );
 
-  const openInvoicePrint = useCallback(
-    (saleCode) => {
-      navigate(
-        `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-          saleCode,
-        )}&doc=invoice`,
-      );
-    },
-    [navigate],
-  );
-
-  const printIfLastPay = useCallback(
-    (remaining, saleCode) => {
-      if (remaining <= 0.05 && saleCode) openInvoicePrint(saleCode);
-    },
-    [openInvoicePrint],
-  );
+  const resolveTreatingInvoice = () => {
+    const treating = treatingInvoiceRef.current;
+    const code = String(treating?.sale_code || "").trim();
+    if (!code) return null;
+    const selectedCode = String(selected?.sale_code || "").trim();
+    if (selectedCode && selectedCode !== code) return null;
+    if (selected?.id != null && treating?.id != null && selected.id !== treating.id) {
+      return null;
+    }
+    return {
+      sale_code: code,
+      id: treating?.id ?? null,
+    };
+  };
 
   const confirmApplyDeposit = useCallback(async () => {
+    const target = resolveTreatingInvoice();
     const row = depositConfirmRow || selected;
-    if (!row?.sale_code || !activeBusiness?.id || !user?.id) return;
+    const saleCode = String(
+      target?.sale_code || row?.sale_code || "",
+    ).trim();
+    if (!saleCode || !activeBusiness?.id || !user?.id) return;
+    if (row?.sale_code && String(row.sale_code).trim() !== saleCode) {
+      toast.error("This collection is not for the open invoice. Close and try again.");
+      return;
+    }
 
     const available = Number(row.deposit_available) || 0;
     const typedDep = parseFormattedAmount(depositAmount);
@@ -1945,7 +2066,6 @@ export default function ReceivePayment() {
       return;
     }
 
-    const saleCode = row.sale_code;
     const due = Number(row.amount) || 0;
     const collected = Number(row.split_progress?.collected_total) || 0;
     const creditAlloc = Number(row.split_progress?.credit_allocated) || 0;
@@ -1967,12 +2087,13 @@ export default function ReceivePayment() {
       toast.success(
         remaining > 0.05
           ? `Deposit applied · ₦${formatNumber1(remaining)} left`
-          : "Last payment (deposit) — opening invoice to print",
+          : "Last payment (deposit) recorded",
       );
+      setSearch("");
+      setActiveTab("pending");
       setDepositConfirmRow(null);
       setHubOpen(false);
       fetchDashboard();
-      printIfLastPay(remaining, saleCode);
     } catch (err) {
       toast.error(err?.message || "Could not apply deposit");
     } finally {
@@ -1985,7 +2106,6 @@ export default function ReceivePayment() {
     user,
     depositAmount,
     fetchDashboard,
-    printIfLastPay,
   ]);
 
   const openHub = useCallback(
@@ -2001,14 +2121,23 @@ export default function ReceivePayment() {
         return;
       }
 
-      setSelected(row);
+      const snapshot = snapshotInvoiceRow(row);
+      if (!snapshot?.sale_code) {
+        toast.error("This invoice has no sale code");
+        return;
+      }
+      setSelected(snapshot);
+      treatingInvoiceRef.current = {
+        sale_code: snapshot.sale_code,
+        id: snapshot.id,
+      };
       setHubAction(action);
       setHubOpen(true);
-      loadHubInvoice(row.sale_code);
+      loadHubInvoice(snapshot.sale_code);
       if (action === "deposit") {
-        setDepositConfirmRow(row);
-        const due = Number(row.amount) || 0;
-        const available = Number(row.deposit_available) || 0;
+        setDepositConfirmRow(snapshot);
+        const due = Number(snapshot.amount) || 0;
+        const available = Number(snapshot.deposit_available) || 0;
         const preset = Math.min(Math.max(0, due), Math.max(0, available));
         setDepositAmount(
           preset > 0.05 ? formatNumberWithCommas(String(preset)) : "",
@@ -2021,13 +2150,13 @@ export default function ReceivePayment() {
       if (action === "collect") {
         // Mixed modes: leave amount blank so any portion can be entered.
         // Single-mode invoices still pre-fill the full amount due.
-        if (rowCollectsAsSplit(row)) {
+        if (rowCollectsAsSplit(snapshot)) {
           setCashAmount("");
           setTransferAmount("");
         } else {
-          const due = Number(row.amount) || 0;
-          const collected = Number(row.split_progress?.collected_total) || 0;
-          const creditAlloc = Number(row.split_progress?.credit_allocated) || 0;
+          const due = Number(snapshot.amount) || 0;
+          const collected = Number(snapshot.split_progress?.collected_total) || 0;
+          const creditAlloc = Number(snapshot.split_progress?.credit_allocated) || 0;
           const leftover = Math.max(
             0,
             Number((due - collected - creditAlloc).toFixed(2)),
@@ -2053,13 +2182,13 @@ export default function ReceivePayment() {
         }
       }
       if (action === "credit") {
-        const due = Number(row.amount) || 0;
-        const collected = Number(row.split_progress?.collected_total) || 0;
-        const allocated = Number(row.split_progress?.credit_allocated) || 0;
+        const due = Number(snapshot.amount) || 0;
+        const collected = Number(snapshot.split_progress?.collected_total) || 0;
+        const allocated = Number(snapshot.split_progress?.credit_allocated) || 0;
         const unpaid = Math.max(0, Number((due - collected).toFixed(2)));
         const preset =
-          allocated > 0.05 ? allocated : Number(row.split_progress?.credit) > 0.05
-            ? Number(row.split_progress.credit)
+          allocated > 0.05 ? allocated : Number(snapshot.split_progress?.credit) > 0.05
+            ? Number(snapshot.split_progress.credit)
             : unpaid;
         setCreditAmount(
           preset > 0.05 ? formatNumberWithCommas(String(preset)) : "",
@@ -2234,6 +2363,8 @@ export default function ReceivePayment() {
   });
 
   const closeHub = () => {
+    hubInvoiceRequestRef.current += 1;
+    treatingInvoiceRef.current = null;
     setHubOpen(false);
   };
 
@@ -2250,6 +2381,7 @@ export default function ReceivePayment() {
       setSelected(null);
       setCashAmount("");
       setTransferAmount("");
+      treatingInvoiceRef.current = null;
     }, 200);
     return () => window.clearTimeout(t);
   }, [hubOpen]);
@@ -2485,36 +2617,6 @@ export default function ReceivePayment() {
     );
   };
 
-  const sendRemainderToCredit = (row) => {
-    if (!row?.sale_code || !activeBusiness?.id) return;
-    setSubmitting(true);
-    _postApi(
-      "/api/v1/sale-workflows/advance",
-      {
-        facilityId: activeBusiness.id,
-        saleCode: row.sale_code,
-        action: "send_remainder_to_credit",
-        updated_by: user?.id,
-        note: "No deposit available — remainder sent to Credit approval",
-      },
-      (res) => {
-        setSubmitting(false);
-        if (res?.success) {
-          toast.success(
-            res.message || "Remainder sent to Credit approval",
-          );
-          fetchDashboard();
-        } else {
-          toast.error(res?.message || "Could not send remainder to Credit");
-        }
-      },
-      (err) => {
-        setSubmitting(false);
-        toast.error(err?.message || "Could not send remainder to Credit");
-      },
-    );
-  };
-
   const sendCreditRemainder = () => {
     if (!selected || !activeBusiness?.id) return;
     const pt = normalizePaymentMode(selected.payment_type);
@@ -2538,13 +2640,19 @@ export default function ReceivePayment() {
       return;
     }
     const collected = Number(splitProgress?.collected_total) || 0;
-    const saleCode = selected.sale_code;
+    const target = resolveTreatingInvoice();
+    if (!target?.sale_code || target.id == null) {
+      toast.error("This collection is not for the open invoice. Close and try again.");
+      return;
+    }
+    const saleCode = target.sale_code;
     setSubmitting(true);
     _postApi(
       "/api/v1/sale-workflows/send-credit-remainder",
       {
         facilityId: activeBusiness.id,
         saleCode,
+        workflowId: target.id,
         credit_amount: creditToSend,
         updated_by: user?.id,
         note:
@@ -2564,12 +2672,10 @@ export default function ReceivePayment() {
             res.message ||
               `Credit ₦${formatNumber1(creditToSend)} saved`,
           );
+          setSearch("");
+          setActiveTab("pending");
           closeHub();
           fetchDashboard();
-          printIfLastPay(
-            Number(res.results?.leftover ?? res.results?.remaining) || 0,
-            saleCode,
-          );
           return;
         }
         _postApi(
@@ -2584,27 +2690,26 @@ export default function ReceivePayment() {
           (advRes) => {
             setSubmitting(false);
             if (advRes?.success) {
-              toast.success(
-                `Last payment (credit) — opening invoice to print`,
-              );
+              toast.success("Last payment (credit) recorded");
+              setSearch("");
+              setActiveTab("pending");
               closeHub();
               fetchDashboard();
-              openInvoicePrint(saleCode);
             } else {
-              toast.success(
-                "Last payment (credit) — opening invoice to print",
-              );
+              toast.success("Last payment (credit) recorded");
+              setSearch("");
+              setActiveTab("pending");
               closeHub();
               fetchDashboard();
-              openInvoicePrint(saleCode);
             }
           },
           (err) => {
             setSubmitting(false);
-            toast.success("Last payment (credit) — opening invoice to print");
+            toast.success("Last payment (credit) recorded");
+            setSearch("");
+            setActiveTab("pending");
             closeHub();
             fetchDashboard();
-            openInvoicePrint(saleCode);
           },
         );
       },
@@ -2617,6 +2722,11 @@ export default function ReceivePayment() {
 
   const confirmPayment = () => {
     if (!selected || !activeBusiness?.id) return;
+    const target = resolveTreatingInvoice();
+    if (!target?.sale_code || target.id == null) {
+      toast.error("This collection is not for the open invoice. Close and try again.");
+      return;
+    }
     const cashAmt = parseFormattedAmount(cashAmount);
     const transferAmt = parseFormattedAmount(transferAmount);
     const splits = [];
@@ -2707,7 +2817,8 @@ export default function ReceivePayment() {
       "/api/v1/sale-workflows/cashier-confirm",
       {
         facilityId: activeBusiness.id,
-        saleCode: selected.sale_code,
+        saleCode: target.sale_code,
+        workflowId: target.id,
         updated_by: user?.id,
         collector_name:
           [user?.firstname, user?.lastname].filter(Boolean).join(" ").trim() ||
@@ -2746,7 +2857,6 @@ export default function ReceivePayment() {
       (res) => {
         setSubmitting(false);
         if (res?.success) {
-          const saleCode = selected.sale_code;
           const status = String(res.results?.status || "").toLowerCase();
           const lastPay =
             Boolean(res.last_pay) ||
@@ -2759,15 +2869,13 @@ export default function ReceivePayment() {
 
           toast.success(
             lastPay
-              ? res.message || "Last payment — opening invoice to print"
+              ? res.message || "Payment confirmed"
               : res.message || "Payment recorded",
           );
+          setSearch("");
+          setActiveTab("pending");
           closeCollect();
           fetchDashboard();
-
-          if (lastPay && saleCode) {
-            openInvoicePrint(saleCode);
-          }
         } else {
           toast.error(res?.message || "Could not confirm payment");
         }
@@ -2823,9 +2931,13 @@ export default function ReceivePayment() {
           : collectionSide === "transfer"
             ? "Transfer"
             : "Cash";
-      return amtLabel ? `Confirm ${amtLabel} ${side}` : `Confirm ${side}`;
+      return amtLabel
+        ? `Confirm ${amtLabel} ${side} · ${selected?.sale_code || ""}`
+        : `Confirm ${side} · ${selected?.sale_code || ""}`;
     }
-    return amtLabel ? `Confirm ${amtLabel}` : "Confirm Payment";
+    return amtLabel
+      ? `Confirm ${amtLabel} · ${selected?.sale_code || ""}`
+      : `Confirm Payment · ${selected?.sale_code || ""}`;
   })();
 
   const summaryGridCols =
@@ -3300,7 +3412,10 @@ export default function ReceivePayment() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredPending.map((row) => (
-                      <tr key={row.id || row.sale_code} className="hover:bg-slate-50/80">
+                      <tr
+                        key={`${row.id || "row"}-${row.sale_code}`}
+                        className="hover:bg-slate-50/80"
+                      >
                         <td className="px-4 py-3 font-mono text-xs font-medium">
                           <button
                             type="button"
@@ -3475,36 +3590,23 @@ export default function ReceivePayment() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           {methodTab === "deposit" ? (
-                            <div className="flex flex-col items-end gap-1.5">
-                              <button
-                                type="button"
-                                disabled={
-                                  submitting ||
-                                  Number(row.deposit_available) <= 0.05
-                                }
-                                title={
-                                  Number(row.deposit_available) <= 0.05
-                                    ? "No deposit available — Apply is blocked"
-                                    : "Apply deposit"
-                                }
-                                onClick={() => openHub(row, "deposit")}
-                                className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                <Wallet className="h-3.5 w-3.5" />
-                                Apply
-                              </button>
-                              {Number(row.deposit_available) <= 0.05 ? (
-                                <button
-                                  type="button"
-                                  disabled={submitting}
-                                  onClick={() => sendRemainderToCredit(row)}
-                                  className="inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
-                                >
-                                  <CreditCard className="h-3.5 w-3.5" />
-                                  Send to Credit
-                                </button>
-                              ) : null}
-                            </div>
+                            <button
+                              type="button"
+                              disabled={
+                                submitting ||
+                                Number(row.deposit_available) <= 0.05
+                              }
+                              title={
+                                Number(row.deposit_available) <= 0.05
+                                  ? "No deposit available — Apply is blocked"
+                                  : "Apply deposit"
+                              }
+                              onClick={() => openHub(row, "deposit")}
+                              className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Wallet className="h-3.5 w-3.5" />
+                              Apply
+                            </button>
                           ) : methodTab === "credit" &&
                             isDepositPendingCredit(row) ? (
                             <div className="flex flex-col items-end gap-1.5">
@@ -3918,7 +4020,7 @@ export default function ReceivePayment() {
                             : methodTab === "transfer"
                               ? "Collect any transfer amount. Remaining balance can stay on credit or other modes."
                               : "Collect any portion in this mode. Any unpaid balance can be Credit — confirm it on the Credit tab."
-                          : "Enter any portion. You do not need to pay the full invoice in this mode. The last payment that completes it opens the invoice."}
+                          : "Collect any amount in this mode — including the full remaining balance as cash, transfer, or POS if needed. Unused modes stay open until the invoice is fully paid."}
                       </p>
                       {depositCover > 0.05 ? (
                         <p className="text-teal-700">

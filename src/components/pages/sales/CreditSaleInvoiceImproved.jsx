@@ -822,8 +822,13 @@ export default function CreditSaleInvoice({
     invoice.transaction?.date || invoice.date || propDate;
 
   const invoiceReference =
-    invoice.transaction?.id ||
     invoice.transaction?.reference ||
+    invoice.sale_code ||
+    invoice.invoice_ref ||
+    (typeof invoice.transaction?.id === "string" &&
+    /^INV-/i.test(invoice.transaction.id)
+      ? invoice.transaction.id
+      : null) ||
     saleCode ||
     "N/A";
 
