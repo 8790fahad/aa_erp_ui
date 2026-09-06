@@ -28,6 +28,19 @@ function companyBits(business = {}) {
   };
 }
 
+/** Last word on its own line for letterhead names like "ALH ALI MUHAMMAD YAMMUSA". */
+function splitLetterheadName(name) {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length < 3) {
+    return { primary: parts.join(" "), secondary: "" };
+  }
+  const secondary = parts.pop();
+  return { primary: parts.join(" "), secondary };
+}
+
 /**
  * Shared HTML document/print header used across receipts, invoices, and reports.
  * Style is chosen in Settings → Header Settings (`document_header_style`: text | logo).
@@ -48,168 +61,179 @@ export default function BusinessDocumentHeader({
   const style = forceStyle || getDocumentHeaderStyle(business);
   const c = companyBits(business);
   const showLogo = style === "logo" && Boolean(c.logo);
-  const pad = compact ? "px-2 py-1.5" : "p-2.5";
+  const { primary: namePrimary, secondary: nameSecondary } = splitLetterheadName(
+    c.name,
+  );
+  const pad = compact ? "px-2 py-1.5" : "px-3 py-3";
   const dateText = date
     ? moment(date).isValid()
       ? moment(date).format(dateFormat)
       : String(date)
     : moment().format(dateFormat);
 
-  const contactLine = [
-    c.phone ? `Tel: ${c.phone}` : null,
-    c.fax ? `Fax: ${c.fax}` : null,
-    c.email ? `Email: ${c.email}` : null,
-  ]
+  const telLine = c.phone ? `Tel: ${c.phone}` : "";
+  const faxEmailLine = [c.fax ? `Fax: ${c.fax}` : null, c.email ? `Email: ${c.email}` : null]
     .filter(Boolean)
     .join(" | ");
 
   const warehouseText = String(warehouse || "").trim();
 
-  // A5 / compact previews are often < sm breakpoint — always keep side-by-side.
-  const rowClass = compact
-    ? "flex flex-row items-start justify-between gap-2"
-    : "flex flex-col gap-3 md:flex-row md:items-start md:justify-between";
-
   return (
-    <div className="border-2 border-[var(--aa-navy,#1a2d5e)] p-0.5 mb-1.5">
+    <div className="border-2 border-[var(--aa-navy,#1a2d5e)] p-[3px] mb-1.5">
       <div
-        className={`bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white ${pad} shadow-md border-2 border-[var(--aa-accent,#e8a317)] overflow-hidden print:bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] ${className}`}
+        className={`bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white ${pad} border-2 border-[var(--aa-accent,#e8a317)] overflow-hidden print:bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] ${className}`}
       >
-      <div className={rowClass}>
         <div
-          className={`min-w-0 ${compact ? "flex-[1.4]" : "flex-1"} ${
-            showLogo ? "flex gap-3 items-center" : ""
-          }`}
-        >
-          {showLogo && (
-            <div
-              className={`shrink-0 overflow-hidden border-2 border-white bg-white shadow-sm ${
-                compact ? "p-0.5" : "p-1"
-              }`}
-            >
-              <img
-                src={c.logo}
-                alt=""
-                className={
-                  compact
-                    ? "h-14 w-14 object-contain"
-                    : "h-24 w-24 object-contain"
-                }
-              />
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
-              <h1
-                className={`font-bold uppercase tracking-wide leading-tight ${
-                  compact ? "text-[11px] sm:text-sm" : "text-xl sm:text-2xl"
-                }`}
-              >
-                {c.name}
-              </h1>
-              {c.rc ? (
-                <span
-                  className={`font-semibold text-white/85 whitespace-nowrap ${
-                    compact ? "text-[9px]" : "text-sm"
-                  }`}
-                >
-                  RC. {c.rc}
-                </span>
-              ) : null}
-            </div>
-            {c.description ? (
-              <p
-                className={`italic underline decoration-white/70 underline-offset-2 text-white/80 ${
-                  compact
-                    ? "text-[9px] leading-snug mt-0.5 line-clamp-2"
-                    : "text-sm mt-0.5"
-                }`}
-              >
-                {c.description}
-              </p>
-            ) : null}
-            {c.address ? (
-              <p
-                className={`text-white/75 ${
-                  compact
-                    ? "text-[8px] leading-snug mt-0.5"
-                    : "text-xs mt-1"
-                }`}
-              >
-                {c.address}
-              </p>
-            ) : null}
-            {contactLine ? (
-              <p
-                className={`text-white/75 ${
-                  compact
-                    ? "text-[8px] leading-snug mt-0.5"
-                    : "text-xs mt-0.5"
-                }`}
-              >
-                {contactLine}
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        <div
-          className={`flex flex-col items-end shrink-0 text-right ${
-            compact ? "w-[38%] min-w-[7.5rem] gap-1" : "md:min-w-[200px] gap-1.5"
+          className={`flex flex-row items-stretch justify-between ${
+            compact ? "gap-2" : "gap-4"
           }`}
         >
           <div
-            className={`w-full bg-white/15 text-center border border-white/20 ${
-              compact ? "px-1.5 py-1.5" : "px-2 py-2"
+            className={`min-w-0 flex-1 ${
+              showLogo ? "flex items-start" : ""
+            } ${compact ? "gap-2" : "gap-3"}`}
+          >
+            {showLogo && (
+              <div
+                className={`shrink-0 overflow-hidden border-2 border-white bg-white ${
+                  compact ? "p-0.5" : "p-1"
+                }`}
+              >
+                <img
+                  src={c.logo}
+                  alt=""
+                  className={
+                    compact
+                      ? "h-16 w-16 object-contain"
+                      : "h-[5.5rem] w-[5.5rem] object-contain"
+                  }
+                />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <h1
+                className={`font-bold uppercase tracking-wide leading-[1.05] ${
+                  compact ? "text-sm" : "text-[1.65rem] sm:text-[1.85rem]"
+                }`}
+              >
+                {namePrimary || c.name}
+              </h1>
+              {nameSecondary ? (
+                <h2
+                  className={`font-bold uppercase tracking-wide leading-tight ${
+                    compact ? "text-xs mt-0" : "text-xl mt-0.5"
+                  }`}
+                >
+                  {nameSecondary}
+                </h2>
+              ) : null}
+              {c.rc ? (
+                <p
+                  className={`font-semibold text-white/90 ${
+                    compact ? "text-[10px] mt-0.5" : "text-sm mt-1"
+                  }`}
+                >
+                  RC. {c.rc}
+                </p>
+              ) : null}
+              {c.description ? (
+                <p
+                  className={`italic text-white/85 ${
+                    compact
+                      ? "text-[9px] leading-snug mt-0.5 line-clamp-2"
+                      : "text-[13px] mt-1"
+                  }`}
+                >
+                  {c.description}
+                </p>
+              ) : null}
+              {c.address ? (
+                <p
+                  className={`text-white/80 ${
+                    compact ? "text-[9px] leading-snug mt-0.5" : "text-[13px] mt-1"
+                  }`}
+                >
+                  {c.address}
+                </p>
+              ) : null}
+              {telLine ? (
+                <p
+                  className={`text-white/80 ${
+                    compact ? "text-[8px] leading-snug mt-0.5" : "text-[12px] mt-1"
+                  }`}
+                >
+                  {telLine}
+                </p>
+              ) : null}
+              {faxEmailLine ? (
+                <p
+                  className={`text-white/80 ${
+                    compact ? "text-[8px] leading-snug" : "text-[12px]"
+                  }`}
+                >
+                  {faxEmailLine}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div
+            className={`flex flex-col items-stretch shrink-0 ${
+              compact ? "w-[38%] min-w-[7.5rem] gap-1" : "w-[13.5rem] sm:w-[15rem] gap-1.5"
             }`}
           >
-            <p
-              className={`font-bold uppercase text-white ${
-                compact
-                  ? "text-[10px] tracking-[0.12em] leading-tight"
-                  : "text-xs tracking-[0.2em]"
+            <div
+              className={`w-full text-center border-2 border-white/35 bg-white/10 ${
+                compact ? "px-1.5 py-2" : "px-2.5 py-3"
               }`}
             >
-              {title}
+              <p
+                className={`font-bold uppercase text-white leading-tight ${
+                  compact
+                    ? "text-sm tracking-[0.14em]"
+                    : "text-[1.35rem] tracking-[0.14em]"
+                }`}
+              >
+                {title}
+              </p>
+              {numberLabel ? (
+                <p
+                  className={`font-bold leading-tight text-white ${
+                    compact ? "text-xs mt-1" : "text-base mt-1.5"
+                  }`}
+                >
+                  {numberLabel}
+                </p>
+              ) : null}
+              {warehouseText ? (
+                <p
+                  className={`text-white leading-tight ${
+                    compact ? "text-[9px] mt-1" : "text-[13px] mt-1.5"
+                  }`}
+                >
+                  <span className="font-semibold text-white/75">Warehouse: </span>
+                  <span className="font-bold">{warehouseText}</span>
+                </p>
+              ) : null}
+              {extraLine && !warehouseText ? (
+                <p
+                  className={`text-white/90 ${
+                    compact ? "text-[9px] mt-1" : "text-[13px] mt-1.5"
+                  }`}
+                >
+                  {extraLine}
+                </p>
+              ) : null}
+            </div>
+            <p
+              className={`text-right font-semibold text-white ${
+                compact ? "text-[10px]" : "text-sm"
+              }`}
+            >
+              Date: {dateText}
             </p>
-            {numberLabel ? (
-              <p
-                className={`mt-1 font-bold leading-tight text-white ${
-                  compact ? "text-xs" : "text-lg"
-                }`}
-              >
-                {numberLabel}
-              </p>
-            ) : null}
-            {warehouseText ? (
-              <p
-                className={`mt-1 text-white/90 leading-tight ${
-                  compact ? "text-[9px]" : "text-sm"
-                }`}
-              >
-                <span className="font-semibold text-white/70">Warehouse:</span>{" "}
-                <span className="font-semibold">{warehouseText}</span>
-              </p>
-            ) : null}
-            {extraLine && !warehouseText ? (
-              <p
-                className={`mt-1 text-white/85 ${
-                  compact ? "text-[9px]" : "text-sm"
-                }`}
-              >
-                {extraLine}
-              </p>
-            ) : null}
           </div>
-          <p
-            className={`font-semibold text-white/90 ${
-              compact ? "text-[9px]" : "text-sm"
-            }`}
-          >
-            Date: {dateText}
-          </p>
         </div>
-      </div>
       </div>
     </div>
   );

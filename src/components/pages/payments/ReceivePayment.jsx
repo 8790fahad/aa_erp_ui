@@ -756,13 +756,18 @@ function parseFormattedAmount(value) {
   return parseFloat(String(value || "").replace(/,/g, "")) || 0;
 }
 
+function workflowNumericId(value) {
+  const id = parseInt(value, 10);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
 function snapshotInvoiceRow(row) {
   if (!row) return null;
   const sale_code = String(row.sale_code || "").trim();
   if (!sale_code) return null;
   return {
     ...row,
-    id: row.id,
+    id: workflowNumericId(row.id) ?? row.id,
     sale_code,
     history: Array.isArray(row.history)
       ? row.history.map((h) => (h && typeof h === "object" ? { ...h } : h))
@@ -2022,16 +2027,25 @@ export default function ReceivePayment() {
 
   const resolveTreatingInvoice = () => {
     const treating = treatingInvoiceRef.current;
-    const code = String(treating?.sale_code || "").trim();
+    const code = String(
+      treating?.sale_code || selected?.sale_code || "",
+    ).trim();
     if (!code) return null;
     const selectedCode = String(selected?.sale_code || "").trim();
     if (selectedCode && selectedCode !== code) return null;
-    if (selected?.id != null && treating?.id != null && selected.id !== treating.id) {
-      return null;
-    }
+    const lists = [
+      selected,
+      treating,
+      ...pending,
+      ...creditPending,
+      ...depositPending,
+    ];
+    const match = lists.find(
+      (r) => String(r?.sale_code || "").trim() === code,
+    );
     return {
       sale_code: code,
-      id: treating?.id ?? null,
+      id: workflowNumericId(treating?.id) ?? workflowNumericId(match?.id),
     };
   };
 
@@ -2641,7 +2655,7 @@ export default function ReceivePayment() {
     }
     const collected = Number(splitProgress?.collected_total) || 0;
     const target = resolveTreatingInvoice();
-    if (!target?.sale_code || target.id == null) {
+    if (!target?.sale_code) {
       toast.error("This collection is not for the open invoice. Close and try again.");
       return;
     }
@@ -2652,7 +2666,6 @@ export default function ReceivePayment() {
       {
         facilityId: activeBusiness.id,
         saleCode,
-        workflowId: target.id,
         credit_amount: creditToSend,
         updated_by: user?.id,
         note:
@@ -2723,7 +2736,7 @@ export default function ReceivePayment() {
   const confirmPayment = () => {
     if (!selected || !activeBusiness?.id) return;
     const target = resolveTreatingInvoice();
-    if (!target?.sale_code || target.id == null) {
+    if (!target?.sale_code) {
       toast.error("This collection is not for the open invoice. Close and try again.");
       return;
     }
@@ -2818,7 +2831,6 @@ export default function ReceivePayment() {
       {
         facilityId: activeBusiness.id,
         saleCode: target.sale_code,
-        workflowId: target.id,
         updated_by: user?.id,
         collector_name:
           [user?.firstname, user?.lastname].filter(Boolean).join(" ").trim() ||
