@@ -29,6 +29,7 @@ import { Typeahead } from "react-bootstrap-typeahead";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import useQuery from "@/hooks/useQuery";
+import { getUserFunctionalities, allowedBillCreateTypes } from "@/lib/access";
 import CashTransferPaymentFields, {
   buildPaymentSplits,
   isCashTransferSplitMode,
@@ -72,6 +73,16 @@ export default function ProductSupplierBill() {
   const user = useSelector((state) => state.auth.user);
   const today = moment().format("YYYY-MM-DD");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const types = allowedBillCreateTypes(
+      getUserFunctionalities(user, activeBusiness),
+    );
+    if (!types.includes("inventory")) {
+      toast.error("You do not have permission to create inventory bills.");
+      navigate("/app/expenses/billing", { replace: true });
+    }
+  }, [user, activeBusiness, navigate]);
 
   const [form, setForm] = useState({
     date: today,

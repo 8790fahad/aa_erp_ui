@@ -267,6 +267,31 @@ export const modules = [
         title: "Bill",
         url: "/app/expenses/billing",
         functionality: ["Bill", "Billing Expense"],
+        subFunctionalities: [
+          {
+            title: "Create Bill",
+            subFunctionalities: [
+              { title: "Inventory Bill" },
+              { title: "Expense Bill" },
+            ],
+          },
+          {
+            title: "View Expenses Memos",
+            subFunctionalities: [
+              { title: "All Memos" },
+              { title: "Approved Memos" },
+              { title: "Pending Memos" },
+            ],
+          },
+          {
+            title: "Filter Bills",
+            subFunctionalities: [
+              { title: "All" },
+              { title: "Inventory" },
+              { title: "Expenses" },
+            ],
+          },
+        ],
         access: [
           "services",
           "retailers",
@@ -278,6 +303,8 @@ export const modules = [
       {
         title: "Pay Bills",
         url: "/app/payments/pay-bills",
+        functionality: ["Pay Bills", "Pay Bill"],
+        subFunctionalities: [{ title: "See All Pay Bills" }],
         access: [
           "services",
           "retailers",

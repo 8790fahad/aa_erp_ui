@@ -100,6 +100,9 @@ export default function Register2() {
             }
             child.subFunctionalities?.forEach((sub) => {
               if (sub?.title) functionalities.push(sub.title);
+              sub?.subFunctionalities?.forEach((nested) => {
+                if (nested?.title) functionalities.push(nested.title);
+              });
             });
           });
         }

@@ -96,9 +96,110 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "Collection Reconciliation",
   "Imprest",
   "Pay Bill",
+  "Create Bill",
+  "Inventory Bill",
+  "Expense Bill",
+  "Filter Bills",
+  "All",
+  "Inventory",
+  "Expenses",
+  "View Expenses Memos",
+  "All Memos",
+  "Approved Memos",
+  "Pending Memos",
+  "See All Pay Bills",
 ];
 
-/** Create Invoice → Mode of Payment checkboxes. */
+export const CREATE_BILL_PRIVILEGE = "Create Bill";
+export const FILTER_BILLS_PRIVILEGE = "Filter Bills";
+export const FILTER_ALL_BILLS_PRIVILEGE = "All";
+export const FILTER_INVENTORY_BILLS_PRIVILEGE = "Inventory";
+export const FILTER_EXPENSE_BILLS_PRIVILEGE = "Expenses";
+export const INVENTORY_BILL_PRIVILEGE = "Inventory Bill";
+export const EXPENSE_BILL_PRIVILEGE = "Expense Bill";
+export const VIEW_EXPENSES_MEMOS_PRIVILEGE = "View Expenses Memos";
+export const MEMO_FILTER_ALL_PRIVILEGE = "All Memos";
+export const MEMO_FILTER_APPROVED_PRIVILEGE = "Approved Memos";
+export const MEMO_FILTER_PENDING_PRIVILEGE = "Pending Memos";
+export const SEE_ALL_PAY_BILLS_PRIVILEGE = "See All Pay Bills";
+
+/** Pay Bills list: own payments unless this privilege (or admin) is granted. */
+export function canSeeAllPayBills(user, activeBusiness) {
+  if (isBusinessOwner(user, activeBusiness)) return true;
+  const funcs = getUserFunctionalities(user, activeBusiness);
+  if (hasFullAccess(funcs)) return true;
+  return funcs.includes(SEE_ALL_PAY_BILLS_PRIVILEGE);
+}
+
+/**
+ * Bill types the user may create (Create Bill modal).
+ * Nested Inventory Bill / Expense Bill grants win; parent Create Bill
+ * with no child grants yet keeps both types.
+ */
+export function allowedBillCreateTypes(functionalities) {
+  if (hasFullAccess(functionalities)) return ["inventory", "expense"];
+  const funcs = Array.isArray(functionalities) ? functionalities : [];
+  const granted = [];
+  if (funcs.includes(INVENTORY_BILL_PRIVILEGE)) granted.push("inventory");
+  if (funcs.includes(EXPENSE_BILL_PRIVILEGE)) granted.push("expense");
+  if (granted.length) return granted;
+  if (funcs.includes(CREATE_BILL_PRIVILEGE)) return ["inventory", "expense"];
+  return [];
+}
+
+/**
+ * Bill types the user may see in the list.
+ * Parent "Bill" with no child grants yet keeps both types (existing staff).
+ */
+export function allowedBillTypes(functionalities) {
+  if (hasFullAccess(functionalities)) return ["inventory", "expense"];
+  const funcs = Array.isArray(functionalities) ? functionalities : [];
+  const createTypes = allowedBillCreateTypes(functionalities);
+  if (createTypes.length) return createTypes;
+  const granted = [];
+  if (funcs.includes(INVENTORY_BILL_PRIVILEGE)) granted.push("inventory");
+  if (funcs.includes(EXPENSE_BILL_PRIVILEGE)) granted.push("expense");
+  if (granted.length) return granted;
+  return ["inventory", "expense"];
+}
+
+/** Filter dropdown options granted under Filter Bills: All / Inventory / Expenses. */
+export function allowedBillFilterOptions(functionalities) {
+  if (hasFullAccess(functionalities)) return ["all", "inventory", "expense"];
+  const funcs = Array.isArray(functionalities) ? functionalities : [];
+  const granted = [];
+  if (funcs.includes(FILTER_ALL_BILLS_PRIVILEGE)) granted.push("all");
+  if (funcs.includes(FILTER_INVENTORY_BILLS_PRIVILEGE)) {
+    granted.push("inventory");
+  }
+  if (funcs.includes(FILTER_EXPENSE_BILLS_PRIVILEGE)) granted.push("expense");
+  if (granted.length) return granted;
+  if (funcs.includes(FILTER_BILLS_PRIVILEGE)) {
+    return ["all", "inventory", "expense"];
+  }
+  return [];
+}
+
+/** Show the type filter on the Bill list when any filter option is granted. */
+export function canUseBillTypeFilter(functionalities) {
+  return allowedBillFilterOptions(functionalities).length > 0;
+}
+
+/** Memo drawer filter: All / Approved / Pending. */
+export function allowedMemoFilterOptions(functionalities) {
+  if (hasFullAccess(functionalities)) return ["all", "approved", "pending"];
+  const funcs = Array.isArray(functionalities) ? functionalities : [];
+  const granted = [];
+  if (funcs.includes(MEMO_FILTER_ALL_PRIVILEGE)) granted.push("all");
+  if (funcs.includes(MEMO_FILTER_APPROVED_PRIVILEGE)) granted.push("approved");
+  if (funcs.includes(MEMO_FILTER_PENDING_PRIVILEGE)) granted.push("pending");
+  if (granted.length) return granted;
+  if (funcs.includes(VIEW_EXPENSES_MEMOS_PRIVILEGE)) {
+    return ["all", "approved", "pending"];
+  }
+  return ["all", "approved", "pending"];
+}
+
 export const INVOICE_PAYMENT_MODE_PRIVILEGES = {
   cash: "Cash Payment",
   transfer: "Transfer Payment",
@@ -161,6 +262,19 @@ export function allowedCrmTabPrivileges(functionalities) {
   return [];
 }
 
+export function collectSubFunctionalityTitles(item) {
+  const titles = [];
+  const walk = (nodes) => {
+    (nodes || []).forEach((node) => {
+      const title = String(node?.title || "").trim();
+      if (title) titles.push(title);
+      if (node?.subFunctionalities?.length) walk(node.subFunctionalities);
+    });
+  };
+  walk(item?.subFunctionalities);
+  return titles;
+}
+
 export function privilegeKeysForItem(item) {
   if (!item) return [];
   const keys = [];
@@ -192,9 +306,7 @@ export function privilegeKeysForItem(item) {
  */
 export function privilegeKeysForNavItem(item) {
   const keys = privilegeKeysForItem(item);
-  const subs = (item?.subFunctionalities || [])
-    .map((sub) => String(sub?.title || "").trim())
-    .filter(Boolean);
+  const subs = collectSubFunctionalityTitles(item);
   return [...new Set([...keys, ...subs])];
 }
 

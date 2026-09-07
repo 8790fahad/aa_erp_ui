@@ -148,6 +148,14 @@ export const ACCOUNTING_REPORT_SECTIONS = [
         external: true,
       },
       {
+        title: "Sales by Mode of Payment",
+        description:
+          "Sales totalled by payment method (Cash, Transfer, POS, Credit)",
+        path: "/app/sales/sales-line-report?view=payment",
+        dateMode: "range",
+        external: true,
+      },
+      {
         title: "Deposit Report",
         description:
           "Customers with a prepaid / deposit balance not yet applied to an invoice",

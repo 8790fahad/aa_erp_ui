@@ -34,12 +34,30 @@ import { formatNumber1 } from "@/components/router/utilities";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
+import {
+  getUserFunctionalities,
+  allowedBillCreateTypes,
+  allowedBillFilterOptions,
+} from "@/lib/access";
 
 const STATUS_ALL = "all";
 const STATUS_PAID = "paid";
 const STATUS_UNPAID = "unpaid";
 const STATUS_PARTIALLY_PAID = "partially_paid";
+const TYPE_ALL = "all";
+const TYPE_INVENTORY = "inventory";
+const TYPE_EXPENSE = "expense";
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
+
+function isExpenseBill(item) {
+  const ref = String(item?.invoice_ref || "");
+  const kind = String(item?.bill_type || "").toLowerCase();
+  return (
+    kind === "expense" ||
+    ref.startsWith("EP-") ||
+    ref.startsWith("DE/")
+  );
+}
 
 const primaryBtn =
   "border-0 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90 shadow-none";
@@ -68,8 +86,36 @@ export default function BillSources() {
     ? rawPageSize
     : 10;
   const statusFromUrl = searchParams.get("status") || STATUS_ALL;
+  const typeFromUrl = searchParams.get("billType") || TYPE_ALL;
   const [searchInput, setSearchInput] = useState(searchFromUrl);
   const searchDebounceRef = useRef(null);
+
+  const functionalities = getUserFunctionalities(user, activeBusiness);
+  const createTypes = allowedBillCreateTypes(functionalities);
+  const filterOptions = allowedBillFilterOptions(functionalities);
+  const canFilterAll = filterOptions.includes("all");
+  const canFilterInventory = filterOptions.includes("inventory");
+  const canFilterExpense = filterOptions.includes("expense");
+  const canCreateInventory = createTypes.includes("inventory");
+  const canCreateExpense = createTypes.includes("expense");
+  const showTypeFilter = filterOptions.length > 0;
+  const canCreateBill = canCreateInventory || canCreateExpense;
+
+  const effectiveBillType = (() => {
+    if (typeFromUrl === TYPE_ALL && canFilterAll) return TYPE_ALL;
+    if (typeFromUrl === TYPE_INVENTORY && canFilterInventory) {
+      return TYPE_INVENTORY;
+    }
+    if (typeFromUrl === TYPE_EXPENSE && canFilterExpense) {
+      return TYPE_EXPENSE;
+    }
+    if (canFilterAll) return TYPE_ALL;
+    if (canFilterInventory && !canFilterExpense) return TYPE_INVENTORY;
+    if (canFilterExpense && !canFilterInventory) return TYPE_EXPENSE;
+    if (canFilterInventory) return TYPE_INVENTORY;
+    if (canFilterExpense) return TYPE_EXPENSE;
+    return TYPE_ALL;
+  })();
 
   const pageSize = pageSizeFromUrl;
 
@@ -91,6 +137,9 @@ export default function BillSources() {
     }
     if (statusFromUrl && statusFromUrl !== STATUS_ALL) {
       params.set("status", statusFromUrl);
+    }
+    if (effectiveBillType && effectiveBillType !== TYPE_ALL) {
+      params.set("billType", effectiveBillType);
     }
     _fetchApi(
       `/api/supplier/bills?${params.toString()}`,
@@ -118,6 +167,7 @@ export default function BillSources() {
     pageSizeFromUrl,
     searchFromUrl,
     statusFromUrl,
+    effectiveBillType,
   ]);
 
   useEffect(() => {
@@ -167,6 +217,11 @@ export default function BillSources() {
         if (updates.status && updates.status !== STATUS_ALL) next.set("status", updates.status);
         else next.delete("status");
       }
+      if (updates.billType !== undefined) {
+        if (updates.billType && updates.billType !== TYPE_ALL) {
+          next.set("billType", updates.billType);
+        } else next.delete("billType");
+      }
       setSearchParams(next, { replace: true });
     },
     [searchParams, setSearchParams]
@@ -191,6 +246,10 @@ export default function BillSources() {
   const handleStatusFilter = (status) => {
     const param = status === null ? STATUS_ALL : status;
     updateUrl({ status: param, page: 1 });
+  };
+
+  const handleTypeFilter = (billType) => {
+    updateUrl({ billType: billType || TYPE_ALL, page: 1 });
   };
 
   const handlePageChange = (newPageIndex) => {
@@ -227,6 +286,25 @@ export default function BillSources() {
           {item.invoice_ref || "N/A"}
         </button>
       ),
+    },
+    {
+      title: "Type",
+      custom: true,
+      component: (item) => {
+        const expense = isExpenseBill(item);
+        return (
+          <Badge
+            variant="outline"
+            className={
+              expense
+                ? "border-emerald-200 bg-emerald-50 font-medium text-emerald-800"
+                : "border-sky-200 bg-sky-50 font-medium text-sky-800"
+            }
+          >
+            {expense ? "Expenses" : "Inventory"}
+          </Badge>
+        );
+      },
     },
     {
       title: "Supplier",
@@ -326,18 +404,32 @@ export default function BillSources() {
     navigate(path);
   };
 
-  const createBillButton = (
+  const handleCreateBill = () => {
+    if (canCreateInventory && !canCreateExpense) {
+      navigate("/app/expenses/billing/product-supplier-bill");
+      return;
+    }
+    if (canCreateExpense && !canCreateInventory) {
+      navigate("/app/expenses/billing/operating-expense-bill");
+      return;
+    }
+    if (canCreateInventory && canCreateExpense) {
+      setCreateBillOpen(true);
+    }
+  };
+
+  const createBillButton = canCreateBill ? (
     <Button
       type="button"
       variant="default"
       size="sm"
       className={`flex h-9 items-center gap-2 ${primaryBtn}`}
-      onClick={() => setCreateBillOpen(true)}
+      onClick={handleCreateBill}
     >
       <HandCoins className="h-4 w-4" />
       Create Bill
     </Button>
-  );
+  ) : null;
 
   return (
     <div className="min-h-[70vh] px-3 py-4 sm:px-4 lg:px-6">
@@ -365,6 +457,29 @@ export default function BillSources() {
           />
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+          {showTypeFilter ? (
+            <div className="w-full sm:w-[12rem] lg:w-[11rem]">
+              <Select
+                value={effectiveBillType || TYPE_ALL}
+                onValueChange={(value) => handleTypeFilter(value)}
+              >
+                <SelectTrigger className={selectTriggerClass}>
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {canFilterAll ? (
+                    <SelectItem value={TYPE_ALL}>All</SelectItem>
+                  ) : null}
+                  {canFilterInventory ? (
+                    <SelectItem value={TYPE_INVENTORY}>Inventory</SelectItem>
+                  ) : null}
+                  {canFilterExpense ? (
+                    <SelectItem value={TYPE_EXPENSE}>Expenses</SelectItem>
+                  ) : null}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div className="w-full sm:w-[12rem] lg:w-[11rem]">
             <Select
               value={statusFromUrl || STATUS_ALL}
@@ -433,7 +548,9 @@ export default function BillSources() {
                         No bills found
                       </p>
                       <p className="text-xs text-slate-500">
-                        Create a bill to get started
+                        {canCreateBill
+                          ? "Create a bill to get started"
+                          : "No bills match the current filters"}
                       </p>
                       {createBillButton}
                     </div>
@@ -556,32 +673,36 @@ export default function BillSources() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 px-5 py-4">
-            <button
-              type="button"
-              onClick={() =>
-                openBillType("/app/expenses/billing/product-supplier-bill")
-              }
-              className="w-full rounded-md border-0 bg-[var(--aa-navy)] px-4 py-3 text-left text-white transition-colors hover:bg-[var(--aa-navy)]/90"
-            >
-              <span className="block text-sm font-semibold">
-                Inventory Bill
-              </span>
-              <span className="mt-0.5 block text-xs font-normal text-white/75">
-                Product / supplier stock purchase bill
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                openBillType("/app/expenses/billing/operating-expense-bill")
-              }
-              className="w-full rounded-md border-0 bg-emerald-600 px-4 py-3 text-left text-white transition-colors hover:bg-emerald-700"
-            >
-              <span className="block text-sm font-semibold">Expense Bill</span>
-              <span className="mt-0.5 block text-xs font-normal text-white/75">
-                Operating expense bill
-              </span>
-            </button>
+            {canCreateInventory ? (
+              <button
+                type="button"
+                onClick={() =>
+                  openBillType("/app/expenses/billing/product-supplier-bill")
+                }
+                className="w-full rounded-md border-0 bg-[var(--aa-navy)] px-4 py-3 text-left text-white transition-colors hover:bg-[var(--aa-navy)]/90"
+              >
+                <span className="block text-sm font-semibold">
+                  Inventory Bill
+                </span>
+                <span className="mt-0.5 block text-xs font-normal text-white/75">
+                  Product / supplier stock purchase bill
+                </span>
+              </button>
+            ) : null}
+            {canCreateExpense ? (
+              <button
+                type="button"
+                onClick={() =>
+                  openBillType("/app/expenses/billing/operating-expense-bill")
+                }
+                className="w-full rounded-md border-0 bg-emerald-600 px-4 py-3 text-left text-white transition-colors hover:bg-emerald-700"
+              >
+                <span className="block text-sm font-semibold">Expense Bill</span>
+                <span className="mt-0.5 block text-xs font-normal text-white/75">
+                  Operating expense bill
+                </span>
+              </button>
+            ) : null}
           </div>
           <div className="flex justify-end border-t border-slate-100 px-5 py-3">
             <button

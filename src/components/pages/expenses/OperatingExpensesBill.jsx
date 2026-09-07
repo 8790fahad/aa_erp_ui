@@ -25,7 +25,15 @@ import { getSuppliers } from "@/redux/actions/suppliers";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import useQuery from "@/hooks/useQuery";
+import { getUserFunctionalities, allowedBillCreateTypes, allowedMemoFilterOptions } from "@/lib/access";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import CreatableSelect from "react-select/creatable";
 import { Typeahead } from "react-bootstrap-typeahead";
 import CreateImprestDrawer from "@/components/common/CreateImprestDrawer";
@@ -58,6 +66,16 @@ export default function OperatingExpenses() {
   const user = useSelector((state) => state.auth.user);
   const today = moment().format("YYYY-MM-DD");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const types = allowedBillCreateTypes(
+      getUserFunctionalities(user, activeBusiness),
+    );
+    if (!types.includes("expense")) {
+      toast.error("You do not have permission to create expense bills.");
+      navigate("/app/expenses/billing", { replace: true });
+    }
+  }, [user, activeBusiness, navigate]);
 
   const [form, setForm] = useState({
     date: today,
@@ -111,6 +129,29 @@ export default function OperatingExpenses() {
   const [confirmDismissMemoId, setConfirmDismissMemoId] = useState(null);
   const [dismissedMemoIds, setDismissedMemoIds] = useState([]);
   const [memosToClose, setMemosToClose] = useState([]);
+  const [memoStatusFilter, setMemoStatusFilter] = useState("all");
+
+  const functionalities = getUserFunctionalities(user, activeBusiness);
+  const memoFilterOptions = allowedMemoFilterOptions(functionalities);
+  const canFilterMemoAll = memoFilterOptions.includes("all");
+  const canFilterMemoApproved = memoFilterOptions.includes("approved");
+  const canFilterMemoPending = memoFilterOptions.includes("pending");
+  const showMemoStatusFilter = memoFilterOptions.length > 0;
+  const effectiveMemoStatus = (() => {
+    if (memoStatusFilter === "all" && canFilterMemoAll) return "all";
+    if (memoStatusFilter === "approved" && canFilterMemoApproved) {
+      return "approved";
+    }
+    if (memoStatusFilter === "pending" && canFilterMemoPending) {
+      return "pending";
+    }
+    if (canFilterMemoAll) return "all";
+    if (canFilterMemoApproved && !canFilterMemoPending) return "approved";
+    if (canFilterMemoPending && !canFilterMemoApproved) return "pending";
+    if (canFilterMemoApproved) return "approved";
+    if (canFilterMemoPending) return "pending";
+    return "all";
+  })();
 
   const [imprestOpen, setImprestOpen] = useState(false);
   const termOptions = [
@@ -858,12 +899,17 @@ export default function OperatingExpenses() {
   };
 
   // Fetch memos for the expenses memo drawer (with items included)
-  const fetchMemos = () => {
+  const fetchMemos = (status = effectiveMemoStatus) => {
     if (!activeBusiness?.id) return;
 
     setLoadingMemos(true);
+    const params = new URLSearchParams();
+    if (status && status !== "all") params.set("status", status);
+    const query = params.toString();
     _fetchApi(
-      `/account/get-reviewed-memos-with-items/${activeBusiness.id}/${user.id}`,
+      `/account/get-reviewed-memos-with-items/${activeBusiness.id}/${user.id}${
+        query ? `?${query}` : ""
+      }`,
       (data) => {
         setLoadingMemos(false);
         if (data.success) {
@@ -886,8 +932,14 @@ export default function OperatingExpenses() {
   // Handle opening memo drawer
   const handleOpenMemoDrawer = () => {
     setIsMemoDrawerOpen(true);
-    fetchMemos();
+    fetchMemos(effectiveMemoStatus);
   };
+
+  useEffect(() => {
+    if (!isMemoDrawerOpen) return;
+    fetchMemos(effectiveMemoStatus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveMemoStatus]);
 
   // Add memo items to the current items list
   // Items are now already included in the memo object from the API
@@ -1890,6 +1942,29 @@ export default function OperatingExpenses() {
               </DrawerClose>
             </div>
           </DrawerHeader>
+          <div className="shrink-0 border-b border-slate-100 px-5 py-3">
+            {showMemoStatusFilter ? (
+              <Select
+                value={effectiveMemoStatus}
+                onValueChange={(value) => setMemoStatusFilter(value)}
+              >
+                <SelectTrigger className="h-9 w-full border-slate-200 bg-white text-sm">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {canFilterMemoAll ? (
+                    <SelectItem value="all">All</SelectItem>
+                  ) : null}
+                  {canFilterMemoApproved ? (
+                    <SelectItem value="approved">Approved</SelectItem>
+                  ) : null}
+                  {canFilterMemoPending ? (
+                    <SelectItem value="pending">Pending</SelectItem>
+                  ) : null}
+                </SelectContent>
+              </Select>
+            ) : null}
+          </div>
           <div className="flex-1 overflow-y-auto px-5 py-4">
             {loadingMemos ? (
               <div className="flex items-center justify-center py-12">

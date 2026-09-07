@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import moment from "moment";
 import { toast } from "sonner";
-import { Col, Row } from "reactstrap";
 import { Input } from "antd";
 import {
   CreditCard,
@@ -31,6 +30,7 @@ import {
 } from "@/components/ui/sheet";
 import ApplySupplierDeposit from "@/components/pages/payments/ApplySupplierDeposit";
 import SupplierAdvancePaymentModal from "@/components/common/SupplierAdvancePaymentModal";
+import { canSeeAllPayBills } from "@/lib/access";
 
 /**
  * Pay Bills — payment history list, matching Bill / app list layout.
@@ -43,13 +43,16 @@ import SupplierAdvancePaymentModal from "@/components/common/SupplierAdvancePaym
 export default function PaymentsMade() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeBusiness } = useSelector((state) => state.auth);
+  const { activeBusiness, user } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id;
+  const canSeeAll = canSeeAllPayBills(user, activeBusiness);
 
   const [searchInput, setSearchInput] = useState("");
   const [modeFilter, setModeFilter] = useState(null);
+  const [paidByFilter, setPaidByFilter] = useState("all");
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
+  const [payers, setPayers] = useState([]);
   const [page, setPage] = useState(1);
   const [applyDepositOpen, setApplyDepositOpen] = useState(false);
   const [makeDepositOpen, setMakeDepositOpen] = useState(false);
@@ -63,6 +66,12 @@ export default function PaymentsMade() {
       facilityId,
       limit: "500",
     });
+    const userId = user?.id || user?.user_id;
+    if (userId) params.set("userId", String(userId));
+    if (canSeeAll) params.set("viewAll", "1");
+    if (canSeeAll && paidByFilter && paidByFilter !== "all") {
+      params.set("createdBy", String(paidByFilter));
+    }
 
     _fetchApi(
       `/api/v1/get-supplier-advance-history?${params.toString()}`,
@@ -74,6 +83,9 @@ export default function PaymentsMade() {
           return;
         }
         setRows(Array.isArray(resp.results) ? resp.results : []);
+        if (Array.isArray(resp.payers)) {
+          setPayers(resp.payers);
+        }
       },
       () => {
         setLoading(false);
@@ -81,7 +93,7 @@ export default function PaymentsMade() {
         setRows([]);
       },
     );
-  }, [facilityId]);
+  }, [facilityId, user?.id, user?.user_id, canSeeAll, paidByFilter]);
 
   useEffect(() => {
     fetchList();
@@ -129,6 +141,27 @@ export default function PaymentsMade() {
     setPage(1);
   };
 
+  const handlePaidByFilter = (e) => {
+    setPaidByFilter(e.target.value || "all");
+    setPage(1);
+  };
+
+  const payerOptions = useMemo(() => {
+    if (payers.length) return payers;
+    const seen = new Map();
+    rows.forEach((r) => {
+      const id = String(r.created_by || "").trim();
+      if (!id || seen.has(id)) return;
+      seen.set(id, {
+        id,
+        name: String(r.created_by_name || "").trim() || id,
+      });
+    });
+    return [...seen.values()].sort((a, b) =>
+      String(a.name).localeCompare(String(b.name)),
+    );
+  }, [payers, rows]);
+
   const filteredRows = useMemo(() => {
     const q = searchInput.trim().toLowerCase();
     return rows.filter((r) => {
@@ -153,6 +186,7 @@ export default function PaymentsMade() {
         r.supplier_no,
         r.mode_of_payment,
         r.description,
+        r.created_by_name,
       ]
         .filter(Boolean)
         .join(" ")
@@ -227,6 +261,18 @@ export default function PaymentsMade() {
         </span>
       ),
     },
+    ...(canSeeAll
+      ? [
+          {
+            title: "Created by",
+            component: (item) => (
+              <span className="text-sm text-gray-700">
+                {item.created_by_name || item.created_by || "—"}
+              </span>
+            ),
+          },
+        ]
+      : []),
     {
       title: "Action",
       component: (item) => (
@@ -267,28 +313,44 @@ export default function PaymentsMade() {
         </div>
       </div>
 
-      <Row className="mb-3">
-        <Col md="6">
+      <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0 w-full max-w-md overflow-hidden">
           <Input.Search
             placeholder="Search by payment #, vendor, or reference"
             value={searchInput}
             onChange={handleSearchChange}
+            className="w-full"
+            style={{ width: "100%" }}
           />
-        </Col>
-        <Col md="6">
-          <div className="flex items-center justify-end gap-2">
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">
             <select
               value={modeFilter || "all"}
               onChange={handleModeFilter}
-              className="h-9 min-w-[9rem] rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+              className="h-9 min-w-[8rem] shrink-0 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-1 focus:ring-[var(--aa-accent)]"
               aria-label="Filter by payment mode"
             >
-              <option value="all">All</option>
+              <option value="all">All modes</option>
               <option value="cash">Cash</option>
               <option value="bank">Bank</option>
               <option value="cheque">Cheque</option>
               <option value="cash+transfer">Cash + Transfer</option>
             </select>
+            {canSeeAll ? (
+              <select
+                value={paidByFilter}
+                onChange={handlePaidByFilter}
+                className="h-9 min-w-[10rem] shrink-0 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                aria-label="Filter by user who made the payment"
+              >
+                <option value="all">All users</option>
+                {payerOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
             <Button
               variant="outline"
               size="sm"
@@ -317,9 +379,8 @@ export default function PaymentsMade() {
               <HandCoins className="h-4 w-4" />
               New Payment
             </Button>
-          </div>
-        </Col>
-      </Row>
+        </div>
+      </div>
 
       <div className="mt-3">
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
@@ -355,11 +416,11 @@ export default function PaymentsMade() {
                         <CreditCard className="h-6 w-6 text-slate-400" />
                       </div>
                       <p className="text-lg text-gray-500">
-                        {searchInput || modeFilter
+                        {searchInput || modeFilter || paidByFilter !== "all"
                           ? "No payments found"
                           : "No payments recorded yet"}
                       </p>
-                      {!searchInput && !modeFilter && (
+                      {!searchInput && !modeFilter && paidByFilter === "all" && (
                         <Button
                           variant="default"
                           size="sm"

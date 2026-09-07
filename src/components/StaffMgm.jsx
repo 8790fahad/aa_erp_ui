@@ -23,7 +23,7 @@ import {
 } from "@/utils/imageUtils";
 import { getMergedSidebarForBusiness } from "./sidebars/sidebarModules";
 import { mergeReportPermissionsIntoSidebar } from "@/components/pages/report/utils/reportPermissions";
-import { EXPLICIT_ONLY_PRIVILEGES, privilegeKeysForItem } from "@/lib/access";
+import { EXPLICIT_ONLY_PRIVILEGES, privilegeKeysForItem, collectSubFunctionalityTitles } from "@/lib/access";
 import { useSelector, useDispatch } from "react-redux";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -1092,8 +1092,7 @@ const StaffManagementDashboard = () => {
       const isChecked = itemKeys.some((key) =>
         prevForm.functionalities.includes(key),
       );
-      const allSubTitles =
-        subItem.subFunctionalities?.map((s) => s.title).filter(Boolean) || [];
+      const allSubTitles = collectSubFunctionalityTitles(subItem);
       const autoSubTitles = allSubTitles.filter(
         (t) => !EXPLICIT_ONLY_PRIVILEGES.includes(t),
       );
@@ -1943,8 +1942,7 @@ const StaffManagementDashboard = () => {
                                   module.items?.flatMap((item) => [
                                     item.title,
                                     ...privilegeKeysForItem(item),
-                                    ...(item.subFunctionalities?.map((s) => s.title) ||
-                                      []),
+                                    ...collectSubFunctionalityTitles(item),
                                   ]) || []
                                 ).filter(Boolean);
                                 const fn = module.functionality;
@@ -1991,30 +1989,62 @@ const StaffManagementDashboard = () => {
                             {item.subFunctionalities?.length > 0 && (
                               <div className="space-y-1 pl-4 border-l border-gray-200 ml-2">
                                 {item.subFunctionalities.map((sub, subIdx) => (
-                                  <div
-                                    key={`${itemIndex}-sub-${subIdx}`}
-                                    className="flex items-center justify-between py-1.5"
-                                  >
-                                    <span className="text-xs text-gray-600">
-                                      {sub.title}
-                                    </span>
-                                    <div className="form-check form-switch">
-                                      <input
-                                        type="checkbox"
-                                        className="form-check-input"
-                                  checked={
-                                    form.functionalities?.includes(sub.title) ||
-                                    (sub.title === "Goods" &&
-                                      form.functionalities?.includes(
-                                        "Goods List",
-                                      ))
-                                  }
-                                        onChange={() =>
-                                          handleChildChechBoxChange(sub)
-                                        }
-                                        id={`subSwitch-${index}-${itemIndex}-${subIdx}`}
-                                      />
+                                  <div key={`${itemIndex}-sub-${subIdx}`}>
+                                    <div className="flex items-center justify-between py-1.5">
+                                      <span className="text-xs text-gray-600">
+                                        {sub.title}
+                                      </span>
+                                      <div className="form-check form-switch">
+                                        <input
+                                          type="checkbox"
+                                          className="form-check-input"
+                                          checked={
+                                            form.functionalities?.includes(
+                                              sub.title,
+                                            ) ||
+                                            (sub.title === "Goods" &&
+                                              form.functionalities?.includes(
+                                                "Goods List",
+                                              ))
+                                          }
+                                          onChange={() =>
+                                            handleChildChechBoxChange(sub)
+                                          }
+                                          id={`subSwitch-${index}-${itemIndex}-${subIdx}`}
+                                        />
+                                      </div>
                                     </div>
+                                    {sub.subFunctionalities?.length > 0 && (
+                                      <div className="space-y-1 pl-4 border-l border-gray-200 ml-2">
+                                        {sub.subFunctionalities.map(
+                                          (nested, nestedIdx) => (
+                                            <div
+                                              key={`${itemIndex}-sub-${subIdx}-${nestedIdx}`}
+                                              className="flex items-center justify-between py-1.5"
+                                            >
+                                              <span className="text-xs text-gray-500">
+                                                {nested.title}
+                                              </span>
+                                              <div className="form-check form-switch">
+                                                <input
+                                                  type="checkbox"
+                                                  className="form-check-input"
+                                                  checked={form.functionalities?.includes(
+                                                    nested.title,
+                                                  )}
+                                                  onChange={() =>
+                                                    handleChildChechBoxChange(
+                                                      nested,
+                                                    )
+                                                  }
+                                                  id={`subSwitch-${index}-${itemIndex}-${subIdx}-${nestedIdx}`}
+                                                />
+                                              </div>
+                                            </div>
+                                          ),
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>

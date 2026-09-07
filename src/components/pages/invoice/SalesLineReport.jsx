@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dialog";
 import MultipleSelector from "@/components/ui/multiselect";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
+import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
 
 const PAGE_SIZE = 100;
 
@@ -46,7 +47,17 @@ const REPORT_VIEWS = [
   { key: "category", label: "Sales by Category" },
   { key: "salesperson", label: "Sales by Salesperson" },
   { key: "branch", label: "Sales by Branch" },
+  { key: "payment", label: "Sales by Mode of Payment" },
 ];
+
+function formatSalesPaymentMode(mode) {
+  const raw = String(mode || "").trim().toLowerCase();
+  if (!raw) return "Unspecified";
+  if (raw === "card" || raw === "pos") return "POS";
+  if (raw === "deposit" || raw === "apply deposit") return "Apply Deposit";
+  const labeled = formatExpensePaymentMode(mode);
+  return labeled === "—" ? "Unspecified" : labeled;
+}
 
 function num(v) {
   return parseFloat(v) || 0;
@@ -134,6 +145,9 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
   const [categories, setCategories] = useState([]);
   const [branchFromUrl, setBranchFromUrl] = useState(
     () => searchParams.get("branchId") || "",
+  );
+  const [paymentModeFilter, setPaymentModeFilter] = useState(
+    () => searchParams.get("mode") || "",
   );
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -274,29 +288,44 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     if (toDate) next.set("toDate", toDate);
     if (category) next.set("category", category);
     else next.delete("category");
+    if (paymentModeFilter) next.set("mode", paymentModeFilter);
+    else next.delete("mode");
     setSearchParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportView, isVatReport]);
+  }, [reportView, isVatReport, paymentModeFilter]);
+
+  const paymentModeOptions = useMemo(() => {
+    const set = new Set();
+    rows.forEach((r) => set.add(formatSalesPaymentMode(r.mode_of_payment)));
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    if (!paymentModeFilter) return rows;
+    return rows.filter(
+      (r) => formatSalesPaymentMode(r.mode_of_payment) === paymentModeFilter,
+    );
+  }, [rows, paymentModeFilter]);
 
   const totalLineAmount = useMemo(
-    () => rows.reduce((s, r) => s + num(r.line_total), 0),
-    [rows],
+    () => filteredRows.reduce((s, r) => s + num(r.line_total), 0),
+    [filteredRows],
   );
   const totalVatAmount = useMemo(
-    () => rows.reduce((s, r) => s + lineVat(r), 0),
-    [rows],
+    () => filteredRows.reduce((s, r) => s + lineVat(r), 0),
+    [filteredRows],
   );
   const totalInclVat = useMemo(
     () => totalLineAmount + totalVatAmount,
     [totalLineAmount, totalVatAmount],
   );
   const totalQty = useMemo(
-    () => rows.reduce((s, r) => s + num(r.qty), 0),
-    [rows],
+    () => filteredRows.reduce((s, r) => s + num(r.qty), 0),
+    [filteredRows],
   );
   const invoiceCount = useMemo(
-    () => new Set(rows.map((r) => r.invoice_no).filter(Boolean)).size,
-    [rows],
+    () => new Set(filteredRows.map((r) => r.invoice_no).filter(Boolean)).size,
+    [filteredRows],
   );
 
   const periodLabel = useMemo(() => {
@@ -392,20 +421,20 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
   const byCustomer = useMemo(
     () =>
       aggregateBy(
-        rows,
+        filteredRows,
         (r) => r.customer_no || r.customer_name || "—",
         (r) => r.customer_name || r.customer_no || "—",
       ),
-    [rows],
+    [filteredRows],
   );
   const byProduct = useMemo(
     () =>
       aggregateBy(
-        rows,
+        filteredRows,
         (r) => r.product_sku || r.product_name || "—",
         (r) => r.product_name || r.product_sku || "—",
       ).map((r) => {
-        const sample = rows.find(
+        const sample = filteredRows.find(
           (x) => (x.product_sku || x.product_name || "—") === r.key,
         );
         return {
@@ -414,39 +443,48 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
           category: sample?.product_category || sample?.category || "",
         };
       }),
-    [rows],
+    [filteredRows],
   );
   const byCategory = useMemo(
     () =>
       aggregateBy(
-        rows,
+        filteredRows,
         (r) => r.product_category || r.category || "Uncategorized",
         (r) => r.product_category || r.category || "Uncategorized",
       ),
-    [rows],
+    [filteredRows],
   );
   const bySalesperson = useMemo(
     () =>
       aggregateBy(
-        rows,
+        filteredRows,
         (r) => r.salesperson_id || r.salesperson_name || "—",
         (r) => r.salesperson_name || r.salesperson_id || "—",
       ),
-    [rows],
+    [filteredRows],
   );
   const byBranch = useMemo(
     () =>
       aggregateBy(
-        rows,
+        filteredRows,
         (r) => String(r.branch_id || r.branch_name || "—"),
         (r) => r.branch_name || `Branch ${r.branch_id}` || "—",
       ),
-    [rows],
+    [filteredRows],
+  );
+  const byPaymentMode = useMemo(
+    () =>
+      aggregateBy(
+        filteredRows,
+        (r) => formatSalesPaymentMode(r.mode_of_payment),
+        (r) => formatSalesPaymentMode(r.mode_of_payment),
+      ),
+    [filteredRows],
   );
   const byDaily = useMemo(
     () =>
       aggregateBy(
-        rows,
+        filteredRows,
         (r) =>
           r.invoice_date
             ? moment(r.invoice_date).format("YYYY-MM-DD")
@@ -456,12 +494,12 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
             ? moment(r.invoice_date).format("DD-MMM-YYYY")
             : "—",
       ).sort((a, b) => String(b.key).localeCompare(String(a.key))),
-    [rows],
+    [filteredRows],
   );
   const byMonthly = useMemo(
     () =>
       aggregateBy(
-        rows,
+        filteredRows,
         (r) =>
           r.invoice_date ? moment(r.invoice_date).format("YYYY-MM") : "—",
         (r) =>
@@ -473,18 +511,18 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
           month: r.key !== "—" ? moment(r.key, "YYYY-MM").format("MMMM") : "—",
         }))
         .sort((a, b) => String(b.key).localeCompare(String(a.key))),
-    [rows],
+    [filteredRows],
   );
   const byAnnual = useMemo(
     () =>
       aggregateBy(
-        rows,
+        filteredRows,
         (r) =>
           r.invoice_date ? moment(r.invoice_date).format("YYYY") : "—",
         (r) =>
           r.invoice_date ? moment(r.invoice_date).format("YYYY") : "—",
       ).sort((a, b) => String(b.key).localeCompare(String(a.key))),
-    [rows],
+    [filteredRows],
   );
 
   const exportRows = useMemo(() => {
@@ -594,6 +632,27 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
             r.total_incl_vat,
           ]),
         };
+      case "payment":
+        return {
+          headers: [
+            "Mode of payment",
+            "Invoices",
+            "Lines",
+            "Qty",
+            "Sales (₦)",
+            "VAT (₦)",
+            "Total incl. VAT (₦)",
+          ],
+          rows: byPaymentMode.map((r) => [
+            r.label,
+            r.invoice_count,
+            r.lines,
+            r.qty,
+            r.line_total,
+            r.vat_amount,
+            r.total_incl_vat,
+          ]),
+        };
       case "daily":
         return {
           headers: [
@@ -657,7 +716,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
           headers: ["Metric", "Value"],
           rows: [
             ["Invoices", invoiceCount],
-            ["Lines", rows.length],
+            ["Lines", filteredRows.length],
             ["Quantity", totalQty],
             ["Sales (ex-VAT)", totalLineAmount],
             ["VAT", totalVatAmount],
@@ -679,7 +738,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
             "VAT (₦)",
             "Line Total (₦)",
           ],
-          rows: rows.map((row) => [
+          rows: filteredRows.map((row) => [
             row.invoice_no,
             row.invoice_date
               ? moment(row.invoice_date).format("DD-MMM-YYYY")
@@ -698,12 +757,13 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     }
   }, [
     reportView,
-    rows,
+    filteredRows,
     byCustomer,
     byProduct,
     byCategory,
     bySalesperson,
     byBranch,
+    byPaymentMode,
     byDaily,
     byMonthly,
     byAnnual,
@@ -715,7 +775,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
   ]);
 
   const handleExportExcel = useCallback(async () => {
-    if (!rows.length && reportView !== "summary") {
+    if (!filteredRows.length && reportView !== "summary") {
       toast.error("No rows to export");
       return;
     }
@@ -786,7 +846,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
       toast.error("Could not export Excel");
     }
   }, [
-    rows.length,
+    filteredRows.length,
     reportView,
     isVatReport,
     activeViewMeta,
@@ -916,7 +976,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {[
               { label: "Invoices", value: invoiceCount, money: false },
-              { label: "Lines", value: rows.length, money: false },
+              { label: "Lines", value: filteredRows.length, money: false },
               { label: "Quantity", value: totalQty, money: false },
               { label: "Sales (ex-VAT)", value: totalLineAmount, money: true },
               { label: "VAT", value: totalVatAmount, money: true },
@@ -1033,6 +1093,9 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
       return renderAggTable(bySalesperson, "Salesperson");
     }
     if (reportView === "branch") return renderAggTable(byBranch, "Branch");
+    if (reportView === "payment") {
+      return renderAggTable(byPaymentMode, "Mode of payment");
+    }
 
     // Sales Detail (default)
     return (
@@ -1056,7 +1119,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, idx) => {
+            {filteredRows.map((r, idx) => {
               const vat = lineVat(r);
               return (
                 <tr key={`${r.invoice_no}-${idx}`} className="border-b">
@@ -1093,7 +1156,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
                 </tr>
               );
             })}
-            {rows.length > 0 && (
+            {filteredRows.length > 0 && (
               <tr className="bg-white font-semibold border-t">
                 <td className="py-4 px-6" colSpan={9}>
                   Total
@@ -1104,7 +1167,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
                 </Td>
               </tr>
             )}
-            {rows.length === 0 && (
+            {filteredRows.length === 0 && (
               <tr>
                 <td
                   colSpan={11}
@@ -1124,21 +1187,10 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     <div className="space-y-3 p-1">
       <div className="bg-gray-100 rounded-lg px-2 py-2 no-print">
         {!isVatReport ? (
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {REPORT_VIEWS.map((view) => (
-              <button
-                key={view.key}
-                type="button"
-                onClick={() => setReportView(view.key)}
-                className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                  reportView === view.key
-                    ? "bg-[var(--aa-navy)] text-white shadow-sm"
-                    : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
-                }`}
-              >
-                {view.label}
-              </button>
-            ))}
+          <div className="mb-2 px-1">
+            <h2 className="text-sm font-semibold text-gray-800">
+              {activeViewMeta.label}
+            </h2>
           </div>
         ) : (
           <div className="mb-2 px-1">
@@ -1197,6 +1249,23 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
                 ))}
               </select>
             </div>
+            <div className="min-w-[160px]">
+              <label className="text-xs text-gray-600 block mb-1">
+                Mode of Payment
+              </label>
+              <select
+                value={paymentModeFilter}
+                onChange={(e) => setPaymentModeFilter(e.target.value)}
+                className="border rounded px-2 py-2 text-sm bg-white w-full"
+              >
+                <option value="">All modes</option>
+                {paymentModeOptions.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
             {branches.length > 0 && (
               <div className="min-w-[180px]">
                 <label className="text-xs text-gray-600 block mb-1">
@@ -1229,7 +1298,10 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
                   type="button"
                   variant="outline"
                   className="border-gray-300"
-                  disabled={(!rows.length && reportView !== "summary") || loading}
+                  disabled={
+                    (!filteredRows.length && reportView !== "summary") ||
+                    loading
+                  }
                 >
                   Export
                   <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />
@@ -1238,7 +1310,10 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuItem
                   className="cursor-pointer"
-                  disabled={(!rows.length && reportView !== "summary") || loading}
+                  disabled={
+                    (!filteredRows.length && reportView !== "summary") ||
+                    loading
+                  }
                   onClick={() => handleExportExcel()}
                 >
                   <FileSpreadsheet className="h-4 w-4 shrink-0" />
@@ -1247,7 +1322,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
                 <DropdownMenuItem
                   className="cursor-pointer"
                   disabled={
-                    (!rows.length && reportView !== "summary") ||
+                    (!filteredRows.length && reportView !== "summary") ||
                     loading ||
                     pdfExporting
                   }
@@ -1319,7 +1394,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
           <div className="px-6 py-4 flex flex-wrap justify-between gap-2 text-sm text-gray-700">
             <p className="font-semibold">{activeViewMeta.label}</p>
             <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
-              <p>{rows.length} line(s)</p>
+              <p>{filteredRows.length} line(s)</p>
               <p>
                 VAT:{" "}
                 <span className="font-semibold tabular-nums">
