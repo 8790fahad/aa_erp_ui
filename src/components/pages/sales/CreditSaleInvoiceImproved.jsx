@@ -997,6 +997,14 @@ export default function CreditSaleInvoice({
   );
 
   const paymentModeLabel = (() => {
+    const used = [];
+    if (cashPaid > 0.05) used.push("Cash");
+    if (transferPaid > 0.05) used.push("Transfer");
+    if (cardPaid > 0.05) used.push("POS");
+    if (creditAmount > 0.05) used.push("Credit");
+    if (depositPaid > 0.05) used.push("Apply Deposit");
+    if (used.length) return used.join(" + ");
+
     const order = [
       ["cash", "Cash"],
       ["transfer", "Transfer"],
@@ -1010,25 +1018,6 @@ export default function CreditSaleInvoice({
       )
       .map(([, label]) => label);
     if (fromModes.length) return fromModes.join(" + ");
-    if (cardPaid > 0.05 && cashPaid <= 0.05 && transferPaid <= 0.05)
-      return hasCreditMode ? "POS + Credit" : "POS";
-    if (cashPaid > 0.05 && transferPaid > 0.05 && creditAmount > 0.05) {
-      return "Cash + Transfer + Credit";
-    }
-    if (cashPaid > 0.05 && transferPaid > 0.05) return "Cash + Transfer";
-    if (cashPaid > 0.05 && creditAmount > 0.05 && transferPaid <= 0.05) {
-      return "Cash + Credit";
-    }
-    if (transferPaid > 0.05 && creditAmount > 0.05 && cashPaid <= 0.05) {
-      return "Transfer + Credit";
-    }
-    if (depositPaid > 0.05 && cashPaid <= 0.05 && transferPaid <= 0.05)
-      return hasCreditMode ? "Apply Deposit + Credit" : "Apply Deposit";
-    if (cashPaid > 0 && transferPaid <= 0 && creditAmount <= 0.05) return "Cash";
-    if (transferPaid > 0 && cashPaid <= 0 && creditAmount <= 0.05)
-      return "Transfer";
-    if (creditAmount > 0.05 && cashPaid <= 0.05 && transferPaid <= 0.05)
-      return "Credit";
     return formatPaymentMode(modeOfPayment);
   })();
   const handleReactToPrint = useReactToPrint({
@@ -1896,23 +1885,6 @@ export default function CreditSaleInvoice({
                 const fields = [
                   { label: "Mode", value: paymentModeLabel },
                 ];
-                if (depositApplied > 0.05) {
-                  fields.push({
-                    label: "Deposit applied",
-                    value: `₦${formatNumber(depositApplied)}`,
-                  });
-                }
-                if (isCreditOnly || onCredit > 0.05) {
-                  fields.push({
-                    label: "On credit",
-                    value: `₦${formatNumber(creditShown)}`,
-                  });
-                } else if (outstanding > 0.05) {
-                  fields.push({
-                    label: "Still outstanding",
-                    value: `₦${formatNumber(outstanding)}`,
-                  });
-                }
                 if (cashPaid > 0.05) {
                   fields.push({
                     label: "Cash received",
@@ -1953,7 +1925,23 @@ export default function CreditSaleInvoice({
                     value: `₦${formatNumber(cardPaid)}`,
                   });
                 }
-
+                if (depositApplied > 0.05) {
+                  fields.push({
+                    label: "Deposit applied",
+                    value: `₦${formatNumber(depositApplied)}`,
+                  });
+                }
+                if (isCreditOnly || onCredit > 0.05) {
+                  fields.push({
+                    label: "On credit",
+                    value: `₦${formatNumber(creditShown)}`,
+                  });
+                } else if (outstanding > 0.05) {
+                  fields.push({
+                    label: "Still outstanding",
+                    value: `₦${formatNumber(outstanding)}`,
+                  });
+                }
                 return (
                   <div className={`grid gap-1 ${isA5 ? "mb-0.5" : "mb-1"}`}>
                     <div

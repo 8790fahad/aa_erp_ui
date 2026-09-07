@@ -11,6 +11,7 @@ import {
   Info,
   Loader2,
   Paperclip,
+  Printer,
   RefreshCw,
   Upload,
   X,
@@ -568,12 +569,22 @@ export default function RecordPaymentForm() {
             res.data?.transaction_ref ||
             res.results?.reference_number ||
             "";
+          const customerNo = payload.customer_no || "";
           toast.success(
             referenceNumber
               ? `Payment recorded (${referenceNumber})`
               : "Payment recorded",
           );
-          goBack();
+          if (referenceNumber && customerNo) {
+            navigate(
+              `/app/customers/view-receipt/print?invoice_ref=${encodeURIComponent(
+                referenceNumber,
+              )}&customer_no=${encodeURIComponent(customerNo)}`,
+              { replace: true },
+            );
+          } else {
+            goBack();
+          }
         } else {
           toast.error(res?.message || "Failed to save payment");
         }
@@ -669,13 +680,24 @@ export default function RecordPaymentForm() {
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={goBack}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
-            >
-              Cancel
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving || attachmentUploading}
+                className="inline-flex items-center gap-1.5 rounded-md bg-[var(--aa-navy,#0f2744)] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <Printer className="h-4 w-4" />
+                Print PDF
+              </button>
+              <button
+                type="button"
+                onClick={goBack}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
           {showValidation && (
             <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
@@ -1145,6 +1167,19 @@ export default function RecordPaymentForm() {
 
         <div className="sticky bottom-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-[#f7f7f8] px-6 py-3">
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || attachmentUploading}
+              className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-navy,#0f2744)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Printer className="h-4 w-4" />
+              )}
+              Print PDF
+            </button>
             <button
               type="button"
               onClick={handleSave}

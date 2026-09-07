@@ -1,11 +1,16 @@
 /* eslint-disable no-unused-vars */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import moment from "moment";
 import { _fetchApi, _postApi, apiURL } from "@/redux/actions/api";
+import { getSuppliers } from "@/redux/actions/suppliers";
 import { toast } from "sonner";
 import { FileText, Loader2, Paperclip, Plus, Trash2, Upload, X, ExternalLink } from "lucide-react";
 import { formatNumber1 } from "@/components/router/utilities";
+import {
+  formatNumberWithCommas,
+  filterJournalAmountInput,
+} from "@/utilities";
 import {
   Sheet,
   SheetContent,
@@ -30,6 +35,18 @@ const MEMO_FILE_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 
+const parseJournalAmount = (value) =>
+  parseFloat(String(value || "").replace(/,/g, "")) || 0;
+
+const formatJournalAmountInput = (value) => {
+  const withoutCommas = String(value || "").replace(/,/g, "");
+  const sanitized = filterJournalAmountInput(withoutCommas);
+  const parts = sanitized.split(".");
+  const numericValue =
+    parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : sanitized;
+  return formatNumberWithCommas(numericValue);
+};
+
 const emptyLine = () => ({
   item_name: "",
   unit_cost: "",
@@ -37,14 +54,13 @@ const emptyLine = () => ({
   description: "",
 });
 
-const emptyForm = (raiseBy = "", branch = "General") => ({
+const emptyForm = () => ({
   date: moment().format("YYYY-MM-DD"),
-  priority: "Medium",
-  recipient: "Managing Director",
-  from_name: branch,
-  raise_by: raiseBy,
   subject: "",
   purpose: "",
+  supplier_name: "",
+  supplier_code: "",
+  supplier_number: "",
 });
 
 /**
@@ -56,19 +72,16 @@ export default function MemoFormModal({
   memoId = null,
   onSuccess,
 }) {
+  const dispatch = useDispatch();
   const { user = {}, activeBusiness = {} } = useSelector((state) => state.auth);
+  const { supplierList = [] } = useSelector((state) => state.suppliers) || {};
   const isEditMode = Boolean(memoId);
 
-  const raiseByDefault =
-    [user.firstname, user.lastname].filter(Boolean).join(" ") ||
-    user.fullname ||
-    user.username ||
-    "User";
+  const userId = user.id ?? user.user_id ?? "";
 
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
-  const [branches, setBranches] = useState([]);
-  const [form, setForm] = useState(() => emptyForm(raiseByDefault));
+  const [form, setForm] = useState(() => emptyForm());
   const [lines, setLines] = useState([emptyLine()]);
   const [draft, setDraft] = useState(emptyLine());
   const [files, setFiles] = useState([]);
@@ -86,16 +99,13 @@ export default function MemoFormModal({
     [lines]
   );
 
-  const resetAll = useCallback(
-    (branch) => {
-      setForm(emptyForm(raiseByDefault, branch || branches[0] || "General"));
-      setLines([]);
-      setDraft(emptyLine());
-      setFiles([]);
-      setErrors({});
-    },
-    [branches, raiseByDefault]
-  );
+  const resetAll = useCallback(() => {
+    setForm(emptyForm());
+    setLines([]);
+    setDraft(emptyLine());
+    setFiles([]);
+    setErrors({});
+  }, []);
 
   const handleChange = ({ target: { name, value } }) => {
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -103,6 +113,13 @@ export default function MemoFormModal({
   };
 
   const handleDraftChange = ({ target: { name, value } }) => {
+    if (name === "unit_cost") {
+      setDraft((prev) => ({
+        ...prev,
+        unit_cost: formatJournalAmountInput(value),
+      }));
+      return;
+    }
     setDraft((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -111,7 +128,8 @@ export default function MemoFormModal({
       toast.error("Item name is required");
       return;
     }
-    if (!draft.unit_cost || Number(draft.unit_cost) <= 0) {
+    const unitCost = parseJournalAmount(draft.unit_cost);
+    if (unitCost <= 0) {
       toast.error("Unit cost must be greater than 0");
       return;
     }
@@ -123,7 +141,7 @@ export default function MemoFormModal({
       ...prev,
       {
         item_name: draft.item_name.trim(),
-        unit_cost: Number(draft.unit_cost),
+        unit_cost: unitCost,
         quantity: Number(draft.quantity),
         description: draft.description.trim() || draft.item_name.trim(),
       },
@@ -140,48 +158,25 @@ export default function MemoFormModal({
     const next = {};
     if (!form.subject.trim()) next.subject = "Subject is required";
     if (!form.purpose.trim()) next.purpose = "Description is required";
-    if (!form.from_name.trim()) next.from_name = "From branch is required";
-    if (!form.recipient.trim()) next.recipient = "Recipient is required";
-    if (!form.raise_by.trim()) next.raise_by = "Raised by is required";
-    if (!form.priority) next.priority = "Priority is required";
+    if (!form.supplier_number) next.supplier_number = "Supplier is required";
+    if (!userId) next.user_id = "User id is missing — please sign in again";
     if (lines.length === 0) next.lines = "Add at least one line item";
     if (grandTotal <= 0) next.lines = next.lines || "Total must be greater than 0";
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
-  const fetchBranches = useCallback(() => {
-    if (!activeBusiness?.id) return;
-    _fetchApi(
-      `/branches/get?facilityId=${activeBusiness.id}&query_type=list`,
-      (data) => {
-        const names = (data.results || [])
-          .map((b) => b.storeName || b.branch_name || b.name)
-          .filter(Boolean);
-        setBranches(names.length ? names : ["General"]);
-        setForm((prev) =>
-          prev.from_name
-            ? prev
-            : { ...prev, from_name: names[0] || "General" }
-        );
-      },
-      () => {
-        setBranches(["General"]);
-        setForm((prev) =>
-          prev.from_name ? prev : { ...prev, from_name: "General" }
-        );
-      }
-    );
-  }, [activeBusiness?.id]);
+  useEffect(() => {
+    if (!open || !activeBusiness?.id) return;
+    dispatch(getSuppliers());
+  }, [open, activeBusiness?.id, dispatch]);
 
   useEffect(() => {
     if (!open) return;
-    fetchBranches();
     if (!isEditMode) {
-      resetAll(branches[0] || "General");
+      resetAll();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when modal opens
-  }, [open, isEditMode, fetchBranches]);
+  }, [open, isEditMode, resetAll]);
 
   useEffect(() => {
     if (!open || !isEditMode || !memoId || !activeBusiness?.id) return;
@@ -198,12 +193,11 @@ export default function MemoFormModal({
         }
         setForm({
           date: moment(m.date).format("YYYY-MM-DD"),
-          priority: m.priority || "Medium",
-          recipient: m.recipient || "Managing Director",
-          from_name: m.from_name || "General",
-          raise_by: m.raise_by || raiseByDefault,
           subject: m.subject || "",
           purpose: m.purpose || m.details || "",
+          supplier_name: m.supplier_name || "",
+          supplier_code: m.supplier_code || "",
+          supplier_number: m.supplier_number || "",
         });
 
         _postApi(
@@ -246,7 +240,6 @@ export default function MemoFormModal({
     memoId,
     activeBusiness?.id,
     onOpenChange,
-    raiseByDefault,
     user.id,
   ]);
 
@@ -260,17 +253,17 @@ export default function MemoFormModal({
 
     const submitData = {
       date: form.date,
-      from_name: form.from_name,
+      from_name: activeBusiness.business_name || "General",
       subject: form.subject.trim(),
       purpose: form.purpose.trim(),
       details: form.purpose.trim(),
-      recipient: form.recipient.trim(),
-      raise_by: form.raise_by.trim(),
-      priority: form.priority || "Medium",
+      recipient: "",
+      raise_by: String(userId),
+      user_id: userId,
+      priority: "Medium",
       query_type: isEditMode ? "update" : "insert",
       prefix: activeBusiness.prefix,
       facilityId: activeBusiness.id,
-      user_id: user.id,
       total: grandTotal,
       amount: 0,
       remark: "",
@@ -278,9 +271,9 @@ export default function MemoFormModal({
       pr_no: null,
       reference_number: "",
       status: "pending",
-      supplier_name: "",
-      supplier_code: "",
-      supplier_number: "",
+      supplier_name: form.supplier_name,
+      supplier_code: form.supplier_code,
+      supplier_number: form.supplier_number,
       account_code: "",
       expenses: lines.map((row) => ({
         item: row.item_name,
@@ -346,7 +339,7 @@ export default function MemoFormModal({
   };
 
   const draftLineTotal =
-    (Number(draft.unit_cost) || 0) * (Number(draft.quantity) || 0);
+    parseJournalAmount(draft.unit_cost) * (Number(draft.quantity) || 0);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -378,7 +371,7 @@ export default function MemoFormModal({
         ) : (
           <>
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-white px-5 py-5">
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block text-sm">
                   <span className="mb-1 block font-medium text-slate-700">
                     Date
@@ -393,88 +386,74 @@ export default function MemoFormModal({
                 </label>
                 <label className="block text-sm">
                   <span className="mb-1 block font-medium text-slate-700">
-                    Priority <span className="text-red-500">*</span>
+                    Supplier <span className="text-red-500">*</span>
                   </span>
                   <select
-                    name="priority"
-                    value={form.priority}
-                    onChange={handleChange}
-                    className={inputClass}
+                    name="supplier_number"
+                    value={form.supplier_number}
+                    onChange={(e) => {
+                      const selectedSupplier = supplierList.find(
+                        (s) => s.supplier_number === e.target.value,
+                      );
+                      if (selectedSupplier) {
+                        setForm((prev) => ({
+                          ...prev,
+                          supplier_name: selectedSupplier.supplier_name || "",
+                          supplier_code: selectedSupplier.supplier_code || "",
+                          supplier_number:
+                            selectedSupplier.supplier_number || "",
+                        }));
+                      } else {
+                        setForm((prev) => ({
+                          ...prev,
+                          supplier_name: "",
+                          supplier_code: "",
+                          supplier_number: "",
+                        }));
+                      }
+                      setErrors((prev) => ({ ...prev, supplier_number: "" }));
+                    }}
+                    className={`${inputClass} ${
+                      !form.supplier_number ? "text-slate-400" : ""
+                    }`}
                   >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                  </select>
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1 block font-medium text-slate-700">
-                    Memo No.
-                  </span>
-                  <input
-                    value={isEditMode && memoId ? memoId : "Auto-generated"}
-                    disabled
-                    className={`${inputClass} bg-slate-50 text-slate-500`}
-                  />
-                </label>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <label className="block text-sm">
-                  <span className="mb-1 block font-medium text-slate-700">
-                    Recipient <span className="text-red-500">*</span>
-                  </span>
-                  <input
-                    name="recipient"
-                    value={form.recipient}
-                    onChange={handleChange}
-                    placeholder="Managing Director"
-                    className={inputClass}
-                  />
-                  {errors.recipient && (
-                    <span className="text-xs text-red-500">
-                      {errors.recipient}
-                    </span>
-                  )}
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1 block font-medium text-slate-700">
-                    From branch <span className="text-red-500">*</span>
-                  </span>
-                  <select
-                    name="from_name"
-                    value={form.from_name}
-                    onChange={handleChange}
-                    className={inputClass}
-                  >
-                    {(branches.length ? branches : ["General"]).map((b) => (
-                      <option key={b} value={b}>
-                        {b}
+                    <option value="">Select supplier...</option>
+                    {form.supplier_number &&
+                      !supplierList.some(
+                        (s) => s.supplier_number === form.supplier_number,
+                      ) && (
+                        <option value={form.supplier_number}>
+                          {form.supplier_name || form.supplier_number}
+                        </option>
+                      )}
+                    {supplierList.map((supplier) => (
+                      <option
+                        key={supplier.supplier_number}
+                        value={supplier.supplier_number}
+                      >
+                        {supplier.supplier_name}
                       </option>
                     ))}
                   </select>
-                  {errors.from_name && (
-                    <span className="text-xs text-red-500">
-                      {errors.from_name}
+                  {form.supplier_number ? (
+                    <span className="mt-1 block text-[11px] text-slate-500">
+                      Supplier No:{" "}
+                      <span className="font-medium">
+                        {form.supplier_number}
+                      </span>
                     </span>
-                  )}
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1 block font-medium text-slate-700">
-                    Raised by <span className="text-red-500">*</span>
-                  </span>
-                  <input
-                    name="raise_by"
-                    value={form.raise_by}
-                    onChange={handleChange}
-                    className={inputClass}
-                  />
-                  {errors.raise_by && (
+                  ) : null}
+                  {errors.supplier_number && (
                     <span className="text-xs text-red-500">
-                      {errors.raise_by}
+                      {errors.supplier_number}
                     </span>
                   )}
                 </label>
               </div>
+
+              {errors.user_id ? (
+                <p className="text-xs text-red-500">{errors.user_id}</p>
+              ) : null}
 
               <label className="block text-sm">
                 <span className="mb-1 block font-medium text-slate-700">
@@ -540,14 +519,13 @@ export default function MemoFormModal({
                       Unit cost (₦)
                     </span>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       name="unit_cost"
-                      min="0"
-                      step="0.01"
                       value={draft.unit_cost}
                       onChange={handleDraftChange}
                       placeholder="0.00"
-                      className={`${inputClass} text-right`}
+                      className={`${inputClass} text-right tabular-nums`}
                     />
                   </div>
                   <div className="sm:col-span-2">
