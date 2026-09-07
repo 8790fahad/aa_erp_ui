@@ -57,6 +57,7 @@ const SupplierRegisteration = ({
   showModal,
   getList,
   selectedSupplier,
+  onCreated,
 }) => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const { user } = useSelector((state) => state.auth);
@@ -315,9 +316,12 @@ const SupplierRegisteration = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const success_callback = () => {
+  const success_callback = (createdSupplier) => {
     setLoading(false);
     getList();
+    if (createdSupplier && !selectedSupplier) {
+      onCreated?.(createdSupplier);
+    }
     closeModal();
     empty();
     setForm(getInitialFormValues());
@@ -441,7 +445,16 @@ const SupplierRegisteration = ({
             toast.success(
               `Vendor ${displayName} added successfully (${supplierNo})`,
             );
-            success_callback();
+            success_callback({
+              supplier_number: res.data?.supplier_number || supplierNo,
+              supplier_name:
+                res.data?.supplier_name || displayName,
+              supplier_code:
+                res.data?.supplier_code ||
+                res.data?.payable_code ||
+                form.payable_code ||
+                "",
+            });
           },
           (err) => {
             setLoading(false);
@@ -484,7 +497,8 @@ const SupplierRegisteration = ({
     >
       <SheetContent
         side="right"
-        className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-xl md:!max-w-2xl"
+        overlayClassName="z-[70]"
+        className="!inset-y-0 !right-0 !left-auto z-[70] flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-xl md:!max-w-2xl"
       >
         <SheetHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-navy)] px-5 py-4 text-left">
           <SheetTitle className="text-lg font-semibold text-white">
@@ -1132,6 +1146,7 @@ SupplierRegisteration.propTypes = {
   showModal: PropTypes.bool.isRequired,
   getList: PropTypes.func.isRequired,
   selectedSupplier: PropTypes.object,
+  onCreated: PropTypes.func,
 };
 
 export default SupplierRegisteration;

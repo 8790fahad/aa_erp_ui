@@ -32,6 +32,21 @@ import ApplySupplierDeposit from "@/components/pages/payments/ApplySupplierDepos
 import SupplierAdvancePaymentModal from "@/components/common/SupplierAdvancePaymentModal";
 import { canSeeAllPayBills } from "@/lib/access";
 
+function isUserCodeLabel(value) {
+  return /^USER-\d+$/i.test(String(value || "").trim());
+}
+
+function staffDisplayName(user) {
+  const name = [user?.firstname, user?.lastname]
+    .map((v) => String(v || "").trim())
+    .filter(Boolean)
+    .join(" ");
+  if (name) return name;
+  const username = String(user?.username || "").trim();
+  if (username && !isUserCodeLabel(username)) return username;
+  return "";
+}
+
 /**
  * Pay Bills — payment history list, matching Bill / app list layout.
  *
@@ -53,6 +68,7 @@ export default function PaymentsMade() {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
   const [payers, setPayers] = useState([]);
+  const [staffById, setStaffById] = useState({});
   const [page, setPage] = useState(1);
   const [applyDepositOpen, setApplyDepositOpen] = useState(false);
   const [makeDepositOpen, setMakeDepositOpen] = useState(false);
@@ -98,6 +114,29 @@ export default function PaymentsMade() {
   useEffect(() => {
     fetchList();
   }, [fetchList]);
+
+  useEffect(() => {
+    if (!canSeeAll || !facilityId) {
+      setStaffById({});
+      return;
+    }
+    _fetchApi(
+      `/api/v1/get-users-by-facility/${facilityId}`,
+      (data) => {
+        const map = {};
+        for (const u of data?.results || []) {
+          const name = staffDisplayName(u);
+          if (!name) continue;
+          for (const key of [u.id, u.user_id, u.username, u.code]) {
+            const id = String(key || "").trim();
+            if (id) map[id] = name;
+          }
+        }
+        setStaffById(map);
+      },
+      () => {},
+    );
+  }, [canSeeAll, facilityId]);
 
   // Deep-link: /pay-bills?action=deposit&supplierNo=…
   useEffect(() => {
@@ -146,21 +185,26 @@ export default function PaymentsMade() {
     setPage(1);
   };
 
+  useEffect(() => {
+    if (isUserCodeLabel(paidByFilter)) setPaidByFilter("all");
+  }, [paidByFilter]);
+
   const payerOptions = useMemo(() => {
-    if (payers.length) return payers;
-    const seen = new Map();
-    rows.forEach((r) => {
-      const id = String(r.created_by || "").trim();
-      if (!id || seen.has(id)) return;
-      seen.set(id, {
-        id,
-        name: String(r.created_by_name || "").trim() || id,
-      });
-    });
-    return [...seen.values()].sort((a, b) =>
+    const byName = new Map();
+    const add = (id, name) => {
+      const key = String(id || "").trim();
+      const label = String(staffById[key] || name || "").trim();
+      if (!key || !label || isUserCodeLabel(label)) return;
+      const nk = label.toLowerCase();
+      if (!byName.has(nk)) byName.set(nk, { id: key, name: label });
+    };
+    payers.forEach((p) => add(p.id, p.name));
+    rows.forEach((r) => add(r.created_by, r.created_by_name));
+    Object.entries(staffById).forEach(([id, name]) => add(id, name));
+    return [...byName.values()].sort((a, b) =>
       String(a.name).localeCompare(String(b.name)),
     );
-  }, [payers, rows]);
+  }, [payers, rows, staffById]);
 
   const filteredRows = useMemo(() => {
     const q = searchInput.trim().toLowerCase();
@@ -265,11 +309,21 @@ export default function PaymentsMade() {
       ? [
           {
             title: "Created by",
-            component: (item) => (
-              <span className="text-sm text-gray-700">
-                {item.created_by_name || item.created_by || "—"}
-              </span>
-            ),
+            component: (item) => {
+              const rawId = String(item.created_by || "").trim();
+              const label = String(
+                staffById[rawId] || item.created_by_name || "",
+              ).trim();
+              const shown =
+                label && !isUserCodeLabel(label)
+                  ? label
+                  : !isUserCodeLabel(rawId)
+                    ? rawId
+                    : label || "—";
+              return (
+                <span className="text-sm text-gray-700">{shown}</span>
+              );
+            },
           },
         ]
       : []),

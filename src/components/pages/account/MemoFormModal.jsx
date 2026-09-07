@@ -23,6 +23,7 @@ import {
   formatCloudinaryFileSize,
   pickAndStageCloudinaryFiles,
 } from "@/utils/cloudinaryDocuments";
+import SupplierRegisteration from "../suppliers/SupplierRegisteration";
 
 const inputClass =
   "h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-[var(--aa-navy,#0f2744)] focus:ring-1 focus:ring-[var(--aa-navy,#0f2744)]";
@@ -86,6 +87,7 @@ export default function MemoFormModal({
   const [draft, setDraft] = useState(emptyLine());
   const [files, setFiles] = useState([]);
   const [errors, setErrors] = useState({});
+  const [showCreateSupplier, setShowCreateSupplier] = useState(false);
   const fileInputRef = useRef(null);
   const attachmentUploading = files.some((doc) => doc.uploading);
 
@@ -105,6 +107,22 @@ export default function MemoFormModal({
     setDraft(emptyLine());
     setFiles([]);
     setErrors({});
+    setShowCreateSupplier(false);
+  }, []);
+
+  const refreshSuppliers = useCallback(() => {
+    dispatch(getSuppliers());
+  }, [dispatch]);
+
+  const applyCreatedSupplier = useCallback((created) => {
+    if (!created?.supplier_number) return;
+    setForm((prev) => ({
+      ...prev,
+      supplier_name: created.supplier_name || created.name || "",
+      supplier_code: created.supplier_code || created.payable_code || "",
+      supplier_number: created.supplier_number,
+    }));
+    setErrors((prev) => ({ ...prev, supplier_number: "" }));
   }, []);
 
   const handleChange = ({ target: { name, value } }) => {
@@ -342,7 +360,14 @@ export default function MemoFormModal({
     parseJournalAmount(draft.unit_cost) * (Number(draft.quantity) || 0);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <>
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && showCreateSupplier) return;
+        onOpenChange?.(next);
+      }}
+    >
       <SheetContent
         side="right"
         className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-xl md:!max-w-2xl lg:!max-w-3xl [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100"
@@ -384,10 +409,20 @@ export default function MemoFormModal({
                     className={inputClass}
                   />
                 </label>
-                <label className="block text-sm">
-                  <span className="mb-1 block font-medium text-slate-700">
-                    Supplier <span className="text-red-500">*</span>
-                  </span>
+                <div className="block text-sm">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="font-medium text-slate-700">
+                      Supplier <span className="text-red-500">*</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateSupplier(true)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--aa-navy,#0f2744)] hover:underline"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      New
+                    </button>
+                  </div>
                   <select
                     name="supplier_number"
                     value={form.supplier_number}
@@ -448,7 +483,7 @@ export default function MemoFormModal({
                       {errors.supplier_number}
                     </span>
                   )}
-                </label>
+                </div>
               </div>
 
               {errors.user_id ? (
@@ -785,5 +820,14 @@ export default function MemoFormModal({
         )}
       </SheetContent>
     </Sheet>
+    <SupplierRegisteration
+      showModal={showCreateSupplier}
+      closeModal={() => setShowCreateSupplier(false)}
+      selectedSupplier={null}
+      getList={refreshSuppliers}
+      empty={() => {}}
+      onCreated={applyCreatedSupplier}
+    />
+    </>
   );
 }
