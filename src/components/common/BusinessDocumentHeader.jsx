@@ -28,19 +28,6 @@ function companyBits(business = {}) {
   };
 }
 
-/** Last word on its own line for letterhead names like "ALH ALI MUHAMMAD YAMMUSA". */
-function splitLetterheadName(name) {
-  const parts = String(name || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  if (parts.length < 3) {
-    return { primary: parts.join(" "), secondary: "" };
-  }
-  const secondary = parts.pop();
-  return { primary: parts.join(" "), secondary };
-}
-
 /**
  * Shared HTML document/print header used across receipts, invoices, and reports.
  * Style is chosen in Settings → Header Settings (`document_header_style`: text | logo).
@@ -61,9 +48,6 @@ export default function BusinessDocumentHeader({
   const style = forceStyle || getDocumentHeaderStyle(business);
   const c = companyBits(business);
   const showLogo = style === "logo" && Boolean(c.logo);
-  const { primary: namePrimary, secondary: nameSecondary } = splitLetterheadName(
-    c.name,
-  );
   const pad = compact ? "px-2 py-1.5" : "px-3 py-3";
   const dateText = date
     ? moment(date).isValid()
@@ -85,7 +69,7 @@ export default function BusinessDocumentHeader({
       >
         <div
           className={`flex flex-row items-stretch justify-between ${
-            compact ? "gap-2" : "gap-4"
+            compact ? "gap-1.5" : "gap-2.5"
           }`}
         >
           <div
@@ -104,44 +88,41 @@ export default function BusinessDocumentHeader({
                   alt=""
                   className={
                     compact
-                      ? "h-16 w-16 object-contain"
-                      : "h-[5.5rem] w-[5.5rem] object-contain"
+                      ? "h-[4.5rem] w-[4.5rem] object-contain"
+                      : "h-[6.25rem] w-[6.25rem] object-contain"
                   }
                 />
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <h1
-                className={`font-bold uppercase tracking-wide leading-[1.05] ${
-                  compact ? "text-sm" : "text-[1.65rem] sm:text-[1.85rem]"
+              <div
+                className={`flex flex-nowrap items-start ${
+                  compact ? "gap-x-1" : "gap-x-1.5"
                 }`}
               >
-                {namePrimary || c.name}
-              </h1>
-              {nameSecondary ? (
-                <h2
-                  className={`font-bold uppercase tracking-wide leading-tight ${
-                    compact ? "text-xs mt-0" : "text-xl mt-0.5"
+                <h1
+                  className={`font-bold uppercase tracking-wide leading-[1.05] ${
+                    compact ? "text-base" : "text-2xl sm:text-[1.7rem]"
                   }`}
                 >
-                  {nameSecondary}
-                </h2>
-              ) : null}
-              {c.rc ? (
-                <p
-                  className={`font-semibold text-white/90 ${
-                    compact ? "text-[10px] mt-0.5" : "text-sm mt-1"
-                  }`}
-                >
-                  RC. {c.rc}
-                </p>
-              ) : null}
+                  {c.name}
+                </h1>
+                {c.rc ? (
+                  <p
+                    className={`font-semibold text-white/80 whitespace-nowrap align-top ${
+                      compact ? "text-[7px] mt-0.5" : "text-[9px] mt-1"
+                    }`}
+                  >
+                    RC. {c.rc}
+                  </p>
+                ) : null}
+              </div>
               {c.description ? (
                 <p
                   className={`italic text-white/85 ${
                     compact
-                      ? "text-[9px] leading-snug mt-0.5 line-clamp-2"
-                      : "text-[13px] mt-1"
+                      ? "text-[11px] leading-snug mt-0.5 line-clamp-2"
+                      : "text-base mt-1"
                   }`}
                 >
                   {c.description}
@@ -150,7 +131,7 @@ export default function BusinessDocumentHeader({
               {c.address ? (
                 <p
                   className={`text-white/80 ${
-                    compact ? "text-[9px] leading-snug mt-0.5" : "text-[13px] mt-1"
+                    compact ? "text-[11px] leading-snug mt-0.5" : "text-base mt-1"
                   }`}
                 >
                   {c.address}
@@ -159,7 +140,7 @@ export default function BusinessDocumentHeader({
               {telLine ? (
                 <p
                   className={`text-white/80 ${
-                    compact ? "text-[8px] leading-snug mt-0.5" : "text-[12px] mt-1"
+                    compact ? "text-[10px] leading-snug mt-0.5" : "text-[15px] mt-1"
                   }`}
                 >
                   {telLine}
@@ -168,7 +149,7 @@ export default function BusinessDocumentHeader({
               {faxEmailLine ? (
                 <p
                   className={`text-white/80 ${
-                    compact ? "text-[8px] leading-snug" : "text-[12px]"
+                    compact ? "text-[10px] leading-snug" : "text-[15px]"
                   }`}
                 >
                   {faxEmailLine}
@@ -179,19 +160,19 @@ export default function BusinessDocumentHeader({
 
           <div
             className={`flex flex-col items-stretch shrink-0 ${
-              compact ? "w-[38%] min-w-[7.5rem] gap-1" : "w-[13.5rem] sm:w-[15rem] gap-1.5"
+              compact
+                ? "w-[22%] min-w-[4.75rem] max-w-[6rem] gap-0.5"
+                : "w-[7rem] sm:w-[7.75rem] gap-0.5"
             }`}
           >
             <div
               className={`w-full text-center border-2 border-white/35 bg-white/10 ${
-                compact ? "px-1.5 py-2" : "px-2.5 py-3"
+                compact ? "px-0.5 py-0.5" : "px-1 py-1"
               }`}
             >
               <p
-                className={`font-bold uppercase text-white leading-tight ${
-                  compact
-                    ? "text-sm tracking-[0.14em]"
-                    : "text-[1.35rem] tracking-[0.14em]"
+                className={`font-bold uppercase text-white leading-[1.1] text-balance ${
+                  compact ? "text-[9px] tracking-wide" : "text-xs tracking-wide"
                 }`}
               >
                 {title}
@@ -199,7 +180,7 @@ export default function BusinessDocumentHeader({
               {numberLabel ? (
                 <p
                   className={`font-bold leading-tight text-white ${
-                    compact ? "text-xs mt-1" : "text-base mt-1.5"
+                    compact ? "text-[8px] mt-0.5" : "text-[11px] mt-0.5"
                   }`}
                 >
                   {numberLabel}
@@ -207,8 +188,8 @@ export default function BusinessDocumentHeader({
               ) : null}
               {warehouseText ? (
                 <p
-                  className={`text-white leading-tight ${
-                    compact ? "text-[9px] mt-1" : "text-[13px] mt-1.5"
+                  className={`text-white leading-tight break-words ${
+                    compact ? "text-[7px] mt-0.5" : "text-[9px] mt-0.5"
                   }`}
                 >
                   <span className="font-semibold text-white/75">Warehouse: </span>
@@ -217,8 +198,8 @@ export default function BusinessDocumentHeader({
               ) : null}
               {extraLine && !warehouseText ? (
                 <p
-                  className={`text-white/90 ${
-                    compact ? "text-[9px] mt-1" : "text-[13px] mt-1.5"
+                  className={`text-white/90 leading-tight ${
+                    compact ? "text-[7px] mt-0.5" : "text-[9px] mt-0.5"
                   }`}
                 >
                   {extraLine}
@@ -227,7 +208,7 @@ export default function BusinessDocumentHeader({
             </div>
             <p
               className={`text-right font-semibold text-white ${
-                compact ? "text-[10px]" : "text-sm"
+                compact ? "text-[9px]" : "text-xs"
               }`}
             >
               Date: {dateText}

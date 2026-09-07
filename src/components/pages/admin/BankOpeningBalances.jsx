@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { toast } from "sonner";
-import { Building2, Loader, Pencil, Search } from "lucide-react";
+import { Building2, CheckCircle2, Loader, Search, CircleDollarSign } from "lucide-react";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import CustomButton from "@/common/Custom/CustomButton";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
+import {
+  formatNumberWithCommas,
+  parseNumberFromFormatted,
+  filterJournalAmountInput,
+} from "@/utilities";
 import { Alert } from "reactstrap";
 import { validateOpeningBalanceFields } from "@/lib/openingBalanceDate";
 
@@ -71,11 +76,23 @@ export default function BankOpeningBalances({
     return dir?.bank_name || bank.bank_name || bank.account_name || "—";
   };
 
+  const hasOpeningBalanceEquity = Boolean(
+    String(activeBusiness?.opening_balance_equity || "").trim(),
+  );
+
   const openEdit = (bank) => {
+    if (!hasOpeningBalanceEquity) {
+      toast.error(
+        "Set Opening Balance Equity under Default accounts before posting opening balances.",
+      );
+      return;
+    }
     setSelected(bank);
     setOpeningBalance(
-      bank.opening_balance != null && bank.opening_balance !== ""
-        ? String(bank.opening_balance)
+      bank.opening_balance != null &&
+        bank.opening_balance !== "" &&
+        Number(bank.opening_balance) !== 0
+        ? formatNumberWithCommas(String(bank.opening_balance))
         : "",
     );
     setOpeningBalanceDate(bank.opening_balance_date || "");
@@ -93,11 +110,15 @@ export default function BankOpeningBalances({
   const handleSave = () => {
     if (!selected) return;
     const obCheck = validateOpeningBalanceFields(
-      openingBalance,
+      parseNumberFromFormatted(openingBalance),
       openingBalanceDate,
     );
     if (!obCheck.ok) {
       toast.error(obCheck.message);
+      return;
+    }
+    if (obCheck.amount === 0) {
+      toast.error("Enter an opening balance amount to post");
       return;
     }
     if (!activeBusiness?.opening_balance_equity) {
@@ -123,20 +144,21 @@ export default function BankOpeningBalances({
         opening_balance: obCheck.amount,
         opening_balance_date: obCheck.date,
         opening_balance_equity: activeBusiness.opening_balance_equity,
+        post_opening_balance: true,
       },
       (res) => {
         if (res?.success) {
-          toast.success(res.message || "Opening balance updated");
+          toast.success(res.message || "Opening balance posted");
           closeModal();
           getBanks();
         } else {
-          toast.error(res?.message || "Failed to update opening balance");
+          toast.error(res?.message || "Failed to post opening balance");
           setSaving(false);
         }
       },
       (err) => {
         console.error(err);
-        toast.error(err?.message || "Failed to update opening balance");
+        toast.error(err?.message || "Failed to post opening balance");
         setSaving(false);
       },
       "PUT",
@@ -185,12 +207,7 @@ export default function BankOpeningBalances({
       ),
     },
     {
-      title: (
-        <span className="inline-flex flex-col items-end leading-tight">
-          <span>Opening Balance</span>
-          <span className="text-[10px] font-normal text-slate-500">₦</span>
-        </span>
-      ),
+      title: "Balance",
       custom: true,
       className: "text-right",
       component: (item) => (
@@ -212,17 +229,28 @@ export default function BankOpeningBalances({
     {
       title: "",
       custom: true,
-      className: "text-center w-12",
-      component: (item) => (
-        <button
-          type="button"
-          onClick={() => openEdit(item)}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-[var(--aa-accent)] hover:bg-[var(--aa-sidebar-active)]"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-          Edit
-        </button>
-      ),
+      className: "text-right whitespace-nowrap",
+      component: (item) => {
+        const posted = Number(item.opening_balance) !== 0;
+        if (posted) {
+          return (
+            <span className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-emerald-700">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Posted
+            </span>
+          );
+        }
+        return (
+          <button
+            type="button"
+            onClick={() => openEdit(item)}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-[var(--aa-accent)] hover:bg-[var(--aa-sidebar-active)]"
+          >
+            <CircleDollarSign className="h-3.5 w-3.5" />
+            Post opening balance
+          </button>
+        );
+      },
     },
   ];
 
@@ -245,10 +273,16 @@ export default function BankOpeningBalances({
       )}
       {nested && (
         <p className="mb-4 text-sm text-slate-500">
-          Set opening balances (₦) for each bank account. Requires Opening Balance
-          Equity under Default accounts.
+          Set the balance for each bank account, then post it to Opening Balance
+          Equity.
         </p>
       )}
+      {!hasOpeningBalanceEquity ? (
+        <Alert className="mb-4" color="warning">
+          Opening Balance Equity is not set. Go to Default accounts and choose
+          an Opening Balance Equity account before posting.
+        </Alert>
+      ) : null}
 
       <div className="relative mb-4 max-w-xl">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -282,7 +316,7 @@ export default function BankOpeningBalances({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-lg bg-white shadow-xl">
             <div className="bg-[var(--aa-navy)] p-4 text-white">
-              <h2 className="text-lg font-semibold">Set Opening Balance</h2>
+            <h2 className="text-lg font-semibold">Post Opening Balance</h2>
               <p className="text-sm text-white/70">
                 {bankNameFor(selected)} · {selected.account_number}
               </p>
@@ -290,14 +324,23 @@ export default function BankOpeningBalances({
             <div className="space-y-4 p-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Opening Balance (₦)
+                  Balance (₦)
                 </label>
                 <input
-                  type="number"
-                  step="0.01"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                  type="text"
+                  inputMode="decimal"
+                  className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-right text-sm tabular-nums outline-none focus:border-[var(--aa-navy)] focus:ring-1 focus:ring-[var(--aa-accent)]/20"
                   value={openingBalance}
-                  onChange={(e) => setOpeningBalance(e.target.value)}
+                  onChange={(e) => {
+                    const withoutCommas = e.target.value.replace(/,/g, "");
+                    const sanitized = filterJournalAmountInput(withoutCommas);
+                    const parts = sanitized.split(".");
+                    const numericValue =
+                      parts.length > 2
+                        ? `${parts[0]}.${parts.slice(1).join("")}`
+                        : sanitized;
+                    setOpeningBalance(formatNumberWithCommas(numericValue));
+                  }}
                   placeholder="0.00"
                 />
               </div>
@@ -333,7 +376,7 @@ export default function BankOpeningBalances({
                 disabled={saving}
                 className="rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
               >
-                {saving ? "Saving…" : "Save"}
+                {saving ? "Posting…" : "Post opening balance"}
               </CustomButton>
             </div>
           </div>

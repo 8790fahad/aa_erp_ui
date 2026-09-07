@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   CreditCard,
+  Download,
   Nfc,
   Eye,
   History,
@@ -17,6 +18,7 @@ import {
   Lock,
   Percent,
   Plus,
+  Printer,
   RefreshCw,
   Receipt,
   ScanLine,
@@ -537,11 +539,29 @@ function creditStateLabel(row) {
   return "Awaiting credit";
 }
 
-function depositApplyPreview(row) {
+function leftoverToSettle(row) {
   const due = Number(row?.amount) || 0;
+  const sp = row?.split_progress || {};
+  const collected =
+    Number(sp.collected_total) ||
+    (Number(sp.cash) || 0) + (Number(sp.transfer) || 0) + (Number(sp.card) || 0);
+  const creditAlloc =
+    Number(sp.credit_allocated) || Number(sp.credit) || 0;
+  const depositApplied = Number(sp.deposit_applied) || 0;
+  const settled = Number(
+    (collected + creditAlloc + depositApplied).toFixed(2),
+  );
+  if (due <= 0) return 0;
+  // amount is already the outstanding leftover (cash/credit live in history)
+  if (settled > due + 0.05) return due;
+  return Math.max(0, Number((due - settled).toFixed(2)));
+}
+
+function depositApplyPreview(row) {
+  const leftover = leftoverToSettle(row);
   const available = Number(row?.deposit_available) || 0;
-  const apply = Math.min(Math.max(0, due), Math.max(0, available));
-  return { due, available, apply };
+  const apply = Math.min(leftover, Math.max(0, available));
+  return { due: leftover, leftover, available, apply };
 }
 
 function collectModeIds(row) {
@@ -630,10 +650,14 @@ function rowPaymentModeBreakdown(row) {
   const transfer = Number(sp.transfer) || 0;
   const card = Number(sp.card) || 0;
   const depositApplied = Number(sp.deposit_applied) || 0;
-  const depositExpected = Math.min(unappliedDepositCover(row), due);
+  const creditKnown =
+    Number(sp.credit_allocated) || Number(sp.credit) || 0;
+  const depositExpected = Math.min(
+    unappliedDepositCover(row),
+    leftoverToSettle(row),
+  );
   const depositAmt =
     depositApplied > 0.05 ? depositApplied : depositExpected;
-  const creditKnown = Number(sp.credit_allocated) || 0;
 
   return ordered.map((id) => {
     let amount = 0;
@@ -848,6 +872,64 @@ function needsCollectionSide(row, method) {
   return true;
 }
 
+function fetchSaleInvoice(saleCode, facilityId) {
+  return new Promise((resolve, reject) => {
+    _fetchApi(
+      `/api/v1/transactions/get-sale?sale_code=${encodeURIComponent(
+        saleCode,
+      )}&facility_id=${facilityId}`,
+      (res) => {
+        if (res?.success && res.data) resolve(res.data);
+        else reject(new Error(res?.message || "Failed to load sales invoice"));
+      },
+      (err) =>
+        reject(
+          err instanceof Error
+            ? err
+            : new Error(err?.message || "Failed to load sales invoice"),
+        ),
+    );
+  });
+}
+
+async function waitForElementImages(root) {
+  const imgs = Array.from(root?.querySelectorAll?.("img") || []);
+  await Promise.all(
+    imgs.map((img) =>
+      img.complete
+        ? Promise.resolve()
+        : new Promise((resolve) => {
+            img.addEventListener("load", resolve, { once: true });
+            img.addEventListener("error", resolve, { once: true });
+          }),
+    ),
+  );
+}
+
+async function saveElementAsPdf(el, filename) {
+  const html2canvas = (await import("html2canvas")).default;
+  const { jsPDF } = await import("jspdf");
+  const canvas = await html2canvas(el, {
+    scale: 2,
+    useCORS: true,
+    logging: false,
+    backgroundColor: "#ffffff",
+    windowWidth: Math.max(el.scrollWidth, el.clientWidth),
+  });
+  const imgData = canvas.toDataURL("image/png");
+  const pdf = new jsPDF("p", "mm", "a4");
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const imgHeight = (canvas.height * pageWidth) / canvas.width;
+  let y = 0;
+  while (y < imgHeight - 0.5) {
+    if (y > 0) pdf.addPage();
+    pdf.addImage(imgData, "PNG", 0, -y, pageWidth, imgHeight);
+    y += pageHeight;
+  }
+  pdf.save(filename);
+}
+
 export default function ReceivePayment() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -983,12 +1065,16 @@ export default function ReceivePayment() {
   const searchInputRef = useRef(null);
   const treatingInvoiceRef = useRef(null);
   const hubInvoiceRequestRef = useRef(0);
+  const invoiceDownloadRef = useRef(null);
+  const invoiceDownloadTokenRef = useRef(0);
 
   /** Unified view + action hub: collect | credit | discount | mode | view */
   const [hubOpen, setHubOpen] = useState(false);
   const [hubAction, setHubAction] = useState("view");
   const [hubInvoiceData, setHubInvoiceData] = useState(null);
   const [hubLoading, setHubLoading] = useState(false);
+  const [invoiceDownloadData, setInvoiceDownloadData] = useState(null);
+  const [downloadingSaleCode, setDownloadingSaleCode] = useState(null);
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [switchingModeCode, setSwitchingModeCode] = useState(null);
@@ -1222,12 +1308,13 @@ export default function ReceivePayment() {
   // Prefill Apply Deposit with available balance when the hub opens.
   useEffect(() => {
     if (!hubOpen || hubAction !== "deposit" || !selected) return;
-    const due = Number(selected.amount) || 0;
+    const leftover = leftoverToSettle(selected);
     const available = Number(selected.deposit_available) || 0;
-    const preset = Math.min(Math.max(0, due), Math.max(0, available));
+    const preset = Math.min(Math.max(0, leftover), Math.max(0, available));
     if (preset <= 0.05) return;
     setDepositAmount((prev) => {
-      if (String(prev || "").trim() !== "" && parseFormattedAmount(prev) > 0.05) {
+      const existing = parseFormattedAmount(prev);
+      if (existing > 0.05 && existing <= preset + 0.05) {
         return prev;
       }
       return formatNumberWithCommas(String(preset));
@@ -1238,6 +1325,9 @@ export default function ReceivePayment() {
     selected?.sale_code,
     selected?.amount,
     selected?.deposit_available,
+    selected?.split_progress?.collected_total,
+    selected?.split_progress?.credit_allocated,
+    selected?.split_progress?.deposit_applied,
   ]);
 
   useEffect(() => {
@@ -1758,6 +1848,80 @@ export default function ReceivePayment() {
     );
   }, [history, methodTab, search]);
 
+  const downloadSalesInvoice = useCallback(
+    async (row) => {
+      const code = String(row?.sale_code || "").trim();
+      if (!code) {
+        toast.error("This row has no invoice number");
+        return;
+      }
+      if (row?.kind === "customer_advance") {
+        toast.error("Customer deposits do not have a sales invoice");
+        return;
+      }
+      if (!activeBusiness?.id) {
+        toast.error("Select a business first");
+        return;
+      }
+      const token = invoiceDownloadTokenRef.current + 1;
+      invoiceDownloadTokenRef.current = token;
+      setDownloadingSaleCode(code);
+      setInvoiceDownloadData(null);
+      try {
+        const data = await fetchSaleInvoice(code, activeBusiness.id);
+        if (invoiceDownloadTokenRef.current !== token) return;
+        setInvoiceDownloadData(data);
+      } catch (err) {
+        if (invoiceDownloadTokenRef.current !== token) return;
+        setDownloadingSaleCode(null);
+        toast.error(err?.message || "Failed to load sales invoice");
+      }
+    },
+    [activeBusiness?.id],
+  );
+
+  useEffect(() => {
+    if (!invoiceDownloadData || !downloadingSaleCode) return;
+    const token = invoiceDownloadTokenRef.current;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        await new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        if (cancelled || invoiceDownloadTokenRef.current !== token) return;
+        const root = invoiceDownloadRef.current;
+        const el =
+          root?.querySelector(".invoice-container") ||
+          root?.querySelector(".invoice-page") ||
+          root;
+        if (!el) {
+          throw new Error("Sales invoice is not ready to download");
+        }
+        await waitForElementImages(el);
+        if (cancelled || invoiceDownloadTokenRef.current !== token) return;
+        await saveElementAsPdf(el, `${downloadingSaleCode}.pdf`);
+        if (cancelled || invoiceDownloadTokenRef.current !== token) return;
+        toast.success(`Downloaded ${downloadingSaleCode}`);
+      } catch (err) {
+        if (!cancelled) {
+          console.error(err);
+          toast.error(err?.message || "Could not download sales invoice");
+        }
+      } finally {
+        if (!cancelled && invoiceDownloadTokenRef.current === token) {
+          setDownloadingSaleCode(null);
+          setInvoiceDownloadData(null);
+        }
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [invoiceDownloadData, downloadingSaleCode]);
+
   const openAdvanceSheet = useCallback((prefillCustomer = null) => {
     const defaultMode =
       methodTab === "transfer"
@@ -2044,6 +2208,9 @@ export default function ReceivePayment() {
     if (!code) return null;
     const selectedCode = String(selected?.sale_code || "").trim();
     if (selectedCode && selectedCode !== code) return null;
+    if (treating?.sale_code && String(treating.sale_code).trim() !== code) {
+      return null;
+    }
     const lists = [
       selected,
       treating,
@@ -2073,6 +2240,7 @@ export default function ReceivePayment() {
     }
 
     const available = Number(row.deposit_available) || 0;
+    const leftover = leftoverToSettle(row);
     const typedDep = parseFormattedAmount(depositAmount);
     const previewApply = depositApplyPreview(row).apply;
     const depAmt =
@@ -2084,6 +2252,16 @@ export default function ReceivePayment() {
       toast.error("Enter a deposit amount to apply");
       return;
     }
+    if (leftover <= 0.05) {
+      toast.error("This invoice has no leftover balance to apply deposit to");
+      return;
+    }
+    if (depAmt - leftover > 0.05) {
+      toast.error(
+        `Deposit cannot exceed leftover ₦${formatNumber1(leftover)}`,
+      );
+      return;
+    }
     if (depAmt - available > 0.05) {
       toast.error(
         `Deposit cannot exceed available ₦${formatNumber1(available)}`,
@@ -2091,12 +2269,7 @@ export default function ReceivePayment() {
       return;
     }
 
-    const due = Number(row.amount) || 0;
-    const collected = Number(row.split_progress?.collected_total) || 0;
-    const creditAlloc = Number(row.split_progress?.credit_allocated) || 0;
-    const remaining = Number(
-      (due - collected - creditAlloc - depAmt).toFixed(2),
-    );
+    const remaining = Number((leftover - depAmt).toFixed(2));
 
     setSubmitting(true);
     try {
@@ -2112,7 +2285,7 @@ export default function ReceivePayment() {
           toast.success(
             remaining > 0.05
               ? `Deposit applied · ₦${formatNumber1(remaining)} left`
-              : "Last payment (deposit) recorded",
+              : "Last payment (deposit) recorded — opening invoice to print",
           );
           if (remaining <= 0.05) {
             removeCollectedInvoice(saleCode);
@@ -2122,6 +2295,13 @@ export default function ReceivePayment() {
       setDepositConfirmRow(null);
       setHubOpen(false);
       fetchDashboard();
+      if (remaining <= 0.05 && saleCode) {
+        navigate(
+          `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
+            saleCode,
+          )}&doc=invoice`,
+        );
+      }
     } catch (err) {
       toast.error(err?.message || "Could not apply deposit");
     } finally {
@@ -2165,9 +2345,8 @@ export default function ReceivePayment() {
       loadHubInvoice(snapshot.sale_code);
       if (action === "deposit") {
         setDepositConfirmRow(snapshot);
-        const due = Number(snapshot.amount) || 0;
-        const available = Number(snapshot.deposit_available) || 0;
-        const preset = Math.min(Math.max(0, due), Math.max(0, available));
+        const preview = depositApplyPreview(snapshot);
+        const preset = preview.apply;
         setDepositAmount(
           preset > 0.05 ? formatNumberWithCommas(String(preset)) : "",
         );
@@ -2681,6 +2860,7 @@ export default function ReceivePayment() {
       {
         facilityId: activeBusiness.id,
         saleCode,
+        workflowId: target.id || undefined,
         credit_amount: creditToSend,
         updated_by: user?.id,
         note:
@@ -2849,6 +3029,7 @@ export default function ReceivePayment() {
       {
         facilityId: activeBusiness.id,
         saleCode: target.sale_code,
+        workflowId: target.id || undefined,
         updated_by: user?.id,
         collector_name:
           [user?.firstname, user?.lastname].filter(Boolean).join(" ").trim() ||
@@ -2899,7 +3080,7 @@ export default function ReceivePayment() {
 
           toast.success(
             lastPay
-              ? res.message || "Payment confirmed"
+              ? res.message || "Payment confirmed — opening invoice to print"
               : res.message || "Payment recorded",
           );
           if (lastPay) {
@@ -2909,6 +3090,13 @@ export default function ReceivePayment() {
           setActiveTab("pending");
           closeCollect();
           fetchDashboard();
+          if (lastPay && target?.sale_code) {
+            navigate(
+              `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
+                target.sale_code,
+              )}&doc=invoice`,
+            );
+          }
         } else {
           toast.error(res?.message || "Could not confirm payment");
         }
@@ -3058,10 +3246,7 @@ export default function ReceivePayment() {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => {
-                  setMethodTab(tab.id);
-                  setActiveTab("pending");
-                }}
+                onClick={() => setMethodTab(tab.id)}
                 className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${
                   active
                     ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white shadow-sm"
@@ -3446,7 +3631,7 @@ export default function ReceivePayment() {
                   <tbody className="divide-y divide-slate-100">
                     {filteredPending.map((row) => (
                       <tr
-                        key={String(row.sale_code)}
+                        key={`${row.sale_code}:${row.id || ""}`}
                         className="hover:bg-slate-50/80"
                       >
                         <td className="px-4 py-3 font-mono text-xs font-medium">
@@ -3600,14 +3785,13 @@ export default function ReceivePayment() {
                         </td>
                         ) : null}
                         <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
-                          ₦{formatNumber1(row.amount)}
-                          {methodTab === "credit" &&
-                          Number(row.credit_remainder) > 0.05 &&
-                          Math.abs(
-                            Number(row.credit_remainder) - Number(row.amount),
+                          ₦{formatNumber1(row.invoice_amount ?? row.amount)}
+                          {Math.abs(
+                            Number(row.invoice_amount ?? row.amount) -
+                              Number(row.amount),
                           ) > 0.05 ? (
                             <div className="mt-0.5 text-[11px] font-medium text-amber-800">
-                              Credit ₦{formatNumber1(row.credit_remainder)}
+                              Due now ₦{formatNumber1(row.amount)}
                             </div>
                           ) : null}
                           {Number(row.discount_amount) > 0 ? (
@@ -3794,6 +3978,7 @@ export default function ReceivePayment() {
                     <th className="px-4 py-3 text-right">Amount</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Updated</th>
+                    <th className="px-4 py-3 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -3861,6 +4046,26 @@ export default function ReceivePayment() {
                           ? moment(updated).format("DD MMM, HH:mm")
                           : "—"}
                       </td>
+                      <td className="px-4 py-3 text-right">
+                        {isAdvance ? (
+                          <span className="text-xs text-slate-400">—</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => downloadSalesInvoice(row)}
+                            disabled={downloadingSaleCode === row.sale_code}
+                            title="Download sales invoice"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {downloadingSaleCode === row.sale_code ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Download className="h-3.5 w-3.5" />
+                            )}
+                            Download
+                          </button>
+                        )}
+                      </td>
                     </tr>
                     );
                   })}
@@ -3920,7 +4125,7 @@ export default function ReceivePayment() {
                   date={hubInvoiceData.date}
                   taxes={hubInvoiceData.taxes || []}
                   discount={hubInvoiceData.discount || null}
-                  showPrintButton={false}
+                  showPrintButton={hubAction === "view"}
                   showCustomerCopyActions={false}
                   enableInlineCustomerCopyPreview={false}
                   documentMode="invoice"
@@ -3947,12 +4152,31 @@ export default function ReceivePayment() {
             <div className="flex min-h-0 flex-col bg-white">
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  {Math.abs(
+                    Number(selected?.invoice_amount ?? amountDue) - amountDue,
+                  ) > 0.05 ? (
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>Invoice amount</span>
+                      <span className="tabular-nums">
+                        ₦{formatNumber1(selected?.invoice_amount)}
+                      </span>
+                    </div>
+                  ) : null}
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-600">Amount due</span>
                     <span className="text-lg font-semibold tabular-nums text-slate-900">
                       ₦{formatNumber1(amountDue)}
                     </span>
                   </div>
+                  {hubAction === "deposit" &&
+                  leftoverToSettle(selected) + 0.05 < amountDue ? (
+                    <div className="mt-1 flex items-center justify-between text-sm">
+                      <span className="text-slate-600">Left to settle</span>
+                      <span className="font-semibold tabular-nums text-teal-800">
+                        ₦{formatNumber1(leftoverToSettle(selected))}
+                      </span>
+                    </div>
+                  ) : null}
                   <div className="mt-2 flex items-center justify-between gap-2 text-sm">
                     <span className="text-slate-600">Status</span>
                     <WorkflowStatusBadge
@@ -4027,11 +4251,21 @@ export default function ReceivePayment() {
                           type="text"
                           inputMode="decimal"
                           value={depositAmount}
-                          onChange={(e) =>
-                            setDepositAmount(
-                              formatNumberWithCommas(e.target.value),
-                            )
-                          }
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const max = depositApplyPreview(selected).apply;
+                            const parsed = parseFormattedAmount(raw);
+                            if (max > 0 && parsed > max + 0.05) {
+                              setDepositAmount(
+                                formatNumberWithCommas(String(max)),
+                              );
+                              toast.error(
+                                `Deposit cannot exceed ₦${formatNumber1(max)}`,
+                              );
+                              return;
+                            }
+                            setDepositAmount(formatNumberWithCommas(raw));
+                          }}
                           className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                           placeholder="0.00"
                         />
@@ -4143,11 +4377,23 @@ export default function ReceivePayment() {
                         type="text"
                         inputMode="decimal"
                         value={creditAmount}
-                        onChange={(e) =>
-                          setCreditAmount(
-                            formatNumberWithCommas(e.target.value),
-                          )
-                        }
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const parsed = parseFormattedAmount(raw);
+                          if (
+                            unpaidBeforeCredit > 0 &&
+                            parsed > unpaidBeforeCredit + 0.05
+                          ) {
+                            setCreditAmount(
+                              formatNumberWithCommas(String(unpaidBeforeCredit)),
+                            );
+                            toast.error(
+                              `Credit cannot exceed ₦${formatNumber1(unpaidBeforeCredit)}`,
+                            );
+                            return;
+                          }
+                          setCreditAmount(formatNumberWithCommas(raw));
+                        }}
                         className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                         placeholder="0.00"
                       />
@@ -4190,11 +4436,21 @@ export default function ReceivePayment() {
                               type="text"
                               inputMode="decimal"
                               value={cashAmount}
-                              onChange={(e) =>
-                                setCashAmount(
-                                  formatNumberWithCommas(e.target.value),
-                                )
-                              }
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const max = remainingDue;
+                                const parsed = parseFormattedAmount(raw);
+                                if (max > 0 && parsed > max + 0.05) {
+                                  setCashAmount(
+                                    formatNumberWithCommas(String(max)),
+                                  );
+                                  toast.error(
+                                    `Cash cannot exceed ₦${formatNumber1(max)}`,
+                                  );
+                                  return;
+                                }
+                                setCashAmount(formatNumberWithCommas(raw));
+                              }}
                               className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                               placeholder={isSplit ? "Enter any amount" : "0.00"}
                             />
@@ -4255,11 +4511,21 @@ export default function ReceivePayment() {
                               type="text"
                               inputMode="decimal"
                               value={transferAmount}
-                              onChange={(e) =>
-                                setTransferAmount(
-                                  formatNumberWithCommas(e.target.value),
-                                )
-                              }
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const max = remainingDue;
+                                const parsed = parseFormattedAmount(raw);
+                                if (max > 0 && parsed > max + 0.05) {
+                                  setTransferAmount(
+                                    formatNumberWithCommas(String(max)),
+                                  );
+                                  toast.error(
+                                    `Transfer cannot exceed ₦${formatNumber1(max)}`,
+                                  );
+                                  return;
+                                }
+                                setTransferAmount(formatNumberWithCommas(raw));
+                              }}
                               className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                               placeholder={isSplit ? "Enter any amount" : "0.00"}
                             />
@@ -4320,11 +4586,21 @@ export default function ReceivePayment() {
                               type="text"
                               inputMode="decimal"
                               value={transferAmount}
-                              onChange={(e) =>
-                                setTransferAmount(
-                                  formatNumberWithCommas(e.target.value),
-                                )
-                              }
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const max = remainingDue;
+                                const parsed = parseFormattedAmount(raw);
+                                if (max > 0 && parsed > max + 0.05) {
+                                  setTransferAmount(
+                                    formatNumberWithCommas(String(max)),
+                                  );
+                                  toast.error(
+                                    `POS cannot exceed ₦${formatNumber1(max)}`,
+                                  );
+                                  return;
+                                }
+                                setTransferAmount(formatNumberWithCommas(raw));
+                              }}
                               className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                               placeholder={isSplit ? "Enter any amount" : "0.00"}
                             />
@@ -4435,8 +4711,9 @@ export default function ReceivePayment() {
                 ) : null}
                 {hubAction === "deposit" ? (
                   <p className="text-sm text-slate-600">
-                    Apply the deposit here. If anything is left, collect it on
-                    Cash — printing opens after that last payment.
+                    Apply only the leftover after cash, transfer, POS, and
+                    credit. If anything is still left, collect it on Cash —
+                    printing opens after that last payment.
                   </p>
                 ) : null}
                 {hubAction === "mode" ? (
@@ -4466,6 +4743,23 @@ export default function ReceivePayment() {
                   >
                     Close
                   </button>
+
+                  {hubAction === "view" && selected?.sale_code ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
+                            selected.sale_code,
+                          )}&doc=invoice`,
+                        )
+                      }
+                      className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-navy)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+                    >
+                      <Printer className="h-4 w-4" />
+                      Open / Print Invoice
+                    </button>
+                  ) : null}
 
                   {hubAction === "deposit" ? (
                     <button
@@ -5202,6 +5496,28 @@ export default function ReceivePayment() {
         skipReceiptNavigate
         onSuccess={fetchDashboard}
       />
+
+      {invoiceDownloadData ? (
+        <div
+          ref={invoiceDownloadRef}
+          className="pointer-events-none fixed left-[-120vw] top-0 z-[-1] w-[210mm] bg-white"
+          aria-hidden
+        >
+          <CreditSaleInvoiceImproved
+            invoiceData={invoiceDownloadData}
+            business={invoiceDownloadData.business || activeBusiness}
+            customer={invoiceDownloadData.customer}
+            date={invoiceDownloadData.date}
+            taxes={invoiceDownloadData.taxes || []}
+            discount={invoiceDownloadData.discount || null}
+            showPrintButton={false}
+            showCustomerCopyActions={false}
+            enableInlineCustomerCopyPreview={false}
+            documentMode="invoice"
+            paperSize="a4"
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

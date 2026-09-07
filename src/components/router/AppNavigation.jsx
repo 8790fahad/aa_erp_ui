@@ -190,6 +190,7 @@ import ReceivableLedger from "../pages/report/components/ReceivableLedger";
 import ReceivableAgingReport from "../pages/report/components/ReceivableAgingReport";
 import SalesInvoicesReport from "../pages/report/components/SalesInvoicesReport";
 import DebtorsReport from "../pages/report/components/DebtorsReport";
+import DepositAdvanceReport from "../pages/report/components/DepositAdvanceReport";
 import BankBalancesReport from "../pages/report/components/BankBalancesReport";
 import CustomReports from "../pages/report/components/CustomReports";
 import Trailbalance from "../pages/report/Trailbalance";
@@ -1151,6 +1152,14 @@ const routeModules = {
           {
             path: "sales-by-supplier",
             element: <SalesBySupplierReport />,
+          },
+          {
+            path: "deposit-report",
+            element: <DepositAdvanceReport variant="deposit" />,
+          },
+          {
+            path: "advance-report",
+            element: <DepositAdvanceReport variant="advance" />,
           },
           {
             path: "bank-balances",
