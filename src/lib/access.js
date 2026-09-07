@@ -167,6 +167,9 @@ export function allowedBillTypes(functionalities) {
 export function allowedBillFilterOptions(functionalities) {
   if (hasFullAccess(functionalities)) return ["all", "inventory", "expense"];
   const funcs = Array.isArray(functionalities) ? functionalities : [];
+  // Require the Filter Bills parent. "All" / "Inventory" / "Expenses" collide
+  // with other module names and must not unlock the bill type filter alone.
+  if (!funcs.includes(FILTER_BILLS_PRIVILEGE)) return [];
   const granted = [];
   if (funcs.includes(FILTER_ALL_BILLS_PRIVILEGE)) granted.push("all");
   if (funcs.includes(FILTER_INVENTORY_BILLS_PRIVILEGE)) {
@@ -174,10 +177,37 @@ export function allowedBillFilterOptions(functionalities) {
   }
   if (funcs.includes(FILTER_EXPENSE_BILLS_PRIVILEGE)) granted.push("expense");
   if (granted.length) return granted;
-  if (funcs.includes(FILTER_BILLS_PRIVILEGE)) {
-    return ["all", "inventory", "expense"];
+  return ["all", "inventory", "expense"];
+}
+
+/**
+ * Bill type sent to GET /api/supplier/bills.
+ * Generic "Expenses" / "Inventory" access does not pick the type.
+ * Fetch All only with Filter Bills → All (or admin). Otherwise fetch the
+ * Inventory Bill / Expense Bill grant(s).
+ */
+export function resolveBillFetchType(functionalities, requestedType = "all") {
+  const req = String(requestedType || "all").toLowerCase();
+  const filters = allowedBillFilterOptions(functionalities);
+  const canAll = filters.includes("all");
+  const viewTypes = canAll
+    ? ["inventory", "expense"]
+    : allowedBillTypes(functionalities);
+
+  if (req === "inventory" && viewTypes.includes("inventory")) {
+    if (filters.includes("inventory") || viewTypes.length === 1) {
+      return "inventory";
+    }
   }
-  return [];
+  if (req === "expense" && viewTypes.includes("expense")) {
+    if (filters.includes("expense") || viewTypes.length === 1) {
+      return "expense";
+    }
+  }
+
+  if (canAll) return "all";
+  if (viewTypes.length === 1) return viewTypes[0];
+  return "all";
 }
 
 /** Show the type filter on the Bill list when any filter option is granted. */

@@ -71,13 +71,6 @@ export const ACCOUNTING_REPORT_SECTIONS = [
         dateMode: "range",
       },
       {
-        title: "Sales report by product",
-        description:
-          "Sales quantity, revenue, COGS and margin by product (Cash / Transfer / Warehouse)",
-        path: `${BASE}/sales-by-product`,
-        dateMode: "range",
-      },
-      {
         title: "Sales report by supplier",
         description:
           "Sales aggregated by product supplier source (Cash / Transfer / Warehouse)",

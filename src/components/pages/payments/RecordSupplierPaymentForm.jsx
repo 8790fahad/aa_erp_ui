@@ -19,7 +19,10 @@ import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
 import SearchSupplierInput from "@/components/pages/purchase/SearchSuppliers";
-import { useAdvancePaymentAccounts } from "@/components/common/useAdvancePaymentAccounts";
+import {
+  useAdvancePaymentAccounts,
+  isCashInHandHead,
+} from "@/components/common/useAdvancePaymentAccounts";
 import CashTransferPaymentFields, {
   buildPaymentSplits,
   isCashTransferSplitMode,
@@ -235,6 +238,21 @@ export default function RecordSupplierPaymentForm({
       return String(visibleBranches[0].id);
     });
   }, [visibleBranches]);
+
+  useEffect(() => {
+    const mode = String(modeOfPayment || "")
+      .toLowerCase()
+      .trim();
+    const needCash =
+      mode === "cash" ||
+      mode === "cash+transfer" ||
+      mode === "split" ||
+      mode === "cash_transfer";
+    if (!needCash || accountHead?.head || !headList?.length) return;
+    const preferred =
+      headList.find((h) => isCashInHandHead(h)) || headList[0];
+    if (preferred) setAccountHead(preferred);
+  }, [modeOfPayment, accountHead?.head, headList, setAccountHead]);
 
   const fetchOutstanding = useCallback(
     (supplierNo) => {
@@ -851,6 +869,7 @@ export default function RecordSupplierPaymentForm({
             </p>
           )}
 
+          {/* Warehouse field hidden — first assigned warehouse is still used on save.
           {visibleBranches.length > 1 && (
             <Field label="Warehouse">
               <select
@@ -867,6 +886,7 @@ export default function RecordSupplierPaymentForm({
               </select>
             </Field>
           )}
+          */}
 
           <Field label="Notes" alignStart>
             <textarea

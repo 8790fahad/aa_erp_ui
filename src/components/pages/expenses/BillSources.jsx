@@ -38,6 +38,8 @@ import {
   getUserFunctionalities,
   allowedBillCreateTypes,
   allowedBillFilterOptions,
+  allowedBillTypes,
+  resolveBillFetchType,
 } from "@/lib/access";
 
 const STATUS_ALL = "all";
@@ -93,29 +95,19 @@ export default function BillSources() {
   const functionalities = getUserFunctionalities(user, activeBusiness);
   const createTypes = allowedBillCreateTypes(functionalities);
   const filterOptions = allowedBillFilterOptions(functionalities);
+  const viewTypes = allowedBillTypes(functionalities);
   const canFilterAll = filterOptions.includes("all");
-  const canFilterInventory = filterOptions.includes("inventory");
-  const canFilterExpense = filterOptions.includes("expense");
+  const listTypes = canFilterAll ? ["inventory", "expense"] : viewTypes;
+  const canFilterInventory =
+    filterOptions.includes("inventory") && listTypes.includes("inventory");
+  const canFilterExpense =
+    filterOptions.includes("expense") && listTypes.includes("expense");
   const canCreateInventory = createTypes.includes("inventory");
   const canCreateExpense = createTypes.includes("expense");
   const showTypeFilter = filterOptions.length > 0;
   const canCreateBill = canCreateInventory || canCreateExpense;
 
-  const effectiveBillType = (() => {
-    if (typeFromUrl === TYPE_ALL && canFilterAll) return TYPE_ALL;
-    if (typeFromUrl === TYPE_INVENTORY && canFilterInventory) {
-      return TYPE_INVENTORY;
-    }
-    if (typeFromUrl === TYPE_EXPENSE && canFilterExpense) {
-      return TYPE_EXPENSE;
-    }
-    if (canFilterAll) return TYPE_ALL;
-    if (canFilterInventory && !canFilterExpense) return TYPE_INVENTORY;
-    if (canFilterExpense && !canFilterInventory) return TYPE_EXPENSE;
-    if (canFilterInventory) return TYPE_INVENTORY;
-    if (canFilterExpense) return TYPE_EXPENSE;
-    return TYPE_ALL;
-  })();
+  const effectiveBillType = resolveBillFetchType(functionalities, typeFromUrl);
 
   const pageSize = pageSizeFromUrl;
 
@@ -460,7 +452,13 @@ export default function BillSources() {
           {showTypeFilter ? (
             <div className="w-full sm:w-[12rem] lg:w-[11rem]">
               <Select
-                value={effectiveBillType || TYPE_ALL}
+                value={
+                  (effectiveBillType === TYPE_ALL && canFilterAll) ||
+                  (effectiveBillType === TYPE_INVENTORY && canFilterInventory) ||
+                  (effectiveBillType === TYPE_EXPENSE && canFilterExpense)
+                    ? effectiveBillType
+                    : undefined
+                }
                 onValueChange={(value) => handleTypeFilter(value)}
               >
                 <SelectTrigger className={selectTriggerClass}>
