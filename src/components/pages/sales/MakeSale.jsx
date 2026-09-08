@@ -13,6 +13,7 @@ import {
   getUserFunctionalities,
   allowedInvoicePaymentModeIds,
 } from "@/lib/access";
+import { isEditableSalesInvoiceStatus } from "@/lib/saleWorkflowStatus.js";
 
 /** Remaining sales-limit qty for a product (facility-wide). null = unlimited. */
 function getSalesLimitRemaining(product) {
@@ -1243,6 +1244,14 @@ function MakeSale() {
   const searchParams = new URLSearchParams(location.search || "");
   const invoiceViewMode =
     searchParams.get("view") === "cards" ? "cards" : "lines";
+  const editSaleCodeFromUrl = (searchParams.get("edit") || "").trim();
+  const editFromVerification =
+    searchParams.get("from") === "verification";
+  const [editingSaleCode, setEditingSaleCode] = useState("");
+  const [loadingEditSale, setLoadingEditSale] = useState(
+    Boolean((searchParams.get("edit") || "").trim()),
+  );
+  const loadedEditRef = useRef("");
   const [selectedLineItemId, setSelectedLineItemId] = useState("");
   // Invoice lines view: default 2 empty rows (Product + Service); extra rows when "+ Add Line" is clicked
   const [extraEmptyLineRows, setExtraEmptyLineRows] = useState(0);
@@ -1623,6 +1632,180 @@ function MakeSale() {
       fetchDiscounts();
     }
   }, [activeBusiness?.id, fetchDiscounts]);
+
+  useEffect(() => {
+    const code = editSaleCodeFromUrl;
+    if (!code || !activeBusiness?.id) {
+      if (!code) {
+        setEditingSaleCode("");
+        setLoadingEditSale(false);
+        loadedEditRef.current = "";
+      }
+      return;
+    }
+    if (loadingTaxes) return;
+    const loadKey = `${activeBusiness.id}:${code}`;
+    if (loadedEditRef.current === loadKey) return;
+    loadedEditRef.current = loadKey;
+    setLoadingEditSale(true);
+    const requestKey = loadKey;
+
+    _fetchApi(
+      `/api/v1/transactions/get-sale?sale_code=${encodeURIComponent(
+        code,
+      )}&facility_id=${activeBusiness.id}`,
+      (response) => {
+        if (loadedEditRef.current !== requestKey) return;
+        setLoadingEditSale(false);
+        if (!response?.success || !response.data) {
+          toast.error(response?.message || "Failed to load invoice");
+          loadedEditRef.current = "";
+          navigate(
+            editFromVerification
+              ? "/app/payments/verification-points"
+              : "/app/sales/invoices",
+          );
+          return;
+        }
+        const data = response.data;
+        if (!isEditableSalesInvoiceStatus(data.workflow_status)) {
+          toast.error(
+            "This invoice cannot be edited after payment or warehouse processing. Issue a credit note instead.",
+          );
+          navigate(
+            editFromVerification
+              ? "/app/payments/verification-points"
+              : `/app/sales/invoice-preview?sale_code=${encodeURIComponent(code)}`,
+          );
+          return;
+        }
+
+        const customer = data.customer || null;
+        if (customer) {
+          const hydrated = {
+            ...customer,
+            fullname: customer.fullname || customer.customer_name,
+            customerNo: customer.customerNo,
+          };
+          setSelectedCustomer(hydrated);
+          if (isWalkInCustomer(hydrated)) {
+            setIsWalkIn(true);
+            setWalkInName(hydrated.fullname || "");
+            setWalkInPhone(hydrated.phone || hydrated.mobile || "");
+          } else {
+            setIsWalkIn(false);
+            setWalkInName("");
+            setWalkInPhone("");
+          }
+        }
+
+        const lineItems = Array.isArray(data.items) ? data.items : [];
+        setCart(
+          lineItems.map((item) => {
+            const qty =
+              Number(item.quantity_sold ?? item.quantity ?? 0) || 0;
+            const price =
+              Number(item.selling_price ?? item.price ?? 0) || 0;
+            const itemTypeRaw = String(item.item_type || item.type || "");
+            const isService =
+              itemTypeRaw.toLowerCase().includes("service");
+            const bidRaw = item.branchId ?? item.branch_id;
+            const bid =
+              bidRaw != null && String(bidRaw).trim() !== ""
+                ? parseInt(String(bidRaw), 10)
+                : null;
+            const lineBranchId =
+              Number.isFinite(bid) && bid > 0 ? bid : null;
+            return {
+              id: UUIDV4(),
+              product_id: item.link_id || item.product_id || item.sku,
+              sku: item.link_id || item.sku,
+              item_name: item.item_name || item.description,
+              quantity_sold: qty,
+              quantity: qty,
+              selling_price: price,
+              price,
+              amount: Number(item.amount) || price * qty,
+              status: "for sale",
+              type: isService ? "service" : "sales",
+              item_type: isService ? "Service" : item.item_type || "Finished Good",
+              taxable: item.taxable || "Taxable",
+              proBono: String(item.type || "")
+                .toLowerCase()
+                .includes("pro-bono"),
+              branchId: lineBranchId,
+              branch_id: lineBranchId,
+              branch_name: item.branch_name || null,
+            };
+          }),
+        );
+        setExtraEmptyLineRows(0);
+
+        if (data.date) {
+          const d = moment(data.date);
+          if (d.isValid()) setTransactionDate(d.format("YYYY-MM-DD"));
+        }
+
+        const catalog = taxes || [];
+        const saleTaxes = Array.isArray(data.taxes) ? data.taxes : [];
+        const regular = [];
+        const outputIds = [];
+        saleTaxes.forEach((t) => {
+          const match = catalog.find(
+            (c) => String(c.id) === String(t.id),
+          );
+          const tax = match || t;
+          if (isOutputVatTax(tax)) {
+            if (tax.id != null) outputIds.push(tax.id);
+          } else {
+            regular.push(tax);
+          }
+        });
+        setSelectedTaxes(regular);
+        setSelectedOutputVAT(outputIds);
+
+        if (data.discount && data.discount.discount_id) {
+          setSelectedDiscount(data.discount);
+        }
+
+        let modes = Array.isArray(data.payment_modes)
+          ? data.payment_modes.map((m) => String(m || "").toLowerCase())
+          : [];
+        if (!modes.length) {
+          const mop = String(data.mode_of_payment || "").toLowerCase();
+          if (mop.includes("cash")) modes.push("cash");
+          if (mop.includes("transfer") || mop.includes("bank")) {
+            modes.push("transfer");
+          }
+          if (mop.includes("card")) modes.push("card");
+          if (mop.includes("credit")) modes.push("credit");
+          if (mop.includes("deposit")) modes.push("deposit");
+        }
+        applyPaymentModes(modes);
+        setEditingSaleCode(code);
+      },
+      (error) => {
+        if (loadedEditRef.current !== requestKey) return;
+        setLoadingEditSale(false);
+        loadedEditRef.current = "";
+        console.error("Load invoice for edit:", error);
+        toast.error("Failed to load invoice for editing");
+        navigate(
+          editFromVerification
+            ? "/app/payments/verification-points"
+            : "/app/sales/invoices",
+        );
+      },
+    );
+  }, [
+    editSaleCodeFromUrl,
+    editFromVerification,
+    activeBusiness?.id,
+    loadingTaxes,
+    taxes,
+    applyPaymentModes,
+    navigate,
+  ]);
 
   // Branch options for labels (no invoice-level warehouse picker).
   const branchOptions = useMemo(
@@ -2494,6 +2677,7 @@ function MakeSale() {
           apply_prepayment: saleType !== "paid" && usePrepayment,
           transaction_date: transactionDate, // Add transaction date
           sale_branch_id: branchId,
+          edit_sale_code: editingSaleCode || editSaleCodeFromUrl || undefined,
           // Payment is collected at Verification Points, not on create.
           defer_payment: saleType === "paid",
           assigned_cashier_id: null,
@@ -2653,14 +2837,19 @@ function MakeSale() {
           if (response.success) {
             const shownTotal =
               Number(entry.total_amount) || totalWithTax || 0;
+            const savedCode = response?.sale_code || editingSaleCode || editSaleCodeFromUrl;
             toast.success(
-              `Sale of ₦${shownTotal.toFixed(2)} saved successfully!`,
+              savedCode
+                ? `Invoice ${savedCode} saved successfully!`
+                : `Sale of ₦${shownTotal.toFixed(2)} saved successfully!`,
             );
             if (response?.sale_code) {
               navigate(
-                `/app/sales/process?sale_code=${encodeURIComponent(
-                  response.sale_code,
-                )}`,
+                editFromVerification
+                  ? "/app/payments/verification-points"
+                  : `/app/sales/process?sale_code=${encodeURIComponent(
+                      response.sale_code,
+                    )}`,
               );
             }
           } else {
@@ -4328,6 +4517,19 @@ function MakeSale() {
           </div>
         </div>
       )}
+      {loadingEditSale && !processingCheckout && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-8 shadow-2xl flex flex-col items-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-[var(--aa-accent)] mb-4"></div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">
+              Loading invoice...
+            </h3>
+            <p className="text-sm text-gray-600">
+              {editSaleCodeFromUrl || "Please wait"}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div
         className={`flex ${
@@ -4347,7 +4549,9 @@ function MakeSale() {
                   />
                   <div>
                     <h1 className="text-xl font-semibold text-slate-900">
-                      New Invoice
+                      {editingSaleCode || editSaleCodeFromUrl
+                        ? `Edit Invoice ${editingSaleCode || editSaleCodeFromUrl}`
+                        : "New Invoice"}
                     </h1>
                     <p className="text-xs text-slate-500">
                       {PAYMENT_MODE_OPTIONS.filter((o) =>

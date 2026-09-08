@@ -25,7 +25,8 @@ import { getSuppliers } from "@/redux/actions/suppliers";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import useQuery from "@/hooks/useQuery";
-import { getUserFunctionalities, allowedBillCreateTypes, allowedMemoFilterOptions } from "@/lib/access";
+import { getUserFunctionalities, allowedBillCreateTypes, allowedMemoFilterOptions, allowedVendorFetchTypes } from "@/lib/access";
+import { filterSuppliersByVendorType, filterSuppliersByAllowedTypes } from "@/utils/vendorType";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -64,6 +65,15 @@ export default function OperatingExpenses() {
   const { supplierList } = useSelector((d) => d.suppliers) || [];
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
+  const expenseSuppliers = useMemo(() => {
+    const allowed = allowedVendorFetchTypes(
+      getUserFunctionalities(user, activeBusiness),
+    );
+    return filterSuppliersByVendorType(
+      filterSuppliersByAllowedTypes(supplierList, allowed),
+      "expense",
+    );
+  }, [supplierList, user, activeBusiness]);
   const today = moment().format("YYYY-MM-DD");
   const navigate = useNavigate();
 
@@ -1287,14 +1297,14 @@ export default function OperatingExpenses() {
               >
                 <option value="">Select supplier...</option>
                 {form.supplier_number &&
-                  !supplierList?.some(
+                  !expenseSuppliers?.some(
                     (s) => s.supplier_number === form.supplier_number,
                   ) && (
                     <option value={form.supplier_number}>
                       {form.supplier_name || form.supplier_number}
                     </option>
                   )}
-                {supplierList?.map((supplier) => (
+                {expenseSuppliers?.map((supplier) => (
                   <option
                     key={supplier.supplier_number}
                     value={supplier.supplier_number}

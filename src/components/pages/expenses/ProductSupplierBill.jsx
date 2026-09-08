@@ -29,7 +29,8 @@ import { Typeahead } from "react-bootstrap-typeahead";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import useQuery from "@/hooks/useQuery";
-import { getUserFunctionalities, allowedBillCreateTypes } from "@/lib/access";
+import { getUserFunctionalities, allowedBillCreateTypes, allowedVendorFetchTypes } from "@/lib/access";
+import { filterSuppliersByVendorType, filterSuppliersByAllowedTypes } from "@/utils/vendorType";
 import CashTransferPaymentFields, {
   buildPaymentSplits,
   isCashTransferSplitMode,
@@ -71,6 +72,15 @@ export default function ProductSupplierBill() {
   const { supplierList } = useSelector((d) => d.suppliers) || [];
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
+  const inventorySuppliers = useMemo(() => {
+    const allowed = allowedVendorFetchTypes(
+      getUserFunctionalities(user, activeBusiness),
+    );
+    return filterSuppliersByVendorType(
+      filterSuppliersByAllowedTypes(supplierList, allowed),
+      "inventory",
+    );
+  }, [supplierList, user, activeBusiness]);
   const today = moment().format("YYYY-MM-DD");
   const navigate = useNavigate();
 
@@ -1345,14 +1355,14 @@ export default function ProductSupplierBill() {
               >
                 <option value="">Select supplier...</option>
                 {form.supplier_number &&
-                  !supplierList?.some(
+                  !inventorySuppliers?.some(
                     (s) => s.supplier_number === form.supplier_number,
                   ) && (
                     <option value={form.supplier_number}>
                       {form.supplier_name || form.supplier_number}
                     </option>
                   )}
-                {supplierList?.map((supplier) => (
+                {inventorySuppliers?.map((supplier) => (
                   <option
                     key={supplier.supplier_number}
                     value={supplier.supplier_number}

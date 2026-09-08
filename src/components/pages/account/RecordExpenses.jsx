@@ -1068,6 +1068,7 @@ export default function RecordExpenses() {
                     <SearchSupplierInput
                       label="Payee:"
                       edge={true}
+                      vendorType="expense"
                       value={{
                         supplier_name: form.supplier_name,
                         supplier_code: form.supplier_code,

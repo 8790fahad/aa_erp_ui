@@ -23,14 +23,16 @@ import {
   Receipt,
   ScanLine,
   Search,
+  Pencil,
   Split,
+  Trash2,
   Wallet,
   ChevronRight,
 } from "lucide-react";
 import moment from "moment";
 import { toast } from "sonner";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
-import { hasFullAccess } from "@/lib/access";
+import { hasFullAccess, isBusinessOwner } from "@/lib/access";
 import { formatNumber1 } from "@/components/router/utilities";
 import {
   POSTING_DATE_MIN,
@@ -70,7 +72,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAdvancePaymentAccounts, isCashInHandHead } from "@/components/common/useAdvancePaymentAccounts";
-import { WorkflowStatusBadge } from "@/lib/saleWorkflowStatus.js";
+import { WorkflowStatusBadge, isEditableSalesInvoiceStatus, isProcessedSalesInvoiceStatus, alreadyProcessedInvoiceMessage } from "@/lib/saleWorkflowStatus.js";
 import useScanDetection from "@/hooks/useScanDetection";
 import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
 import CreditSaleInvoiceImproved from "@/components/pages/sales/CreditSaleInvoiceImproved";
@@ -342,6 +344,7 @@ const MAKE_DEPOSIT_PRIVILEGE = "Make Deposit";
 const RECONCILIATION_PRIVILEGE = "Collection Reconciliation";
 const IMPREST_PRIVILEGE = "Imprest";
 const PAY_BILL_PRIVILEGE = "Pay Bill";
+const EDIT_INVOICE_PRIVILEGE = "Edit Invoice";
 
 function parseFunctionalities(raw) {
   if (Array.isArray(raw)) return raw.filter(Boolean);
@@ -806,6 +809,27 @@ function snapshotInvoiceRow(row) {
   };
 }
 
+function alreadyProcessedFromApi(res, fallbackRow) {
+  const live = res?.results || fallbackRow || {};
+  if (
+    res?.already_processed ||
+    res?.code === "ALREADY_PROCESSED" ||
+    live?.already_processed ||
+    isProcessedSalesInvoiceStatus(live?.status || fallbackRow?.status)
+  ) {
+    return alreadyProcessedInvoiceMessage({
+      message: res?.message || live?.processed_message || live?.message,
+      status: live?.status || fallbackRow?.status,
+      saleCode: live?.sale_code || fallbackRow?.sale_code,
+      processedBy: res?.processed_by || live?.processed_by,
+    });
+  }
+  return null;
+}
+
+/** Light queue check only — not the full dashboard. Pauses when the tab is hidden. */
+const QUEUE_POLL_MS = 15000;
+
 function isRowCreatedOn(row, ymd) {
   const raw = row?.created_at || row?.createdAt;
   if (!raw || !ymd) return false;
@@ -892,6 +916,93 @@ function fetchSaleInvoice(saleCode, facilityId) {
   });
 }
 
+function mapSaleItemsToEditLines(items) {
+  return (Array.isArray(items) ? items : []).map((item, idx) => {
+    const qty = Number(item.quantity_sold ?? item.quantity ?? 0) || 0;
+    const price = Number(item.selling_price ?? item.price ?? 0) || 0;
+    const sku = item.link_id || item.product_id || item.sku || "";
+    const bidRaw = item.branchId ?? item.branch_id;
+    const bid =
+      bidRaw != null && String(bidRaw).trim() !== ""
+        ? parseInt(String(bidRaw), 10)
+        : null;
+    const typeRaw = String(item.item_type || item.type || "").toLowerCase();
+    const isService = typeRaw.includes("service");
+    return {
+      key: `${sku || "line"}-${idx}`,
+      product_id: sku,
+      item_name: item.item_name || item.description || sku || "Item",
+      quantity: qty,
+      selling_price: price,
+      amount: Number(item.amount) || price * qty,
+      branchId: Number.isFinite(bid) && bid > 0 ? bid : null,
+      branch_name: item.branch_name || item.warehouse || null,
+      item_type: isService ? "Service" : item.item_type || "Finished Good",
+      type: typeRaw.includes("pro-bono") ? "Pro-bono" : "Regular",
+      taxable: item.taxable,
+    };
+  });
+}
+
+function editLineAmount(line) {
+  const qty = Number(line.quantity);
+  const price = Number(line.selling_price) || 0;
+  if (!Number.isFinite(qty) || qty <= 0) return 0;
+  return qty * price;
+}
+
+function normalizeEditInvoiceRow(row) {
+  const sale_code = String(row?.sale_code || row?.invoice_ref || "").trim();
+  return {
+    sale_code,
+    customer_name: row?.customer_name || row?.customerName || "",
+    customer_no: row?.customer_no || row?.ref_number || "",
+    amount: Number(row?.invoice_amount ?? row?.amount ?? 0) || 0,
+    date: row?.date || row?.transaction_date || row?.invoice_date || null,
+    status: row?.status || row?.workflow_status || "",
+    payment_type:
+      row?.payment_type ||
+      row?.workflow_payment_type ||
+      row?.payment_method ||
+      "",
+    description: row?.description || "",
+  };
+}
+
+function paymentModesFromSale(data) {
+  const modes = (
+    Array.isArray(data?.payment_modes) ? data.payment_modes : []
+  ).map((m) => String(m || "").toLowerCase());
+  if (modes.length) return [...new Set(modes)];
+  const mop = String(data?.mode_of_payment || "").toLowerCase();
+  const next = [];
+  if (mop.includes("cash")) next.push("cash");
+  if (mop.includes("transfer") || mop.includes("bank")) next.push("transfer");
+  if (mop.includes("card")) next.push("card");
+  if (mop.includes("credit")) next.push("credit");
+  if (mop.includes("deposit")) next.push("deposit");
+  return next;
+}
+
+function exclusiveTaxFromRates(subtotal, discount, taxes) {
+  const net = Math.max(0, subtotal - (Number(discount) || 0));
+  if (!Array.isArray(taxes) || !taxes.length) return 0;
+  return taxes.reduce((sum, tax) => {
+    const inc = String(tax.inclusive_type || tax.tax_type || "").toLowerCase();
+    if (inc.includes("inclusive")) return sum;
+    const rate = parseFloat(tax.rate) || 0;
+    return sum + (net * rate) / 100;
+  }, 0);
+}
+
+const EDIT_PAYMENT_MODE_OPTIONS = [
+  { id: "cash", label: "Cash" },
+  { id: "transfer", label: "Transfer" },
+  { id: "card", label: "Card" },
+  { id: "credit", label: "Credit" },
+  { id: "deposit", label: "Deposit" },
+];
+
 async function waitForElementImages(root) {
   const imgs = Array.from(root?.querySelectorAll?.("img") || []);
   await Promise.all(
@@ -954,6 +1065,10 @@ export default function ReceivePayment() {
   const canApprovePaymentMode =
     hasFullCollectionAccess ||
     functionalities.includes(APPROVE_PAYMENT_MODE_PRIVILEGE);
+  const canEditInvoice =
+    isBusinessOwner(user, activeBusiness) ||
+    hasFullAccess(functionalities) ||
+    functionalities.includes(EDIT_INVOICE_PRIVILEGE);
 
   const canUseHeaderAction = useCallback(
     (privilege) => {
@@ -1062,11 +1177,27 @@ export default function ReceivePayment() {
     history_to: todayYmd,
   });
   const [search, setSearch] = useState("");
+  const [editInvoiceOpen, setEditInvoiceOpen] = useState(false);
+  const [editInvoiceQuery, setEditInvoiceQuery] = useState("");
+  const [editInvoiceSale, setEditInvoiceSale] = useState(null);
+  const [editInvoiceLines, setEditInvoiceLines] = useState([]);
+  const [editInvoiceLoading, setEditInvoiceLoading] = useState(false);
+  const [editInvoiceSaving, setEditInvoiceSaving] = useState(false);
+  const [editInvoiceDate, setEditInvoiceDate] = useState("");
+  const [editInvoiceDiscount, setEditInvoiceDiscount] = useState("");
+  const [editInvoiceCustomer, setEditInvoiceCustomer] = useState(null);
+  const [editPaymentModes, setEditPaymentModes] = useState([]);
+  const [editProductOptions, setEditProductOptions] = useState([]);
+  const [editProductQuery, setEditProductQuery] = useState("");
   const searchInputRef = useRef(null);
   const treatingInvoiceRef = useRef(null);
   const hubInvoiceRequestRef = useRef(0);
   const invoiceDownloadRef = useRef(null);
   const invoiceDownloadTokenRef = useRef(0);
+  const queueStampRef = useRef("");
+  const queuePollInFlightRef = useRef(false);
+  const hubActionRef = useRef("view");
+  const hubOpenRef = useRef(false);
 
   /** Unified view + action hub: collect | credit | discount | mode | view */
   const [hubOpen, setHubOpen] = useState(false);
@@ -1199,9 +1330,10 @@ export default function ReceivePayment() {
     setModePending((rows) => rows.filter(keep));
   }, []);
 
-  const fetchDashboard = useCallback(() => {
+  const fetchDashboard = useCallback((opts = {}) => {
     if (!activeBusiness?.id) return;
-    setLoading(true);
+    const silent = Boolean(opts && opts.silent);
+    if (!silent) setLoading(true);
     let from = historyFrom || todayYmd;
     let to = historyTo || historyFrom || todayYmd;
     if (from > to) {
@@ -1220,14 +1352,19 @@ export default function ReceivePayment() {
     _fetchApi(
       `/api/v1/sale-workflows/cashier-dashboard?${params.toString()}`,
       (res) => {
-        setLoading(false);
+        if (!silent) setLoading(false);
         setDashboardReady(true);
         if (res?.success) {
-          setPending(res.results?.pending || []);
-          setCreditPending(res.results?.credit_pending || []);
-          setDepositPending(res.results?.deposit_pending || []);
-          setDiscountPending(res.results?.discount_pending || []);
-          setModePending(res.results?.mode_pending || []);
+          const nextPending = res.results?.pending || [];
+          const nextCredit = res.results?.credit_pending || [];
+          const nextDeposit = res.results?.deposit_pending || [];
+          const nextDiscount = res.results?.discount_pending || [];
+          const nextMode = res.results?.mode_pending || [];
+          setPending(nextPending);
+          setCreditPending(nextCredit);
+          setDepositPending(nextDeposit);
+          setDiscountPending(nextDiscount);
+          setModePending(nextMode);
           setHistory(res.results?.history || []);
           setSummary(
             res.results?.summary || {
@@ -1251,14 +1388,38 @@ export default function ReceivePayment() {
               history_to: to,
             },
           );
-        } else {
+          const liveCodes = new Set(
+            [...nextPending, ...nextCredit, ...nextDeposit, ...nextDiscount, ...nextMode]
+              .map((r) => String(r?.sale_code || "").trim())
+              .filter(Boolean),
+          );
+          const openCode = String(
+            treatingInvoiceRef.current?.sale_code || "",
+          ).trim();
+          const openAction = hubActionRef.current;
+          if (
+            hubOpenRef.current &&
+            openCode &&
+            ["collect", "credit", "deposit", "discount", "mode"].includes(
+              openAction,
+            ) &&
+            !liveCodes.has(openCode)
+          ) {
+            toast.error("This invoice is already processed.");
+            treatingInvoiceRef.current = null;
+            hubOpenRef.current = false;
+            setHubOpen(false);
+          }
+        } else if (!silent) {
           toast.error(res?.message || "Failed to load collection queue");
         }
       },
       (err) => {
-        setLoading(false);
+        if (!silent) {
+          setLoading(false);
+          toast.error(err?.message || "Failed to load collection queue");
+        }
         setDashboardReady(true);
-        toast.error(err?.message || "Failed to load collection queue");
       },
     );
   }, [
@@ -1272,8 +1433,97 @@ export default function ReceivePayment() {
 
   useEffect(() => {
     setDashboardReady(false);
+    queueStampRef.current = "";
     fetchDashboard();
   }, [fetchDashboard]);
+
+  useEffect(() => {
+    hubActionRef.current = hubAction;
+  }, [hubAction]);
+
+  useEffect(() => {
+    hubOpenRef.current = hubOpen;
+  }, [hubOpen]);
+
+  useEffect(() => {
+    if (!activeBusiness?.id || !dashboardReady) return undefined;
+
+    const params = new URLSearchParams({
+      facilityId: String(activeBusiness.id),
+    });
+    if (user?.id != null) params.set("userId", String(user.id));
+    if (user?.role) params.set("role", String(user.role));
+
+    const dropGoneFromQueue = (codes) => {
+      const live = new Set(
+        (codes || []).map((c) => String(c || "").trim()).filter(Boolean),
+      );
+      const keep = (row) => live.has(String(row?.sale_code || "").trim());
+      setPending((rows) => rows.filter(keep));
+      setCreditPending((rows) => rows.filter(keep));
+      setDepositPending((rows) => rows.filter(keep));
+      setDiscountPending((rows) => rows.filter(keep));
+      setModePending((rows) => rows.filter(keep));
+      const openCode = String(
+        treatingInvoiceRef.current?.sale_code || "",
+      ).trim();
+      const openAction = hubActionRef.current;
+      if (
+        hubOpenRef.current &&
+        openCode &&
+        ["collect", "credit", "deposit", "discount", "mode"].includes(
+          openAction,
+        ) &&
+        !live.has(openCode)
+      ) {
+        toast.error("This invoice is already processed.");
+        treatingInvoiceRef.current = null;
+        hubOpenRef.current = false;
+        setHubOpen(false);
+      }
+    };
+
+    const pollQueue = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      if (queuePollInFlightRef.current) return;
+      queuePollInFlightRef.current = true;
+      _fetchApi(
+        `/api/v1/sale-workflows/cashier-queue-snapshot?${params.toString()}`,
+        (res) => {
+          queuePollInFlightRef.current = false;
+          if (!res?.success || !res.results) return;
+          const stamp = String(res.results.stamp || "");
+          const codes = Array.isArray(res.results.codes)
+            ? res.results.codes
+            : [];
+          const first = !queueStampRef.current;
+          if (stamp && stamp === queueStampRef.current) return;
+          queueStampRef.current = stamp;
+          dropGoneFromQueue(codes);
+          if (!first) fetchDashboard({ silent: true });
+        },
+        () => {
+          queuePollInFlightRef.current = false;
+        },
+      );
+    };
+
+    const id = window.setInterval(pollQueue, QUEUE_POLL_MS);
+    const onVisible = () => {
+      if (!document.hidden) pollQueue();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [
+    activeBusiness?.id,
+    user?.id,
+    user?.role,
+    dashboardReady,
+    fetchDashboard,
+  ]);
 
   useEffect(() => {
     if (!imprestOpen || !activeBusiness?.id || expenseList.length) return;
@@ -1798,6 +2048,437 @@ export default function ReceivePayment() {
     );
   }, [pendingForTab, search]);
 
+  const editablePendingInvoices = useMemo(() => {
+    const byCode = new Map();
+    const rows = [
+      ...pending,
+      ...creditPending,
+      ...depositPending,
+      ...discountPending,
+      ...modePending,
+    ];
+    for (const r of rows) {
+      const code = String(r?.sale_code || "").trim();
+      if (!code || byCode.has(code)) continue;
+      if (!isEditableSalesInvoiceStatus(r.status)) continue;
+      byCode.set(code, normalizeEditInvoiceRow(r));
+    }
+    return Array.from(byCode.values());
+  }, [
+    pending,
+    creditPending,
+    depositPending,
+    discountPending,
+    modePending,
+  ]);
+
+  const filteredEditInvoices = useMemo(() => {
+    const q = editInvoiceQuery.trim().toLowerCase();
+    if (!q) return editablePendingInvoices;
+    return editablePendingInvoices.filter((r) =>
+      [
+        r.sale_code,
+        r.customer_no,
+        r.customer_name,
+        r.payment_type,
+        r.description,
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }, [editablePendingInvoices, editInvoiceQuery]);
+
+  const filteredEditProducts = useMemo(() => {
+    const q = editProductQuery.trim().toLowerCase();
+    const list = Array.isArray(editProductOptions) ? editProductOptions : [];
+    if (!q) return list.slice(0, 12);
+    return list
+      .filter((p) =>
+        [p.item_name, p.product_id, p.sku, p.branch_name, p.location_name]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q)),
+      )
+      .slice(0, 12);
+  }, [editProductOptions, editProductQuery]);
+
+  const goEditInvoice = useCallback(
+    async (saleCode) => {
+      if (!canEditInvoice) {
+        toast.error("You do not have permission to edit invoices.");
+        return;
+      }
+      const code = String(saleCode || "").trim();
+      if (!code) {
+        toast.error("Enter or select an invoice to edit");
+        return;
+      }
+      if (!activeBusiness?.id) {
+        toast.error("Select a business first");
+        return;
+      }
+      const match = editablePendingInvoices.find(
+        (r) => String(r.sale_code || "").toLowerCase() === code.toLowerCase(),
+      );
+      if (!match) {
+        toast.error("This invoice is not awaiting verification.");
+        return;
+      }
+      if (!isEditableSalesInvoiceStatus(match.status)) {
+        toast.error(
+          "This invoice cannot be edited after payment or warehouse processing.",
+        );
+        return;
+      }
+      setEditInvoiceLoading(true);
+      try {
+        const data = await fetchSaleInvoice(code, activeBusiness.id);
+        if (!isEditableSalesInvoiceStatus(data.workflow_status)) {
+          toast.error(
+            "This invoice cannot be edited after payment or warehouse processing. Issue a credit note instead.",
+          );
+          return;
+        }
+        const lines = mapSaleItemsToEditLines(data.items);
+        if (!lines.length) {
+          toast.error("This invoice has no line items");
+          return;
+        }
+        const customer = data.customer
+          ? {
+              ...data.customer,
+              fullname:
+                data.customer.fullname || data.customer.customer_name,
+              customerNo: data.customer.customerNo,
+            }
+          : null;
+        setEditInvoiceSale({ ...data, sale_code: code });
+        setEditInvoiceLines(lines);
+        setEditInvoiceCustomer(customer);
+        setEditInvoiceDate(
+          data.date ? moment(data.date).format("YYYY-MM-DD") : moment().format("YYYY-MM-DD"),
+        );
+        const origDisc = Number(
+          data.discountAmount ?? data.discount_amount ?? data.discount?.amount ?? 0,
+        );
+        setEditInvoiceDiscount(origDisc > 0 ? String(origDisc) : "");
+        setEditPaymentModes(paymentModesFromSale(data));
+        setEditProductQuery("");
+      } catch (err) {
+        toast.error(err?.message || "Failed to load invoice");
+      } finally {
+        setEditInvoiceLoading(false);
+      }
+    },
+    [editablePendingInvoices, activeBusiness?.id, canEditInvoice],
+  );
+
+  const openEditInvoice = useCallback(() => {
+    if (!canEditInvoice) {
+      toast.error("You do not have permission to edit invoices.");
+      return;
+    }
+    setEditInvoiceQuery(search.trim());
+    setEditInvoiceSale(null);
+    setEditInvoiceLines([]);
+    setEditInvoiceCustomer(null);
+    setEditInvoiceDate("");
+    setEditInvoiceDiscount("");
+    setEditPaymentModes([]);
+    setEditInvoiceOpen(true);
+    const q = search.trim();
+    if (q) {
+      const exact = editablePendingInvoices.find(
+        (r) => String(r.sale_code || "").toLowerCase() === q.toLowerCase(),
+      );
+      if (exact) goEditInvoice(exact.sale_code);
+    }
+  }, [search, editablePendingInvoices, goEditInvoice, canEditInvoice]);
+
+  const closeEditInvoice = useCallback(() => {
+    setEditInvoiceOpen(false);
+    setEditInvoiceSale(null);
+    setEditInvoiceLines([]);
+    setEditInvoiceQuery("");
+    setEditInvoiceLoading(false);
+    setEditInvoiceSaving(false);
+    setEditInvoiceCustomer(null);
+    setEditInvoiceDate("");
+    setEditInvoiceDiscount("");
+    setEditPaymentModes([]);
+    setEditProductQuery("");
+  }, []);
+
+  useEffect(() => {
+    if (!editInvoiceOpen || !editInvoiceSale || !activeBusiness?.id) return;
+    if (editProductOptions.length) return;
+    _fetchApi(
+      `/account/get-ready-for-sales/${activeBusiness.id}?includeStopped=1`,
+      (res) => {
+        setEditProductOptions(res?.results || []);
+      },
+      () => setEditProductOptions([]),
+    );
+  }, [
+    editInvoiceOpen,
+    editInvoiceSale,
+    activeBusiness?.id,
+    editProductOptions.length,
+  ]);
+
+  const updateEditInvoiceLine = useCallback((key, field, raw) => {
+    setEditInvoiceLines((prev) =>
+      prev.map((line) => {
+        if (line.key !== key) return line;
+        if (raw === "") {
+          const next = { ...line, [field]: "", amount: 0 };
+          return next;
+        }
+        const num = parseFloat(String(raw).replace(/,/g, ""));
+        if (!Number.isFinite(num) || num < 0) return line;
+        const next = { ...line, [field]: num };
+        const qty = Number(next.quantity);
+        const price = Number(next.selling_price) || 0;
+        next.amount =
+          Number.isFinite(qty) && qty > 0 ? qty * price : 0;
+        return next;
+      }),
+    );
+  }, []);
+
+  const removeEditInvoiceLine = useCallback((key) => {
+    setEditInvoiceLines((prev) => prev.filter((line) => line.key !== key));
+  }, []);
+
+  const addEditInvoiceProduct = useCallback((product) => {
+    if (!product) return;
+    const sku = String(
+      product.product_id || product.sku || product.item_code || product.id || "",
+    ).trim();
+    if (!sku) {
+      toast.error("This item has no product code");
+      return;
+    }
+    const price = Number(product.selling_price ?? product.price ?? 0) || 0;
+    const bidRaw = product.branchId ?? product.branch_id;
+    const bid =
+      bidRaw != null && String(bidRaw).trim() !== ""
+        ? parseInt(String(bidRaw), 10)
+        : null;
+    const typeRaw = String(product.item_type || product.type || "").toLowerCase();
+    const isService = typeRaw.includes("service");
+    setEditInvoiceLines((prev) => {
+      const existing = prev.find(
+        (line) =>
+          String(line.product_id) === sku &&
+          String(line.branchId || "") === String(Number.isFinite(bid) && bid > 0 ? bid : ""),
+      );
+      if (existing) {
+        return prev.map((line) => {
+          if (line.key !== existing.key) return line;
+          const qty = (Number(line.quantity) || 0) + 1;
+          return { ...line, quantity: qty, amount: qty * (Number(line.selling_price) || 0) };
+        });
+      }
+      return [
+        ...prev,
+        {
+          key: `${sku}-${Date.now()}`,
+          product_id: sku,
+          item_name: product.item_name || product.description || sku,
+          quantity: 1,
+          selling_price: price,
+          amount: price,
+          branchId: Number.isFinite(bid) && bid > 0 ? bid : null,
+          branch_name: product.branch_name || product.location_name || null,
+          item_type: isService ? "Service" : product.item_type || "Finished Good",
+          type: "Regular",
+          taxable: product.taxable,
+        },
+      ];
+    });
+    setEditProductQuery("");
+  }, []);
+
+  const editInvoiceTotals = useMemo(() => {
+    const subtotal = editInvoiceLines.reduce(
+      (sum, line) => sum + editLineAmount(line),
+      0,
+    );
+    let discount = parseFloat(String(editInvoiceDiscount).replace(/,/g, "")) || 0;
+    if (discount < 0) discount = 0;
+    if (discount > subtotal) discount = subtotal;
+    discount = Number(discount.toFixed(2));
+    const exclusiveTax = Number(
+      exclusiveTaxFromRates(
+        subtotal,
+        discount,
+        editInvoiceSale?.taxes,
+      ).toFixed(2),
+    );
+    return {
+      subtotal,
+      discount,
+      exclusiveTax,
+      total: Math.max(0, subtotal - discount + exclusiveTax),
+    };
+  }, [editInvoiceLines, editInvoiceDiscount, editInvoiceSale?.taxes]);
+
+  const saveEditInvoiceQuantities = useCallback(() => {
+    if (!canEditInvoice) {
+      toast.error("You do not have permission to edit invoices.");
+      return;
+    }
+    if (!editInvoiceSale || !activeBusiness?.id || !user?.id) {
+      toast.error("Session required");
+      return;
+    }
+    const saleCode =
+      editInvoiceSale.sale_code || editInvoiceSale.transaction?.id || "";
+    const lines = editInvoiceLines
+      .map((line) => ({
+        ...line,
+        quantity: Number(line.quantity),
+        selling_price: Number(line.selling_price) || 0,
+      }))
+      .filter((line) => Number.isFinite(line.quantity) && line.quantity > 0);
+    if (!lines.length) {
+      toast.error("Enter a quantity greater than zero on at least one item");
+      return;
+    }
+    if (lines.some((line) => !line.product_id)) {
+      toast.error("A line is missing a product code and cannot be saved");
+      return;
+    }
+    const customerNo =
+      editInvoiceCustomer?.customerNo ||
+      editInvoiceSale.customer?.customerNo ||
+      editInvoiceSale.customer_no;
+    if (!customerNo) {
+      toast.error("Select a customer for this invoice");
+      return;
+    }
+
+    const modes = (editPaymentModes.length
+      ? editPaymentModes
+      : paymentModesFromSale(editInvoiceSale)
+    ).map((m) => String(m || "").toLowerCase());
+    if (!modes.length) {
+      toast.error("Select at least one payment mode");
+      return;
+    }
+    const hasCollectMode =
+      modes.includes("cash") ||
+      modes.includes("transfer") ||
+      modes.includes("card");
+    const saleBranchId = lines.find((l) => l.branchId)?.branchId || 0;
+    const txnDate = editInvoiceDate
+      ? moment(editInvoiceDate).format("YYYY-MM-DD")
+      : moment().format("YYYY-MM-DD");
+    const d = editInvoiceSale.discount;
+    const discount_info =
+      d && d.discount_id
+        ? {
+            discount_id: d.discount_id,
+            discount_name: d.discount_name || d.name,
+            discount_type: d.discount_type,
+            value: parseFloat(d.value),
+            customer_type: d.customer_type,
+          }
+        : null;
+    const taxes = Array.isArray(editInvoiceSale.taxes)
+      ? editInvoiceSale.taxes.map((t) => ({
+          id: t.id,
+          name: t.description || t.name,
+          description: t.description || t.name,
+          rate: parseFloat(t.rate) || 0,
+          head: t.account_sub_head || t.account_head || t.head,
+          account_head: t.account_head || t.account_sub_head || t.head,
+          account_sub_head: t.account_sub_head || t.account_head || t.head,
+          tax_type: t.tax_type,
+          rate_type: t.rate_type || "percentage",
+          inclusive_type: t.inclusive_type,
+        }))
+      : [];
+
+    setEditInvoiceSaving(true);
+    _postApi(
+      "/api/v1/transactions/create-sale",
+      {
+        edit_sale_code: saleCode,
+        customer_id: customerNo,
+        items: lines.map((line) => ({
+          product_id: line.product_id,
+          sku: line.product_id,
+          item_name: line.item_name,
+          quantity: line.quantity,
+          quantity_sold: line.quantity,
+          selling_price: line.selling_price,
+          price: line.selling_price,
+          amount: line.quantity * line.selling_price,
+          type: line.type,
+          item_type: line.item_type,
+          taxable: line.taxable,
+          branchId: line.branchId,
+          branch_id: line.branchId,
+          status: "for sale",
+        })),
+        discount_amount: editInvoiceTotals.discount,
+        discount: editInvoiceTotals.discount,
+        discount_info,
+        taxes,
+        tax_amount: editInvoiceTotals.exclusiveTax,
+        total_amount: editInvoiceTotals.total,
+        txn_type:
+          hasCollectMode && !modes.includes("credit")
+            ? "Cash Sale"
+            : "Credit Sale",
+        modeOfPayment: modes.length ? modes.join(",") : "CREDIT",
+        payment_modes: modes,
+        facilityId: activeBusiness.id,
+        created_by: user.id,
+        receivable_code: activeBusiness.receivable_code,
+        receivable_accural_code: activeBusiness.receivable_accural_code,
+        cost_of_sale: activeBusiness.cost_of_sale,
+        sale_revenue_code: activeBusiness.sale_revenue_code,
+        finished_goods_code: activeBusiness.finished_goods_code,
+        inventory_account: activeBusiness.inventory_account || null,
+        pro_bono_code: activeBusiness.pro_bono_code,
+        transaction_date: txnDate,
+        sale_branch_id: saleBranchId,
+        defer_payment: hasCollectMode,
+        apply_prepayment: false,
+      },
+      (response) => {
+        setEditInvoiceSaving(false);
+        if (response?.success) {
+          toast.success(
+            `Invoice ${saleCode} updated — ledger, invoice, and stock rebuilt`,
+          );
+          closeEditInvoice();
+          fetchDashboard();
+        } else {
+          toast.error(response?.message || "Failed to update invoice");
+        }
+      },
+      (error) => {
+        setEditInvoiceSaving(false);
+        toast.error(error?.message || "Failed to update invoice");
+      },
+    );
+  }, [
+    editInvoiceSale,
+    editInvoiceLines,
+    editInvoiceTotals,
+    editInvoiceCustomer,
+    editInvoiceDate,
+    editPaymentModes,
+    activeBusiness,
+    user?.id,
+    closeEditInvoice,
+    fetchDashboard,
+    canEditInvoice,
+  ]);
+
   const filteredHistory = useMemo(() => {
     let list = history.filter((r) => {
       // Received Payment (AD-*) stays on Received Payment — not this hub
@@ -2303,7 +2984,10 @@ export default function ReceivePayment() {
         );
       }
     } catch (err) {
-      toast.error(err?.message || "Could not apply deposit");
+      handleAlreadyProcessedError(
+        err || { message: "Could not apply deposit" },
+        saleCode,
+      );
     } finally {
       setSubmitting(false);
     }
@@ -2318,14 +3002,47 @@ export default function ReceivePayment() {
   ]);
 
   const openHub = useCallback(
-    (row, preferredAction = null) => {
+    (row, preferredAction = null, options = {}) => {
       if (!row?.sale_code) return;
       const action = resolveHubAction(row, preferredAction);
       const pt = String(row?.payment_type || "").toLowerCase();
+      const skipLiveCheck = Boolean(options.skipLiveCheck);
 
       if (action === "collect" && pt === "credit") {
         toast.info(
           "Credit invoices are approved on the Credit tab — not collected as cash/transfer",
+        );
+        return;
+      }
+
+      if (
+        !skipLiveCheck &&
+        action !== "view" &&
+        activeBusiness?.id &&
+        row.sale_code
+      ) {
+        _fetchApi(
+          `/api/v1/sale-workflows/one?facilityId=${encodeURIComponent(
+            activeBusiness.id,
+          )}&saleCode=${encodeURIComponent(row.sale_code)}`,
+          (res) => {
+            const processedMsg = alreadyProcessedFromApi(res, row);
+            if (processedMsg) {
+              toast.error(processedMsg);
+              removeCollectedInvoice(row.sale_code);
+              fetchDashboard();
+              return;
+            }
+            const live = res?.success ? res.results : null;
+            openHub(
+              live ? { ...row, ...live, sale_code: row.sale_code } : row,
+              preferredAction,
+              { skipLiveCheck: true },
+            );
+          },
+          () => {
+            openHub(row, preferredAction, { skipLiveCheck: true });
+          },
         );
         return;
       }
@@ -2403,7 +3120,14 @@ export default function ReceivePayment() {
         );
       }
     },
-    [loadHubInvoice, resolveHubAction, methodTab],
+    [
+      loadHubInvoice,
+      resolveHubAction,
+      methodTab,
+      activeBusiness?.id,
+      removeCollectedInvoice,
+      fetchDashboard,
+    ],
   );
 
   const openCollect = (row) => openHub(row, "collect");
@@ -2498,20 +3222,86 @@ export default function ReceivePayment() {
       );
       if (historyMatch) {
         setActiveTab("history");
+        toast.error(
+          alreadyProcessedInvoiceMessage({
+            saleCode: historyMatch.sale_code,
+            status: historyMatch.status,
+          }),
+        );
         if (!historyMatch.kind || historyMatch.kind !== "customer_advance") {
-          openHub(historyMatch, "view");
+          openHub(historyMatch, "view", { skipLiveCheck: true });
         }
-        if (fromScan) toast.info(`${historyMatch.sale_code} already collected`);
         return;
       }
 
-      if (fromScan) {
+      const looksLikeCode = !/\s/.test(code) && code.length >= 3;
+      if (!looksLikeCode && !fromScan) return;
+      if (!activeBusiness?.id) {
         toast.error(`No collection invoice found for ${code}`);
+        return;
       }
+
+      _fetchApi(
+        `/api/v1/sale-workflows/one?facilityId=${encodeURIComponent(
+          activeBusiness.id,
+        )}&saleCode=${encodeURIComponent(code)}`,
+        (res) => {
+          if (!res?.success || !res.results) {
+            toast.error(res?.message || `No collection invoice found for ${code}`);
+            return;
+          }
+          const live = res.results;
+          const processedMsg = alreadyProcessedFromApi(res, live);
+          if (processedMsg) {
+            toast.error(processedMsg);
+            setActiveTab("history");
+            openHub(live, "view", { skipLiveCheck: true });
+            return;
+          }
+          const pt = String(live.payment_type || "").toLowerCase();
+          if (pt === "deposit") {
+            setMethodTab("deposit");
+            openHub(live, "deposit", { skipLiveCheck: true });
+            if (fromScan) toast.success(`Scanned ${live.sale_code}`);
+            return;
+          }
+          if (pt === "credit" || live.status === "awaiting_credit_approval") {
+            setMethodTab("credit");
+            openHub(live, "credit", { skipLiveCheck: true });
+            if (fromScan) toast.success(`Scanned ${live.sale_code}`);
+            return;
+          }
+          if (pt === "transfer" || pt === "bank") {
+            if (canViewCollectionTab("Transfer Collection")) {
+              setMethodTab("transfer");
+            }
+          } else if (pt === "card") {
+            if (canViewCollectionTab("Card Collection")) {
+              setMethodTab("card");
+            }
+          } else if (pt === "cash") {
+            if (canViewCollectionTab("Cash Collection")) {
+              setMethodTab("cash");
+            }
+          }
+          openHub(live, "collect", { skipLiveCheck: true });
+          if (fromScan) toast.success(`Scanned ${live.sale_code}`);
+        },
+        () => toast.error(`No collection invoice found for ${code}`),
+      );
     },
     // openHub only uses setters + row data; safe across renders
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [history, pending, creditPending, depositPending, canViewCollectionTab, methodTab, openHub],
+    [
+      history,
+      pending,
+      creditPending,
+      depositPending,
+      canViewCollectionTab,
+      methodTab,
+      openHub,
+      activeBusiness?.id,
+    ],
   );
 
   // Deep-link: /verification-points?sale_code=INV-…&tab=credit|cash|transfer
@@ -2578,6 +3368,26 @@ export default function ReceivePayment() {
 
   const closeCollect = () => {
     closeHub();
+  };
+
+  const handleAlreadyProcessedError = (err, saleCode) => {
+    const processedMsg = alreadyProcessedFromApi(err, { sale_code: saleCode });
+    const text =
+      processedMsg ||
+      err?.message ||
+      err?.error ||
+      "This invoice is already processed.";
+    toast.error(text);
+    if (
+      processedMsg ||
+      err?.already_processed ||
+      err?.code === "ALREADY_PROCESSED" ||
+      /already processed/i.test(String(text))
+    ) {
+      if (saleCode) removeCollectedInvoice(saleCode);
+      closeHub();
+      fetchDashboard();
+    }
   };
 
   useEffect(() => {
@@ -2784,12 +3594,18 @@ export default function ReceivePayment() {
             );
           }
         } else {
-          toast.error(res?.message || "Could not approve credit");
+          handleAlreadyProcessedError(
+            res || { message: "Could not approve credit" },
+            row?.sale_code,
+          );
         }
       },
       (err) => {
         setSubmitting(false);
-        toast.error(err?.message || "Could not approve credit");
+        handleAlreadyProcessedError(
+          err || { message: "Could not approve credit" },
+          row?.sale_code,
+        );
       },
     );
   };
@@ -2871,7 +3687,10 @@ export default function ReceivePayment() {
       (res) => {
         if (!res?.success) {
           setSubmitting(false);
-          toast.error(res?.message || "Could not confirm credit amount");
+          handleAlreadyProcessedError(
+            res || { message: "Could not confirm credit amount" },
+            saleCode,
+          );
           return;
         }
         if (res.allocated) {
@@ -2926,7 +3745,10 @@ export default function ReceivePayment() {
       },
       (err) => {
         setSubmitting(false);
-        toast.error(err?.message || "Could not confirm credit amount");
+        handleAlreadyProcessedError(
+          err || { message: "Could not confirm credit amount" },
+          saleCode,
+        );
       },
     );
   };
@@ -3007,7 +3829,7 @@ export default function ReceivePayment() {
         return;
       }
       if (remainingDue <= 0.05) {
-        toast.error("This invoice is already fully collected");
+        toast.error("This invoice is already processed.");
         return;
       }
       if (total - remainingDue > 0.05) {
@@ -3098,12 +3920,18 @@ export default function ReceivePayment() {
             );
           }
         } else {
-          toast.error(res?.message || "Could not confirm payment");
+          handleAlreadyProcessedError(
+            res || { message: "Could not confirm payment" },
+            target.sale_code,
+          );
         }
       },
       (err) => {
         setSubmitting(false);
-        toast.error(err?.message || "Could not confirm payment");
+        handleAlreadyProcessedError(
+          err || { message: "Could not confirm payment" },
+          target.sale_code,
+        );
       },
     );
   };
@@ -3171,7 +3999,12 @@ export default function ReceivePayment() {
   const canImprest = canUseHeaderAction(IMPREST_PRIVILEGE);
   const canPayBill = canUseHeaderAction(PAY_BILL_PRIVILEGE);
 
-  if (!visibleMethodTabs.length && !canMakeDeposit && !canReconcileCollections) {
+  if (
+    !visibleMethodTabs.length &&
+    !canMakeDeposit &&
+    !canReconcileCollections &&
+    !canEditInvoice
+  ) {
     return (
       <div className="min-h-full bg-[#f5f7fb] px-4 py-5 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
@@ -3223,6 +4056,16 @@ export default function ReceivePayment() {
               <ClipboardCheck className="h-4 w-4" />
               Collection Reconciliation
             </Link>
+            ) : null}
+            {canEditInvoice ? (
+            <button
+              type="button"
+              onClick={openEditInvoice}
+              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit Invoice
+            </button>
             ) : null}
             <button
               type="button"
@@ -5347,7 +6190,438 @@ export default function ReceivePayment() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog
+        open={editInvoiceOpen}
+        onOpenChange={(open) => {
+          if (!open) closeEditInvoice();
+          else setEditInvoiceOpen(true);
+        }}
+      >
+        <DialogContent className="z-[200] flex max-h-[94vh] w-[min(98vw,72rem)] max-w-6xl flex-col gap-0 overflow-hidden border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl sm:rounded-xl">
+          <DialogHeader className="shrink-0 border-b border-slate-200 px-5 py-4 text-left">
+            <DialogTitle>
+              {editInvoiceSale?.sale_code
+                ? `Edit Invoice ${editInvoiceSale.sale_code}`
+                : "Edit Invoice"}
+            </DialogTitle>
+            <DialogDescription>
+              {editInvoiceSale
+                ? "Change customer, date, lines, prices, discount, or payment mode. Saving rebuilds the invoice, customer ledger, stock, and general ledger."
+                : "All invoices at Verification Points, any payment mode. Reduce the amount when the customer says the total is not correct."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+            {editInvoiceLoading ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-12 text-sm text-slate-500">
+                <Loader2 className="h-6 w-6 animate-spin text-[var(--aa-navy)]" />
+                Loading invoice…
+              </div>
+            ) : editInvoiceSale ? (
+              <div className="space-y-4">
+                <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="sm:col-span-2">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                      Customer
+                    </div>
+                    <div className="mt-1">
+                      <SearchCustomerInput
+                        selected={editInvoiceCustomer ? [editInvoiceCustomer] : []}
+                        onChange={(cus) => setEditInvoiceCustomer(cus)}
+                        disabled={editInvoiceSaving}
+                      />
+                    </div>
+                    {editInvoiceCustomer?.phone || editInvoiceCustomer?.address ? (
+                      <div className="mt-1 text-xs text-slate-500">
+                        {[editInvoiceCustomer.phone, editInvoiceCustomer.address]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                      Invoice date
+                    </div>
+                    <input
+                      type="date"
+                      min={POSTING_DATE_MIN}
+                      max={getPostingDateMax()}
+                      value={editInvoiceDate}
+                      disabled={editInvoiceSaving}
+                      onChange={(e) => setEditInvoiceDate(e.target.value)}
+                      className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                      Status / amount
+                    </div>
+                    <div className="mt-1">
+                      <WorkflowStatusBadge
+                        status={editInvoiceSale.workflow_status}
+                        paymentType={editInvoiceSale.mode_of_payment}
+                        compact
+                      />
+                    </div>
+                    <div className="mt-1 text-sm font-semibold tabular-nums text-slate-900">
+                      ₦{formatNumber1(editInvoiceTotals.total)}
+                    </div>
+                    {editInvoiceSale.warehouse || editInvoiceSale.warehouse_name ? (
+                      <div className="text-xs text-slate-500">
+                        {editInvoiceSale.warehouse || editInvoiceSale.warehouse_name}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
 
+                <div>
+                  <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                    Payment mode
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {EDIT_PAYMENT_MODE_OPTIONS.map((opt) => {
+                      const on = editPaymentModes.includes(opt.id);
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          disabled={editInvoiceSaving}
+                          onClick={() =>
+                            setEditPaymentModes((prev) =>
+                              prev.includes(opt.id)
+                                ? prev.filter((m) => m !== opt.id)
+                                : [...prev, opt.id],
+                            )
+                          }
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                            on
+                              ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2">Item</th>
+                        <th className="px-3 py-2 text-right">Qty</th>
+                        <th className="px-3 py-2 text-right">Rate</th>
+                        <th className="px-3 py-2 text-right">Amount</th>
+                        <th className="px-3 py-2" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {editInvoiceLines.map((line) => (
+                        <tr key={line.key}>
+                          <td className="px-3 py-2">
+                            <div className="font-medium text-slate-900">
+                              {line.item_name}
+                            </div>
+                            <div className="font-mono text-[11px] text-slate-400">
+                              {[line.product_id, line.branch_name, line.item_type]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={line.quantity}
+                              disabled={editInvoiceSaving}
+                              onChange={(e) =>
+                                updateEditInvoiceLine(
+                                  line.key,
+                                  "quantity",
+                                  e.target.value,
+                                )
+                              }
+                              className="h-9 w-24 rounded-md border border-slate-200 bg-white px-2 text-right text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={line.selling_price}
+                              disabled={editInvoiceSaving}
+                              onChange={(e) =>
+                                updateEditInvoiceLine(
+                                  line.key,
+                                  "selling_price",
+                                  e.target.value,
+                                )
+                              }
+                              className="h-9 w-28 rounded-md border border-slate-200 bg-white px-2 text-right text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
+                            ₦{formatNumber1(editLineAmount(line))}
+                          </td>
+                          <td className="px-2 py-2 text-right">
+                            <button
+                              type="button"
+                              title="Remove line"
+                              disabled={editInvoiceSaving}
+                              onClick={() => removeEditInvoiceLine(line.key)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="relative">
+                  <input
+                    value={editProductQuery}
+                    onChange={(e) => setEditProductQuery(e.target.value)}
+                    disabled={editInvoiceSaving}
+                    placeholder="Add item — search product name or SKU"
+                    className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                  />
+                  {editProductQuery.trim() && filteredEditProducts.length ? (
+                    <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                      {filteredEditProducts.map((p) => {
+                        const sku = p.product_id || p.sku || p.id;
+                        return (
+                          <li key={`${sku}-${p.branchId || p.branch_id || ""}`}>
+                            <button
+                              type="button"
+                              onClick={() => addEditInvoiceProduct(p)}
+                              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                            >
+                              <span>
+                                <span className="block font-medium text-slate-800">
+                                  {p.item_name}
+                                </span>
+                                <span className="block font-mono text-[11px] text-slate-400">
+                                  {[sku, p.branch_name || p.location_name]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </span>
+                              </span>
+                              <span className="tabular-nums text-slate-600">
+                                ₦{formatNumber1(p.selling_price ?? p.price ?? 0)}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                </div>
+
+                <div className="ml-auto w-full max-w-xs space-y-2 text-sm">
+                  <div className="flex justify-between text-slate-600">
+                    <span>Subtotal</span>
+                    <span className="tabular-nums">
+                      ₦{formatNumber1(editInvoiceTotals.subtotal)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-slate-600">
+                    <span>Discount</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={editInvoiceDiscount}
+                      disabled={editInvoiceSaving}
+                      onChange={(e) => setEditInvoiceDiscount(e.target.value)}
+                      className="h-8 w-28 rounded-md border border-slate-200 bg-white px-2 text-right text-sm tabular-nums outline-none focus:border-[var(--aa-accent)]"
+                    />
+                  </div>
+                  {editInvoiceTotals.exclusiveTax > 0 ? (
+                    <div className="flex justify-between text-slate-600">
+                      <span>Tax</span>
+                      <span className="tabular-nums">
+                        ₦{formatNumber1(editInvoiceTotals.exclusiveTax)}
+                      </span>
+                    </div>
+                  ) : null}
+                  {(editInvoiceSale.taxes || []).map((tax) => (
+                    <div
+                      key={tax.id || tax.name}
+                      className="flex justify-between text-xs text-slate-500"
+                    >
+                      <span>
+                        {tax.description || tax.name}
+                        {tax.rate ? ` (${tax.rate}%)` : ""}
+                      </span>
+                      <span>
+                        {String(tax.inclusive_type || "").toLowerCase() ===
+                        "inclusive"
+                          ? "inclusive"
+                          : ""}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between border-t border-slate-200 pt-1 font-semibold text-slate-900">
+                    <span>Total</span>
+                    <span className="tabular-nums">
+                      ₦{formatNumber1(editInvoiceTotals.total)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <input
+                  value={editInvoiceQuery}
+                  onChange={(e) => setEditInvoiceQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const typed = editInvoiceQuery.trim();
+                      if (filteredEditInvoices.length === 1) {
+                        goEditInvoice(filteredEditInvoices[0].sale_code);
+                      } else if (typed) {
+                        goEditInvoice(typed);
+                      }
+                    }
+                  }}
+                  placeholder="Search invoice or customer…"
+                  autoComplete="off"
+                  className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                />
+                <div className="max-h-[28rem] overflow-y-auto rounded-md border border-slate-200">
+                  {filteredEditInvoices.length === 0 ? (
+                    <p className="px-3 py-6 text-center text-sm text-slate-500">
+                      No invoices awaiting verification
+                      {editInvoiceQuery.trim() ? " match this search" : ""}.
+                    </p>
+                  ) : (
+                    <table className="min-w-full text-sm">
+                      <thead className="sticky top-0 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2">Invoice</th>
+                          <th className="px-3 py-2">Date</th>
+                          <th className="px-3 py-2">Customer</th>
+                          <th className="px-3 py-2">Mode</th>
+                          <th className="px-3 py-2">Status</th>
+                          <th className="px-3 py-2 text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredEditInvoices.map((row) => (
+                          <tr
+                            key={row.sale_code}
+                            className="cursor-pointer hover:bg-slate-50"
+                            onClick={() => goEditInvoice(row.sale_code)}
+                          >
+                            <td className="px-3 py-2 font-mono text-sm font-semibold text-[var(--aa-navy)]">
+                              {row.sale_code}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2 text-slate-600">
+                              {row.date
+                                ? moment(row.date).format("DD MMM YYYY")
+                                : "—"}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="font-medium text-slate-800">
+                                {row.customer_name || "—"}
+                              </div>
+                              {row.customer_no ? (
+                                <div className="font-mono text-[11px] text-slate-400">
+                                  {row.customer_no}
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="px-3 py-2 capitalize text-slate-600">
+                              {String(row.payment_type || "—").replace(/_/g, " ")}
+                            </td>
+                            <td className="px-3 py-2">
+                              {row.status ? (
+                                <WorkflowStatusBadge
+                                  status={row.status}
+                                  paymentType={row.payment_type}
+                                  compact
+                                />
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
+                              ₦{formatNumber1(row.amount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="shrink-0 gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3 sm:gap-2">
+            {editInvoiceSale ? (
+              <button
+                type="button"
+                disabled={editInvoiceSaving}
+                onClick={() => {
+                  setEditInvoiceSale(null);
+                  setEditInvoiceLines([]);
+                  setEditInvoiceCustomer(null);
+                }}
+                className="mr-auto inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                <ChevronRight className="h-4 w-4 rotate-180" />
+                Back
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={editInvoiceSaving}
+              onClick={closeEditInvoice}
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            >
+              Cancel
+            </button>
+            {editInvoiceSale ? (
+              <button
+                type="button"
+                disabled={editInvoiceSaving || editInvoiceLoading}
+                onClick={saveEditInvoiceQuantities}
+                className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-navy)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {editInvoiceSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
+                {editInvoiceSaving ? "Saving…" : "Save invoice"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={
+                  editInvoiceLoading || filteredEditInvoices.length === 0
+                }
+                onClick={() =>
+                  goEditInvoice(
+                    filteredEditInvoices.length === 1
+                      ? filteredEditInvoices[0].sale_code
+                      : editInvoiceQuery,
+                  )
+                }
+                className="rounded-md bg-[var(--aa-navy)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              >
+                Open invoice
+              </button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <AlertDialog
         open={Boolean(modeApproveRow)}
         onOpenChange={(open) => {

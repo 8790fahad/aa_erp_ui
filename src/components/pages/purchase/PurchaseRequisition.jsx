@@ -220,6 +220,7 @@ export default function PurchaseRequisition() {
             <Col md={6} className="mt-2">
               <SearchSupplierInput
                 label="Preferred vendor/supplier"
+                vendorType="inventory"
                 // onInputChange={(v) =>
                 //   setForm((p) => ({
                 //     ...p,

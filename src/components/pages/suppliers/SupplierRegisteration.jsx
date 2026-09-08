@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { VENDOR_TYPE_OPTIONS } from "@/utils/vendorType";
 
 const SALUTATIONS = [
   "Mr.",
@@ -58,6 +59,7 @@ const SupplierRegisteration = ({
   getList,
   selectedSupplier,
   onCreated,
+  defaultVendorType = "",
 }) => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const { user } = useSelector((state) => state.auth);
@@ -105,6 +107,7 @@ const SupplierRegisteration = ({
       payable_code: activeBusiness?.payable_code || "",
       payable_accural_code: activeBusiness?.payable_accural_code || "",
       branch_id: "",
+      vendor_type: defaultVendorType || "all",
       // Address
       billing_attention: "",
       billing_country: "Nigeria",
@@ -124,7 +127,7 @@ const SupplierRegisteration = ({
       shipping_phone: "",
       remarks: "",
     }),
-    [activeBusiness?.payable_code, activeBusiness?.payable_accural_code],
+    [activeBusiness?.payable_code, activeBusiness?.payable_accural_code, defaultVendorType],
   );
 
   const [form, setForm] = useState(() => getInitialFormValues());
@@ -190,6 +193,7 @@ const SupplierRegisteration = ({
           : "",
         payable_code: selectedSupplier.payable_code || "",
         payable_accural_code: selectedSupplier.payable_accural_code || "",
+        vendor_type: selectedSupplier.vendor_type || "all",
         branch_id:
           selectedSupplier.branch_id != null
             ? String(selectedSupplier.branch_id)
@@ -300,6 +304,9 @@ const SupplierRegisteration = ({
     if (!String(form.payable_accural_code || "").trim()) {
       newErrors.payable_accural_code = "Advance to payables is required";
     }
+    if (!String(form.vendor_type || "").trim()) {
+      newErrors.vendor_type = "Vendor type is required";
+    }
     const parsedOpeningBalance = form.opening_balance
       ? parseFloat(parseNumberFromFormatted(form.opening_balance)) || 0
       : 0;
@@ -388,6 +395,7 @@ const SupplierRegisteration = ({
         billing_address,
         shipping_address,
         contact_persons,
+        vendor_type: form.vendor_type,
       };
 
       if (selectedSupplier) {
@@ -579,6 +587,39 @@ const SupplierRegisteration = ({
               {errors.name && (
                 <p className="mt-1 text-xs text-red-500">{errors.name}</p>
               )}
+            </div>
+
+            <div>
+              <ShadcnLabel htmlFor="vendor_type" className={labelClass}>
+                Vendor Type <span className="text-red-500">*</span>
+              </ShadcnLabel>
+              <select
+                id="vendor_type"
+                name="vendor_type"
+                value={form.vendor_type || ""}
+                onChange={handleChange}
+                className={cn(
+                  inputClass,
+                  errors.vendor_type && "border-red-500",
+                )}
+              >
+                <option value="">Select type...</option>
+                {VENDOR_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              {errors.vendor_type && (
+                <p className="mt-1 text-xs text-red-500">
+                  {errors.vendor_type}
+                </p>
+              )}
+              <p className="mt-1 text-[11px] text-slate-500">
+                Inventory vendors appear on Inventory Bill. Expense vendors
+                appear on Expense Bill and Imprest. All appears on every
+                list.
+              </p>
             </div>
 
             <div>
@@ -1147,6 +1188,7 @@ SupplierRegisteration.propTypes = {
   getList: PropTypes.func.isRequired,
   selectedSupplier: PropTypes.object,
   onCreated: PropTypes.func,
+  defaultVendorType: PropTypes.string,
 };
 
 export default SupplierRegisteration;

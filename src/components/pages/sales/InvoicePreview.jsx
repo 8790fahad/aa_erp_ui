@@ -231,6 +231,7 @@ function buildBranchInvoiceView(
     invoice_total_amount: Number(
       invoiceData.totalAmount ?? invoiceData.total_amount ?? 0,
     ),
+    workflow_status: invoiceData.workflow_status || null,
   };
 }
 

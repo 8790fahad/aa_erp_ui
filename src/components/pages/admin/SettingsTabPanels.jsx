@@ -17,6 +17,7 @@ import CostingTemplate from "./CostingTemplate";
 import UserRole from "./userRole";
 import ProductMultiplier from "./ProductMultiplier";
 import VATPolicySelector from "./VATPolicySelector";
+import VatSettings from "./VatSettings";
 import InvoiceClosingSettings from "./InvoiceClosingSettings";
 import CustomerType from "./CustomerType";
 import BankListSettings from "./BankListSettings";
@@ -541,6 +542,16 @@ export default function SettingsTabPanels({
                 description="Configure opening balance equity account"
                 icon="💰"
               />
+            </Col>
+          </Row>
+        </TabsContent>
+      )}
+
+      {tabVisible("vat") && (
+        <TabsContent value="vat" className="mt-0">
+          <Row className="g-4">
+            <Col md={12}>
+              <VatSettings />
             </Col>
           </Row>
         </TabsContent>
@@ -1498,9 +1509,9 @@ export default function SettingsTabPanels({
             </Col>
             <Col md={12}>
               <PayableSettings
-                title="VAT Account"
+                title="VAT Recoverable"
                 code={activeBusiness.vat_account_code}
-                description="Default VAT account head — used on VAT Report as the amount you are supposed to pay"
+                description="VAT Recoverable account — Input VAT, Output VAT, and the amount to pay"
                 icon="🧾"
               />
             </Col>

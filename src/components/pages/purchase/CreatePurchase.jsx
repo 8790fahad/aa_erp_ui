@@ -292,6 +292,7 @@ export default function CreatePurchase() {
       component: () => (
         <SearchSupplierInput
           label="Supplier Name"
+          vendorType="inventory"
           onInputChange={(v) =>
             setForm((p) => ({
               ...p,

@@ -74,6 +74,7 @@ import AddProduct from "../pages/inventory/All/product/AddProduct";
 import ProductServiceForm from "../pages/inventory/All/product/ProductServiceForm";
 import GenerateGoodReceiveNote from "../pages/purchase/GenerateGoodReceiveNote";
 import PurchaseInventory from "../pages/purchase/PurchaseInventory";
+import InputVatReport from "../pages/purchase/InputVatReport";
 
 import ViewBatch from "../pages/inventory/ViewBatch";
 import ProcessBatch from "../pages/inventory/ProcessBatch";
@@ -482,6 +483,10 @@ const routeModules = {
       {
         path: "inventory",
         element: <PurchaseInventory />,
+      },
+      {
+        path: "input-vat",
+        element: <InputVatReport />,
       },
       {
         path: "payment",

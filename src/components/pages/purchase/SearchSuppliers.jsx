@@ -4,11 +4,27 @@ import { useDispatch, useSelector } from "react-redux";
 import CustomTypeahead from "@/common/Custom/Customtypeahead";
 import { getSuppliers } from "@/redux/actions/suppliers";
 import SupplierRegisteration from "../suppliers/SupplierRegisteration";
+import {
+  filterSuppliersByVendorType,
+  filterSuppliersByAllowedTypes,
+} from "@/utils/vendorType";
+import { getUserFunctionalities, allowedVendorFetchTypes } from "@/lib/access";
 
 export default function SearchSupplierInput(props) {
   const dispatch = useDispatch();
   const rawOptions = useSelector((state) => state.suppliers.supplierList);
-  const options = Array.isArray(rawOptions) ? rawOptions : [];
+  const user = useSelector((state) => state.auth.user);
+  const activeBusiness = useSelector((state) => state.auth.activeBusiness);
+  const allowedTypes = allowedVendorFetchTypes(
+    getUserFunctionalities(user, activeBusiness),
+  );
+  const options = filterSuppliersByVendorType(
+    filterSuppliersByAllowedTypes(
+      Array.isArray(rawOptions) ? rawOptions : [],
+      allowedTypes,
+    ),
+    props.vendorType,
+  );
   const [inputValue, setInputValue] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -67,10 +83,9 @@ export default function SearchSupplierInput(props) {
         closeModal={() => setShowCreateModal(false)}
         // No specific supplier selected – this opens the "create" mode
         selectedSupplier={null}
-        // Refresh supplier list after creating a new one
         getList={getList}
-        // No-op for the required empty callback
         empty={() => {}}
+        defaultVendorType="all"
       />
     </>
   );

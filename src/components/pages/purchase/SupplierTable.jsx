@@ -28,6 +28,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import ViewSupplierAccounts from "../suppliers/ViewSupplierAccounts";
+import { vendorTypeLabel, VENDOR_TYPE_OPTIONS, normalizeVendorType, filterSuppliersByAllowedTypes } from "@/utils/vendorType";
+import { getUserFunctionalities, allowedVendorFetchTypes } from "@/lib/access";
 
 export default function SupplierTable() {
   const dispatch = useDispatch();
@@ -35,7 +37,22 @@ export default function SupplierTable() {
   const location = useLocation();
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const data = useSelector((state) => state.suppliers.supplierList);
+  const allowedVendorTypes = useMemo(
+    () =>
+      allowedVendorFetchTypes(
+        getUserFunctionalities(user, activeBusiness),
+      ),
+    [user, activeBusiness],
+  );
+  const typeFilterOptions = useMemo(
+    () =>
+      VENDOR_TYPE_OPTIONS.filter((opt) =>
+        allowedVendorTypes.includes(opt.value),
+      ),
+    [allowedVendorTypes],
+  );
   const [searchText, setSearchText] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
   const [filterBranches, setFilterBranches] = useState([]);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [branches, setBranches] = useState([]);
@@ -215,7 +232,8 @@ export default function SupplierTable() {
       filterBranches.length === visibleBranches.length);
 
   const filteredData = useMemo(() => {
-    return data.filter((item) => {
+    const permitted = filterSuppliersByAllowedTypes(data, allowedVendorTypes);
+    return permitted.filter((item) => {
       const matchesSearch =
         item.supplier_name?.toLowerCase().includes(searchText?.toLowerCase()) ||
         item.name?.toLowerCase().includes(searchText?.toLowerCase()) ||
@@ -228,9 +246,14 @@ export default function SupplierTable() {
         showingAllWarehouses ||
         filterBranches.includes(String(item.branch_id));
 
-      return matchesSearch && matchesBranch;
+      const matchesType = !typeFilter
+        ? true
+        : normalizeVendorType(item.vendor_type) === typeFilter ||
+          (!normalizeVendorType(item.vendor_type) && typeFilter === "all");
+
+      return matchesSearch && matchesBranch && matchesType;
     });
-  }, [data, searchText, filterBranches, showingAllWarehouses]);
+  }, [data, searchText, filterBranches, showingAllWarehouses, typeFilter, allowedVendorTypes]);
 
   // Simplified handler - only one for managing accounts
   const handleManageAccounts = useCallback((supplier) => {
@@ -264,6 +287,15 @@ export default function SupplierTable() {
       custom: true,
       component: (item) => (
         <div className="text-sm text-gray-800">{item.supplier_name || "-"}</div>
+      ),
+    },
+    {
+      title: "Type",
+      custom: true,
+      component: (item) => (
+        <div className="text-sm text-gray-700">
+          {vendorTypeLabel(item.vendor_type)}
+        </div>
       ),
     },
     {
@@ -469,6 +501,21 @@ export default function SupplierTable() {
                 </div>
               )}
             </div>
+            <select
+              value={typeFilter}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full rounded-lg border border-gray-300 bg-white py-2 px-3 text-sm text-gray-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--aa-accent)] sm:w-44"
+            >
+              <option value="">All types</option>
+              {typeFilterOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

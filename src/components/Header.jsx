@@ -106,6 +106,7 @@ const QUICK_CREATE = [
       "Collection Reconciliation",
       "Imprest",
       "Pay Bill",
+      "Edit Invoice",
     ],
   },
 ];

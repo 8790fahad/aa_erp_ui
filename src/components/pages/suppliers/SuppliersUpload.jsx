@@ -196,6 +196,7 @@ const SuppliersUpload = ({ open, onClose, onUploadSuccess }) => {
       "phone",
       "email",
       "branch",
+      "vendor_type",
       "payable_code",
       "payable_accural_code",
       "opening_balance",
@@ -228,6 +229,13 @@ const SuppliersUpload = ({ open, onClose, onUploadSuccess }) => {
         "location",
         "warehouse",
         "branch/location",
+      ],
+      vendor_type: [
+        "vendor_type",
+        "vendor type",
+        "type",
+        "supplier_type",
+        "supplier type",
       ],
       payable_code: [
         "payable_code",
@@ -543,6 +551,7 @@ const SuppliersUpload = ({ open, onClose, onUploadSuccess }) => {
           supplier.payable_accural_code || activeBusiness?.payable_accural_code,
         branch: supplier.branch || null,
         branch_id: resolveBranchId(supplier.branch),
+        vendor_type: supplier.vendor_type || "all",
       }));
 
       // Step 4: Show preview instead of uploading immediately
@@ -626,6 +635,7 @@ const SuppliersUpload = ({ open, onClose, onUploadSuccess }) => {
           payable_code: item.payable_code,
           payable_accural_code: item.payable_accural_code,
           branch_id: item.branch_id ?? resolveBranchId(item.branch),
+          vendor_type: item.vendor_type || "all",
           opening_balance_equity: activeBusiness?.opening_balance_equity,
         })),
         opening_balance_equity: activeBusiness?.opening_balance_equity,

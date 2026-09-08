@@ -1473,6 +1473,7 @@ export default function PurchaseRequisitionList() {
                 <SearchSupplierInput
                   label=""
                   edge
+                  vendorType="inventory"
                   placeholder="Search and select supplier..."
                   selected={
                     form.supplier_name

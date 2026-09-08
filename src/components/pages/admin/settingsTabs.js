@@ -72,6 +72,18 @@ export const SETTINGS_TABS = [
     category: "accounts",
   },
   {
+    value: "vat",
+    label: "VAT",
+    privilege: "Settings VAT",
+    altPrivileges: [
+      "Settings VAT Policy",
+      "Settings Payable",
+      "Settings Tax Setup",
+      "Settings",
+    ],
+    category: "accounts",
+  },
+  {
     value: "depreciation-method",
     label: "Depreciation Method",
     privilege: "Settings Depreciation Method",
@@ -296,6 +308,7 @@ export const SETTINGS_HASH_TO_TAB = {
   "bank-setup": "bank-setup",
   "bank-opening-balances": "bank-setup",
   "tax-setup": "tax-setup",
+  vat: "vat",
   "paye-setup": "paye-setup",
   "header-settings": "header-settings",
   "production-abnormal-loss-account": "abnormal-loss",

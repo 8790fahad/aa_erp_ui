@@ -7,6 +7,11 @@ import { SET_SUPPLIER_LIST } from "./actionTypes";
 import store from "../store.js";
 // import suppliersLocal, { remoteSuppliers } from "../../pouchdb/suppliers";
 import { apiURL, _fetchApi, _postApi } from "./api";
+import {
+  getUserFunctionalities,
+  allowedVendorFetchTypes,
+  canFetchAllVendorTypes,
+} from "@/lib/access";
 // import { saveDataToCache, getDataFromCache } from "./reports";
 import { DATA_KEYS } from "../../constants";
 import moment from "moment";
@@ -216,10 +221,23 @@ export const saveNewSupplier = (
 export const getSuppliers = (callback = (f) => f, error = (f) => f) => {
   return (dispatch) => {
     const facilityId = store.getState().auth.activeBusiness.id;
+    const user = store.getState().auth.user;
+    const activeBusiness = store.getState().auth.activeBusiness;
+    const functionalities = getUserFunctionalities(user, activeBusiness);
+    const params = new URLSearchParams({
+      facilityId: String(facilityId),
+      limit: "1000",
+    });
+    if (!canFetchAllVendorTypes(functionalities)) {
+      params.set(
+        "vendorTypes",
+        allowedVendorFetchTypes(functionalities).join(","),
+      );
+    }
 
     // Use new supplier API endpoint with pagination support
     _fetchApi(
-      `/api/suppliers?facilityId=${facilityId}&limit=1000`,
+      `/api/suppliers?${params.toString()}`,
       (data) => {
         console.log("Suppliers API Response:", data);
         // New API returns data in data.data.suppliers format

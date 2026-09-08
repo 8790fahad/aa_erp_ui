@@ -24,6 +24,8 @@ import {
   pickAndStageCloudinaryFiles,
 } from "@/utils/cloudinaryDocuments";
 import SupplierRegisteration from "../suppliers/SupplierRegisteration";
+import { filterSuppliersByVendorType, filterSuppliersByAllowedTypes } from "@/utils/vendorType";
+import { getUserFunctionalities, allowedVendorFetchTypes } from "@/lib/access";
 
 const inputClass =
   "h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-[var(--aa-navy,#0f2744)] focus:ring-1 focus:ring-[var(--aa-navy,#0f2744)]";
@@ -76,6 +78,15 @@ export default function MemoFormModal({
   const dispatch = useDispatch();
   const { user = {}, activeBusiness = {} } = useSelector((state) => state.auth);
   const { supplierList = [] } = useSelector((state) => state.suppliers) || {};
+  const expenseSuppliers = useMemo(() => {
+    const allowed = allowedVendorFetchTypes(
+      getUserFunctionalities(user, activeBusiness),
+    );
+    return filterSuppliersByVendorType(
+      filterSuppliersByAllowedTypes(supplierList, allowed),
+      "expense",
+    );
+  }, [supplierList, user, activeBusiness]);
   const isEditMode = Boolean(memoId);
 
   const userId = user.id ?? user.user_id ?? "";
@@ -454,14 +465,14 @@ export default function MemoFormModal({
                   >
                     <option value="">Select supplier...</option>
                     {form.supplier_number &&
-                      !supplierList.some(
+                      !expenseSuppliers.some(
                         (s) => s.supplier_number === form.supplier_number,
                       ) && (
                         <option value={form.supplier_number}>
                           {form.supplier_name || form.supplier_number}
                         </option>
                       )}
-                    {supplierList.map((supplier) => (
+                    {expenseSuppliers.map((supplier) => (
                       <option
                         key={supplier.supplier_number}
                         value={supplier.supplier_number}
@@ -827,6 +838,7 @@ export default function MemoFormModal({
       getList={refreshSuppliers}
       empty={() => {}}
       onCreated={applyCreatedSupplier}
+      defaultVendorType="expense"
     />
     </>
   );

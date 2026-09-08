@@ -49,6 +49,8 @@ import { v4 as uuidv4 } from "uuid";
 import moment from "moment";
 import { isProductTaxable } from "@/utils/taxableStatus";
 import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
+import { filterSuppliersByVendorType } from "@/utils/vendorType";
+import { getUserFunctionalities, allowedVendorFetchTypes, canFetchAllVendorTypes } from "@/lib/access";
 
 const HISTORY_PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
 
@@ -327,6 +329,8 @@ export default function CreateImprestDrawer({
   const [historyPage, setHistoryPage] = useState(1);
   const [historyPageSize, setHistoryPageSize] = useState(10);
   const [historyTotal, setHistoryTotal] = useState(0);
+  const [expenseSuppliers, setExpenseSuppliers] = useState([]);
+  const [selectedPayee, setSelectedPayee] = useState(null);
 
   const navigate = useNavigate();
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
@@ -347,7 +351,35 @@ export default function CreateImprestDrawer({
     setModeOfPayment(defaultMode || "cash");
     setNarration("");
     setChequeNumber("");
+    setSelectedPayee(null);
   }, [defaultMode]);
+
+  useEffect(() => {
+    if (!open || !facilityId) return;
+    const functionalities = getUserFunctionalities(user, activeBusiness);
+    const params = new URLSearchParams({
+      facilityId: String(facilityId),
+      limit: "1000",
+      vendorType: "expense",
+    });
+    if (!canFetchAllVendorTypes(functionalities)) {
+      params.set(
+        "vendorTypes",
+        allowedVendorFetchTypes(functionalities).join(","),
+      );
+    }
+    _fetchApi(
+      `/api/suppliers?${params.toString()}`,
+      (data) => {
+        const rows =
+          data?.success && data?.data?.suppliers
+            ? data.data.suppliers
+            : data?.results || [];
+        setExpenseSuppliers(filterSuppliersByVendorType(rows, "expense"));
+      },
+      () => setExpenseSuppliers([]),
+    );
+  }, [open, facilityId, user, activeBusiness]);
 
   useEffect(() => {
     if (open) setModeOfPayment(defaultMode || "cash");
@@ -708,6 +740,8 @@ export default function CreateImprestDrawer({
       /** Imprest posts to direct-expenses but must not create a purchase invoice row */
       skip_invoice: true,
       till_mode: tillMode || null,
+      supplier_number: selectedPayee?.supplier_number || "",
+      supplier_name: selectedPayee?.supplier_name || "",
     };
 
     _postApi(
@@ -811,6 +845,33 @@ export default function CreateImprestDrawer({
               onChequeNumberChange={setChequeNumber}
               allowCashTransfer={false}
             />
+
+            <div className="space-y-2">
+              <Label htmlFor="imprest-payee">
+                Payee{" "}
+                <span className="font-normal text-slate-400">
+                  (expense vendor)
+                </span>
+              </Label>
+              <select
+                id="imprest-payee"
+                value={selectedPayee?.supplier_number || ""}
+                onChange={(e) => {
+                  const next = expenseSuppliers.find(
+                    (s) => s.supplier_number === e.target.value,
+                  );
+                  setSelectedPayee(next || null);
+                }}
+                className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-1 focus:ring-[var(--aa-navy)]"
+              >
+                <option value="">Select expense vendor…</option>
+                {expenseSuppliers.map((s) => (
+                  <option key={s.supplier_number} value={s.supplier_number}>
+                    {s.supplier_name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="imprest-narration">Narration (optional)</Label>

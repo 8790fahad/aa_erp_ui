@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Save,
   Plus,
@@ -35,6 +35,8 @@ import { POSTING_DATE_MIN, getPostingDateMax } from "@/utilities";
 import { v4 as uuidv4 } from "uuid";
 import useQuery from "@/hooks/useQuery";
 import { Button } from "@/components/ui/button";
+import { filterSuppliersByVendorType, filterSuppliersByAllowedTypes } from "@/utils/vendorType";
+import { getUserFunctionalities, allowedVendorFetchTypes } from "@/lib/access";
 
 const initialItemForm = {
   item_name: "",
@@ -55,6 +57,15 @@ export default function OperatingCashExpenses() {
   const { supplierList } = useSelector((d) => d.suppliers) || [];
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
+  const expenseSuppliers = useMemo(() => {
+    const allowed = allowedVendorFetchTypes(
+      getUserFunctionalities(user, activeBusiness),
+    );
+    return filterSuppliersByVendorType(
+      filterSuppliersByAllowedTypes(supplierList, allowed),
+      "expense",
+    );
+  }, [supplierList, user, activeBusiness]);
   const today = moment().format("YYYY-MM-DD");
 
   const [form, setForm] = useState({
@@ -623,14 +634,14 @@ export default function OperatingCashExpenses() {
                   <option value="">Select supplier...</option>
                   {/* Show memo's supplier when added from memo but not yet in supplierList */}
                   {form.supplier_number &&
-                    !supplierList?.some(
+                    !expenseSuppliers?.some(
                       (s) => s.supplier_number === form.supplier_number,
                     ) && (
                       <option value={form.supplier_number}>
                         {form.supplier_name || form.supplier_number}
                       </option>
                     )}
-                  {supplierList?.map((supplier) => (
+                  {expenseSuppliers?.map((supplier) => (
                     <option
                       key={supplier.supplier_number}
                       value={supplier.supplier_number}

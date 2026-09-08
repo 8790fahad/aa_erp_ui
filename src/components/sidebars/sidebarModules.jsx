@@ -207,6 +207,11 @@ export const modules = [
         title: "Vendors",
         url: "/app/suppliers",
         functionality: ["Vendors", "Suppliers", "Supplier Register"],
+        subFunctionalities: [
+          { title: "All Vendors" },
+          { title: "Inventory Vendors" },
+          { title: "Expense Vendors" },
+        ],
         access: [
           "services",
           "retailers",
@@ -291,6 +296,23 @@ export const modules = [
               { title: "Expenses" },
             ],
           },
+        ],
+        access: [
+          "services",
+          "retailers",
+          "recycling",
+          "manufacturing",
+          "contractors",
+        ],
+      },
+      {
+        title: "Input VAT",
+        url: "/app/purchase/input-vat",
+        functionality: [
+          "Input VAT",
+          "VAT Report",
+          "Bill",
+          "Billing Expense",
         ],
         access: [
           "services",
@@ -439,6 +461,7 @@ export const modules = [
           { title: "Collection Reconciliation" },
           { title: "Imprest" },
           { title: "Pay Bill" },
+          { title: "Edit Invoice" },
           { title: "Switch Payment Mode" },
           { title: "Approve Payment Mode Switch" },
         ],

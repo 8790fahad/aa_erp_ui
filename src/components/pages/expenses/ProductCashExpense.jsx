@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Save,
   Plus,
@@ -24,6 +24,8 @@ import { Typeahead } from "react-bootstrap-typeahead";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import useQuery from "@/hooks/useQuery";
+import { filterSuppliersByVendorType, filterSuppliersByAllowedTypes } from "@/utils/vendorType";
+import { getUserFunctionalities, allowedVendorFetchTypes } from "@/lib/access";
 import {
   Drawer,
   DrawerClose,
@@ -51,6 +53,15 @@ export default function ProductCashExpense() {
   const { supplierList } = useSelector((d) => d.suppliers) || [];
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
+  const inventorySuppliers = useMemo(() => {
+    const allowed = allowedVendorFetchTypes(
+      getUserFunctionalities(user, activeBusiness),
+    );
+    return filterSuppliersByVendorType(
+      filterSuppliersByAllowedTypes(supplierList, allowed),
+      "inventory",
+    );
+  }, [supplierList, user, activeBusiness]);
   const today = moment().format("YYYY-MM-DD");
   const navigate = useNavigate();
 
@@ -582,14 +593,14 @@ export default function ProductCashExpense() {
                   <option value="">Select supplier...</option>
                   {/* Show requisition's supplier when added but not yet in supplierList */}
                   {form.supplier_number &&
-                    !supplierList?.some(
+                    !inventorySuppliers?.some(
                       (s) => s.supplier_number === form.supplier_number
                     ) && (
                       <option value={form.supplier_number}>
                         {form.supplier_name || form.supplier_number}
                       </option>
                     )}
-                  {supplierList?.map((supplier) => (
+                  {inventorySuppliers?.map((supplier) => (
                     <option
                       key={supplier.supplier_number}
                       value={supplier.supplier_number}

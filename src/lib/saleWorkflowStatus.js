@@ -114,6 +114,63 @@ const STATUS_TO_PROCESS = (() => {
   return map;
 })();
 
+/** Line-item edit is allowed only before payment / warehouse / closing. */
+export const EDITABLE_SALES_INVOICE_STATUSES = [
+  "sales_order",
+  "invoice_generated",
+  "submitted",
+  "awaiting_payment",
+  "awaiting_cashier_confirm",
+  "awaiting_discount_approval",
+  "awaiting_credit_approval",
+  "awaiting_payment_mode_approval",
+  "awaiting_payment_method",
+];
+
+/**
+ * Missing status (legacy invoices with no workflow) can still be opened for edit.
+ * Paid, separated, warehouse, completed, and reversed invoices cannot.
+ */
+export function isEditableSalesInvoiceStatus(status) {
+  if (status == null || String(status).trim() === "") return true;
+  return EDITABLE_SALES_INVOICE_STATUSES.includes(
+    String(status).toLowerCase().trim(),
+  );
+}
+
+/** Statuses that mean Verification Points collection/approval is already done. */
+export const PROCESSED_SALES_INVOICE_STATUSES = [
+  "payment_confirmed",
+  "credit_approved",
+  "invoice_separation",
+  "final_invoice",
+  "warehouse_picking",
+  "dual_signature",
+  "goods_released",
+  "completed",
+  "cancelled",
+  "reversed",
+];
+
+export function isProcessedSalesInvoiceStatus(status) {
+  return PROCESSED_SALES_INVOICE_STATUSES.includes(
+    String(status || "").toLowerCase().trim(),
+  );
+}
+
+export function alreadyProcessedInvoiceMessage(payload = {}) {
+  const status = String(payload.status || "").toLowerCase();
+  const code = String(payload.saleCode || payload.sale_code || "").trim();
+  if (status === "cancelled" || status === "reversed") {
+    return code
+      ? `Invoice ${code} has been reversed and cannot be processed.`
+      : "This invoice has been reversed and cannot be processed.";
+  }
+  const who = String(payload.processedBy || payload.processed_by || "").trim();
+  if (who) return `This invoice is already processed by ${who}.`;
+  return payload.message || "This invoice is already processed.";
+}
+
 /** Raw status detail (timeline / history). */
 export const SALE_WORKFLOW_STATUS_META = {
   sales_order: {

@@ -96,6 +96,7 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "Collection Reconciliation",
   "Imprest",
   "Pay Bill",
+  "Edit Invoice",
   "Create Bill",
   "Inventory Bill",
   "Expense Bill",
@@ -108,6 +109,8 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "Approved Memos",
   "Pending Memos",
   "See All Pay Bills",
+  "Inventory Vendors",
+  "Expense Vendors",
 ];
 
 export const CREATE_BILL_PRIVILEGE = "Create Bill";
@@ -122,6 +125,40 @@ export const MEMO_FILTER_ALL_PRIVILEGE = "All Memos";
 export const MEMO_FILTER_APPROVED_PRIVILEGE = "Approved Memos";
 export const MEMO_FILTER_PENDING_PRIVILEGE = "Pending Memos";
 export const SEE_ALL_PAY_BILLS_PRIVILEGE = "See All Pay Bills";
+export const ALL_VENDORS_PRIVILEGE = "All Vendors";
+export const INVENTORY_VENDORS_PRIVILEGE = "Inventory Vendors";
+export const EXPENSE_VENDORS_PRIVILEGE = "Expense Vendors";
+
+/**
+ * Vendor types the user may fetch.
+ * All Vendors (default) → every type. Inventory / Expense Vendors restrict
+ * the list. Type "all" vendors stay visible with any grant. No child grants
+ * keeps full fetch for existing staff.
+ */
+export function allowedVendorFetchTypes(functionalities) {
+  if (hasFullAccess(functionalities)) return ["all", "inventory", "expense"];
+  const funcs = Array.isArray(functionalities) ? functionalities : [];
+  if (funcs.includes(ALL_VENDORS_PRIVILEGE)) {
+    return ["all", "inventory", "expense"];
+  }
+  const granted = [];
+  if (funcs.includes(INVENTORY_VENDORS_PRIVILEGE)) granted.push("inventory");
+  if (funcs.includes(EXPENSE_VENDORS_PRIVILEGE)) granted.push("expense");
+  if (granted.length) {
+    granted.push("all");
+    return granted;
+  }
+  return ["all", "inventory", "expense"];
+}
+
+export function canFetchAllVendorTypes(functionalities) {
+  const allowed = allowedVendorFetchTypes(functionalities);
+  return (
+    allowed.includes("all") &&
+    allowed.includes("inventory") &&
+    allowed.includes("expense")
+  );
+}
 
 /** Pay Bills list: own payments unless this privilege (or admin) is granted. */
 export function canSeeAllPayBills(user, activeBusiness) {
