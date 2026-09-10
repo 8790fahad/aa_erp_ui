@@ -1600,19 +1600,10 @@ export default function ProductSupplierBill() {
               type="text"
               name="order_id"
               value={form.order_id || ""}
-              onChange={(e) => {
-                const nextPo = e.target.value;
-                setForm((p) => ({ ...p, order_id: nextPo }));
-                setItems((prev) =>
-                  prev.map((item) =>
-                    item.pr_no || item.order_id || item.po_no
-                      ? { ...item, order_id: nextPo, po_no: nextPo }
-                      : item,
-                  ),
-                );
-              }}
-              placeholder="Type PO number or add from purchase order"
-              className="h-9 w-full max-w-md rounded-md border border-slate-300 bg-white px-3 font-mono text-sm text-slate-800 outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+              readOnly
+              disabled
+              placeholder="Filled from purchase order"
+              className="h-9 w-full max-w-md cursor-not-allowed rounded-md border border-slate-300 bg-slate-50 px-3 font-mono text-sm text-slate-800 outline-none"
             />
           </div>
 

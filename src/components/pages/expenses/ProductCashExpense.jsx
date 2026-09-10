@@ -683,9 +683,10 @@ export default function ProductCashExpense() {
                   type="text"
                   name="order_id"
                   value={form.order_id || ""}
-                  onChange={handleFormChange}
-                  placeholder="Filled from purchase order, or type here"
-                  className="w-full px-3 py-2 font-mono text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all hover:border-slate-400"
+                  readOnly
+                  disabled
+                  placeholder="Filled from purchase order"
+                  className="w-full cursor-not-allowed px-3 py-2 font-mono text-sm border-2 border-slate-200 bg-slate-50 rounded-lg text-slate-800"
                 />
               </div>
 
