@@ -456,7 +456,6 @@ export const modules = [
           { title: "Card Collection" },
           { title: "Credit Collection" },
           { title: "Apply Deposit" },
-          { title: "Make Deposit" },
           { title: "Discount Collection" },
           {
             title: "Collection Reconciliation",
@@ -470,7 +469,6 @@ export const modules = [
           { title: "Pay Bill" },
           { title: "Edit Invoice" },
           { title: "Switch Payment Mode" },
-          { title: "Approve Payment Mode Switch" },
         ],
         access: [
           "services",

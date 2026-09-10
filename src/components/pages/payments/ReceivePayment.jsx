@@ -18,7 +18,6 @@ import {
   Loader2,
   Lock,
   Percent,
-  Plus,
   Printer,
   RefreshCw,
   Receipt,
@@ -55,16 +54,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -496,12 +485,6 @@ const METHOD_TABS = [
     icon: Percent,
     privilege: "Discount Collection",
   },
-  {
-    id: "mode",
-    label: "Mode Switch",
-    icon: ArrowRightLeft,
-    privilege: "Switch Payment Mode",
-  },
 ];
 
 /** Status chip under the invoice number follows the active Verification Points tab. */
@@ -522,7 +505,6 @@ function tabWorkflowBadge(methodTab, row) {
 }
 
 const SWITCH_PAYMENT_MODE_PRIVILEGE = "Switch Payment Mode";
-const APPROVE_PAYMENT_MODE_PRIVILEGE = "Approve Payment Mode Switch";
 
 const MAKE_DEPOSIT_PRIVILEGE = "Make Deposit";
 const RECONCILIATION_PRIVILEGE = "Collection Reconciliation";
@@ -1089,6 +1071,33 @@ function isRowOnQueueDay(row, ymd) {
   return m.isValid() && m.format("YYYY-MM-DD") === ymd;
 }
 
+function isPendingModeSwitchRow(row) {
+  return (
+    row?.status === "awaiting_payment_mode_approval" ||
+    Boolean(row?.proposed_payment_type) ||
+    Boolean(row?.pending_payment_mode?.to) ||
+    Boolean(row?.pending_payment_mode)
+  );
+}
+
+function isPostedOrReversedWorkflow(row) {
+  const st = String(row?.status || "").toLowerCase();
+  return (
+    st === "reversed" ||
+    st === "cancelled" ||
+    st === "payment_confirmed" ||
+    st === "invoice_separation" ||
+    st === "final_invoice" ||
+    st === "warehouse_picking" ||
+    st === "dual_signature" ||
+    st === "goods_released" ||
+    st === "completed" ||
+    st === "credit_approved"
+  );
+}
+
+const POSTED_MODE_CHECK_VALUES = new Set(["cash", "transfer", "card"]);
+
 /** Cash / Transfer / Card / Credit tabs — credit_split appears on matching sides. */
 function matchesMethod(paymentType, method, row = null) {
   const modes = row ? rowPaymentModes(row) : [];
@@ -1124,11 +1133,7 @@ function matchesMethod(paymentType, method, row = null) {
     );
   }
   if (method === "mode") {
-    return (
-      row?.status === "awaiting_payment_mode_approval" ||
-      Boolean(row?.proposed_payment_type) ||
-      Boolean(row?.pending_payment_mode)
-    );
+    return isPendingModeSwitchRow(row);
   }
   return false;
 }
@@ -1247,14 +1252,6 @@ function exclusiveTaxFromRates(subtotal, discount, taxes) {
   }, 0);
 }
 
-const EDIT_PAYMENT_MODE_OPTIONS = [
-  { id: "cash", label: "Cash" },
-  { id: "transfer", label: "Transfer" },
-  { id: "card", label: "Card" },
-  { id: "credit", label: "Credit" },
-  { id: "deposit", label: "Deposit" },
-];
-
 async function waitForElementImages(root) {
   const imgs = Array.from(root?.querySelectorAll?.("img") || []);
   await Promise.all(
@@ -1312,11 +1309,9 @@ export default function ReceivePayment() {
   const hasFullCollectionAccess =
     hasFullAccess(functionalities) || !functionalities.length;
   const canSwitchPaymentMode =
-    hasFullCollectionAccess ||
+    isBusinessOwner(user, activeBusiness) ||
+    hasFullAccess(functionalities) ||
     functionalities.includes(SWITCH_PAYMENT_MODE_PRIVILEGE);
-  const canApprovePaymentMode =
-    hasFullCollectionAccess ||
-    functionalities.includes(APPROVE_PAYMENT_MODE_PRIVILEGE);
   const canEditInvoice =
     isBusinessOwner(user, activeBusiness) ||
     hasFullAccess(functionalities) ||
@@ -1335,33 +1330,14 @@ export default function ReceivePayment() {
       if (hasFullAccess(functionalities) || !functionalities.length)
         return true;
 
-      if (functionalities.includes(privilege)) return true;
-
-      // Mode Switch is never granted by parent/legacy Collection Points alone
-      if (
-        privilege === APPROVE_PAYMENT_MODE_PRIVILEGE ||
-        privilege === SWITCH_PAYMENT_MODE_PRIVILEGE
-      ) {
-        return (
-          functionalities.includes(SWITCH_PAYMENT_MODE_PRIVILEGE) ||
-          functionalities.includes(APPROVE_PAYMENT_MODE_PRIVILEGE)
-        );
-      }
-
-      return false;
+      return functionalities.includes(privilege);
     },
     [functionalities],
   );
 
   const visibleMethodTabs = useMemo(
-    () =>
-      METHOD_TABS.filter((t) => {
-        if (t.id === "mode") {
-          return canSwitchPaymentMode || canApprovePaymentMode;
-        }
-        return canViewCollectionTab(t.privilege);
-      }),
-    [canViewCollectionTab, canSwitchPaymentMode, canApprovePaymentMode],
+    () => METHOD_TABS.filter((t) => canViewCollectionTab(t.privilege)),
+    [canViewCollectionTab],
   );
 
   const [methodTab, setMethodTab] = useState(() => {
@@ -1400,7 +1376,10 @@ export default function ReceivePayment() {
     () => discountPending.filter((r) => isRowOnQueueDay(r, todayYmd)),
     [discountPending, todayYmd],
   );
-  const modePendingToday = useMemo(() => modePending, [modePending]);
+  const modePendingToday = useMemo(
+    () => modePending.filter((r) => isPendingModeSwitchRow(r)),
+    [modePending],
+  );
   const [imprestOpen, setImprestOpen] = useState(false);
   const [tillHubOpen, setTillHubOpen] = useState(false);
   const [tillDownloadKind, setTillDownloadKind] = useState(null);
@@ -1466,8 +1445,6 @@ export default function ReceivePayment() {
   const [modeChangeRow, setModeChangeRow] = useState(null);
   const [modeChangeNext, setModeChangeNext] = useState("");
   const [modeChangeChecked, setModeChangeChecked] = useState([]);
-  const [modeApproveRow, setModeApproveRow] = useState(null);
-  const [modeRejectRow, setModeRejectRow] = useState(null);
   const [depositConfirmRow, setDepositConfirmRow] = useState(null);
   const [cashAmount, setCashAmount] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
@@ -1615,7 +1592,18 @@ export default function ReceivePayment() {
           const nextDeposit = res.results?.deposit_pending || [];
           const nextDiscount = res.results?.discount_pending || [];
           const nextMode = res.results?.mode_pending || [];
-          setPending(nextPending);
+          const pendingCodes = new Set(
+            nextPending
+              .map((r) => String(r?.sale_code || "").trim())
+              .filter(Boolean),
+          );
+          setPending([
+            ...nextPending,
+            ...nextMode.filter((r) => {
+              const code = String(r?.sale_code || "").trim();
+              return code && !pendingCodes.has(code);
+            }),
+          ]);
           setCreditPending(nextCredit);
           setDepositPending(nextDeposit);
           setDiscountPending(nextDiscount);
@@ -2120,26 +2108,6 @@ export default function ReceivePayment() {
         pending_count: discountPendingToday.length,
       };
     }
-    if (methodTab === "mode") {
-      return {
-        showCash: false,
-        showTransfer: false,
-        showSplit: false,
-        showCredit: false,
-        showDiscount: false,
-        showMode: true,
-        pending_cash: 0,
-        pending_transfer: 0,
-        pending_split: 0,
-        pending_credit: 0,
-        pending_discount: 0,
-        pending_mode:
-          Number(summary.pending_mode) || sumAmounts(modePendingToday),
-        collected_cash_today: 0,
-        collected_transfer_today: 0,
-        pending_count: modePendingToday.length,
-      };
-    }
     return {
       showCash: true,
       showTransfer: true,
@@ -2349,27 +2317,6 @@ export default function ReceivePayment() {
       list = depositPendingToday;
     } else if (methodTab === "discount") {
       list = discountPendingToday;
-    } else if (methodTab === "mode") {
-      // Mode Switch: invoices you can change + those awaiting mode approval
-      const byCode = new Map();
-      for (const r of [
-        ...pendingToday,
-        ...creditPendingToday,
-        ...modePendingToday,
-      ]) {
-        if (!r?.sale_code) continue;
-        const existing = byCode.get(r.sale_code);
-        // Prefer mode-approval row when both exist
-        if (
-          !existing ||
-          r.status === "awaiting_payment_mode_approval" ||
-          r.proposed_payment_type ||
-          r.pending_payment_mode
-        ) {
-          byCode.set(r.sale_code, r);
-        }
-      }
-      list = [...byCode.values()];
     } else {
       const collectionDeposit = depositPendingToday.filter((r) =>
         isCollectionPlusDepositRow(r, methodTab),
@@ -2856,9 +2803,6 @@ export default function ReceivePayment() {
       if (methodTab === "discount") {
         return matchesMethod(r.payment_type, "discount", r);
       }
-      if (methodTab === "mode") {
-        return matchesMethod(r.payment_type, "mode", r);
-      }
       if (
         methodTab === "cash" ||
         methodTab === "transfer" ||
@@ -3232,7 +3176,6 @@ export default function ReceivePayment() {
         return "credit";
       if (methodTab === "credit") return "collect";
       if (methodTab === "discount") return "discount";
-      if (methodTab === "mode") return "mode";
       if (pt === "credit") return "credit";
       return "collect";
     },
@@ -3770,11 +3713,22 @@ export default function ReceivePayment() {
     const current = normalizePaymentMode(
       row.payment_type || (methodTab === "credit" ? "credit" : "cash"),
     );
-    const checked = modeChecksFromRow(row);
+    const posted = isPostedOrReversedWorkflow(row);
+    const checked = modeChecksFromRow(row).filter((id) =>
+      posted ? POSTED_MODE_CHECK_VALUES.has(id) : true,
+    );
+    const fallback = posted
+      ? POSTED_MODE_CHECK_VALUES.has(current)
+        ? [current]
+        : []
+      : current
+        ? [current]
+        : [];
     setModeChangeRow(row);
-    setModeChangeChecked(checked.length ? checked : current ? [current] : []);
+    setModeChangeChecked(checked.length ? checked : fallback);
     setModeChangeNext(
-      paymentTypeFromModeChecks(checked.length ? checked : [current]) || current,
+      paymentTypeFromModeChecks(checked.length ? checked : fallback) ||
+        (posted ? "" : current),
     );
   };
 
@@ -3804,6 +3758,15 @@ export default function ReceivePayment() {
       toast.error("Tick at least one payment mode");
       return;
     }
+    if (
+      isPostedOrReversedWorkflow(modeChangeRow) &&
+      !["cash", "transfer", "card", "split"].includes(nextType)
+    ) {
+      toast.error(
+        "Paid or reversed invoices can only switch between Cash, Transfer, POS, or Cash + Transfer.",
+      );
+      return;
+    }
     const current = normalizePaymentMode(
       modeChangeRow.payment_type ||
         (methodTab === "credit" ? "credit" : "cash"),
@@ -3814,8 +3777,9 @@ export default function ReceivePayment() {
       return;
     }
 
-    // Approvers apply immediately; switch-only users submit for Mode tab approval
-    const requireApproval = !canApprovePaymentMode;
+    // Change applies on Cash / Transfer / POS / Credit immediately.
+    // There is no Mode Switch approval queue.
+    const requireApproval = false;
 
     setSwitchingModeCode(modeChangeRow.sale_code);
     _postApi(
@@ -3869,76 +3833,6 @@ export default function ReceivePayment() {
       (err) => {
         setSwitchingModeCode(null);
         toast.error(err?.message || "Could not switch payment mode");
-      },
-    );
-  };
-
-  const confirmApprovePaymentMode = () => {
-    const row = modeApproveRow;
-    if (!row || !activeBusiness?.id) return;
-    if (!canApprovePaymentMode) {
-      toast.error("You do not have permission to approve payment mode switches");
-      return;
-    }
-    setSubmitting(true);
-    _postApi(
-      "/api/v1/sale-workflows/advance",
-      {
-        facilityId: activeBusiness.id,
-        saleCode: row.sale_code,
-        action: "approve_payment_mode",
-        updated_by: user?.id,
-        note: "Payment mode switch approved",
-      },
-      (res) => {
-        setSubmitting(false);
-        setModeApproveRow(null);
-        if (res?.success) {
-          toast.success(res.message || "Payment mode switch approved");
-          closeHub();
-          fetchDashboard();
-        } else {
-          toast.error(res?.message || "Could not approve payment mode switch");
-        }
-      },
-      (err) => {
-        setSubmitting(false);
-        toast.error(err?.message || "Could not approve payment mode switch");
-      },
-    );
-  };
-
-  const confirmRejectPaymentMode = () => {
-    const row = modeRejectRow;
-    if (!row || !activeBusiness?.id) return;
-    if (!canApprovePaymentMode) {
-      toast.error("You do not have permission to reject payment mode switches");
-      return;
-    }
-    setSubmitting(true);
-    _postApi(
-      "/api/v1/sale-workflows/advance",
-      {
-        facilityId: activeBusiness.id,
-        saleCode: row.sale_code,
-        action: "reject_payment_mode",
-        updated_by: user?.id,
-        note: "Payment mode switch rejected",
-      },
-      (res) => {
-        setSubmitting(false);
-        setModeRejectRow(null);
-        if (res?.success) {
-          toast.success(res.message || "Payment mode switch rejected");
-          closeHub();
-          fetchDashboard();
-        } else {
-          toast.error(res?.message || "Could not reject payment mode switch");
-        }
-      },
-      (err) => {
-        setSubmitting(false);
-        toast.error(err?.message || "Could not reject payment mode switch");
       },
     );
   };
@@ -4377,18 +4271,16 @@ export default function ReceivePayment() {
   })();
 
   const summaryGridCols =
-    methodTab === "discount" || methodTab === "mode"
+    methodTab === "discount"
       ? "xl:grid-cols-1 sm:grid-cols-1"
       : "xl:grid-cols-2";
 
-  const canMakeDeposit = canUseHeaderAction(MAKE_DEPOSIT_PRIVILEGE);
   const canReconcileCollections = canUseHeaderAction(RECONCILIATION_PRIVILEGE);
   const canImprest = canUseHeaderAction(IMPREST_PRIVILEGE);
   const canPayBill = canUseHeaderAction(PAY_BILL_PRIVILEGE);
 
   if (
     !visibleMethodTabs.length &&
-    !canMakeDeposit &&
     !canReconcileCollections &&
     !canEditInvoice
   ) {
@@ -4402,7 +4294,7 @@ export default function ReceivePayment() {
             <p className="text-sm font-medium text-slate-600">
               You do not have permission to collect payments. Ask an admin to
               grant Cash Collection, Transfer Collection, POS Collection, Credit Collection,
-              Apply Deposit, Discount Collection, or Make Deposit under Sales →
+              Apply Deposit, or Discount Collection under Sales →
               Verification Points.
             </p>
           </div>
@@ -4425,16 +4317,6 @@ export default function ReceivePayment() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {canMakeDeposit ? (
-              <button
-                type="button"
-                onClick={() => openAdvanceSheet()}
-                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-              >
-                <Plus className="h-4 w-4" />
-                Make Deposit
-              </button>
-            ) : null}
             {canReconcileCollections ? (
             <Link
               to="/app/payments/collection-reconciliation"
@@ -4663,22 +4545,6 @@ export default function ReceivePayment() {
             </div>
           ) : null}
 
-          {viewSummary.showMode ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-                <ArrowRightLeft className="h-4 w-4 text-indigo-600" />
-                Mode switches awaiting approval
-              </div>
-              <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">
-                ₦{formatNumber1(viewSummary.pending_mode)}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                {viewSummary.pending_count} invoice
-                {viewSummary.pending_count === 1 ? "" : "s"}
-              </p>
-            </div>
-          ) : null}
-
           {viewSummary.showCash ? (
             <TillSummaryCard
               modeLabel="Cash"
@@ -4834,9 +4700,7 @@ export default function ReceivePayment() {
                     ? "apply deposit"
                     : methodTab === "discount"
                       ? "discount approval"
-                      : methodTab === "mode"
-                        ? "mode switch"
-                        : methodTab === "transfer"
+                      : methodTab === "transfer"
                           ? "transfer payment"
                           : methodTab === "card"
                             ? "POS payment"
@@ -4850,9 +4714,6 @@ export default function ReceivePayment() {
                     <tr>
                       <th className="px-4 py-3">Invoice</th>
                       <th className="px-4 py-3">Customer</th>
-                      {methodTab === "mode" ? (
-                        <th className="px-4 py-3">Mode</th>
-                      ) : null}
                       <th className="px-4 py-3 text-right">Amount due</th>
                       <th className="px-4 py-3">Created</th>
                       <th className="px-4 py-3 text-right">Action</th>
@@ -4873,7 +4734,7 @@ export default function ReceivePayment() {
                           >
                             {row.sale_code}
                           </button>
-                          {methodTab === "mode" || methodTab === "discount" ? (
+                          {methodTab === "discount" ? (
                           <div className="mt-1.5">
                             {(() => {
                               const badge = tabWorkflowBadge(methodTab, row);
@@ -4950,70 +4811,6 @@ export default function ReceivePayment() {
                               </div>
                           ) : null}
                         </td>
-                        {methodTab === "mode" ? (
-                        <td className="px-4 py-3">
-                            <div className="space-y-2">
-                              {row.status === "awaiting_payment_mode_approval" ||
-                              row.proposed_payment_type ||
-                              row.pending_payment_mode?.to ? (
-                                <div className="space-y-1 text-xs">
-                                  <div>
-                                    <span className="text-slate-500">Current: </span>
-                                    <span
-                                      className={`inline-flex rounded-full px-2 py-0.5 font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
-                                        row.payment_type,
-                                      )}`}
-                                    >
-                                      {paymentTypeLabel(row.payment_type, row)}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="text-slate-500">Requested: </span>
-                                    <span
-                                      className={`inline-flex rounded-full px-2 py-0.5 font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
-                                        row.proposed_payment_type ||
-                                          row.pending_payment_mode?.to,
-                                      )}`}
-                                    >
-                                      {paymentTypeLabel(
-                                        row.proposed_payment_type ||
-                                          row.pending_payment_mode?.to,
-                                      )}
-                                    </span>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span
-                                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
-                                      row.payment_type,
-                                    )}`}
-                                  >
-                                    {paymentTypeLabel(row.payment_type, row)}
-                                  </span>
-                                  {canSwitchPaymentMode ? (
-                                    <button
-                                      type="button"
-                                      disabled={
-                                        switchingModeCode === row.sale_code ||
-                                        submitting
-                                      }
-                                      onClick={() => openModeChange(row)}
-                                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                                    >
-                                      {switchingModeCode === row.sale_code ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                      ) : (
-                                        <ArrowRightLeft className="h-3 w-3" />
-                                      )}
-                                      Change
-                                    </button>
-                                  ) : null}
-                                </div>
-                              )}
-                            </div>
-                        </td>
-                        ) : null}
                         <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
                           ₦{formatNumber1(row.invoice_amount ?? row.amount)}
                           {Math.abs(
@@ -5036,6 +4833,7 @@ export default function ReceivePayment() {
                             : "—"}
                         </td>
                         <td className="px-4 py-3 text-right">
+                          <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
                           {methodTab === "deposit" ? (
                             <button
                               type="button"
@@ -5115,43 +4913,7 @@ export default function ReceivePayment() {
                               <Eye className="h-3.5 w-3.5" />
                               Approve
                             </button>
-                          ) : methodTab === "mode" ? (
-                            row.status === "awaiting_payment_mode_approval" ||
-                            row.proposed_payment_type ||
-                            row.pending_payment_mode?.to ? (
-                              <button
-                                type="button"
-                                disabled={submitting}
-                                onClick={() => openHub(row, "mode")}
-                                className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-                              >
-                                <Eye className="h-3.5 w-3.5" />
-                                View & Review
-                              </button>
-                            ) : canSwitchPaymentMode ? (
-                              <button
-                                type="button"
-                                disabled={
-                                  switchingModeCode === row.sale_code ||
-                                  submitting
-                                }
-                                onClick={() => openHub(row, "mode")}
-                                className="inline-flex items-center gap-1.5 rounded-md bg-[var(--aa-navy)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                              >
-                                <Eye className="h-3.5 w-3.5" />
-                                View & Switch
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => openHub(row, "view")}
-                                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                              >
-                                <Eye className="h-3.5 w-3.5" />
-                                View
-                              </button>
-                            )
-                          ) : isDepositPendingCollection(row, methodTab) ? (
+                          ) : isPendingModeSwitchRow(row) ? null : isDepositPendingCollection(row, methodTab) ? (
                             <button
                               type="button"
                               onClick={() => openHub(row, "collect")}
@@ -5170,6 +4932,29 @@ export default function ReceivePayment() {
                               Collect
                             </button>
                           )}
+                          {canSwitchPaymentMode &&
+                          (methodTab === "cash" ||
+                            methodTab === "transfer" ||
+                            methodTab === "card" ||
+                            methodTab === "credit") ? (
+                            <button
+                              type="button"
+                              disabled={
+                                switchingModeCode === row.sale_code ||
+                                submitting
+                              }
+                              onClick={() => openModeChange(row)}
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                              {switchingModeCode === row.sale_code ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <ArrowRightLeft className="h-3 w-3" />
+                              )}
+                              Change
+                            </button>
+                          ) : null}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -5202,9 +4987,6 @@ export default function ReceivePayment() {
                   <tr>
                     <th className="px-4 py-3">Invoice</th>
                     <th className="px-4 py-3">Customer</th>
-                    {methodTab === "mode" ? (
-                      <th className="px-4 py-3">Mode</th>
-                    ) : null}
                     <th className="px-4 py-3 text-right">Amount</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Updated</th>
@@ -5240,21 +5022,6 @@ export default function ReceivePayment() {
                           {row.customer_no}
                         </div>
                       </td>
-                      {methodTab === "mode" ? (
-                      <td className="px-4 py-3">
-                        {isAdvance ? (
-                          <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
-                              row.payment_type,
-                            )}`}
-                          >
-                            Deposit · {paymentTypeLabel(row.payment_type)}
-                          </span>
-                        ) : (
-                          <PaymentModeBreakdown row={row} />
-                        )}
-                      </td>
-                      ) : null}
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">
                         ₦{formatNumber1(row.amount)}
                         {Number(row.discount_amount) > 0 ? (
@@ -5264,12 +5031,29 @@ export default function ReceivePayment() {
                         ) : null}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                        {(() => {
+                          const st = String(row.status || "").toLowerCase();
+                          const reversed =
+                            st === "reversed" || st === "cancelled";
+                          return (
+                        <span
+                          className={`inline-flex items-center gap-1 text-xs font-medium ${
+                            reversed ? "text-red-700" : "text-emerald-700"
+                          }`}
+                        >
+                          {reversed ? null : (
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                          {methodTab === "credit" && !isAdvance
+                          )}
+                          {reversed
+                            ? st === "cancelled"
+                              ? "Cancelled"
+                              : "Reversed"
+                            : methodTab === "credit" && !isAdvance
                             ? "Credited"
                             : row.status_label || row.status}
                         </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-500">
                         {updated
@@ -5280,6 +5064,29 @@ export default function ReceivePayment() {
                         {isAdvance ? (
                           <span className="text-xs text-slate-400">—</span>
                         ) : (
+                          <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                          {canSwitchPaymentMode &&
+                          (methodTab === "cash" ||
+                            methodTab === "transfer" ||
+                            methodTab === "card" ||
+                            methodTab === "credit") ? (
+                            <button
+                              type="button"
+                              disabled={
+                                switchingModeCode === row.sale_code ||
+                                submitting
+                              }
+                              onClick={() => openModeChange(row)}
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                              {switchingModeCode === row.sale_code ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <ArrowRightLeft className="h-3 w-3" />
+                              )}
+                              Change
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => downloadSalesInvoice(row)}
@@ -5294,6 +5101,7 @@ export default function ReceivePayment() {
                             )}
                             Download
                           </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -5323,8 +5131,6 @@ export default function ReceivePayment() {
                     ? "View & Approve Discount"
                     : hubAction === "deposit"
                       ? "View & Apply Deposit"
-                      : hubAction === "mode"
-                      ? "View & Review Mode"
                       : "Invoice"}{" "}
               {selected?.sale_code ? `· ${selected.sale_code}` : ""}
             </DialogTitle>
@@ -5423,24 +5229,6 @@ export default function ReceivePayment() {
                       <PaymentModeBreakdown row={selected} />
                     </span>
                   </div>
-                  {hubAction === "mode" &&
-                  (selected?.proposed_payment_type ||
-                    selected?.pending_payment_mode?.to) ? (
-                    <div className="mt-2 flex items-center justify-between text-sm">
-                      <span className="text-slate-600">Requested</span>
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${paymentTypeBadgeClass(
-                          selected.proposed_payment_type ||
-                            selected.pending_payment_mode?.to,
-                        )}`}
-                      >
-                        {paymentTypeLabel(
-                          selected.proposed_payment_type ||
-                            selected.pending_payment_mode?.to,
-                        )}
-                      </span>
-                    </div>
-                  ) : null}
                   {hubAction === "deposit" ? (
                     <div className="mt-3 space-y-3 border-t border-slate-200 pt-3 text-sm">
                       <div className="flex justify-between gap-3 text-slate-600">
@@ -5946,15 +5734,6 @@ export default function ReceivePayment() {
                     printing opens after that last payment.
                   </p>
                 ) : null}
-                {hubAction === "mode" ? (
-                  <p className="text-sm text-slate-600">
-                    {selected?.status === "awaiting_payment_mode_approval" ||
-                    selected?.proposed_payment_type ||
-                    selected?.pending_payment_mode?.to
-                      ? "Review the invoice and approve or reject the requested payment mode switch."
-                      : "Review the invoice, then switch the payment mode if needed."}
-                  </p>
-                ) : null}
                 {hubAction === "view" ? (
                   <p className="text-sm text-slate-600">
                     Read-only view of this invoice from Verification Points
@@ -5975,6 +5754,25 @@ export default function ReceivePayment() {
                   </button>
 
                   {hubAction === "view" && selected?.sale_code ? (
+                    <>
+                      {canSwitchPaymentMode ? (
+                        <button
+                          type="button"
+                          disabled={
+                            switchingModeCode === selected.sale_code ||
+                            submitting
+                          }
+                          onClick={() => openModeChange(selected)}
+                          className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          {switchingModeCode === selected.sale_code ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <ArrowRightLeft className="h-4 w-4" />
+                          )}
+                          Change
+                        </button>
+                      ) : null}
                     <button
                       type="button"
                       onClick={() =>
@@ -5989,6 +5787,7 @@ export default function ReceivePayment() {
                       <Printer className="h-4 w-4" />
                       Open / Print Invoice
                     </button>
+                    </>
                   ) : null}
 
                   {hubAction === "deposit" ? (
@@ -6120,54 +5919,6 @@ export default function ReceivePayment() {
                     </button>
                   ) : null}
 
-                  {hubAction === "mode" ? (
-                    selected?.status === "awaiting_payment_mode_approval" ||
-                    selected?.proposed_payment_type ||
-                    selected?.pending_payment_mode?.to ? (
-                      canApprovePaymentMode ? (
-                        <>
-                          <button
-                            type="button"
-                            disabled={submitting}
-                            onClick={() => setModeRejectRow(selected)}
-                            className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                          >
-                            Reject
-                          </button>
-                          <button
-                            type="button"
-                            disabled={submitting}
-                            onClick={() => setModeApproveRow(selected)}
-                            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-                          >
-                            <CheckCircle2 className="h-4 w-4" />
-                            Approve Mode
-                          </button>
-                        </>
-                      ) : (
-                        <span className="self-center text-xs text-slate-500">
-                          Awaiting approval
-                        </span>
-                      )
-                    ) : canSwitchPaymentMode ? (
-                      <button
-                        type="button"
-                        disabled={
-                          switchingModeCode === selected?.sale_code ||
-                          submitting
-                        }
-                        onClick={() => openModeChange(selected)}
-                        className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-navy)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                      >
-                        {switchingModeCode === selected?.sale_code ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <ArrowRightLeft className="h-4 w-4" />
-                        )}
-                        Switch Mode
-                      </button>
-                    ) : null
-                  ) : null}
                 </div>
               </div>
             </div>
@@ -6491,8 +6242,20 @@ export default function ReceivePayment() {
             </DialogDescription>
           </DialogHeader>
 
+          {isPostedOrReversedWorkflow(modeChangeRow) ? (
+            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              This invoice is already paid or reversed. You can only switch
+              between Cash, Transfer, POS, or Cash + Transfer. Collection
+              entries are not rewritten.
+            </p>
+          ) : null}
+
           <div className="grid grid-cols-1 gap-2 py-1 sm:grid-cols-2">
-            {MODE_CHECK_OPTIONS.map((opt) => {
+            {MODE_CHECK_OPTIONS.filter((opt) =>
+              isPostedOrReversedWorkflow(modeChangeRow)
+                ? POSTED_MODE_CHECK_VALUES.has(opt.value)
+                : true,
+            ).map((opt) => {
               const Icon = opt.icon;
               const checked = modeChangeChecked.includes(opt.value);
               return (
@@ -6556,9 +6319,9 @@ export default function ReceivePayment() {
                     .map((id) => MODE_LABELS[id] || id)
                     .join(" + ")}
                 </span>
-                {canApprovePaymentMode
-                  ? ". This will apply immediately."
-                  : ". This will be sent for approval on the Mode tab."}
+                {isPostedOrReversedWorkflow(modeChangeRow)
+                  ? ". This invoice is already paid or reversed — the recorded payment mode will be updated."
+                  : ". This will apply immediately."}
               </p>
               {modeChangeNext === "credit" ? (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -6699,32 +6462,59 @@ export default function ReceivePayment() {
                   <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">
                     Payment mode
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {EDIT_PAYMENT_MODE_OPTIONS.map((opt) => {
-                      const on = editPaymentModes.includes(opt.id);
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {MODE_CHECK_OPTIONS.map((opt) => {
+                      const Icon = opt.icon;
+                      const checked = editPaymentModes.includes(opt.value);
                       return (
                         <button
-                          key={opt.id}
+                          key={opt.value}
                           type="button"
                           disabled={editInvoiceSaving}
                           onClick={() =>
                             setEditPaymentModes((prev) =>
-                              prev.includes(opt.id)
-                                ? prev.filter((m) => m !== opt.id)
-                                : [...prev, opt.id],
+                              prev.includes(opt.value)
+                                ? prev.filter((m) => m !== opt.value)
+                                : [...prev, opt.value],
                             )
                           }
-                          className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                            on
-                              ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white"
-                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                          className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition-colors disabled:opacity-50 ${
+                            checked
+                              ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white shadow-sm"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                           }`}
                         >
+                          <span
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                              checked
+                                ? "border-white bg-white text-[var(--aa-navy)]"
+                                : "border-slate-400 bg-white"
+                            }`}
+                          >
+                            {checked ? (
+                              <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                            ) : null}
+                          </span>
+                          <Icon className="h-4 w-4 shrink-0" />
                           {opt.label}
                         </button>
                       );
                     })}
                   </div>
+                  {paymentTypeFromModeChecks(editPaymentModes) ? (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Selected:{" "}
+                      <span className="font-semibold text-slate-800">
+                        {editPaymentModes
+                          .map((id) => MODE_LABELS[id] || id)
+                          .join(" + ") || "—"}
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs text-amber-700">
+                      Tick at least one payment mode.
+                    </p>
+                  )}
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -7048,94 +6838,6 @@ export default function ReceivePayment() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <AlertDialog
-        open={Boolean(modeApproveRow)}
-        onOpenChange={(open) => {
-          if (!open && !submitting) setModeApproveRow(null);
-        }}
-      >
-        <AlertDialogContent className="z-[200] border border-slate-200 bg-white text-slate-900 shadow-2xl sm:rounded-xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Approve payment mode switch?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {modeApproveRow ? (
-                <>
-                  Apply{" "}
-                  <span className="font-semibold text-slate-800">
-                    {paymentTypeLabel(
-                      modeApproveRow.proposed_payment_type ||
-                        modeApproveRow.pending_payment_mode?.to,
-                    )}
-                  </span>{" "}
-                  on invoice{" "}
-                  <span className="font-mono font-medium text-slate-800">
-                    {modeApproveRow.sale_code}
-                  </span>
-                  ?
-                </>
-              ) : (
-                "Confirm approving this payment mode switch."
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={submitting}
-              onClick={(e) => {
-                e.preventDefault();
-                confirmApprovePaymentMode();
-              }}
-              className="bg-indigo-600 text-white hover:bg-indigo-700"
-            >
-              {submitting ? "Approving…" : "Approve"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={Boolean(modeRejectRow)}
-        onOpenChange={(open) => {
-          if (!open && !submitting) setModeRejectRow(null);
-        }}
-      >
-        <AlertDialogContent className="z-[200] border border-slate-200 bg-white text-slate-900 shadow-2xl sm:rounded-xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reject payment mode switch?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {modeRejectRow ? (
-                <>
-                  Keep current mode{" "}
-                  <span className="font-semibold text-slate-800">
-                    {paymentTypeLabel(modeRejectRow.payment_type)}
-                  </span>{" "}
-                  on invoice{" "}
-                  <span className="font-mono font-medium text-slate-800">
-                    {modeRejectRow.sale_code}
-                  </span>
-                  ?
-                </>
-              ) : (
-                "Confirm rejecting this payment mode switch."
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={submitting}
-              onClick={(e) => {
-                e.preventDefault();
-                confirmRejectPaymentMode();
-              }}
-              className="bg-slate-800 text-white hover:bg-slate-900"
-            >
-              {submitting ? "Rejecting…" : "Reject"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       <TillHubDialog
         open={tillHubOpen}
         onOpenChange={setTillHubOpen}

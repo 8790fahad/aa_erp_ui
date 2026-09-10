@@ -101,7 +101,6 @@ const QUICK_CREATE = [
       "Card Collection",
       "Credit Collection",
       "Apply Deposit",
-      "Make Deposit",
       "Discount Collection",
       "Collection Reconciliation",
       "Imprest",
