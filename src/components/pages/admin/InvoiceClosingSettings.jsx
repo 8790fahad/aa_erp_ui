@@ -14,7 +14,7 @@ const TIMEZONES = [
 
 export default function InvoiceClosingSettings({
   title = "Invoice Payment Validity",
-  description = "Unpaid invoices that are not on credit reverse automatically after daily closing time",
+  description = "Invoices still on Verification Points with no payment reverse after daily closing time, including unapproved credit",
 }) {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
@@ -75,7 +75,7 @@ export default function InvoiceClosingSettings({
       `/account/run-invoice-closing/${activeBusiness.id}`,
       {
         userId: user?.id,
-        reason: `Manual reverse of unpaid non-credit invoices after closing time ${activeBusiness.invoice_closing_time || "17:00"}`,
+        reason: `Manual reverse of unpaid verification invoices after closing time ${activeBusiness.invoice_closing_time || "17:00"}`,
       },
       (resp) => {
         setRunning(false);
@@ -152,9 +152,10 @@ export default function InvoiceClosingSettings({
               <strong>{lastRun || "—"}</strong>
             </div>
             <p className="small text-muted mt-3 mb-3">
-              After closing time, cash / transfer / bank / split invoices still
-              waiting for cashier confirmation are reversed (GL, stock, and
-              invoice removed). Credit invoices are never auto-reversed.
+              After closing time, every invoice still on Verification Points
+              with no payment is reversed — including credit that has not been
+              approved. Partially paid invoices stay on verification. Paid
+              invoices have already moved to separation and are not touched.
             </p>
             <Button
               color="outline-primary"
@@ -191,8 +192,8 @@ export default function InvoiceClosingSettings({
                 }
               />
               <small className="text-muted">
-                Example: 17:00 — unpaid non-credit invoices reverse after 5:00
-                PM.
+                Example: 17:00 — unpaid verification invoices (including
+                unapproved credit) reverse after 5:00 PM. Partial payments stay.
               </small>
             </div>
 

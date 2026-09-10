@@ -30,6 +30,8 @@
   --aa-accent-hover: #1a68d1;
   --aa-sidebar-bg: #f3f4f7;
   --aa-sidebar-active: #e8f1fc;
+  --bs-primary: #1a2d5e;
+  --bs-primary-rgb: 26, 45, 94;
 }
 
 .bg-sidebar {
@@ -50,6 +52,18 @@
   background-color: var(--aa-navy-hover);
   border-color: var(--aa-navy-hover);
   color: #fff;
+}
+.btn-primary {
+  background-color: var(--aa-navy) !important;
+  border-color: var(--aa-navy) !important;
+  color: #fff !important;
+}
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+  background-color: var(--aa-navy-hover) !important;
+  border-color: var(--aa-navy-hover) !important;
+  color: #fff !important;
 }
 .aa-link {
   color: var(--aa-accent);

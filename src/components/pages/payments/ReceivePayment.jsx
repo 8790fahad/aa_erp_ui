@@ -6,6 +6,7 @@ import {
   Banknote,
   Building2,
   Calendar,
+  Check,
   CheckCircle2,
   ClipboardCheck,
   CreditCard,
@@ -29,6 +30,7 @@ import {
   Wallet,
   ChevronRight,
 } from "lucide-react";
+import ExcelJS from "exceljs";
 import moment from "moment";
 import { toast } from "sonner";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -128,37 +130,63 @@ function TillSummaryCard({
   );
 }
 
-function TillLine({ label, value, onClick, tone = "neutral", prefix = "" }) {
+function TillLine({
+  label,
+  value,
+  onClick,
+  onDownload,
+  downloading = false,
+  tone = "neutral",
+  prefix = "",
+}) {
   const isTotal = tone === "total";
   const valueClass = isTotal
     ? "font-semibold text-emerald-700"
     : tone === "minus"
       ? "font-medium text-slate-700"
       : "font-medium text-slate-900";
-  const Comp = onClick ? "button" : "div";
   return (
-    <Comp
-      type={onClick ? "button" : undefined}
-      onClick={onClick}
-      className={`flex w-full items-baseline justify-between gap-4 py-1.5 text-sm ${
-        onClick
-          ? "-mx-1 rounded-md px-1 text-left hover:bg-slate-100"
-          : ""
-      }`}
-    >
-      <span
-        className={`inline-flex items-center gap-1 ${
-          isTotal ? "font-semibold text-slate-800" : "text-slate-600"
-        }`}
+    <div className="flex w-full items-center justify-between gap-2 py-1.5 text-sm">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={!onClick}
+        className={`inline-flex min-w-0 items-center gap-1 text-left ${
+          onClick
+            ? "-mx-1 rounded-md px-1 hover:bg-slate-100"
+            : "cursor-default"
+        } ${isTotal ? "font-semibold text-slate-800" : "text-slate-600"}`}
       >
         {label}
         {onClick ? <History className="h-3.5 w-3.5 text-slate-400" /> : null}
-      </span>
-      <span className={`tabular-nums ${valueClass}`}>
-        {prefix}
-        ₦{formatNumber1(value)}
-      </span>
-    </Comp>
+      </button>
+      <div className="flex shrink-0 items-center gap-1">
+        {onDownload ? (
+          <button
+            type="button"
+            title={`Download ${label} report`}
+            aria-label={`Download ${label} report`}
+            disabled={downloading}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDownload();
+            }}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-[var(--aa-navy)] disabled:opacity-50"
+          >
+            {downloading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+          </button>
+        ) : null}
+        <span className={`tabular-nums ${valueClass}`}>
+          {prefix}
+          ₦{formatNumber1(value)}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -200,6 +228,8 @@ function TillHubDialog({
   onImprest,
   onPayBill,
   onViewCollected,
+  onDownload,
+  downloadingKind = null,
 }) {
   const showCollect = Number(collect) > 0.005 || Number(pendingCount) > 0;
   const spendOver =
@@ -228,18 +258,24 @@ function TillHubDialog({
             label="Collected today"
             value={collected}
             onClick={onViewCollected}
+            onDownload={() => onDownload?.("collected")}
+            downloading={downloadingKind === "collected" || downloadingKind === "all"}
           />
           <TillLine
             label="Imprest"
             value={imprestTotal}
             tone="minus"
             prefix="− "
+            onDownload={() => onDownload?.("imprest")}
+            downloading={downloadingKind === "imprest" || downloadingKind === "all"}
           />
           <TillLine
             label="Pay Bill"
             value={payBillTotal}
             tone="minus"
             prefix="− "
+            onDownload={() => onDownload?.("paybill")}
+            downloading={downloadingKind === "paybill" || downloadingKind === "all"}
           />
           <div className="mt-1 border-t border-slate-200 pt-1">
             <TillLine
@@ -270,9 +306,157 @@ function TillHubDialog({
             onClick={onPayBill}
           />
         </div>
+        <button
+          type="button"
+          disabled={Boolean(downloadingKind)}
+          onClick={() => onDownload?.("all")}
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 hover:border-[var(--aa-accent)] hover:bg-slate-50 disabled:opacity-50"
+        >
+          {downloadingKind === "all" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4" />
+          )}
+          Download till report
+        </button>
       </DialogContent>
     </Dialog>
   );
+}
+
+function formatTillReportWhen(value) {
+  if (!value) return "";
+  const m = moment(value);
+  return m.isValid() ? m.format("DD MMM YYYY HH:mm") : String(value);
+}
+
+async function downloadTillExcel({
+  businessName,
+  cashierName,
+  modeLabel,
+  fromDate,
+  toDate,
+  section,
+  collected,
+  imprest,
+  payBills,
+  retire,
+}) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Verification Points";
+
+  const addSheet = (name, columns, lines, totalLabel, totalValue) => {
+    const ws = wb.addWorksheet(name);
+    ws.addRow([`${modeLabel} till — ${name}`]);
+    if (businessName) ws.addRow([businessName]);
+    ws.addRow([`Period: ${fromDate} to ${toDate}`]);
+    if (cashierName) ws.addRow([`Prepared for: ${cashierName}`]);
+    ws.addRow([]);
+    ws.addRow(columns);
+    ws.getRow(ws.lastRow.number).font = { bold: true };
+    (lines || []).forEach((line) => {
+      ws.addRow([
+        formatTillReportWhen(line.transaction_date),
+        line.sale_code || "",
+        line.party || "",
+        line.description || "",
+        line.by_name || "",
+        Number(line.amount) || 0,
+      ]);
+      ws.getRow(ws.lastRow.number).getCell(6).numFmt = "#,##0.00";
+    });
+    ws.addRow([]);
+    const totalRow = ws.addRow(["", "", "", "", totalLabel, Number(totalValue) || 0]);
+    totalRow.font = { bold: true };
+    totalRow.getCell(6).numFmt = "#,##0.00";
+    ws.columns = [
+      { width: 20 },
+      { width: 18 },
+      { width: 28 },
+      { width: 36 },
+      { width: 22 },
+      { width: 14 },
+    ];
+  };
+
+  const columns = [
+    "Date / time",
+    "Reference",
+    "Customer / supplier",
+    "Description",
+    "By",
+    "Amount",
+  ];
+
+  if (section === "all" || section === "collected") {
+    addSheet(
+      "Collected",
+      columns,
+      collected?.lines,
+      "Collected total",
+      collected?.total,
+    );
+  }
+  if (section === "all" || section === "imprest") {
+    addSheet(
+      "Imprest",
+      columns,
+      imprest?.lines,
+      "Imprest total",
+      imprest?.total,
+    );
+  }
+  if (section === "all" || section === "paybill") {
+    addSheet(
+      "Pay Bill",
+      columns,
+      payBills?.lines,
+      "Pay Bill total",
+      payBills?.total,
+    );
+  }
+  if (section === "all") {
+    const ws = wb.addWorksheet("Summary");
+    ws.addRow([`${modeLabel} till summary`]);
+    if (businessName) ws.addRow([businessName]);
+    ws.addRow([`Period: ${fromDate} to ${toDate}`]);
+    if (cashierName) ws.addRow([`Prepared for: ${cashierName}`]);
+    ws.addRow([]);
+    ws.addRow(["Item", "Amount"]);
+    ws.getRow(ws.lastRow.number).font = { bold: true };
+    const summaryRows = [
+      ["Collected", Number(collected?.total) || 0],
+      ["Imprest", Number(imprest?.total) || 0],
+      ["Pay Bill", Number(payBills?.total) || 0],
+      [`${modeLabel} to retire`, Number(retire) || 0],
+    ];
+    summaryRows.forEach(([label, amount]) => {
+      const row = ws.addRow([label, amount]);
+      row.getCell(2).numFmt = "#,##0.00";
+    });
+    ws.getRow(ws.lastRow.number).font = { bold: true };
+    ws.columns = [{ width: 28 }, { width: 16 }];
+  }
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const slug = String(modeLabel || "till")
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+  const part =
+    section === "all"
+      ? "report"
+      : section === "paybill"
+        ? "pay-bill"
+        : section;
+  a.download = `${slug}-till-${part}-${fromDate}-to-${toDate}.xlsx`;
+  a.click();
+  window.URL.revokeObjectURL(url);
 }
 
 /** Select menu must sit above Sheet (z-50) */
@@ -393,7 +577,7 @@ function normalizePaymentMode(type) {
   if (t === "deposit" || t === "apply_deposit" || t === "apply deposit")
     return "deposit";
   if (t === "transfer") return "transfer";
-  if (t === "card") return "card";
+  if (t === "card" || t === "pos") return "card";
   if (t === "cash") return "cash";
   return t || "cash";
 }
@@ -407,6 +591,65 @@ const PAYMENT_MODE_OPTIONS = [
   { value: "credit_split", label: "Credit + Cash + Transfer", icon: Wallet },
   { value: "deposit", label: "Apply Deposit", icon: Wallet },
 ];
+
+const MODE_CHECK_OPTIONS = [
+  { value: "cash", label: "Cash", icon: Banknote },
+  { value: "transfer", label: "Transfer", icon: Building2 },
+  { value: "card", label: "POS", icon: Nfc },
+  { value: "credit", label: "Credit", icon: CreditCard },
+  { value: "deposit", label: "Apply Deposit", icon: Wallet },
+];
+
+function paymentTypeFromModeChecks(checked) {
+  const set = new Set(
+    (Array.isArray(checked) ? checked : []).map((id) =>
+      String(id || "").toLowerCase(),
+    ),
+  );
+  const hasCash = set.has("cash");
+  const hasTransfer = set.has("transfer");
+  const hasCard = set.has("card");
+  const hasCredit = set.has("credit");
+  const hasDeposit = set.has("deposit");
+  if (hasDeposit) return "deposit";
+  if (hasCredit && (hasCash || hasTransfer || hasCard)) return "credit_split";
+  if (hasCredit) return "credit";
+  if (
+    (hasCash && hasTransfer) ||
+    (hasCash && hasCard) ||
+    (hasTransfer && hasCard)
+  ) {
+    return "split";
+  }
+  if (hasCard && !hasCash && !hasTransfer) return "card";
+  if (hasTransfer) return "transfer";
+  if (hasCash) return "cash";
+  return "";
+}
+
+function modeChecksFromRow(row) {
+  const fromRow = rowPaymentModes(row).filter((id) =>
+    MODE_CHECK_OPTIONS.some((opt) => opt.value === id),
+  );
+  if (fromRow.length) return fromRow;
+  const pt = normalizePaymentMode(row?.payment_type);
+  if (pt === "credit_split") return ["credit", "cash", "transfer"];
+  if (pt === "split") return ["cash", "transfer"];
+  if (pt === "deposit") return ["deposit"];
+  if (pt === "card") return ["card"];
+  if (pt === "transfer") return ["transfer"];
+  if (pt === "credit") return ["credit"];
+  if (pt === "cash") return ["cash"];
+  return [];
+}
+
+function modeChecksEqual(a, b) {
+  const left = [...new Set(a || [])].map(String).sort();
+  const right = [...new Set(b || [])].map(String).sort();
+  return (
+    left.length === right.length && left.every((id, i) => id === right[i])
+  );
+}
 
 const MODE_LABELS = {
   cash: "Cash",
@@ -837,6 +1080,15 @@ function isRowCreatedOn(row, ymd) {
   return m.isValid() && m.format("YYYY-MM-DD") === ymd;
 }
 
+/** Created today or switched/updated today — so Mode Switch lands on Cash/Transfer. */
+function isRowOnQueueDay(row, ymd) {
+  if (isRowCreatedOn(row, ymd)) return true;
+  const raw = row?.updated_at || row?.updatedAt;
+  if (!raw || !ymd) return false;
+  const m = moment(raw);
+  return m.isValid() && m.format("YYYY-MM-DD") === ymd;
+}
+
 /** Cash / Transfer / Card / Credit tabs — credit_split appears on matching sides. */
 function matchesMethod(paymentType, method, row = null) {
   const modes = row ? rowPaymentModes(row) : [];
@@ -1133,27 +1385,25 @@ export default function ReceivePayment() {
   const [modePending, setModePending] = useState([]);
   const [history, setHistory] = useState([]);
   const pendingToday = useMemo(
-    () => pending.filter((r) => isRowCreatedOn(r, todayYmd)),
+    () => pending.filter((r) => isRowOnQueueDay(r, todayYmd)),
     [pending, todayYmd],
   );
   const creditPendingToday = useMemo(
-    () => creditPending.filter((r) => isRowCreatedOn(r, todayYmd)),
+    () => creditPending.filter((r) => isRowOnQueueDay(r, todayYmd)),
     [creditPending, todayYmd],
   );
   const depositPendingToday = useMemo(
-    () => depositPending.filter((r) => isRowCreatedOn(r, todayYmd)),
+    () => depositPending.filter((r) => isRowOnQueueDay(r, todayYmd)),
     [depositPending, todayYmd],
   );
   const discountPendingToday = useMemo(
-    () => discountPending.filter((r) => isRowCreatedOn(r, todayYmd)),
+    () => discountPending.filter((r) => isRowOnQueueDay(r, todayYmd)),
     [discountPending, todayYmd],
   );
-  const modePendingToday = useMemo(
-    () => modePending.filter((r) => isRowCreatedOn(r, todayYmd)),
-    [modePending, todayYmd],
-  );
+  const modePendingToday = useMemo(() => modePending, [modePending]);
   const [imprestOpen, setImprestOpen] = useState(false);
   const [tillHubOpen, setTillHubOpen] = useState(false);
+  const [tillDownloadKind, setTillDownloadKind] = useState(null);
   const [payBillOpen, setPayBillOpen] = useState(false);
   const [expenseList, setExpenseList] = useState([]);
   const [summary, setSummary] = useState({
@@ -1189,6 +1439,10 @@ export default function ReceivePayment() {
   const [editPaymentModes, setEditPaymentModes] = useState([]);
   const [editProductOptions, setEditProductOptions] = useState([]);
   const [editProductQuery, setEditProductQuery] = useState("");
+  const [verificationInvoices, setVerificationInvoices] = useState([]);
+  const [loadingVerificationInvoices, setLoadingVerificationInvoices] = useState(
+    false,
+  );
   const searchInputRef = useRef(null);
   const treatingInvoiceRef = useRef(null);
   const hubInvoiceRequestRef = useRef(0);
@@ -1211,6 +1465,7 @@ export default function ReceivePayment() {
   const [switchingModeCode, setSwitchingModeCode] = useState(null);
   const [modeChangeRow, setModeChangeRow] = useState(null);
   const [modeChangeNext, setModeChangeNext] = useState("");
+  const [modeChangeChecked, setModeChangeChecked] = useState([]);
   const [modeApproveRow, setModeApproveRow] = useState(null);
   const [modeRejectRow, setModeRejectRow] = useState(null);
   const [depositConfirmRow, setDepositConfirmRow] = useState(null);
@@ -1436,6 +1691,33 @@ export default function ReceivePayment() {
     queueStampRef.current = "";
     fetchDashboard();
   }, [fetchDashboard]);
+
+  const fetchVerificationInvoices = useCallback(() => {
+    if (!activeBusiness?.id) {
+      setVerificationInvoices([]);
+      return;
+    }
+    setLoadingVerificationInvoices(true);
+    _fetchApi(
+      `/api/v1/sale-workflows/verification-invoices?facilityId=${encodeURIComponent(
+        String(activeBusiness.id),
+      )}`,
+      (res) => {
+        setLoadingVerificationInvoices(false);
+        setVerificationInvoices(Array.isArray(res?.results) ? res.results : []);
+      },
+      () => {
+        setLoadingVerificationInvoices(false);
+        setVerificationInvoices([]);
+        toast.error("Failed to load invoices for edit");
+      },
+    );
+  }, [activeBusiness?.id]);
+
+  useEffect(() => {
+    if (!editInvoiceOpen) return;
+    fetchVerificationInvoices();
+  }, [editInvoiceOpen, fetchVerificationInvoices]);
 
   useEffect(() => {
     hubActionRef.current = hubAction;
@@ -1899,6 +2181,84 @@ export default function ReceivePayment() {
     };
   }, [methodTab, viewSummary]);
 
+  const downloadTillReport = useCallback(
+    (section) => {
+      if (!activeBusiness?.id || tillDownloadKind) return;
+      const mode =
+        methodTab === "card"
+          ? "card"
+          : methodTab === "transfer"
+            ? "transfer"
+            : "cash";
+      const from = historyFrom || todayYmd;
+      const to = historyTo || from;
+      setTillDownloadKind(section);
+      const params = new URLSearchParams({
+        facilityId: String(activeBusiness.id),
+        tillMode: mode,
+        fromDate: from,
+        toDate: to,
+      });
+      if (user?.id != null) params.set("userId", String(user.id));
+      if (user?.role) params.set("role", String(user.role));
+      _fetchApi(
+        `/api/v1/sale-workflows/till-report?${params.toString()}`,
+        async (res) => {
+          if (!res?.success) {
+            setTillDownloadKind(null);
+            toast.error(res?.message || "Could not load till report");
+            return;
+          }
+          try {
+            const cashierName =
+              [user?.firstname, user?.lastname]
+                .filter(Boolean)
+                .join(" ")
+                .trim() ||
+              user?.name ||
+              user?.username ||
+              "";
+            await downloadTillExcel({
+              businessName:
+                activeBusiness?.name ||
+                activeBusiness?.business_name ||
+                "",
+              cashierName,
+              modeLabel: tillHub.modeLabel,
+              fromDate: res.results?.from_date || from,
+              toDate: res.results?.to_date || to,
+              section,
+              collected: res.results?.collected,
+              imprest: res.results?.imprest,
+              payBills: res.results?.pay_bills,
+              retire: res.results?.retire,
+            });
+            toast.success("Report downloaded");
+          } catch (err) {
+            console.error(err);
+            toast.error("Could not generate Excel");
+          } finally {
+            setTillDownloadKind(null);
+          }
+        },
+        () => {
+          setTillDownloadKind(null);
+          toast.error("Could not load till report");
+        },
+      );
+    },
+    [
+      activeBusiness,
+      tillDownloadKind,
+      methodTab,
+      historyFrom,
+      historyTo,
+      todayYmd,
+      user,
+      tillHub.modeLabel,
+    ],
+  );
+
   const methodPendingCounts = useMemo(() => {
     const creditSplitPending = pendingToday.filter(
       (r) =>
@@ -2050,27 +2410,15 @@ export default function ReceivePayment() {
 
   const editablePendingInvoices = useMemo(() => {
     const byCode = new Map();
-    const rows = [
-      ...pending,
-      ...creditPending,
-      ...depositPending,
-      ...discountPending,
-      ...modePending,
-    ];
-    for (const r of rows) {
-      const code = String(r?.sale_code || "").trim();
+    for (const r of verificationInvoices) {
+      const row = normalizeEditInvoiceRow(r);
+      const code = String(row?.sale_code || "").trim();
       if (!code || byCode.has(code)) continue;
-      if (!isEditableSalesInvoiceStatus(r.status)) continue;
-      byCode.set(code, normalizeEditInvoiceRow(r));
+      if (!isEditableSalesInvoiceStatus(row.status)) continue;
+      byCode.set(code, row);
     }
     return Array.from(byCode.values());
-  }, [
-    pending,
-    creditPending,
-    depositPending,
-    discountPending,
-    modePending,
-  ]);
+  }, [verificationInvoices]);
 
   const filteredEditInvoices = useMemo(() => {
     const q = editInvoiceQuery.trim().toLowerCase();
@@ -2120,19 +2468,29 @@ export default function ReceivePayment() {
         (r) => String(r.sale_code || "").toLowerCase() === code.toLowerCase(),
       );
       if (!match) {
-        toast.error("This invoice is not awaiting verification.");
+        toast.error(
+          "This invoice is not on Verification Points or has been reversed.",
+        );
         return;
       }
       if (!isEditableSalesInvoiceStatus(match.status)) {
         toast.error(
-          "This invoice cannot be edited after payment or warehouse processing.",
+          "This invoice cannot be edited after payment, warehouse processing, or reversal.",
         );
         return;
       }
       setEditInvoiceLoading(true);
       try {
         const data = await fetchSaleInvoice(code, activeBusiness.id);
-        if (!isEditableSalesInvoiceStatus(data.workflow_status)) {
+        const liveStatus = data.workflow_status || data.status;
+        if (
+          String(liveStatus || "").toLowerCase() === "cancelled" ||
+          String(liveStatus || "").toLowerCase() === "reversed"
+        ) {
+          toast.error("This invoice has been reversed and cannot be edited.");
+          return;
+        }
+        if (!isEditableSalesInvoiceStatus(liveStatus)) {
           toast.error(
             "This invoice cannot be edited after payment or warehouse processing. Issue a credit note instead.",
           );
@@ -3412,25 +3770,46 @@ export default function ReceivePayment() {
     const current = normalizePaymentMode(
       row.payment_type || (methodTab === "credit" ? "credit" : "cash"),
     );
+    const checked = modeChecksFromRow(row);
     setModeChangeRow(row);
-    setModeChangeNext(current);
+    setModeChangeChecked(checked.length ? checked : current ? [current] : []);
+    setModeChangeNext(
+      paymentTypeFromModeChecks(checked.length ? checked : [current]) || current,
+    );
   };
 
   const closeModeChange = () => {
     if (switchingModeCode) return;
     setModeChangeRow(null);
     setModeChangeNext("");
+    setModeChangeChecked([]);
+  };
+
+  const toggleModeCheck = (value) => {
+    setModeChangeChecked((prev) => {
+      const on = prev.includes(value);
+      const next = on ? prev.filter((id) => id !== value) : [...prev, value];
+      setModeChangeNext(paymentTypeFromModeChecks(next));
+      return next;
+    });
   };
 
   const confirmModeChange = () => {
-    if (!modeChangeRow?.sale_code || !activeBusiness?.id || !modeChangeNext) {
+    if (!modeChangeRow?.sale_code || !activeBusiness?.id) {
+      return;
+    }
+    const nextType =
+      paymentTypeFromModeChecks(modeChangeChecked) || modeChangeNext;
+    if (!nextType) {
+      toast.error("Tick at least one payment mode");
       return;
     }
     const current = normalizePaymentMode(
       modeChangeRow.payment_type ||
         (methodTab === "credit" ? "credit" : "cash"),
     );
-    if (current === modeChangeNext) {
+    const currentChecks = modeChecksFromRow(modeChangeRow);
+    if (current === nextType && modeChecksEqual(currentChecks, modeChangeChecked)) {
       toast.message("Same payment mode selected");
       return;
     }
@@ -3444,10 +3823,11 @@ export default function ReceivePayment() {
       {
         facilityId: activeBusiness.id,
         saleCodes: [modeChangeRow.sale_code],
-        paymentType: modeChangeNext,
+        paymentType: nextType,
+        payment_modes: modeChangeChecked,
         updated_by: user?.id,
         requireApproval,
-        note: `Verification Points: payment mode ${current} → ${modeChangeNext}`,
+        note: `Verification Points: payment mode ${current} → ${nextType}`,
       },
       (res) => {
         setSwitchingModeCode(null);
@@ -3455,10 +3835,16 @@ export default function ReceivePayment() {
           const skipped = Array.isArray(res.results)
             ? res.results.find((r) => r.skipped)
             : null;
+          const unchanged =
+            Array.isArray(res.results) &&
+            res.results.length > 0 &&
+            res.results.every((r) => r.changed === false && !r.skipped);
           if (skipped) {
             toast.error(skipped.reason || "Cannot change payment mode");
+          } else if (unchanged) {
+            toast.message("Same payment mode selected");
           } else {
-            if (modeChangeNext === "credit" && !requireApproval) {
+            if (nextType === "credit" && !requireApproval) {
               toast.success(
                 "Switched to Credit — approve on the Credit tab, then it opens Sales Process",
               );
@@ -3466,12 +3852,13 @@ export default function ReceivePayment() {
               toast.success(
                 res.message ||
                   (requireApproval
-                    ? `Submitted switch to ${paymentTypeLabel(modeChangeNext)} for approval`
-                    : `Switched to ${paymentTypeLabel(modeChangeNext)}`),
+                    ? `Submitted switch to ${paymentTypeLabel(nextType)} for approval`
+                    : `Switched to ${paymentTypeLabel(nextType)}`),
               );
             }
             setModeChangeRow(null);
             setModeChangeNext("");
+            setModeChangeChecked([]);
             closeHub();
           }
           fetchDashboard();
@@ -3499,7 +3886,7 @@ export default function ReceivePayment() {
       {
         facilityId: activeBusiness.id,
         saleCode: row.sale_code,
-        action: "advance",
+        action: "approve_payment_mode",
         updated_by: user?.id,
         note: "Payment mode switch approved",
       },
@@ -4084,7 +4471,7 @@ export default function ReceivePayment() {
             const Icon = tab.icon;
             const active = methodTab === tab.id;
             const count = methodPendingCounts[tab.id] || 0;
-            const showCount = tab.id !== "mode";
+            const showCount = true;
             return (
               <button
                 key={tab.id}
@@ -4340,7 +4727,7 @@ export default function ReceivePayment() {
               >
                 <Wallet className="h-4 w-4" />
                 Pending
-                {methodTab === "mode" ? null : ` (${filteredPending.length})`}
+                {` (${filteredPending.length})`}
               </button>
               <button
                 type="button"
@@ -4448,7 +4835,7 @@ export default function ReceivePayment() {
                     : methodTab === "discount"
                       ? "discount approval"
                       : methodTab === "mode"
-                        ? "payment mode approval"
+                        ? "mode switch"
                         : methodTab === "transfer"
                           ? "transfer payment"
                           : methodTab === "card"
@@ -6092,7 +6479,10 @@ export default function ReceivePayment() {
                   {" · "}
                   Current:{" "}
                   <span className="font-medium text-slate-800">
-                    {paymentTypeLabel(modeChangeRow.payment_type)}
+                    {paymentTypeLabel(
+                      modeChangeRow.payment_type,
+                      modeChangeRow,
+                    )}
                   </span>
                 </>
               ) : (
@@ -6101,41 +6491,70 @@ export default function ReceivePayment() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-wrap gap-2 py-1">
-            {PAYMENT_MODE_OPTIONS.map((opt) => {
+          <div className="grid grid-cols-1 gap-2 py-1 sm:grid-cols-2">
+            {MODE_CHECK_OPTIONS.map((opt) => {
               const Icon = opt.icon;
-              const active = modeChangeNext === opt.value;
+              const checked = modeChangeChecked.includes(opt.value);
               return (
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setModeChangeNext(opt.value)}
-                  className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${
-                    active
+                  onClick={() => toggleModeCheck(opt.value)}
+                  className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition-colors ${
+                    checked
                       ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white shadow-sm"
                       : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
+                  <span
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                      checked
+                        ? "border-white bg-white text-[var(--aa-navy)]"
+                        : "border-slate-400 bg-white"
+                    }`}
+                  >
+                    {checked ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : null}
+                  </span>
+                  <Icon className="h-4 w-4 shrink-0" />
                   {opt.label}
                 </button>
               );
             })}
           </div>
 
+          {modeChangeRow && paymentTypeFromModeChecks(modeChangeChecked) ? (
+            <p className="text-xs text-slate-500">
+              Selected:{" "}
+              <span className="font-semibold text-slate-800">
+                {modeChangeChecked
+                  .map((id) => MODE_LABELS[id] || id)
+                  .join(" + ") || "—"}
+              </span>
+            </p>
+          ) : (
+            <p className="text-xs text-amber-700">Tick at least one payment mode.</p>
+          )}
+
           {modeChangeRow &&
-          modeChangeNext &&
-          normalizePaymentMode(modeChangeRow.payment_type) !==
-            modeChangeNext ? (
+          paymentTypeFromModeChecks(modeChangeChecked) &&
+          !modeChecksEqual(
+            modeChecksFromRow(modeChangeRow),
+            modeChangeChecked,
+          ) ? (
             <div className="space-y-2">
               <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
                 Switch from{" "}
                 <span className="font-semibold text-slate-900">
-                  {paymentTypeLabel(modeChangeRow.payment_type)}
+                  {paymentTypeLabel(
+                    modeChangeRow.payment_type,
+                    modeChangeRow,
+                  )}
                 </span>{" "}
                 to{" "}
                 <span className="font-semibold text-slate-900">
-                  {paymentTypeLabel(modeChangeNext)}
+                  {modeChangeChecked
+                    .map((id) => MODE_LABELS[id] || id)
+                    .join(" + ")}
                 </span>
                 {canApprovePaymentMode
                   ? ". This will apply immediately."
@@ -6174,9 +6593,11 @@ export default function ReceivePayment() {
               onClick={confirmModeChange}
               disabled={
                 Boolean(switchingModeCode) ||
-                !modeChangeNext ||
-                normalizePaymentMode(modeChangeRow?.payment_type) ===
-                  modeChangeNext
+                !paymentTypeFromModeChecks(modeChangeChecked) ||
+                modeChecksEqual(
+                  modeChecksFromRow(modeChangeRow),
+                  modeChangeChecked,
+                )
               }
               className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:opacity-50"
             >
@@ -6497,10 +6918,15 @@ export default function ReceivePayment() {
                   className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                 />
                 <div className="max-h-[28rem] overflow-y-auto rounded-md border border-slate-200">
-                  {filteredEditInvoices.length === 0 ? (
+                  {loadingVerificationInvoices ? (
                     <p className="px-3 py-6 text-center text-sm text-slate-500">
-                      No invoices awaiting verification
+                      Loading invoices still on Verification Points…
+                    </p>
+                  ) : filteredEditInvoices.length === 0 ? (
+                    <p className="px-3 py-6 text-center text-sm text-slate-500">
+                      No invoices on Verification Points
                       {editInvoiceQuery.trim() ? " match this search" : ""}.
+                      Reversed and already processed invoices are not listed.
                     </p>
                   ) : (
                     <table className="min-w-full text-sm">
@@ -6737,6 +7163,8 @@ export default function ReceivePayment() {
           setHistoryTo(todayYmd);
           setActiveTab("history");
         }}
+        onDownload={downloadTillReport}
+        downloadingKind={tillDownloadKind}
       />
       <Sheet open={payBillOpen} onOpenChange={setPayBillOpen}>
         <SheetContent

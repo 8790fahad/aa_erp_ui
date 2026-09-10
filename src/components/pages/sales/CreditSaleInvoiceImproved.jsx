@@ -38,6 +38,10 @@ export default function CreditSaleInvoice({
   onCancel,
   onApplyCustomerCopy,
   onCustomerCopySaved,
+  printMode: printModeProp = null,
+  onPrintModeChange,
+  printInColor: printInColorProp = null,
+  onPrintInColorChange,
 }) {
   const query = useQuery();
   const invoiceRef = useRef(null);
@@ -87,9 +91,37 @@ export default function CreditSaleInvoice({
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [isSavingCustomerCopy, setIsSavingCustomerCopy] = useState(false);
   /** Customer print view: amount = VAT in unit price; vat = show VAT breakdown */
-  const [customerPrintMode, setCustomerPrintMode] = useState("amount");
-  /** Invoice print ink: black-and-white by default; Color is opt-in on this screen. */
-  const [printInColor, setPrintInColor] = useState(false);
+  const [customerPrintModeState, setCustomerPrintModeState] = useState(
+    propInvoiceData?.is_vat_test_copy ? "vat" : "amount",
+  );
+  const customerPrintMode =
+    printModeProp === "amount" || printModeProp === "vat"
+      ? printModeProp
+      : customerPrintModeState;
+  const setCustomerPrintMode = (mode) => {
+    if (typeof onPrintModeChange === "function") {
+      onPrintModeChange(mode);
+      return;
+    }
+    setCustomerPrintModeState(mode);
+  };
+  /** Invoice print ink: follows Header Settings (color vs black and white). */
+  const [printInColorState, setPrintInColorState] = useState(() =>
+    Boolean(activeBusiness?.sales_invoice_print_in_color),
+  );
+  useEffect(() => {
+    if (typeof printInColorProp === "boolean") return;
+    setPrintInColorState(Boolean(activeBusiness?.sales_invoice_print_in_color));
+  }, [activeBusiness?.sales_invoice_print_in_color, printInColorProp]);
+  const printInColor =
+    typeof printInColorProp === "boolean" ? printInColorProp : printInColorState;
+  const setPrintInColor = (next) => {
+    if (typeof onPrintInColorChange === "function") {
+      onPrintInColorChange(next);
+      return;
+    }
+    setPrintInColorState(next);
+  };
 
   const isInlineLoading = !propInvoiceData && loadingInvoice && !fetchedInvoice;
   useEffect(() => {
@@ -1273,8 +1305,8 @@ export default function CreditSaleInvoice({
         @media print {
           .no-print { display: none !important; }
           .invoice-container {
-            width: ${pageWidthMm}mm !important;
-            max-width: ${pageWidthMm}mm !important;
+            width: 100% !important;
+            max-width: 100% !important;
             padding: 4px !important;
             box-shadow: none !important;
             border: 2px solid #1a2d5e !important;
@@ -1501,9 +1533,27 @@ export default function CreditSaleInvoice({
                 isA5 ? "mb-2 print:mb-0 a5-section" : "flex-1"
               }`}
             >
+              {invoice?.is_vat_test_copy ? (
+                <div className="mb-1 border-2 border-dashed border-black bg-white px-2 py-1 text-center text-black">
+                  <div className="text-sm font-bold uppercase tracking-wide">
+                    VAT test copy — not posted
+                  </div>
+                  <div className="text-[10px]">
+                    Values are 1/{invoice.test_copy_divisor || 4} of{" "}
+                    {invoice.original_invoice_reference || "the original invoice"}.
+                    Not a tax invoice and not posted to the General Ledger,
+                    stock, customer account, or VAT report.
+                  </div>
+                </div>
+              ) : null}
               <BusinessDocumentHeader
                 business={business}
-                title="Sales Invoice"
+                forcePrintInColor={printInColor}
+                title={
+                  invoice?.is_vat_test_copy
+                    ? "VAT Test Copy (Pro Forma)"
+                    : "Sales Invoice"
+                }
                 numberLabel={`No: ${invoiceReference}`}
                 warehouse={
                   copyLabel ||
@@ -1948,12 +1998,12 @@ export default function CreditSaleInvoice({
                       className={`bg-blue-50 border border-blue-200 ${isA5 ? "p-0.5 px-1" : "p-1"}`}
                     >
                       <h6
-                        className={`font-semibold text-blue-800 uppercase tracking-wide ${isA5 ? "text-[10px] mb-0" : "text-xs mb-"}`}
+                        className={`font-semibold text-blue-800 uppercase tracking-wide ${isA5 ? "text-xs mb-0" : "text-sm mb-"}`}
                       >
                         How this invoice is paid
                       </h6>
                       <p
-                        className={`${isA5 ? "text-[10px] leading-snug" : "text-xs leading-relaxed"} text-gray-700`}
+                        className={`${isA5 ? "text-xs leading-snug" : "text-sm leading-relaxed"} text-gray-700`}
                       >
                         {fields.map((field, idx) => (
                           <span key={`${field.label}-${idx}`}>
@@ -2131,6 +2181,7 @@ export default function CreditSaleInvoice({
             >
               <BusinessDocumentHeader
                 business={business}
+                forcePrintInColor={printInColor}
                 title={dispatchDocTitle}
                 numberLabel={`No: ${dispatchDocPrefix}-${invoiceReference}`}
                 warehouse={
@@ -2369,4 +2420,8 @@ CreditSaleInvoice.propTypes = {
   onCancel: PropTypes.func,
   onApplyCustomerCopy: PropTypes.func,
   onCustomerCopySaved: PropTypes.func,
+  printMode: PropTypes.oneOf(["amount", "vat"]),
+  onPrintModeChange: PropTypes.func,
+  printInColor: PropTypes.bool,
+  onPrintInColorChange: PropTypes.func,
 };

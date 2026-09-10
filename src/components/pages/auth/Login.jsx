@@ -14,8 +14,9 @@ import logoDefault from "../../../assets/aa_erp-blue.png";
 import { Link, useParams } from "react-router-dom";
 import useLogin from "./useLogin";
 import { apiURL } from "@/redux/actions/api";
+import { AA_NAVY } from "@/lib/aaBrand";
 
-function normalizeHex(hex, fallback = "#1A2D5E") {
+function normalizeHex(hex, fallback = AA_NAVY) {
   const raw = String(hex || fallback).trim();
   if (/^#?[0-9a-fA-F]{3}$/.test(raw)) {
     const h = raw.startsWith("#") ? raw.slice(1) : raw;
@@ -60,8 +61,8 @@ function withAlpha(hex, alpha = 0.88) {
 }
 
 function usableBrandColors(primaryRaw, secondaryRaw) {
-  const primary = normalizeHex(primaryRaw || "#1A2D5E");
-  const safePrimary = isLightColor(primary) ? "#1A2D5E" : primary;
+  const primary = normalizeHex(primaryRaw || AA_NAVY);
+  const safePrimary = isLightColor(primary) ? AA_NAVY : primary;
   let secondary = normalizeHex(secondaryRaw || safePrimary, safePrimary);
   if (isLightColor(secondary)) {
     secondary = darkenHex(safePrimary, 0.2);

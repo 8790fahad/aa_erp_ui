@@ -94,6 +94,9 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "Make Deposit",
   "Apply Deposit",
   "Collection Reconciliation",
+  "Cash",
+  "Card",
+  "Transfer",
   "Imprest",
   "Pay Bill",
   "Edit Invoice",
@@ -128,6 +131,35 @@ export const SEE_ALL_PAY_BILLS_PRIVILEGE = "See All Pay Bills";
 export const ALL_VENDORS_PRIVILEGE = "All Vendors";
 export const INVENTORY_VENDORS_PRIVILEGE = "Inventory Vendors";
 export const EXPENSE_VENDORS_PRIVILEGE = "Expense Vendors";
+export const COLLECTION_RECONCILIATION_PRIVILEGE = "Collection Reconciliation";
+export const RECONCILE_CASH_PRIVILEGE = "Cash";
+export const RECONCILE_CARD_PRIVILEGE = "Card";
+export const RECONCILE_TRANSFER_PRIVILEGE = "Transfer";
+
+const ALL_RECONCILIATION_MODES = ["cash", "card", "transfer"];
+
+const RECONCILIATION_MODE_PRIVILEGES = {
+  cash: RECONCILE_CASH_PRIVILEGE,
+  card: RECONCILE_CARD_PRIVILEGE,
+  transfer: RECONCILE_TRANSFER_PRIVILEGE,
+};
+
+/**
+ * Payment modes shown on Collection Reconciliation.
+ * Check Cash / Card / Transfer under Collection Reconciliation.
+ * Parent with no child grants keeps every mode (existing supervisors).
+ */
+export function allowedReconciliationModes(functionalities) {
+  if (hasFullAccess(functionalities)) return [...ALL_RECONCILIATION_MODES];
+  const funcs = Array.isArray(functionalities) ? functionalities : [];
+  if (!funcs.includes(COLLECTION_RECONCILIATION_PRIVILEGE)) {
+    return [...ALL_RECONCILIATION_MODES];
+  }
+  const granted = ALL_RECONCILIATION_MODES.filter((id) =>
+    funcs.includes(RECONCILIATION_MODE_PRIVILEGES[id]),
+  );
+  return granted.length ? granted : [...ALL_RECONCILIATION_MODES];
+}
 
 /**
  * Vendor types the user may fetch.

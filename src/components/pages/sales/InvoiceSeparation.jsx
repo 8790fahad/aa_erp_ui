@@ -389,16 +389,25 @@ export default function InvoiceSeparation() {
 
   const needsCreditApproval =
     selected?.status === "awaiting_credit_approval";
-  const canSeparate =
-    selected &&
-    !isHistoryRecord &&
-    !needsCreditApproval &&
+  const parkedPaidModeSwitch =
+    selected?.status === "awaiting_payment_mode_approval" &&
     [
       "payment_confirmed",
       "invoice_separation",
       "credit_approved",
       "final_invoice",
-    ].includes(selected.status);
+    ].includes(selected?.pending_payment_mode?.previous_status);
+  const canSeparate =
+    selected &&
+    !isHistoryRecord &&
+    !needsCreditApproval &&
+    ([
+      "payment_confirmed",
+      "invoice_separation",
+      "credit_approved",
+      "final_invoice",
+    ].includes(selected.status) ||
+      parkedPaidModeSwitch);
 
   const storeCountLabel =
     packs.length === 1

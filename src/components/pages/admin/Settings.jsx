@@ -570,7 +570,7 @@ export default function Settings() {
     "";
 
   return (
-    <div className="mx-auto max-w-[1600px] p-4 pt-2">
+    <div className="mx-auto w-full max-w-[1200px] p-4 pt-2">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h2 className="mb-1 text-[22px] font-bold text-[var(--aa-navy)]">

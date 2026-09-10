@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Outlet, useLocation } from "react-router-dom";
 import { AppTopBar, PageContextBar } from "@/components/Header";
@@ -5,7 +6,9 @@ import AuthWrapper from "./AuthWrapper";
 import { AppSidebar } from "../sidebars/AppSidebar";
 import PageAccessGuard from "./PageAccessGuard";
 import SessionLockGuard from "@/components/session/SessionLockGuard";
+import LoginHoursGuard from "@/components/session/LoginHoursGuard";
 import { cn } from "@/lib/utils";
+import { AA_NAVY, applyAaBrandToDocument } from "@/lib/aaBrand";
 
 export default function AppIndex() {
   const location = useLocation();
@@ -14,6 +17,10 @@ export default function AppIndex() {
   );
   const isHomePage =
     /\/app\/home\/?$/.test(location.pathname);
+
+  useEffect(() => {
+    applyAaBrandToDocument(AA_NAVY);
+  }, []);
 
   return (
     <AuthWrapper>
@@ -42,6 +49,7 @@ export default function AppIndex() {
         </div>
       </SidebarProvider>
       <SessionLockGuard />
+      <LoginHoursGuard />
     </AuthWrapper>
   );
 }

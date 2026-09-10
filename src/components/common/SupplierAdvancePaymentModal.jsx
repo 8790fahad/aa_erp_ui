@@ -166,6 +166,11 @@ export default function SupplierAdvancePaymentModal({
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [fetchedSuppliers, setFetchedSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
+  const [vendorFilters, setVendorFilters] = useState({
+    inventory: true,
+    expense: false,
+    all: false,
+  });
   const [activeTab, setActiveTab] = useState("payment");
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -203,6 +208,7 @@ export default function SupplierAdvancePaymentModal({
     setNarration("");
     setChequeNumber("");
     setSelectedSupplier(null);
+    setVendorFilters({ inventory: true, expense: false, all: false });
     setActiveTab("payment");
     setHistory([]);
     setAvailableAdvance(0);
@@ -222,14 +228,51 @@ export default function SupplierAdvancePaymentModal({
     if (modeOfPayment !== "cheque") setChequeNumber("");
   }, [modeOfPayment]);
 
+  const sortSuppliersByName = (rows) => {
+    const byNumber = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const key = String(row?.supplier_number || row?.id || "").trim();
+      if (key) byNumber.set(key, row);
+    });
+    return [...byNumber.values()].sort((a, b) =>
+      String(a.supplier_name || "").localeCompare(
+        String(b.supplier_name || ""),
+        undefined,
+        { sensitivity: "base" },
+      ),
+    );
+  };
+
+  const vendorTypesParam = useMemo(() => {
+    if (vendorFilters.all) return "inventory,expense,all";
+    const types = [];
+    if (vendorFilters.inventory) types.push("inventory");
+    if (vendorFilters.expense) types.push("expense");
+    if (types.length === 2) return "inventory,expense,all";
+    if (types.includes("expense")) return "expense,all";
+    return "inventory,all";
+  }, [vendorFilters]);
+
   const resolvedSuppliersList = useMemo(() => {
     if (Array.isArray(suppliersList) && suppliersList.length > 0) {
-      return suppliersList;
+      return sortSuppliersByName(suppliersList);
     }
     return fetchedSuppliers;
   }, [suppliersList, fetchedSuppliers]);
 
-  // Load suppliers when opened from toolbar without a pre-selected payee.
+  const toggleVendorFilter = (key) => {
+    if (key === "all") {
+      setVendorFilters({ inventory: false, expense: false, all: true });
+      return;
+    }
+    setVendorFilters((prev) => {
+      const next = { ...prev, [key]: !prev[key], all: false };
+      if (!next.inventory && !next.expense) next.inventory = true;
+      return next;
+    });
+  };
+
+  // Load suppliers for the deposit picker, filtered by vendor type.
   useEffect(() => {
     if (!open || !activeBusiness?.id) {
       setFetchedSuppliers([]);
@@ -238,25 +281,44 @@ export default function SupplierAdvancePaymentModal({
     if (party?.supplier_number) return;
     if (Array.isArray(suppliersList) && suppliersList.length > 0) return;
 
+    let cancelled = false;
     setLoadingSuppliers(true);
-    _fetchApi(
-      `/api/suppliers?facilityId=${activeBusiness.id}&limit=1000`,
-      (data) => {
-        setLoadingSuppliers(false);
-        let rows = [];
-        if (data?.success && data?.data?.suppliers) {
-          rows = data.data.suppliers;
-        } else if (Array.isArray(data?.results)) {
-          rows = data.results;
-        }
-        setFetchedSuppliers(Array.isArray(rows) ? rows : []);
-      },
-      () => {
-        setLoadingSuppliers(false);
-        setFetchedSuppliers([]);
-      },
-    );
-  }, [open, activeBusiness?.id, party, suppliersList]);
+    const collected = [];
+    const loadPage = (page) => {
+      const params = new URLSearchParams({
+        facilityId: String(activeBusiness.id),
+        page: String(page),
+        limit: "500",
+        vendorTypes: vendorTypesParam,
+      });
+      _fetchApi(
+        `/api/suppliers?${params.toString()}`,
+        (data) => {
+          if (cancelled) return;
+          const rows = data?.data?.suppliers || data?.results || [];
+          collected.push(...(Array.isArray(rows) ? rows : []));
+          const total = Number(
+            data?.data?.pagination?.total || collected.length,
+          );
+          if (rows.length === 500 && collected.length < total && page < 20) {
+            loadPage(page + 1);
+            return;
+          }
+          setFetchedSuppliers(sortSuppliersByName(collected));
+          setLoadingSuppliers(false);
+        },
+        () => {
+          if (cancelled) return;
+          setLoadingSuppliers(false);
+          setFetchedSuppliers(sortSuppliersByName(collected));
+        },
+      );
+    };
+    loadPage(1);
+    return () => {
+      cancelled = true;
+    };
+  }, [open, activeBusiness?.id, party, suppliersList, vendorTypesParam]);
 
   const supplierNoForQuery =
     selectedSupplier?.supplier_number || party?.supplier_number || null;
@@ -1001,6 +1063,27 @@ export default function SupplierAdvancePaymentModal({
             {activeTab === "payment" && showSupplierPicker && (
               <div className="space-y-2">
                 <Label className="text-gray-900 font-medium">Supplier *</Label>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+                  {[
+                    { key: "inventory", label: "Inventory" },
+                    { key: "expense", label: "Expenses" },
+                    { key: "all", label: "All" },
+                  ].map((opt) => (
+                    <label
+                      key={opt.key}
+                      className="inline-flex cursor-pointer items-center gap-1.5"
+                    >
+                      <input
+                        type="checkbox"
+                        className="rounded border-slate-300 text-[var(--aa-navy)] focus:ring-[var(--aa-navy)]"
+                        checked={Boolean(vendorFilters[opt.key])}
+                        onChange={() => toggleVendorFilter(opt.key)}
+                        disabled={submitting || loadingSuppliers}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
                 {loadingSuppliers ? (
                   <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1008,38 +1091,48 @@ export default function SupplierAdvancePaymentModal({
                   </div>
                 ) : resolvedSuppliersList.length === 0 ? (
                   <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                    No payees found. Add a supplier first, then record an advance
-                    payment.
+                    No payees found for this filter. Try Expenses or All, or add
+                    a supplier first.
                   </p>
                 ) : (
-                  <Typeahead
-                    id="supplier-advance-payment-supplier"
-                    options={resolvedSuppliersList}
-                    placeholder="Search or select supplier…"
-                    labelKey={(s) =>
-                      s
-                        ? `${s.supplier_name || ""} (${s.supplier_number || ""})`
-                        : ""
-                    }
-                    selected={supplierTypeaheadSelected}
-                    onChange={(selected) => {
-                      setSelectedSupplier(selected[0] || null);
-                    }}
-                    renderMenuItemChildren={(option) => (
-                      <div className="py-1">
-                        <div className="font-semibold text-slate-800">
-                          {option.supplier_name || ""}
+                  <>
+                    <Typeahead
+                      id="supplier-advance-payment-supplier"
+                      options={resolvedSuppliersList}
+                      placeholder="Search or select supplier…"
+                      labelKey={(s) =>
+                        s
+                          ? `${s.supplier_name || ""} (${s.supplier_number || ""})`
+                          : ""
+                      }
+                      selected={supplierTypeaheadSelected}
+                      onChange={(selected) => {
+                        setSelectedSupplier(selected[0] || null);
+                      }}
+                      maxResults={Math.max(resolvedSuppliersList.length, 1000)}
+                      paginate={false}
+                      minLength={0}
+                      renderMenuItemChildren={(option) => (
+                        <div className="py-1">
+                          <div className="font-semibold text-slate-800">
+                            {option.supplier_name || ""}
+                          </div>
+                          <small className="text-slate-600 text-xs">
+                            Payee ID: {option.supplier_number}
+                          </small>
                         </div>
-                        <small className="text-slate-600 text-xs">
-                          Payee ID: {option.supplier_number}
-                        </small>
-                      </div>
-                    )}
-                    clearButton
-                    positionFixed
-                    flip
-                    className="w-full [&_.rbt-input-main]:rounded-md [&_.rbt-input-main]:border [&_.rbt-input-main]:border-gray-200 [&_.rbt-input-main]:min-h-10 [&_.rbt-input-main]:shadow-sm"
-                  />
+                      )}
+                      clearButton
+                      positionFixed
+                      flip
+                      className="w-full [&_.rbt-input-main]:rounded-md [&_.rbt-input-main]:border [&_.rbt-input-main]:border-gray-200 [&_.rbt-input-main]:min-h-10 [&_.rbt-input-main]:shadow-sm [&_.rbt-menu]:max-h-80"
+                    />
+                    <p className="text-[11px] text-slate-500 mb-0">
+                      {resolvedSuppliersList.length} supplier
+                      {resolvedSuppliersList.length === 1 ? "" : "s"} — type a
+                      name to search
+                    </p>
+                  </>
                 )}
               </div>
             )}

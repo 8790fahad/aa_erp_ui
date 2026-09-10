@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 const PREFS_KEY = "aa_erp_session_prefs";
 const LOCKED_KEY = "aa_erp_session_locked";
+const REASON_KEY = "aa_erp_session_lock_reason";
 export const SESSION_PREFS_EVENT = "aa-erp-session-prefs-changed";
 export const SESSION_LOCK_EVENT = "aa-erp-session-locked-changed";
 
@@ -115,13 +116,25 @@ export function guardDismissWhileLocked(handler) {
   };
 }
 
-export function setSessionLocked(locked) {
-  if (locked) sessionStorage.setItem(LOCKED_KEY, "1");
-  else sessionStorage.removeItem(LOCKED_KEY);
+export function setSessionLocked(locked, reason = "idle") {
+  if (locked) {
+    sessionStorage.setItem(LOCKED_KEY, "1");
+    sessionStorage.setItem(REASON_KEY, reason || "idle");
+  } else {
+    sessionStorage.removeItem(LOCKED_KEY);
+    sessionStorage.removeItem(REASON_KEY);
+  }
   emitSessionLock(Boolean(locked));
+}
+
+export function getSessionLockReason() {
+  if (typeof window === "undefined") return null;
+  if (!isSessionLocked()) return null;
+  return sessionStorage.getItem(REASON_KEY) || "idle";
 }
 
 export function clearSessionLockState() {
   sessionStorage.removeItem(LOCKED_KEY);
+  sessionStorage.removeItem(REASON_KEY);
   emitSessionLock(false);
 }

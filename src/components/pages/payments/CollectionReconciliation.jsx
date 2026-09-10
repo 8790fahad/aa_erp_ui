@@ -29,6 +29,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  getUserFunctionalities,
+  allowedReconciliationModes,
+} from "@/lib/access";
 
 /**
  * Cashier supervisor hand-in confirmation — not bank reconciliation.
@@ -37,6 +41,22 @@ export default function CollectionReconciliation() {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
   const facilityId = activeBusiness?.id;
+  const reconModes = useMemo(
+    () =>
+      allowedReconciliationModes(
+        getUserFunctionalities(user, activeBusiness),
+      ),
+    [user, activeBusiness],
+  );
+  const showCash = reconModes.includes("cash");
+  const showCard = reconModes.includes("card");
+  const showTransfer = reconModes.includes("transfer");
+  const visibleColCount =
+    1 +
+    (showCash ? 2 : 0) +
+    (showCard ? 2 : 0) +
+    (showTransfer ? 2 : 0) +
+    3;
 
   const [date, setDate] = useState(() => moment().format("YYYY-MM-DD"));
   const [cashierFilter, setCashierFilter] = useState("all");
@@ -193,15 +213,15 @@ export default function CollectionReconciliation() {
       return;
     }
     const draft = drafts[row.cashier_user_id] || {};
-    const received_cash = parseFloat(
-      parseNumberFromFormatted(draft.received_cash),
-    );
-    const received_card = parseFloat(
-      parseNumberFromFormatted(draft.received_card),
-    );
-    const received_transfer = parseFloat(
-      parseNumberFromFormatted(draft.received_transfer),
-    );
+    const received_cash = showCash
+      ? parseFloat(parseNumberFromFormatted(draft.received_cash))
+      : Number(row.received_cash ?? row.expected_cash) || 0;
+    const received_card = showCard
+      ? parseFloat(parseNumberFromFormatted(draft.received_card))
+      : Number(row.received_card ?? row.expected_card) || 0;
+    const received_transfer = showTransfer
+      ? parseFloat(parseNumberFromFormatted(draft.received_transfer))
+      : Number(row.received_transfer ?? row.expected_transfer) || 0;
     if (
       !Number.isFinite(received_cash) ||
       !Number.isFinite(received_card) ||
@@ -258,22 +278,29 @@ export default function CollectionReconciliation() {
   }, [cashiers, cashierFilter]);
 
   const viewSummary = useMemo(() => {
+    const pick = (cash, card, transfer) =>
+      (showCash ? Number(cash) || 0 : 0) +
+      (showCard ? Number(card) || 0 : 0) +
+      (showTransfer ? Number(transfer) || 0 : 0);
+
     if (cashierFilter === "all" && summary) {
       return {
         expected_cash: Number(summary.expected_cash) || 0,
         expected_card: Number(summary.expected_card) || 0,
         expected_transfer: Number(summary.expected_transfer) || 0,
-        expected_total:
-          (Number(summary.expected_cash) || 0) +
-          (Number(summary.expected_card) || 0) +
-          (Number(summary.expected_transfer) || 0),
+        expected_total: pick(
+          summary.expected_cash,
+          summary.expected_card,
+          summary.expected_transfer,
+        ),
         confirmed_cash: Number(summary.received_cash) || 0,
         confirmed_card: Number(summary.received_card) || 0,
         confirmed_transfer: Number(summary.received_transfer) || 0,
-        confirmed_total:
-          (Number(summary.received_cash) || 0) +
-          (Number(summary.received_card) || 0) +
-          (Number(summary.received_transfer) || 0),
+        confirmed_total: pick(
+          summary.received_cash,
+          summary.received_card,
+          summary.received_transfer,
+        ),
         confirmed_count: Number(summary.confirmed_count) || 0,
         open_count: Number(summary.open_count) || 0,
       };
@@ -307,50 +334,57 @@ export default function CollectionReconciliation() {
       expected_cash,
       expected_card,
       expected_transfer,
-      expected_total: expected_cash + expected_card + expected_transfer,
+      expected_total: pick(expected_cash, expected_card, expected_transfer),
       confirmed_cash,
       confirmed_card,
       confirmed_transfer,
-      confirmed_total: confirmed_cash + confirmed_card + confirmed_transfer,
+      confirmed_total: pick(confirmed_cash, confirmed_card, confirmed_transfer),
       confirmed_count,
       open_count,
     };
-  }, [cashierFilter, summary, filteredCashiers]);
+  }, [cashierFilter, summary, filteredCashiers, showCash, showCard, showTransfer]);
 
   const cards = useMemo(
-    () => [
-      {
-        label: "To retire",
-        value: viewSummary.expected_total,
-      },
-      {
-        label: "Cash to retire",
-        value: viewSummary.expected_cash,
-      },
-      {
-        label: "Card to retire",
-        value: viewSummary.expected_card,
-      },
-      {
-        label: "Transfer to retire",
-        value: viewSummary.expected_transfer,
-      },
-      {
-        label: "Confirmed total",
-        value: viewSummary.confirmed_total,
-      },
-      {
-        label: "Confirmed",
-        value: viewSummary.confirmed_count,
-        raw: true,
-      },
-      {
-        label: "Open",
-        value: viewSummary.open_count,
-        raw: true,
-      },
-    ],
-    [viewSummary],
+    () =>
+      [
+        {
+          label: "To retire",
+          value: viewSummary.expected_total,
+        },
+        showCash
+          ? {
+              label: "Cash to retire",
+              value: viewSummary.expected_cash,
+            }
+          : null,
+        showCard
+          ? {
+              label: "Card to retire",
+              value: viewSummary.expected_card,
+            }
+          : null,
+        showTransfer
+          ? {
+              label: "Transfer to retire",
+              value: viewSummary.expected_transfer,
+            }
+          : null,
+        {
+          label: "Confirmed total",
+          value: viewSummary.confirmed_total,
+        },
+        {
+          label: "Confirmed",
+          value: viewSummary.confirmed_count,
+          raw: true,
+        },
+        {
+          label: "Open",
+          value: viewSummary.open_count,
+          raw: true,
+        },
+      ].filter(Boolean),
+    [viewSummary, showCash, showCard, showTransfer],
   );
 
   return (
@@ -475,24 +509,36 @@ export default function CollectionReconciliation() {
                 <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-3 py-2.5 font-semibold">Cashier</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">
-                      Cash to retire
-                    </th>
-                    <th className="px-3 py-2.5 font-semibold text-right">
-                      Card to retire
-                    </th>
-                    <th className="px-3 py-2.5 font-semibold text-right">
-                      Transfer to retire
-                    </th>
-                    <th className="px-3 py-2.5 font-semibold text-right">
-                      Received cash
-                    </th>
-                    <th className="px-3 py-2.5 font-semibold text-right">
-                      Received card
-                    </th>
-                    <th className="px-3 py-2.5 font-semibold text-right">
-                      Received transfer
-                    </th>
+                    {showCash ? (
+                      <th className="px-3 py-2.5 font-semibold text-right">
+                        Cash to retire
+                      </th>
+                    ) : null}
+                    {showCard ? (
+                      <th className="px-3 py-2.5 font-semibold text-right">
+                        Card to retire
+                      </th>
+                    ) : null}
+                    {showTransfer ? (
+                      <th className="px-3 py-2.5 font-semibold text-right">
+                        Transfer to retire
+                      </th>
+                    ) : null}
+                    {showCash ? (
+                      <th className="px-3 py-2.5 font-semibold text-right">
+                        Received cash
+                      </th>
+                    ) : null}
+                    {showCard ? (
+                      <th className="px-3 py-2.5 font-semibold text-right">
+                        Received card
+                      </th>
+                    ) : null}
+                    {showTransfer ? (
+                      <th className="px-3 py-2.5 font-semibold text-right">
+                        Received transfer
+                      </th>
+                    ) : null}
                     <th className="px-3 py-2.5 font-semibold text-right">
                       Variance
                     </th>
@@ -517,11 +563,17 @@ export default function CollectionReconciliation() {
                         parseNumberFromFormatted(draft.received_transfer),
                       ) || 0;
                     const liveVariance =
-                      locked && row.variance_total != null
+                      locked && row.variance_total != null && showCash && showCard && showTransfer
                         ? Number(row.variance_total)
-                        : moneySafe(recvCash - row.expected_cash) +
-                          moneySafe(recvCard - (row.expected_card || 0)) +
-                          moneySafe(recvTransfer - row.expected_transfer);
+                        : (showCash
+                            ? moneySafe(recvCash - row.expected_cash)
+                            : 0) +
+                          (showCard
+                            ? moneySafe(recvCard - (row.expected_card || 0))
+                            : 0) +
+                          (showTransfer
+                            ? moneySafe(recvTransfer - row.expected_transfer)
+                            : 0);
                     const expanded = expandedId === row.cashier_user_id;
                     const lines = linesByCashier[row.cashier_user_id] || [];
 
@@ -542,6 +594,7 @@ export default function CollectionReconciliation() {
                               {row.cashier_name || row.cashier_user_id}
                             </button>
                           </td>
+                          {showCash ? (
                           <td className="px-3 py-2.5 text-right tabular-nums">
                             ₦{formatNumber1(row.expected_cash)}
                             {Number(row.expenses_cash) > 0 ? (
@@ -551,12 +604,18 @@ export default function CollectionReconciliation() {
                               </div>
                             ) : null}
                           </td>
+                          ) : null}
+                          {showCard ? (
                           <td className="px-3 py-2.5 text-right tabular-nums">
                             ₦{formatNumber1(row.expected_card || 0)}
                           </td>
+                          ) : null}
+                          {showTransfer ? (
                           <td className="px-3 py-2.5 text-right tabular-nums">
                             ₦{formatNumber1(row.expected_transfer)}
                           </td>
+                          ) : null}
+                          {showCash ? (
                           <td className="px-3 py-2.5 text-right">
                             {locked ? (
                               <span className="tabular-nums">
@@ -579,6 +638,8 @@ export default function CollectionReconciliation() {
                               />
                             )}
                           </td>
+                          ) : null}
+                          {showCard ? (
                           <td className="px-3 py-2.5 text-right">
                             {locked ? (
                               <span className="tabular-nums">
@@ -601,6 +662,8 @@ export default function CollectionReconciliation() {
                               />
                             )}
                           </td>
+                          ) : null}
+                          {showTransfer ? (
                           <td className="px-3 py-2.5 text-right">
                             {locked ? (
                               <span className="tabular-nums">
@@ -623,6 +686,7 @@ export default function CollectionReconciliation() {
                               />
                             )}
                           </td>
+                          ) : null}
                           <td
                             className={`px-3 py-2.5 text-right tabular-nums font-medium ${
                               Math.abs(liveVariance) > 0.05
@@ -660,12 +724,18 @@ export default function CollectionReconciliation() {
                         </tr>
                         {expanded ? (
                           <tr className="border-b border-slate-100 bg-slate-50/70">
-                            <td colSpan={8} className="px-4 py-3">
+                            <td colSpan={visibleColCount} className="px-4 py-3">
                               {linesLoading === row.cashier_user_id ? (
                                 <p className="text-xs text-slate-500">
                                   Loading lines…
                                 </p>
-                              ) : lines.length === 0 ? (
+                              ) : lines.filter((line) =>
+                                  reconModes.some((m) =>
+                                    String(line.payment_type || "")
+                                      .toLowerCase()
+                                      .includes(m),
+                                  ),
+                                ).length === 0 ? (
                                 <p className="text-xs text-slate-500">
                                   No collection lines
                                 </p>
@@ -691,7 +761,15 @@ export default function CollectionReconciliation() {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {lines.map((line) => (
+                                    {lines
+                                      .filter((line) =>
+                                        reconModes.some((m) =>
+                                          String(line.payment_type || "")
+                                            .toLowerCase()
+                                            .includes(m),
+                                        ),
+                                      )
+                                      .map((line) => (
                                       <tr
                                         key={line.entry_id}
                                         className="border-t border-slate-200/80"

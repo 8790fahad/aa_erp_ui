@@ -13,8 +13,8 @@ export default {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		colors: {
-			dark:"#4267B2",
-  			color1: '#4267B2',
+			dark:"#1a2d5e",
+  			color1: '#1a2d5e',
   			color2: '#fff',
   			sidebar: {
   				DEFAULT: 'hsl(var(--sidebar-background))',

@@ -107,7 +107,7 @@ export default function AuthRoutes() {
 
   return (
     <SidebarProvider>
-      <Sidebar collapsible="icon" variant="floating">
+      <Sidebar collapsible="icon" variant="floating" className="print:hidden">
         <SidebarHeader>
           <SidebarMenu className="mb-0 pl-2 mt-2">
             <SidebarMenuItem>
@@ -253,7 +253,7 @@ export default function AuthRoutes() {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="w-full">
-        <header className="flex h-16 sticky top-0 bg-white border-b mb-3 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+        <header className="flex h-16 sticky top-0 bg-white border-b mb-3 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 print:hidden">
           <div className="flex flex-1 items-center gap-2 px-4 min-w-0 w-full">
             <SidebarTrigger className="-ml-1 shrink-0" />
             <Separator orientation="vertical" className="mr-2 h-4 shrink-0" />
@@ -301,7 +301,7 @@ export default function AuthRoutes() {
             )}
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-3 pt-0 w-full">
+        <div className="flex flex-1 flex-col gap-4 p-3 pt-0 w-full print:p-0 print:gap-0">
           <Outlet />
         </div>
       </SidebarInset>

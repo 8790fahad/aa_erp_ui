@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { apiURL, _fetchApi, _postApi } from "@/redux/actions/api";
 import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
+import { AA_NAVY } from "@/lib/aaBrand";
 
 // ---------- Category config: name, icon, GL account mapping (matches API CoA) ----------
 const CATEGORIES = {
@@ -338,7 +339,7 @@ export default function AssetRegister() {
   const location = useLocation();
   const navigate = useNavigate();
   const facilityId = activeBusiness?.id || user?.facilityId;
-  const primaryColor = activeBusiness?.primary_color || "#1a2d5e";
+  const primaryColor = activeBusiness?.primary_color || AA_NAVY;
   const darkColor = useMemo(
     () => shadeColor(primaryColor, -38),
     [primaryColor],

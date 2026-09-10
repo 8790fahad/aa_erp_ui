@@ -31,7 +31,7 @@ import {
 // import { pullbankChanges, pushbankChanges } from "./add_bank";
 
 import { apiURL, _postApi } from "./api";
-import { clearSessionLockState } from "@/lib/sessionLock";
+import { clearSessionLockState, setSessionLocked } from "@/lib/sessionLock";
 
 const endpoint = "auth";
 
@@ -149,6 +149,9 @@ export function initUser(navigate = null, callback = (f) => f) {
           );
         }
         dispatch({ type: LOGIN, payload: data });
+        if (data.loginHoursLocked) {
+          setSessionLocked(true, "hours");
+        }
         callback();
       })
       .catch((err) => {

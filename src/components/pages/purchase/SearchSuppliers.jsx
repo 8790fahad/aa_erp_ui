@@ -18,36 +18,42 @@ export default function SearchSupplierInput(props) {
   const allowedTypes = allowedVendorFetchTypes(
     getUserFunctionalities(user, activeBusiness),
   );
-  const options = filterSuppliersByVendorType(
-    filterSuppliersByAllowedTypes(
-      Array.isArray(rawOptions) ? rawOptions : [],
-      allowedTypes,
-    ),
-    props.vendorType,
-  );
+  const hasExternalOptions = Array.isArray(props.options);
+  const options = hasExternalOptions
+    ? props.options
+    : filterSuppliersByVendorType(
+        filterSuppliersByAllowedTypes(
+          Array.isArray(rawOptions) ? rawOptions : [],
+          allowedTypes,
+        ),
+        props.vendorType,
+      );
   const [inputValue, setInputValue] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const allowNew = props.allowNew !== false;
 
   const getList = useCallback(() => {
-    // Always fetch suppliers when component loads
+    if (hasExternalOptions) return;
     dispatch(getSuppliers());
-    // alert(JSON.stringify(options))
-  }, [dispatch]);
+  }, [dispatch, hasExternalOptions]);
 
   useEffect(() => {
-    // Ensure suppliers are always fetched when component mounts
+    if (hasExternalOptions) return;
     getList();
-  }, [getList]);
+  }, [getList, hasExternalOptions]);
 
   return (
     <>
       <CustomTypeahead
         {...props}
         options={options}
-        labelKey="supplier_name"
-        // Allow creating a new supplier directly from the input
-        allowNew
-        newSelectionPrefix="Create new supplier: "
+        labelKey={props.labelKey || "supplier_name"}
+        allowNew={allowNew}
+        newSelectionPrefix={
+          allowNew ? "Create new supplier: " : undefined
+        }
+        paginate={props.paginate}
+        maxResults={props.maxResults}
         onInputChange={(v) => {
           setInputValue(v);
           if (v.length && props.onInputChange) {
@@ -60,33 +66,28 @@ export default function SearchSupplierInput(props) {
           if (v.length) {
             const selected = v[0];
 
-            // If user chose the "create new" option from the typeahead,
-            // open the SupplierRegistration form instead of returning a value.
             if (selected && selected.customOption) {
               setShowCreateModal(true);
               return;
             }
 
-            // Normal selection of an existing supplier
             props.onChange(selected);
-          } else {
-            // Handle clearing selection
-            if (props.onChange) {
-              props.onChange(null);
-            }
+          } else if (props.onChange) {
+            props.onChange(null);
           }
         }}
       />
 
-      <SupplierRegisteration
-        showModal={showCreateModal}
-        closeModal={() => setShowCreateModal(false)}
-        // No specific supplier selected – this opens the "create" mode
-        selectedSupplier={null}
-        getList={getList}
-        empty={() => {}}
-        defaultVendorType="all"
-      />
+      {allowNew ? (
+        <SupplierRegisteration
+          showModal={showCreateModal}
+          closeModal={() => setShowCreateModal(false)}
+          selectedSupplier={null}
+          getList={getList}
+          empty={() => {}}
+          defaultVendorType="all"
+        />
+      ) : null}
     </>
   );
 }

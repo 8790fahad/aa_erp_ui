@@ -35,10 +35,13 @@ import JournalCorrection from "./JournalCorrection";
 import MaterialRequisitionSettings from "./MaterialRequisitionSettings";
 import ProductionCorrectionSettings from "./ProductionCorrectionSettings";
 import SessionSettings from "./SessionSettings";
+import LoginHoursSettings from "./LoginHoursSettings";
 import { getConfiguredSocialCount } from "./MarketplaceSocialMediaModal";
 import BusinessDocumentHeader, {
   DocumentHeaderPreview,
+  ThermalDocumentHeaderPreview,
   getDocumentHeaderStyle,
+  getDocumentPrintInColor,
 } from "@/components/common/BusinessDocumentHeader";
 
 function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
@@ -194,17 +197,40 @@ function InvoiceNotesSettingsPanel({ activeBusiness, dispatch }) {
   );
 }
 
+function previewSizeFromReceiptType(type) {
+  const t = String(type || "pdf").toLowerCase();
+  if (t === "a5") return "a5";
+  if (t === "terminal") return "thermal";
+  return "a4";
+}
+
+function receiptTypeFromPreviewSize(size) {
+  if (size === "a5") return "a5";
+  if (size === "thermal") return "terminal";
+  return "pdf";
+}
+
 function HeaderSettingsPanel({ activeBusiness, dispatch }) {
   const savedStyle = getDocumentHeaderStyle(activeBusiness);
+  const savedPrintInColor = getDocumentPrintInColor(activeBusiness);
+  const savedSize = previewSizeFromReceiptType(
+    activeBusiness?.default_receipt_type,
+  );
   const [draftStyle, setDraftStyle] = useState(savedStyle);
+  const [draftPrintInColor, setDraftPrintInColor] = useState(savedPrintInColor);
+  const [draftSize, setDraftSize] = useState(savedSize);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setDraftStyle(savedStyle);
-  }, [savedStyle, activeBusiness?.id]);
+    setDraftPrintInColor(savedPrintInColor);
+    setDraftSize(savedSize);
+  }, [savedStyle, savedPrintInColor, savedSize, activeBusiness?.id]);
 
-  const dirty = draftStyle !== savedStyle;
-
+  const dirty =
+    draftStyle !== savedStyle ||
+    draftPrintInColor !== savedPrintInColor ||
+    draftSize !== savedSize;
 
   const handleSave = () => {
     if (!activeBusiness?.id || saving) return;
@@ -213,9 +239,14 @@ function HeaderSettingsPanel({ activeBusiness, dispatch }) {
       return;
     }
     setSaving(true);
+    const receiptType = receiptTypeFromPreviewSize(draftSize);
     _postApi(
       `/account/update-document-header-style/${activeBusiness.id}`,
-      { document_header_style: draftStyle },
+      {
+        document_header_style: draftStyle,
+        sales_invoice_print_in_color: draftPrintInColor,
+        default_receipt_type: receiptType,
+      },
       (resp) => {
         setSaving(false);
         if (resp?.success) {
@@ -225,13 +256,21 @@ function HeaderSettingsPanel({ activeBusiness, dispatch }) {
               business: {
                 id: activeBusiness.id,
                 document_header_style: draftStyle,
+                sales_invoice_print_in_color: draftPrintInColor,
+                default_receipt_type: receiptType,
               },
             },
           });
+          const sizeLabel =
+            draftSize === "a5"
+              ? "A5"
+              : draftSize === "thermal"
+                ? "thermal"
+                : "A4";
           toast.success(
-            draftStyle === "logo"
-              ? "Logo header saved"
-              : "Text header saved",
+            `${draftStyle === "logo" ? "Logo" : "Text"} header, ${
+              draftPrintInColor ? "color" : "black and white"
+            }, ${sizeLabel} saved`,
           );
         } else {
           toast.error(resp?.message || "Failed to save header settings");
@@ -245,16 +284,26 @@ function HeaderSettingsPanel({ activeBusiness, dispatch }) {
     );
   };
 
+  const previewBusiness = {
+    ...activeBusiness,
+    business_logo:
+      activeBusiness?.business_logo ||
+      "data:image/svg+xml," +
+        encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect fill="#e2e8f0" width="64" height="64"/><text x="32" y="36" text-anchor="middle" font-size="10" fill="#64748b">LOGO</text></svg>',
+        ),
+  };
+
   return (
-    <div className="space-y-4 max-w-4xl">
+    <div className="space-y-4 max-w-6xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-slate-800">
             Document Header Settings
           </h3>
           <p className="text-sm text-slate-500 mt-1">
-            Choose how company headers appear on receipts, invoices, payment
-            vouchers, and reports. Click Save to apply across the app.
+            Choose the header layout, black and white or color, and the default
+            receipt size (A4, A5, or thermal). Click Save Settings to keep them.
           </p>
         </div>
         <CustomButton
@@ -330,15 +379,8 @@ function HeaderSettingsPanel({ activeBusiness, dispatch }) {
               <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50 p-2">
                 <DocumentHeaderPreview
                   style={opt.value}
-                  business={{
-                    ...activeBusiness,
-                    business_logo:
-                      activeBusiness?.business_logo ||
-                      "data:image/svg+xml," +
-                        encodeURIComponent(
-                          '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect fill="#e2e8f0" width="64" height="64"/><text x="32" y="36" text-anchor="middle" font-size="10" fill="#64748b">LOGO</text></svg>',
-                        ),
-                  }}
+                  printInColor={draftPrintInColor}
+                  business={previewBusiness}
                 />
               </div>
             </button>
@@ -346,17 +388,183 @@ function HeaderSettingsPanel({ activeBusiness, dispatch }) {
         })}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div>
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-          Live preview
+          Receipt print color
         </p>
-        <BusinessDocumentHeader
-          business={activeBusiness}
-          forceStyle={draftStyle}
-          title="PAYMENT RECEIPT"
-          numberLabel="No: PR-EXAMPLE"
-          date={new Date()}
-        />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[
+            {
+              value: false,
+              label: "Black and white",
+              hint: "Print receipts and invoices in black ink only",
+            },
+            {
+              value: true,
+              label: "Color",
+              hint: "Print with the navy header and logo colors",
+            },
+          ].map((opt) => {
+            const selected = draftPrintInColor === opt.value;
+            const isSaved = savedPrintInColor === opt.value;
+            return (
+              <button
+                key={String(opt.value)}
+                type="button"
+                onClick={() => setDraftPrintInColor(opt.value)}
+                className={`text-left rounded-xl border-2 p-3 transition-all ${
+                  selected
+                    ? "border-[var(--aa-accent)] bg-[var(--aa-sidebar-active)] shadow-sm"
+                    : "border-slate-200 bg-white hover:border-slate-300"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div>
+                    <p className="font-bold text-slate-800 text-sm">
+                      {opt.label}
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      {opt.hint}
+                    </p>
+                  </div>
+                  {selected ? (
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[var(--aa-navy)] bg-[var(--aa-sidebar-active)] px-2 py-1 rounded-full">
+                      {isSaved && !dirty ? "Active" : "Selected"}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50 p-2">
+                  <DocumentHeaderPreview
+                    style={draftStyle}
+                    printInColor={opt.value}
+                    business={previewBusiness}
+                  />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+          Default receipt size
+        </p>
+        <p className="text-xs text-slate-500 mb-3">
+          Click A4, A5, or thermal, then Save Settings. That size is used when
+          you print a receipt.
+        </p>
+        <div className="flex flex-col gap-5">
+          {[
+            {
+              id: "a4",
+              label: "A4",
+              hint: "210 × 297 mm",
+              compact: false,
+              paperClass: "w-full max-w-[210mm]",
+            },
+            {
+              id: "a5",
+              label: "A5",
+              hint: "148 × 210 mm",
+              compact: true,
+              paperClass: "w-full max-w-[148mm]",
+            },
+          ].map((size) => {
+            const selected = draftSize === size.id;
+            const isSaved = savedSize === size.id;
+            return (
+            <button
+              key={size.id}
+              type="button"
+              onClick={() => setDraftSize(size.id)}
+              className={`flex min-w-0 flex-col rounded-lg border-2 p-3 text-left transition-all ${
+                selected
+                  ? "border-[var(--aa-accent)] bg-[var(--aa-sidebar-active)] shadow-sm"
+                  : "border-slate-200 bg-slate-50 hover:border-slate-300"
+              }`}
+            >
+              <div className="mb-2 flex items-baseline justify-between gap-2 px-1">
+                <span className="text-sm font-bold text-slate-800">
+                  {size.label}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-500">{size.hint}</span>
+                  {selected ? (
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[var(--aa-navy)] bg-white/80 px-2 py-1 rounded-full">
+                      {isSaved && !dirty ? "Active" : "Selected"}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              <div
+                className={`mx-auto overflow-hidden rounded-md border bg-white p-3 shadow-sm ${
+                  size.paperClass
+                } ${draftPrintInColor ? "border-slate-200" : "border-black"}`}
+              >
+                <BusinessDocumentHeader
+                  business={previewBusiness}
+                  forceStyle={draftStyle}
+                  forcePrintInColor={draftPrintInColor}
+                  title="PAYMENT RECEIPT"
+                  numberLabel="No: PR-EXAMPLE"
+                  date={new Date()}
+                  compact={size.compact}
+                />
+                <div
+                  className={`mt-2 space-y-0.5 text-slate-700 ${
+                    size.compact ? "text-[11px]" : "text-sm"
+                  }`}
+                >
+                  <div className="flex justify-between border-b border-slate-200 pb-0.5 font-semibold">
+                    <span>Item</span>
+                    <span>Amount</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Rice 50kg × 2</span>
+                    <span>99,000.00</span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-200 pt-0.5 font-bold">
+                    <span>Total</span>
+                    <span>99,000.00</span>
+                  </div>
+                </div>
+              </div>
+            </button>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => setDraftSize("thermal")}
+            className={`flex min-w-0 flex-col rounded-lg border-2 p-3 text-left transition-all ${
+              draftSize === "thermal"
+                ? "border-[var(--aa-accent)] bg-[var(--aa-sidebar-active)] shadow-sm"
+                : "border-slate-200 bg-slate-50 hover:border-slate-300"
+            }`}
+          >
+            <div className="mb-2 flex items-baseline justify-between gap-2 px-1">
+              <span className="text-sm font-bold text-slate-800">Thermal</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-500">80 mm roll</span>
+                {draftSize === "thermal" ? (
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[var(--aa-navy)] bg-white/80 px-2 py-1 rounded-full">
+                    {savedSize === "thermal" && !dirty ? "Active" : "Selected"}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex justify-center rounded-md border border-dashed border-slate-300 bg-slate-200/60 py-4">
+              <div className="rounded-sm border border-slate-300 bg-white shadow-md">
+                <ThermalDocumentHeaderPreview
+                  business={previewBusiness}
+                  showLogo={draftStyle === "logo"}
+                  printInColor={draftPrintInColor}
+                />
+              </div>
+            </div>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1749,6 +1957,16 @@ export default function SettingsTabPanels({
           <Row className="g-4">
             <Col md={12}>
               <SessionSettings />
+            </Col>
+          </Row>
+        </TabsContent>
+      )}
+
+      {tabVisible("login-hours") && (
+        <TabsContent value="login-hours" className="mt-0">
+          <Row className="g-4">
+            <Col md={12}>
+              <LoginHoursSettings />
             </Col>
           </Row>
         </TabsContent>

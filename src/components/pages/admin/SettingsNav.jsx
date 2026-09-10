@@ -132,7 +132,7 @@ export default function SettingsNav({
       {/* Sub-tabs for active category */}
       {activeGroup && activeGroup.tabs.length > 0 && (
         <div
-          className="-mx-1 flex gap-0 overflow-x-auto border-b border-slate-200 px-1"
+          className="-mx-1 flex flex-wrap gap-x-1 border-b border-slate-200 px-1"
           role="tablist"
           aria-label={`${activeGroup.label} settings`}
         >
@@ -145,7 +145,7 @@ export default function SettingsNav({
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => onSelect(tab.value)}
-                className={`-mb-px shrink-0 border-b-2 px-3.5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
                   isActive
                     ? "border-[var(--aa-navy)] text-[var(--aa-navy)]"
                     : "border-transparent text-slate-500 hover:border-slate-300 hover:text-[var(--aa-navy)]"

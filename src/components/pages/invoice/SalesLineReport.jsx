@@ -63,6 +63,12 @@ function num(v) {
   return parseFloat(v) || 0;
 }
 
+function divideMoney(v, divisor) {
+  const n = num(v);
+  if (!Number.isFinite(divisor) || divisor <= 1) return n;
+  return Math.round((n / divisor) * 100) / 100;
+}
+
 function lineVat(row) {
   return num(row.vat_amount ?? row.vat);
 }
@@ -162,9 +168,13 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
   const vatAccountCode = String(
     activeBusiness?.vat_account_code || "",
   ).trim();
+  const vatDivisor = useMemo(() => {
+    const n = Number(searchParams.get("vat_divisor"));
+    return isVatReport && Number.isFinite(n) && n > 1 ? n : 1;
+  }, [isVatReport, searchParams]);
 
   const activeViewMeta = isVatReport
-    ? { key: "detail", label: "VAT Report" }
+    ? { key: "detail", label: "Output VAT" }
     : REPORT_VIEWS.find((v) => v.key === reportView) || REPORT_VIEWS[1];
 
   useEffect(() => {
@@ -286,13 +296,18 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     else next.delete("view");
     if (fromDate) next.set("fromDate", fromDate);
     if (toDate) next.set("toDate", toDate);
+    if (isVatReport && vatDivisor > 1) {
+      next.set("vat_divisor", String(vatDivisor));
+    } else {
+      next.delete("vat_divisor");
+    }
     if (category) next.set("category", category);
     else next.delete("category");
     if (paymentModeFilter) next.set("mode", paymentModeFilter);
     else next.delete("mode");
     setSearchParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportView, isVatReport, paymentModeFilter]);
+  }, [reportView, isVatReport, paymentModeFilter, vatDivisor]);
 
   const paymentModeOptions = useMemo(() => {
     const set = new Set();
@@ -301,11 +316,20 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
   }, [rows]);
 
   const filteredRows = useMemo(() => {
-    if (!paymentModeFilter) return rows;
-    return rows.filter(
-      (r) => formatSalesPaymentMode(r.mode_of_payment) === paymentModeFilter,
-    );
-  }, [rows, paymentModeFilter]);
+    const list = paymentModeFilter
+      ? rows.filter(
+          (r) => formatSalesPaymentMode(r.mode_of_payment) === paymentModeFilter,
+        )
+      : rows;
+    if (!(isVatReport && vatDivisor > 1)) return list;
+    return list.map((r) => ({
+      ...r,
+      unit_price: divideMoney(r.unit_price, vatDivisor),
+      line_total: divideMoney(r.line_total, vatDivisor),
+      vat_amount: divideMoney(r.vat_amount ?? r.vat, vatDivisor),
+      vat: divideMoney(r.vat_amount ?? r.vat, vatDivisor),
+    }));
+  }, [rows, paymentModeFilter, isVatReport, vatDivisor]);
 
   const totalLineAmount = useMemo(
     () => filteredRows.reduce((s, r) => s + num(r.line_total), 0),
@@ -800,8 +824,8 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
       r++;
       ws.mergeCells(r, 1, r, colCount);
       ws.getCell(r, 1).value = `Period: ${periodLabel} · All amounts in ₦${
-        category ? ` · Category: ${category}` : ""
-      }`;
+        vatDivisor > 1 ? ` · divided by ${vatDivisor} (test copy)` : ""
+      }${category ? ` · Category: ${category}` : ""}`;
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r += 2;
 
@@ -837,7 +861,9 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${isVatReport ? "vat-report" : `sales-${reportView}`}-${fromDate}-to-${toDate}.xlsx`;
+      a.download = `${isVatReport ? "vat-report" : `sales-${reportView}`}${
+        vatDivisor > 1 ? `-div${vatDivisor}` : ""
+      }-${fromDate}-to-${toDate}.xlsx`;
       a.click();
       window.URL.revokeObjectURL(url);
       toast.success("Excel downloaded");
@@ -856,6 +882,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     category,
     fromDate,
     toDate,
+    vatDivisor,
   ]);
 
   const handleExportPdf = useCallback(async () => {
@@ -1194,11 +1221,17 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
           </div>
         ) : (
           <div className="mb-2 px-1">
-            <h2 className="text-sm font-semibold text-gray-800">VAT Report</h2>
+            <h2 className="text-sm font-semibold text-gray-800">Output VAT</h2>
             <p className="text-xs text-gray-500">
               Sales lines with VAT for the selected period (same detail as Sales
               Detail).
             </p>
+            {vatDivisor > 1 ? (
+              <p className="text-xs text-emerald-800 mt-1">
+                Amounts divided by {vatDivisor} — test copy, not posted to the
+                ledger or VAT return.
+              </p>
+            ) : null}
           </div>
         )}
 
@@ -1385,7 +1418,11 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
             business={activeBusiness}
             title={activeViewMeta.label}
             numberLabel={`Period: ${periodLabel}`}
-            extraLine="All amounts in ₦"
+            extraLine={
+              vatDivisor > 1
+                ? `All amounts in ₦ · divided by ${vatDivisor} (test copy, not posted)`
+                : "All amounts in ₦"
+            }
             date={new Date()}
             dateFormat="dddd, DD MMMM YYYY hh:mm A [GMT]Z"
             className="mb-0 border-b border-blue-950"
@@ -1409,6 +1446,13 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
               </p>
             </div>
           </div>
+
+          {isVatReport && vatDivisor > 1 ? (
+            <div className="mx-6 mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+              Test copy: all amounts divided by {vatDivisor}. This is not posted
+              to the General Ledger or official VAT return.
+            </div>
+          ) : null}
 
           {isVatReport && !vatAccountCode ? (
             <div className="mx-6 mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">

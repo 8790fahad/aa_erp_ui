@@ -114,10 +114,8 @@ const STATUS_TO_PROCESS = (() => {
   return map;
 })();
 
-/** Line-item edit is allowed only before payment / warehouse / closing. */
+/** Line-item edit is allowed only while the invoice is still on Verification Points. */
 export const EDITABLE_SALES_INVOICE_STATUSES = [
-  "sales_order",
-  "invoice_generated",
   "submitted",
   "awaiting_payment",
   "awaiting_cashier_confirm",
@@ -128,14 +126,12 @@ export const EDITABLE_SALES_INVOICE_STATUSES = [
 ];
 
 /**
- * Missing status (legacy invoices with no workflow) can still be opened for edit.
- * Paid, separated, warehouse, completed, and reversed invoices cannot.
+ * Paid, separated, warehouse, completed, and reversed invoices cannot be edited.
  */
 export function isEditableSalesInvoiceStatus(status) {
-  if (status == null || String(status).trim() === "") return true;
-  return EDITABLE_SALES_INVOICE_STATUSES.includes(
-    String(status).toLowerCase().trim(),
-  );
+  const s = String(status || "").toLowerCase().trim();
+  if (!s || s === "cancelled" || s === "reversed") return false;
+  return EDITABLE_SALES_INVOICE_STATUSES.includes(s);
 }
 
 /** Statuses that mean Verification Points collection/approval is already done. */

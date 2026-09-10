@@ -81,6 +81,8 @@ export default function ApplySupplierDeposit({
     "NGN";
 
   const [selectedSupplier, setSelectedSupplier] = useState(null);
+  const [supplierOptions, setSupplierOptions] = useState([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const [availableDeposit, setAvailableDeposit] = useState(0);
   const [availableGit, setAvailableGit] = useState(0);
   const [applySource, setApplySource] = useState("deposit"); // deposit | goods_in_transit
@@ -102,6 +104,43 @@ export default function ApplySupplierDeposit({
     selectedSupplier?.supplierNo ||
     selectedSupplier?.id ||
     "";
+
+  const loadSupplierOptions = useCallback(() => {
+    if (!facilityId) return;
+    setLoadingSuppliers(true);
+    const params = new URLSearchParams({
+      facilityId: String(facilityId),
+      vendorTypes: "inventory,expense,all",
+      withBalance: "1",
+    });
+    _fetchApi(
+      `/api/v1/suppliers-for-apply-deposit?${params.toString()}`,
+      (res) => {
+        setLoadingSuppliers(false);
+        const rows = Array.isArray(res?.results) ? res.results : [];
+        setSupplierOptions(rows);
+      },
+      () => {
+        setLoadingSuppliers(false);
+        setSupplierOptions([]);
+        toast.error("Failed to load suppliers");
+      },
+    );
+  }, [facilityId]);
+
+  useEffect(() => {
+    loadSupplierOptions();
+  }, [loadSupplierOptions]);
+
+  const supplierLabelKey = (s) => {
+    const name = s?.supplier_name || s?.supplier_number || "";
+    const dep = parseFloat(s?.available_deposit) || 0;
+    const git = parseFloat(s?.available_git) || 0;
+    const bits = [];
+    if (dep > 0.009) bits.push(`Dep ${formatNumber1(dep)}`);
+    if (git > 0.009) bits.push(`GIT ${formatNumber1(git)}`);
+    return bits.length ? `${name} · ${bits.join(" · ")}` : name;
+  };
 
   const sourceBalance =
     applySource === "goods_in_transit" ? availableGit : availableDeposit;
@@ -613,8 +652,27 @@ export default function ApplySupplierDeposit({
                 <SearchSupplierInput
                   onChange={handleSupplierChange}
                   selected={selectedSupplier ? [selectedSupplier] : []}
-                  disabled={applying || moving || writingOff}
+                  disabled={applying || moving || writingOff || loadingSuppliers}
+                  options={supplierOptions}
+                  allowNew={false}
+                  labelKey={supplierLabelKey}
+                  placeholder={
+                    loadingSuppliers
+                      ? "Loading suppliers…"
+                      : "Search suppliers with a deposit…"
+                  }
+                  paginate={false}
+                  maxResults={500}
                 />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {loadingSuppliers
+                    ? "Loading…"
+                    : supplierOptions.length === 0
+                      ? "No suppliers with a deposit or GIT"
+                      : `${supplierOptions.length} supplier${
+                          supplierOptions.length === 1 ? "" : "s"
+                        } with a deposit or GIT`}
+                </p>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">

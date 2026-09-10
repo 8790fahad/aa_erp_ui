@@ -94,6 +94,7 @@ const CustomerDepositReceiptHTML = ({
       <div className={isA5 ? "p-0.5" : "p-1"}>
         <BusinessDocumentHeader
           business={company}
+          forcePrintInColor={printInColor}
           title="DEPOSIT RECEIPT"
           numberLabel={`No: ${companyData.receiptNumber}`}
           date={companyData.depositDate}
@@ -485,7 +486,12 @@ const CustomerDepositReceiptPdf = () => {
   const customer_no = query.get("customer_no");
   const [depositData, setDepositData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [printInColor, setPrintInColor] = useState(false);
+  const [printInColor, setPrintInColor] = useState(() =>
+    Boolean(activeBusiness?.sales_invoice_print_in_color),
+  );
+  useEffect(() => {
+    setPrintInColor(Boolean(activeBusiness?.sales_invoice_print_in_color));
+  }, [activeBusiness?.sales_invoice_print_in_color]);
   const [printFormat, setPrintFormat] = useState(() =>
     defaultPrintFormat(activeBusiness),
   );

@@ -4,8 +4,19 @@
 import store from "../store";
 import { notifyNetworkError } from "@/hooks/useNetworkStatus";
 import { apiURL, ipAddr } from "./apiConfig";
+import { LOGIN_HOURS_ENDED_EVENT } from "@/lib/loginHours";
 
 export { apiURL, ipAddr };
+
+function maybeEndLoginHoursSession(response) {
+  if (response?.code !== "LOGIN_HOURS") return;
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(LOGIN_HOURS_ENDED_EVENT, {
+      detail: { message: response.message || response.msg },
+    }),
+  );
+}
 
 // API posting
 const _postApi = (
@@ -41,6 +52,7 @@ const _postApi = (
         (typeof response?.err === "string" ? response.err : response?.err?.message);
 
       if (!res.ok) {
+        maybeEndLoginHoursSession(response);
         error({
           ...response,
           message: apiMessage || `Request failed (${res.status})`,
@@ -49,6 +61,7 @@ const _postApi = (
       }
 
       if (response && response.success === false) {
+        maybeEndLoginHoursSession(response);
         error({
           ...response,
           message: apiMessage || "Request failed",
@@ -80,6 +93,7 @@ const _fetchApi = (
     .then((raw) => raw.json())
     .then((response) => {
       if (response) {
+        maybeEndLoginHoursSession(response);
         success(response);
       } else {
         console.log("Empty response");

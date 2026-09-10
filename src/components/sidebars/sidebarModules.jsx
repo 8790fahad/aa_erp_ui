@@ -458,7 +458,14 @@ export const modules = [
           { title: "Apply Deposit" },
           { title: "Make Deposit" },
           { title: "Discount Collection" },
-          { title: "Collection Reconciliation" },
+          {
+            title: "Collection Reconciliation",
+            subFunctionalities: [
+              { title: "Cash" },
+              { title: "Card" },
+              { title: "Transfer" },
+            ],
+          },
           { title: "Imprest" },
           { title: "Pay Bill" },
           { title: "Edit Invoice" },
@@ -576,9 +583,10 @@ export const modules = [
         ],
       },
       {
-        title: "VAT Report",
+        title: "Output VAT",
         url: "/app/sales/vat-report",
         functionality: [
+          "Output VAT",
           "VAT Report",
           "Sales Report",
           "Invoice List",

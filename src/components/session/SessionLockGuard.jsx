@@ -8,12 +8,15 @@ import { Button } from "@/components/ui/button";
 import { apiURL } from "@/redux/actions/api";
 import { logout } from "@/redux/actions/auth";
 import {
+  SESSION_LOCK_EVENT,
   SESSION_PREFS_EVENT,
   clearSessionLockState,
+  getSessionLockReason,
   getSessionPrefs,
   isSessionLocked,
   setSessionLocked,
 } from "@/lib/sessionLock";
+import { LOGIN } from "@/redux/actions/actionTypes";
 
 const ACTIVITY_EVENTS = [
   "mousemove",
@@ -38,6 +41,9 @@ export default function SessionLockGuard() {
   const storedEmail = String(user?.email || "").trim();
 
   const [locked, setLocked] = useState(() => isSessionLocked());
+  const [lockReason, setLockReason] = useState(
+    () => getSessionLockReason() || "idle",
+  );
   const [unlockEmail, setUnlockEmail] = useState(storedEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -74,17 +80,22 @@ export default function SessionLockGuard() {
     return () => window.removeEventListener(SESSION_PREFS_EVENT, onPrefs);
   }, [facilityId, activeBusiness]);
 
-  const lockNow = useCallback(() => {
-    setSessionLocked(true);
-    setLocked(true);
-    setUnlockEmail(String(user?.email || "").trim());
-    setPassword("");
-    setShowPassword(false);
-    setError("");
-  }, [user?.email]);
+  const lockNow = useCallback(
+    (reason = "idle") => {
+      setSessionLocked(true, reason);
+      setLockReason(reason);
+      setLocked(true);
+      setUnlockEmail(String(user?.email || "").trim());
+      setPassword("");
+      setShowPassword(false);
+      setError("");
+    },
+    [user?.email],
+  );
 
   const unlockLocal = useCallback(() => {
     setSessionLocked(false);
+    setLockReason("idle");
     setLocked(false);
     setPassword("");
     setShowPassword(false);
@@ -98,7 +109,7 @@ export default function SessionLockGuard() {
     if (timerRef.current) clearTimeout(timerRef.current);
     const ms = Math.max(1, Number(prefs.idleMinutes) || 10) * 60 * 1000;
     timerRef.current = setTimeout(() => {
-      lockNow();
+      lockNow("idle");
     }, ms);
   }, [prefs.enabled, prefs.idleMinutes, locked, authenticated, lockNow]);
 
@@ -124,7 +135,30 @@ export default function SessionLockGuard() {
   }, [authenticated, prefs.enabled, locked, resetIdleTimer]);
 
   useEffect(() => {
-    if (!prefs.enabled && !locked) {
+    const onLock = (event) => {
+      const next = Boolean(event?.detail?.locked ?? isSessionLocked());
+      if (!next) {
+        setLocked(false);
+        setLockReason("idle");
+        return;
+      }
+      setLocked((wasLocked) => {
+        if (!wasLocked) {
+          setUnlockEmail(String(user?.email || "").trim());
+          setPassword("");
+          setShowPassword(false);
+          setError("");
+        }
+        return true;
+      });
+      setLockReason(getSessionLockReason() || "idle");
+    };
+    window.addEventListener(SESSION_LOCK_EVENT, onLock);
+    return () => window.removeEventListener(SESSION_LOCK_EVENT, onLock);
+  }, [user?.email]);
+
+  useEffect(() => {
+    if (!prefs.enabled && !locked && getSessionLockReason() !== "hours") {
       clearSessionLockState();
     }
   }, [prefs.enabled, locked]);
@@ -152,13 +186,21 @@ export default function SessionLockGuard() {
       });
       const data = await response.json();
       if (data.success === false) {
-        setError(data.message || "Incorrect password");
+        setError(
+          data.code === "LOGIN_HOURS"
+            ? data.message ||
+                "Business hours are still closed. Enter your password again after hours are extended."
+            : data.message || "Incorrect password",
+        );
         setUnlocking(false);
         passwordInputRef.current?.focus();
         return;
       }
       if (data.token) {
         localStorage.setItem("@@__token", data.token);
+      }
+      if (data.user || data.business) {
+        dispatch({ type: LOGIN, payload: data });
       }
       unlockLocal();
       toast.success("Welcome back");
@@ -212,12 +254,14 @@ export default function SessionLockGuard() {
               id="session-lock-title"
               className="text-lg font-semibold"
             >
-              Session locked
+              {lockReason === "hours" ? "Session expired" : "Session locked"}
             </DialogPrimitive.Title>
             <DialogPrimitive.Description className="mt-1 text-sm text-white/80">
-              {needsEmail
-                ? "Enter your email and password to continue"
-                : "Enter your password to continue"}
+              {lockReason === "hours"
+                ? "Business hours have closed. Enter your password to continue. If hours are extended, you can continue from here."
+                : needsEmail
+                  ? "Enter your email and password to continue"
+                  : "Enter your password to continue"}
             </DialogPrimitive.Description>
           </div>
 

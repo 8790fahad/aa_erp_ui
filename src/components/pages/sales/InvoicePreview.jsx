@@ -235,15 +235,116 @@ function buildBranchInvoiceView(
   };
 }
 
+function buildDividedTestInvoiceView(invoiceData, divisor) {
+  const n = Number(divisor);
+  if (!invoiceData || !Number.isFinite(n) || n <= 1) return invoiceData;
+
+  const divided = (value) => {
+    const amount = Number(value);
+    return Number.isFinite(amount)
+      ? Number((amount / n).toFixed(2))
+      : value;
+  };
+  const divideFields = (record, fields) => {
+    if (!record || typeof record !== "object") return record;
+    const next = { ...record };
+    fields.forEach((field) => {
+      if (next[field] !== undefined && next[field] !== null) {
+        next[field] = divided(next[field]);
+      }
+    });
+    return next;
+  };
+  const moneyFields = [
+    "amount",
+    "selling_price",
+    "price",
+    "unit_price",
+    "cost",
+    "cost_price",
+    "tax_amount",
+    "discount",
+    "discount_amount",
+    "discountAmount",
+    "subtotal",
+    "totalTax",
+    "total_tax",
+    "totalAmount",
+    "total_amount",
+    "invoice_total_amount",
+    "amount_paid",
+    "paid_amount",
+    "cash_paid",
+    "transfer_paid",
+    "card_paid",
+    "credit_paid",
+    "deposit_paid",
+    "balance",
+  ];
+  const originalReference =
+    invoiceData.transaction?.reference ||
+    invoiceData.sale_code ||
+    invoiceData.invoice_ref ||
+    "INVOICE";
+  const testReference = `${originalReference}/TEST-1-OF-${n}`;
+
+  return {
+    ...divideFields(invoiceData, moneyFields),
+    transaction: invoiceData.transaction
+      ? {
+          ...divideFields(invoiceData.transaction, moneyFields),
+          reference: testReference,
+        }
+      : { reference: testReference },
+    items: (invoiceData.items || []).map((item) =>
+      divideFields(item, moneyFields),
+    ),
+    deliveryItems: (invoiceData.deliveryItems || []).map((item) =>
+      divideFields(item, moneyFields),
+    ),
+    taxes: (invoiceData.taxes || []).map((tax) =>
+      divideFields(tax, ["amount", "cost", "tax_amount"]),
+    ),
+    discounts: (invoiceData.discounts || []).map((discount) =>
+      divideFields(discount, ["amount", "cost", "value"]),
+    ),
+    discount: invoiceData.discount
+      ? divideFields(invoiceData.discount, ["amount", "cost", "value"])
+      : invoiceData.discount,
+    payment_breakdown: (invoiceData.payment_breakdown || []).map((payment) =>
+      divideFields(payment, ["amount"]),
+    ),
+    customPricing: false,
+    customPrices: {},
+    is_vat_test_copy: true,
+    test_copy_divisor: n,
+    original_invoice_reference: originalReference,
+  };
+}
+
 function InvoicePreview() {
   const navigate = useNavigate();
   const query = useQuery();
   const saleCode = query.get("sale_code");
+  const saleCodesRaw = query.get("sale_codes") || "";
+  const uniqueSaleCodes = [
+    ...new Set(
+      [
+        ...(saleCodesRaw ? saleCodesRaw.split(",") : []),
+        ...(saleCode ? [saleCode] : []),
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  const isInvoiceBatch = uniqueSaleCodes.length > 1;
+  const previewSaleCode = uniqueSaleCodes[0] || "";
   const branchIdFilter = query.get("branch_id");
   const packCode = query.get("pack_code");
   const branchNameParam = query.get("branch_name");
   const printAll = query.get("print_all") === "1" || query.get("print_all") === "true";
   const autoPrint = query.get("auto_print") === "1" || query.get("auto_print") === "true";
+  const vatTestDivisor = Number(query.get("vat_test_divisor") || 0);
   const forceThermal =
     query.get("thermal") === "1" ||
     query.get("thermal") === "true" ||
@@ -271,22 +372,87 @@ function InvoicePreview() {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const facilityId = activeBusiness?.id;
   const [invoiceData, setInvoiceData] = useState(null);
+  const [batchInvoices, setBatchInvoices] = useState([]);
   const [packs, setPacks] = useState([]);
   const [activePack, setActivePack] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [didAutoPrint, setDidAutoPrint] = useState(false);
+  const [batchPrintMode, setBatchPrintMode] = useState("vat");
+  const [batchPrintInColor, setBatchPrintInColor] = useState(() =>
+    Boolean(activeBusiness?.sales_invoice_print_in_color),
+  );
+  useEffect(() => {
+    setBatchPrintInColor(Boolean(activeBusiness?.sales_invoice_print_in_color));
+  }, [activeBusiness?.sales_invoice_print_in_color]);
 
   const fetchInvoice = useCallback(() => {
-    if (!saleCode || !facilityId) {
+    if (!facilityId || !uniqueSaleCodes.length) {
+      return;
+    }
+
+    if (isInvoiceBatch) {
+      setIsLoading(true);
+      setHasError(false);
+      setInvoiceData(null);
+      setPacks([]);
+      setActivePack(null);
+      let pending = uniqueSaleCodes.length;
+      const results = uniqueSaleCodes.map((code) => ({
+        code,
+        data: null,
+        error: false,
+      }));
+      uniqueSaleCodes.forEach((code, idx) => {
+        _fetchApi(
+          `/api/v1/transactions/get-sale?sale_code=${encodeURIComponent(
+            code,
+          )}&facility_id=${facilityId}`,
+          (response) => {
+            results[idx] = {
+              code,
+              data: response.success ? response.data : null,
+              error: !response.success,
+            };
+            pending -= 1;
+            if (pending <= 0) {
+              setBatchInvoices([...results]);
+              setIsLoading(false);
+              if (results.every((row) => row.error || !row.data)) {
+                setHasError(true);
+                toast.error("Unable to load the selected invoices");
+              }
+            }
+          },
+          () => {
+            results[idx] = { code, data: null, error: true };
+            pending -= 1;
+            if (pending <= 0) {
+              setBatchInvoices([...results]);
+              setIsLoading(false);
+              if (results.every((row) => row.error || !row.data)) {
+                setHasError(true);
+                toast.error("Unable to load the selected invoices");
+              }
+            }
+          },
+        );
+      });
+      return;
+    }
+
+    if (!previewSaleCode) {
       return;
     }
 
     setIsLoading(true);
     setHasError(false);
     setActivePack(null);
+    setBatchInvoices([]);
     _fetchApi(
-      `/api/v1/transactions/get-sale?sale_code=${saleCode}&facility_id=${facilityId}`,
+      `/api/v1/transactions/get-sale?sale_code=${encodeURIComponent(
+        previewSaleCode,
+      )}&facility_id=${facilityId}`,
       (response) => {
         if (response.success) {
           setInvoiceData(response.data);
@@ -294,7 +460,7 @@ function InvoicePreview() {
           if (loadPacks) {
             const params = new URLSearchParams({
               facilityId,
-              saleCode,
+              saleCode: previewSaleCode,
             });
             _fetchApi(
               `/api/v1/sale-workflows/fulfillments?${params.toString()}`,
@@ -338,17 +504,25 @@ function InvoicePreview() {
         toast.error("Failed to fetch invoice data");
       },
     );
-  }, [saleCode, facilityId, printAll, packCode, branchIdFilter]);
+  }, [
+    facilityId,
+    printAll,
+    packCode,
+    branchIdFilter,
+    isInvoiceBatch,
+    previewSaleCode,
+    uniqueSaleCodes.join(","),
+  ]);
 
   useEffect(() => {
     fetchInvoice();
   }, [fetchInvoice]);
 
   useEffect(() => {
-    if (!saleCode && !isLoading) {
+    if (!uniqueSaleCodes.length && !isLoading) {
       toast.error("Sale code is required to preview the invoice.");
     }
-  }, [saleCode, isLoading]);
+  }, [uniqueSaleCodes.length, isLoading]);
 
   const resolvedInvoiceData = useMemo(() => {
     const base = buildBranchInvoiceView(
@@ -359,11 +533,15 @@ function InvoicePreview() {
       activePack?.lines || null,
     );
     if (!base) return null;
-    if (!isCollectionReceipt) return base;
+    const printableBase =
+      Number.isFinite(vatTestDivisor) && vatTestDivisor > 1
+        ? buildDividedTestInvoiceView(base, vatTestDivisor)
+        : base;
+    if (!isCollectionReceipt) return printableBase;
     return {
-      ...base,
+      ...printableBase,
       collection_receipt: true,
-      collected_at: base.collected_at || new Date().toISOString(),
+      collected_at: printableBase.collected_at || new Date().toISOString(),
     };
   }, [
     invoiceData,
@@ -372,6 +550,7 @@ function InvoicePreview() {
     branchNameParam,
     activePack,
     isCollectionReceipt,
+    vatTestDivisor,
   ]);
 
   const printAllCopies = useMemo(() => {
@@ -387,6 +566,23 @@ function InvoicePreview() {
       ),
     }));
   }, [printAll, invoiceData, packs]);
+
+  const batchCopies = useMemo(() => {
+    if (!isInvoiceBatch) return [];
+    return batchInvoices
+      .map((row) => {
+        if (!row?.data) {
+          return { code: row.code, data: null, error: true };
+        }
+        const base = buildBranchInvoiceView(row.data);
+        const printable =
+          Number.isFinite(vatTestDivisor) && vatTestDivisor > 1
+            ? buildDividedTestInvoiceView(base, vatTestDivisor)
+            : base;
+        return { code: row.code, data: printable, error: false };
+      })
+      .filter((row) => row.data);
+  }, [isInvoiceBatch, batchInvoices, vatTestDivisor]);
 
   // Respect business system setting: PDF/A4, A5, or Terminal/thermal.
   // Prefer live invoice business over stale Redux session when present.
@@ -480,7 +676,8 @@ function InvoicePreview() {
   useEffect(() => {
     if (!autoPrint || didAutoPrint || isLoading) return;
     if (printAll && printAllCopies.length === 0) return;
-    if (!printAll && !resolvedInvoiceData) return;
+    if (isInvoiceBatch && batchCopies.length === 0) return;
+    if (!printAll && !isInvoiceBatch && !resolvedInvoiceData) return;
     setDidAutoPrint(true);
     const t = setTimeout(() => {
       if (showThermalDeliveryOrder) {
@@ -501,12 +698,20 @@ function InvoicePreview() {
     isTerminalReceipt,
     printAll,
     printAllCopies.length,
+    isInvoiceBatch,
+    batchCopies.length,
     resolvedInvoiceData,
     showThermalDeliveryOrder,
   ]);
 
   const handleCancel = () => {
-    if (printAll || packCode || branchIdFilter) {
+    if (
+      printAll ||
+      packCode ||
+      branchIdFilter ||
+      isInvoiceBatch ||
+      vatTestDivisor > 1
+    ) {
       navigate(-1);
       return;
     }
@@ -563,6 +768,208 @@ function InvoicePreview() {
             Please verify the sale code or try again later.
           </p>
         </div>
+      </div>
+    );
+  }
+
+  if (isInvoiceBatch) {
+    const failedCount = batchInvoices.filter(
+      (row) => row.error || !row.data,
+    ).length;
+    return (
+      <div className="min-h-screen bg-gray-50 py-6 print-all-root">
+        <style>{`
+          @media print {
+            .no-print { display: none !important; }
+            html, body {
+              background: white !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              height: auto !important;
+              overflow: visible !important;
+            }
+            body * {
+              visibility: hidden;
+            }
+            .print-invoice-stack,
+            .print-invoice-stack * {
+              visibility: visible;
+            }
+            .print-invoice-stack {
+              position: absolute !important;
+              inset: 0 auto auto 0 !important;
+              width: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              background: white !important;
+            }
+            .print-all-root {
+              background: white !important;
+              min-height: 0 !important;
+              padding: 0 !important;
+              margin: 0 !important;
+            }
+            @page { size: ${paperLabel} portrait; margin: 8mm; }
+            .batch-invoice-copy {
+              break-after: page;
+              page-break-after: always;
+              margin: 0 !important;
+            }
+            .batch-invoice-copy:last-child {
+              break-after: auto;
+              page-break-after: auto;
+            }
+            .print-invoice-stack .invoice-container {
+              width: 100% !important;
+              max-width: 100% !important;
+              margin: 0 auto !important;
+              box-shadow: none !important;
+              overflow: visible !important;
+              height: auto !important;
+              max-height: none !important;
+            }
+            .print-invoice-stack .invoice-page-half {
+              page-break-after: auto !important;
+              break-after: auto !important;
+            }
+            .print-invoice-stack .invoice-items-table {
+              width: 100% !important;
+              table-layout: fixed !important;
+            }
+            .print-invoice-stack .invoice-items-table th,
+            .print-invoice-stack .invoice-items-table td {
+              color: #000 !important;
+              background: #fff !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+          }
+        `}</style>
+        <div className="no-print max-w-4xl mx-auto px-4 mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 flex-1">
+            <strong>VAT output test copy</strong>
+            <span className="block text-xs text-emerald-800 mt-0.5">
+              {batchCopies.length} invoice
+              {batchCopies.length === 1 ? "" : "s"}
+              {Number.isFinite(vatTestDivisor) && vatTestDivisor > 1
+                ? ` · amounts divided by ${vatTestDivisor}`
+                : ""}
+              {failedCount
+                ? ` · ${failedCount} could not be loaded`
+                : ""}
+              {" — "}one {paperLabel} page per invoice. This does not post to
+              the ledger.
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className="inline-flex rounded-md border border-slate-300 overflow-hidden bg-white"
+              role="tablist"
+              aria-label="Customer copy type"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={batchPrintMode === "amount"}
+                onClick={() => setBatchPrintMode("amount")}
+                className={`px-3 py-1 text-sm transition-colors ${
+                  batchPrintMode === "amount"
+                    ? "bg-[var(--aa-navy)] text-white"
+                    : "bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Amount only
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={batchPrintMode === "vat"}
+                onClick={() => setBatchPrintMode("vat")}
+                className={`px-3 py-1 text-sm border-l border-slate-300 transition-colors ${
+                  batchPrintMode === "vat"
+                    ? "bg-[var(--aa-navy)] text-white"
+                    : "bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                With VAT
+              </button>
+            </div>
+            <div
+              className="inline-flex rounded-md border border-slate-300 overflow-hidden bg-white"
+              role="tablist"
+              aria-label="Print color"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={!batchPrintInColor}
+                onClick={() => setBatchPrintInColor(false)}
+                className={`px-3 py-1 text-sm transition-colors ${
+                  !batchPrintInColor
+                    ? "bg-[var(--aa-navy)] text-white"
+                    : "bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Black and white
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={batchPrintInColor}
+                onClick={() => setBatchPrintInColor(true)}
+                className={`px-3 py-1 text-sm border-l border-slate-300 transition-colors ${
+                  batchPrintInColor
+                    ? "bg-[var(--aa-navy)] text-white"
+                    : "bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Colour
+              </button>
+            </div>
+            <Button color="primary" onClick={() => window.print()}>
+              <Printer className="inline w-4 h-4 mr-2" />
+              Print all
+            </Button>
+            <Button color="secondary" outline onClick={handleCancel}>
+              Close
+            </Button>
+          </div>
+        </div>
+        {batchCopies.length === 0 ? (
+          <div className="max-w-4xl mx-auto px-4 text-sm text-gray-500">
+            None of the selected invoices could be loaded.
+          </div>
+        ) : (
+          <div className="print-invoice-stack">
+            {batchCopies.map(({ code, data }) => (
+              <div key={code} className="batch-invoice-copy mb-8 print:mb-0">
+                <div className="invoice-print-section">
+                  <CreditSaleInvoiceImproved
+                    invoiceData={data}
+                    business={data.business}
+                    customer={data.customer}
+                    date={data.date}
+                    customPricing={data.customPricing}
+                    customPrices={data.customPrices}
+                    customerCopyEnabled={false}
+                    customerCopyPrices={{}}
+                    setCustomerCopyPrices={() => {}}
+                    taxes={data.taxes}
+                    discount={data.discount}
+                    copyLabel=""
+                    showCustomerCopyActions={false}
+                    showPrintButton={false}
+                    enableInlineCustomerCopyPreview={false}
+                    documentMode="invoice"
+                    paperSize={paperSize}
+                    printMode={batchPrintMode}
+                    printInColor={batchPrintInColor}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -1013,7 +1420,10 @@ function InvoicePreview() {
               (packCode ? `Pack ${packCode}` : "")
             }
             showCustomerCopyActions={
-              showSalesInvoice && !packCode && !branchIdFilter
+              showSalesInvoice &&
+              !packCode &&
+              !branchIdFilter &&
+              !resolvedInvoiceData.is_vat_test_copy
             }
             enableInlineCustomerCopyPreview={false}
             warehouseDualSignature={Boolean(packCode || branchIdFilter)}

@@ -267,6 +267,7 @@ const SupplierPaymentReceiptHTML = ({
       <div className={isA5 ? "p-1.5" : "p-2"}>
         <BusinessDocumentHeader
           business={company}
+          forcePrintInColor={printInColor}
           title="PAYMENT RECEIPT"
           numberLabel={`No: PR-${payment_ref}`}
           date={companyData.paymentDate}
@@ -558,7 +559,12 @@ const SupplierPaymentReceiptPdf = () => {
   const [paymentData, setPaymentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [paperSize, setPaperSize] = useState("a5");
-  const [printInColor, setPrintInColor] = useState(false);
+  const [printInColor, setPrintInColor] = useState(() =>
+    Boolean(activeBusiness?.sales_invoice_print_in_color),
+  );
+  useEffect(() => {
+    setPrintInColor(Boolean(activeBusiness?.sales_invoice_print_in_color));
+  }, [activeBusiness?.sales_invoice_print_in_color]);
   const receiptRef = useRef(null);
   const navigate = useNavigate();
 

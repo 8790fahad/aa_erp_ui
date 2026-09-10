@@ -295,6 +295,12 @@ export const SETTINGS_TABS = [
     category: "security",
     openToAll: true,
   },
+  {
+    value: "login-hours",
+    label: "Login Hours",
+    category: "security",
+    openToAll: true,
+  },
 ];
 
 /** Legacy hash anchors → tab value (deep links from other pages). */
@@ -313,4 +319,7 @@ export const SETTINGS_HASH_TO_TAB = {
   "header-settings": "header-settings",
   "production-abnormal-loss-account": "abnormal-loss",
   "production-scrap-inventory-account": "scrap-inventory",
+  "invoice-closing": "invoice-closing",
+  session: "session",
+  "login-hours": "login-hours",
 };
