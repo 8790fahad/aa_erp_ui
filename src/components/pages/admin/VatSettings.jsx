@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import moment from "moment";
 import { ChevronDown, History, Loader2 } from "lucide-react";
@@ -11,7 +11,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { _fetchApi } from "@/redux/actions/api";
+import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import PayableSettings from "./PayableSettings";
 
@@ -111,7 +111,7 @@ function readVatHistory(facilityId) {
           : [];
       for (const row of rows) {
         const entry = normalizeHistoryEntry(row);
-        if (!entry) continue;
+        if (!entry?.savedAt) continue;
         map[monthHistoryKey(entry.year, entry.month)] = entry;
       }
     }
@@ -119,10 +119,13 @@ function readVatHistory(facilityId) {
     /* ignore broken history */
   }
   const current = readSavedVatPeriod(facilityId);
-  if (current?.divisor && !map[monthHistoryKey(current.year, current.month)]) {
+  if (
+    current?.divisor &&
+    current.savedAt &&
+    !map[monthHistoryKey(current.year, current.month)]
+  ) {
     map[monthHistoryKey(current.year, current.month)] = {
       ...current,
-      savedAt: null,
       generatedAt: null,
       previewedAt: null,
       invoiceCount: 0,
@@ -134,11 +137,36 @@ function readVatHistory(facilityId) {
   return map;
 }
 
+function historyMapFromApiRows(rows) {
+  const map = {};
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const entry = normalizeHistoryEntry({
+      year: row.year,
+      month: row.month,
+      divisor: row.divisor,
+      savedAt: row.created_at || row.savedAt || new Date().toISOString(),
+      generatedAt: row.generated_at || row.generatedAt || null,
+      previewedAt: row.previewed_at || row.previewedAt || null,
+      invoiceCount: row.invoice_count ?? row.invoiceCount,
+      selectedCount: row.selected_count ?? row.selectedCount,
+      selectedCodes: row.selected_codes || row.selectedCodes,
+      outputVat: row.output_vat ?? row.outputVat,
+    });
+    if (!entry) return;
+    map[monthHistoryKey(entry.year, entry.month)] = entry;
+  });
+  return map;
+}
+
+function monthLabel(year, month) {
+  return moment({ year, month: month - 1 }).format("MMMM YYYY");
+}
+
 function writeVatHistory(facilityId, map) {
   if (!facilityId) return;
   localStorage.setItem(
     vatHistoryStorageKey(facilityId),
-    JSON.stringify(Object.values(map)),
+    JSON.stringify(Object.values(map).filter((row) => row?.savedAt)),
   );
 }
 
@@ -178,7 +206,8 @@ function MonthYearSelects({ year, month, yearOptions, onYear, onMonth, labelClas
 }
 
 export default function VatSettings() {
-  const { activeBusiness } = useSelector((state) => state.auth);
+  const navigate = useNavigate();
+  const { activeBusiness, user } = useSelector((state) => state.auth);
   const vatAccountCode = String(activeBusiness?.vat_account_code || "").trim();
   const [periodYear, setPeriodYear] = useState(() => {
     const saved = readSavedVatPeriod(activeBusiness?.id);
@@ -207,6 +236,7 @@ export default function VatSettings() {
     readVatHistory(activeBusiness?.id),
   );
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [savingHistory, setSavingHistory] = useState(false);
 
   const { fromDate, toDate } = useMemo(
     () => monthBounds(periodYear, periodMonth),
@@ -360,7 +390,7 @@ export default function VatSettings() {
     }
     persistPeriod(false);
     upsertMonthHistory({ previewedAt: new Date().toISOString() });
-    window.open(`/app/sales/invoice-preview?${params.toString()}`, "_blank");
+    navigate(`/app/sales/invoice-preview?${params.toString()}`);
   };
 
   const persistPeriod = useCallback(
@@ -387,37 +417,129 @@ export default function VatSettings() {
     (extra = {}) => {
       if (!activeBusiness?.id) return;
       const key = monthHistoryKey(periodYear, periodMonth);
-      const prev = testHistory[key] || {};
-      const now = new Date().toISOString();
+      const prev = testHistory[key];
+      if (!prev?.savedAt) return;
       const entry = {
-        year: periodYear,
-        month: periodMonth,
-        divisor: String(testDivisor || "").trim(),
-        savedAt: extra.touchSaved === false ? prev.savedAt || null : now,
+        ...prev,
         generatedAt: extra.generatedAt || prev.generatedAt || null,
         previewedAt: extra.previewedAt || prev.previewedAt || null,
-        invoiceCount: monthInvoices.length,
-        selectedCount: selectedInvoiceCodes.length,
-        selectedCodes: [...selectedInvoiceCodes],
-        outputVat: Number(summary?.outputVat || 0),
       };
-      if (extra.generatedAt) entry.generatedAt = extra.generatedAt;
-      if (extra.previewedAt) entry.previewedAt = extra.previewedAt;
       const next = { ...testHistory, [key]: entry };
       setTestHistory(next);
       writeVatHistory(activeBusiness.id, next);
     },
-    [
-      activeBusiness?.id,
-      periodYear,
-      periodMonth,
-      testDivisor,
-      testHistory,
-      monthInvoices.length,
-      selectedInvoiceCodes,
-      summary?.outputVat,
-    ],
+    [activeBusiness?.id, periodYear, periodMonth, testHistory],
   );
+
+  const loadSavedHistory = useCallback(() => {
+    if (!activeBusiness?.id) {
+      setTestHistory({});
+      return;
+    }
+    _fetchApi(
+      `/account/vat-output-test-history?facilityId=${encodeURIComponent(
+        activeBusiness.id,
+      )}`,
+      (res) => {
+        if (!res?.success) {
+          setTestHistory(readVatHistory(activeBusiness.id));
+          return;
+        }
+        const map = {
+          ...readVatHistory(activeBusiness.id),
+          ...historyMapFromApiRows(res.results),
+        };
+        setTestHistory(map);
+        writeVatHistory(activeBusiness.id, map);
+      },
+      () => {
+        setTestHistory(readVatHistory(activeBusiness.id));
+      },
+    );
+  }, [activeBusiness?.id]);
+
+  const saveTestCopyHistory = () => {
+    if (!activeBusiness?.id) return;
+    if (!hasDivisor) {
+      toast.error("Type the divide number, greater than 1. Example: 2, 3, or 4");
+      return;
+    }
+    const key = monthHistoryKey(periodYear, periodMonth);
+    if (testHistory[key]?.savedAt) {
+      toast.error(`${monthLabel(periodYear, periodMonth)} is already saved for this facility`);
+      return;
+    }
+    setSavingHistory(true);
+    _postApi(
+      "/account/vat-output-test-history",
+      {
+        facilityId: activeBusiness.id,
+        year: periodYear,
+        month: periodMonth,
+        divisor: String(divisorNum),
+        outputVat: Number(summary?.outputVat || 0),
+        invoiceCount: monthInvoices.length,
+        selectedCount: selectedInvoiceCodes.length,
+        selectedCodes: [...selectedInvoiceCodes],
+        created_by: user?.id || user?.user_id || "",
+      },
+      (res) => {
+        setSavingHistory(false);
+        const entry = historyMapFromApiRows([res?.results || res]);
+        const saved = entry[key];
+        if (!saved) {
+          toast.error("Saved, but history could not be refreshed");
+          loadSavedHistory();
+          return;
+        }
+        const next = { ...testHistory, [key]: saved };
+        setTestHistory(next);
+        writeVatHistory(activeBusiness.id, next);
+        persistPeriod(false);
+        setHistoryOpen(true);
+        toast.success(`Saved ${monthLabel(periodYear, periodMonth)}`);
+      },
+      (err) => {
+        setSavingHistory(false);
+        const alreadySaved = String(err?.message || "")
+          .toLowerCase()
+          .includes("already saved");
+        if (alreadySaved) {
+          toast.error(
+            err.message ||
+              `${monthLabel(periodYear, periodMonth)} is already saved for this facility`,
+          );
+          loadSavedHistory();
+          return;
+        }
+        const localKey = monthHistoryKey(periodYear, periodMonth);
+        if (testHistory[localKey]?.savedAt) {
+          toast.error(
+            `${monthLabel(periodYear, periodMonth)} is already saved for this facility`,
+          );
+          return;
+        }
+        const entry = {
+          year: periodYear,
+          month: periodMonth,
+          divisor: String(divisorNum),
+          savedAt: new Date().toISOString(),
+          generatedAt: null,
+          previewedAt: null,
+          invoiceCount: monthInvoices.length,
+          selectedCount: selectedInvoiceCodes.length,
+          selectedCodes: [...selectedInvoiceCodes],
+          outputVat: Number(summary?.outputVat || 0),
+        };
+        const next = { ...testHistory, [localKey]: entry };
+        setTestHistory(next);
+        writeVatHistory(activeBusiness.id, next);
+        persistPeriod(false);
+        setHistoryOpen(true);
+        toast.success(`Saved ${monthLabel(periodYear, periodMonth)}`);
+      },
+    );
+  };
 
   const openHistoryMonth = (entry) => {
     if (!entry) return;
@@ -425,24 +547,28 @@ export default function VatSettings() {
     setPeriodMonth(entry.month);
     setTestDivisor(entry.divisor || "");
     setSelectedInvoiceCodes(entry.selectedCodes || []);
-    toast.message(
-      `Opened ${moment({ year: entry.year, month: entry.month - 1 }).format("MMMM YYYY")}`,
-    );
+    toast.message(`Opened ${monthLabel(entry.year, entry.month)}`);
   };
 
-  const yearHistoryRows = useMemo(
+  const savedHistoryRows = useMemo(
     () =>
-      MONTH_OPTIONS.map((m) => {
-        const saved = testHistory[monthHistoryKey(periodYear, m.value)] || null;
-        return {
-          month: m.value,
-          label: m.label,
+      Object.values(testHistory)
+        .filter((row) => row?.savedAt)
+        .sort((a, b) =>
+          a.year !== b.year ? b.year - a.year : b.month - a.month,
+        )
+        .map((saved) => ({
+          month: saved.month,
+          year: saved.year,
+          label: monthLabel(saved.year, saved.month),
           saved,
-        };
-      }),
-    [periodYear, testHistory],
+        })),
+    [testHistory],
   );
-  const savedHistoryCount = yearHistoryRows.filter((row) => row.saved).length;
+  const savedHistoryCount = savedHistoryRows.length;
+  const currentPeriodSaved = Boolean(
+    testHistory[monthHistoryKey(periodYear, periodMonth)]?.savedAt,
+  );
 
   const openDividedVatReport = () => {
     if (!hasDivisor) {
@@ -456,7 +582,7 @@ export default function VatSettings() {
       toDate,
       vat_divisor: String(divisorNum),
     });
-    window.open(`/app/sales/vat-report?${params.toString()}`, "_blank");
+    navigate(`/app/sales/vat-report?${params.toString()}`);
   };
 
   const runFetch = useCallback(() => {
@@ -509,9 +635,9 @@ export default function VatSettings() {
       setPeriodMonth(saved.month);
       if (saved.divisor) setTestDivisor(saved.divisor);
     }
-    setTestHistory(readVatHistory(activeBusiness.id));
+    loadSavedHistory();
     setPeriodLoaded(true);
-  }, [activeBusiness?.id]);
+  }, [activeBusiness?.id, loadSavedHistory]);
 
   useEffect(() => {
     if (!periodLoaded) return;
@@ -738,15 +864,18 @@ export default function VatSettings() {
                   />
                   <Button
                     type="button"
-                    onClick={() => {
-                      persistPeriod(true);
-                      upsertMonthHistory();
-                    }}
-                    disabled={!activeBusiness?.id}
+                    onClick={saveTestCopyHistory}
+                    disabled={
+                      !activeBusiness?.id || savingHistory || currentPeriodSaved
+                    }
                     variant="outline"
                     className="border-emerald-300 text-emerald-900"
                   >
-                    Save
+                    {savingHistory
+                      ? "Saving"
+                      : currentPeriodSaved
+                        ? "Saved"
+                        : "Save"}
                   </Button>
                   <div>
                     <label className={testFieldLabel}>
@@ -815,10 +944,8 @@ export default function VatSettings() {
                         History
                         <span className="font-normal text-xs text-emerald-800/80">
                           {savedHistoryCount
-                            ? `${savedHistoryCount} month${
-                                savedHistoryCount === 1 ? "" : "s"
-                              } in ${periodYear}`
-                            : `Each month in ${periodYear}`}
+                            ? `${savedHistoryCount} saved`
+                            : "None saved yet"}
                         </span>
                       </span>
                       <ChevronDown
@@ -830,7 +957,8 @@ export default function VatSettings() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <p className="mb-0 border-t border-emerald-100 px-3 py-1.5 text-xs text-emerald-800/80">
-                      Save to keep the divide number for that month
+                      Only saved months are listed. Each year and month can be
+                      saved once per facility.
                     </p>
                     <div className="max-h-64 overflow-y-auto border-t border-emerald-100">
                     <table className="min-w-full text-sm">
@@ -846,9 +974,21 @@ export default function VatSettings() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {yearHistoryRows.map((row) => {
+                        {savedHistoryRows.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={5}
+                              className="px-3 py-6 text-center text-sm text-slate-500"
+                            >
+                              No saved months yet
+                            </td>
+                          </tr>
+                        ) : (
+                          savedHistoryRows.map((row) => {
                           const saved = row.saved;
-                          const isCurrent = row.month === periodMonth;
+                          const isCurrent =
+                            row.month === periodMonth &&
+                            row.year === periodYear;
                           const rowDivisor = Number(
                             String(saved?.divisor || "").replace(/,/g, ""),
                           );
@@ -860,7 +1000,7 @@ export default function VatSettings() {
                               : null;
                           return (
                             <tr
-                              key={row.month}
+                              key={`${row.year}-${row.month}`}
                               className={
                                 isCurrent
                                   ? "bg-emerald-50"
@@ -881,9 +1021,7 @@ export default function VatSettings() {
                               <td className="whitespace-nowrap px-3 py-2 text-slate-600">
                                 {saved?.savedAt
                                   ? moment(saved.savedAt).format("DD MMM YYYY")
-                                  : saved
-                                    ? "Saved"
-                                    : "—"}
+                                  : "Saved"}
                                 {saved?.generatedAt ? (
                                   <span className="ml-1 text-[11px] text-emerald-700">
                                     · report
@@ -891,29 +1029,18 @@ export default function VatSettings() {
                                 ) : null}
                               </td>
                               <td className="px-3 py-2 text-right">
-                                {saved ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => openHistoryMonth(saved)}
-                                    className="rounded-md border border-emerald-300 px-2.5 py-1 text-xs font-semibold text-emerald-900 hover:bg-emerald-50"
-                                  >
-                                    {isCurrent ? "Current" : "Open"}
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPeriodMonth(row.month);
-                                    }}
-                                    className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100"
-                                  >
-                                    Select
-                                  </button>
-                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => openHistoryMonth(saved)}
+                                  className="rounded-md border border-emerald-300 px-2.5 py-1 text-xs font-semibold text-emerald-900 hover:bg-emerald-50"
+                                >
+                                  {isCurrent ? "Current" : "Open"}
+                                </button>
                               </td>
                             </tr>
                           );
-                        })}
+                          })
+                        )}
                       </tbody>
                     </table>
                     </div>

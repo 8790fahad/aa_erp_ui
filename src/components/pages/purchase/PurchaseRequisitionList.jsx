@@ -301,12 +301,15 @@ export default function PurchaseRequisitionList() {
     branch: user.branch_name || "",
     branch_id: user.branchId ? String(user.branchId) : "",
     reason: "inventory topup",
+    order_id: "",
+    orderIdAuto: false,
   });
 
   const [errors, setErrors] = useState({
     reason: "",
     supplier: "",
     branch: "",
+    order_id: "",
   });
 
   const toggle = (item) => {
@@ -432,6 +435,8 @@ export default function PurchaseRequisitionList() {
       branch: wh.branch || user.branch_name || "",
       branch_id: wh.branch_id || "",
       reason: "inventory topup",
+      order_id: "",
+      orderIdAuto: false,
       expenses: [],
       supplier_name: "",
       supplier_code: "",
@@ -445,7 +450,7 @@ export default function PurchaseRequisitionList() {
       category: "",
       unit: "",
     });
-    setErrors({ reason: "", supplier: "", branch: "" });
+    setErrors({ reason: "", supplier: "", branch: "", order_id: "" });
     formSubmittedRef.current = false;
     setAttachments([]);
     getProductList();
@@ -610,9 +615,16 @@ export default function PurchaseRequisitionList() {
       reason: "",
       supplier: "",
       branch: "",
+      order_id: "",
     };
 
     let isValid = true;
+
+    if (!form.orderIdAuto && !String(form.order_id || "").trim()) {
+      toast.error("Order ID is required, or check Auto to generate it.");
+      newErrors.order_id = "Type an order ID or check Auto";
+      isValid = false;
+    }
 
     if (!form.supplier_name) {
       toast.error("Preferred vendor/supplier is required");
@@ -858,6 +870,9 @@ export default function PurchaseRequisitionList() {
     try {
       const requisitionData = {
         ...form,
+        order_id: form.orderIdAuto
+          ? "auto"
+          : String(form.order_id || "").trim(),
         supplier_code:
           form.supplier_code || form.supplier_name || "",
         prefix: activeBusiness.prefix,
@@ -955,7 +970,7 @@ export default function PurchaseRequisitionList() {
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="Search PR, supplier, subject…"
+                    placeholder="Search PR, order ID, supplier…"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="h-9 w-56 rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
@@ -1066,6 +1081,7 @@ export default function PurchaseRequisitionList() {
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] uppercase tracking-wide text-slate-500">
                     <th className="px-4 py-2.5 font-medium">Date</th>
+                    <th className="px-4 py-2.5 font-medium">Order ID</th>
                     <th className="px-4 py-2.5 font-medium">PR No.</th>
                     <th className="px-4 py-2.5 font-medium">Subject</th>
                     <th className="px-4 py-2.5 font-medium">Supplier</th>
@@ -1077,7 +1093,7 @@ export default function PurchaseRequisitionList() {
                   {loading ? (
                     Array.from({ length: 5 }).map((_, i) => (
                       <tr key={i} className="border-b border-slate-50">
-                        <td className="px-4 py-3" colSpan={6}>
+                        <td className="px-4 py-3" colSpan={7}>
                           <Skeleton className="h-4 w-full" />
                         </td>
                       </tr>
@@ -1085,7 +1101,7 @@ export default function PurchaseRequisitionList() {
                   ) : pr.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={7}
                         className="px-4 py-16 text-center text-slate-500"
                       >
                         <FileText className="mx-auto mb-2 h-8 w-8 text-slate-300" />
@@ -1104,6 +1120,9 @@ export default function PurchaseRequisitionList() {
                           {row.date
                             ? moment(row.date).format("DD MMM YYYY")
                             : "—"}
+                        </td>
+                        <td className="bg-white px-4 py-2.5 font-mono text-[13px] font-semibold text-slate-800">
+                          {row.order_id || "—"}
                         </td>
                         <td className="bg-white px-4 py-2.5 font-mono text-[13px] font-semibold text-slate-800">
                           {row.pr_no}
@@ -1262,6 +1281,11 @@ export default function PurchaseRequisitionList() {
                     }}
                   >
                     PR No.: <b>{items?.pr_no}</b>
+                    {items?.order_id ? (
+                      <span style={{ marginLeft: 12 }}>
+                        Order ID: <b>{items.order_id}</b>
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1463,6 +1487,55 @@ export default function PurchaseRequisitionList() {
                   onChange={handleFormChange}
                   className={poInputClass}
                 />
+              </div>
+
+              <div>
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <label htmlFor="po-order-id" className={poLabelClass}>
+                    Order ID <span className="text-red-500">*</span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form.orderIdAuto)}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        setForm((prev) => ({
+                          ...prev,
+                          orderIdAuto: on,
+                          order_id: on ? "" : prev.order_id,
+                        }));
+                        setErrors((prev) => ({ ...prev, order_id: "" }));
+                      }}
+                      className="h-3.5 w-3.5 rounded border-slate-300"
+                    />
+                    Auto
+                  </label>
+                </div>
+                <input
+                  id="po-order-id"
+                  type="text"
+                  name="order_id"
+                  value={
+                    form.orderIdAuto ? "auto" : form.order_id || ""
+                  }
+                  onChange={handleFormChange}
+                  placeholder="Type order ID"
+                  autoComplete="off"
+                  disabled={Boolean(form.orderIdAuto)}
+                  className={`${poInputClass} ${
+                    errors.order_id ? "border-red-500" : ""
+                  } ${form.orderIdAuto ? "bg-slate-50 text-slate-500" : ""}`}
+                />
+                {errors.order_id ? (
+                  <p className="mt-1 text-xs text-red-500">{errors.order_id}</p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    {form.orderIdAuto
+                      ? "The number generator will assign a unique Order ID for this facility."
+                      : "Required and unique in this facility. Check Auto to generate it."}
+                  </p>
+                )}
               </div>
 
               <div>

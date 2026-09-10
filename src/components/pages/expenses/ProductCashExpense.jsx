@@ -74,6 +74,7 @@ export default function ProductCashExpense() {
     remark: "",
     mode_of_payment: "",
     cheque_number: "",
+    order_id: "",
   });
 
   const [items, setItems] = useState([]);
@@ -256,6 +257,8 @@ export default function ProductCashExpense() {
         user_id: user.id,
         supplier_no: form.supplier_number,
         remark: form.remark,
+        order_id: form.order_id || undefined,
+        po_no: form.order_id || undefined,
         transaction_date: form.date,
         bankAccount,
         accountHead,
@@ -373,6 +376,8 @@ export default function ProductCashExpense() {
       return;
     }
 
+    const orderId = requisition.order_id || requisition.po_no || "";
+
     // Map the items from the requisition to the format expected by the items list
     const requisitionItems = requisition.items.map((item) => ({
       _id: uuidv4(),
@@ -384,6 +389,8 @@ export default function ProductCashExpense() {
         parseFloat(item.quantity || 1) *
         parseFloat(item.unit_cost || item.cost || 0),
       item_type: item.item_type || "",
+      order_id: orderId,
+      pr_no: requisition.pr_no || "",
     }));
 
     // Add to items list
@@ -405,6 +412,12 @@ export default function ProductCashExpense() {
           requisition.supplier_subhead ||
           requisition.account_code ||
           prev.supplier_subhead,
+        order_id: orderId || prev.order_id,
+      }));
+    } else if (orderId) {
+      setForm((prev) => ({
+        ...prev,
+        order_id: orderId || prev.order_id,
       }));
     }
 
@@ -609,6 +622,20 @@ export default function ProductCashExpense() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Order ID
+                </label>
+                <input
+                  type="text"
+                  name="order_id"
+                  value={form.order_id || ""}
+                  onChange={handleFormChange}
+                  placeholder="Filled from purchase order, or type here"
+                  className="w-full px-3 py-2 font-mono text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-[var(--aa-accent)] transition-all hover:border-slate-400"
+                />
               </div>
 
               <div>
@@ -1003,7 +1030,12 @@ export default function ProductCashExpense() {
                             {idx + 1}
                           </td>
                           <td className="px-3 py-2 text-xs font-medium text-slate-800">
-                            {item.item_name}
+                            <div>{item.item_name}</div>
+                            {item.order_id ? (
+                              <div className="mt-0.5 font-mono text-[10px] font-semibold text-slate-500">
+                                {item.order_id}
+                              </div>
+                            ) : null}
                           </td>
                           <td className="px-3 py-2 text-xs text-slate-600 text-right">
                             {formatNumber(item.quantity)}
@@ -1214,6 +1246,11 @@ export default function ProductCashExpense() {
                           <h3 className="text-sm font-bold text-gray-900">
                             {requisition.pr_no}
                           </h3>
+                          {requisition.order_id ? (
+                            <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 font-mono text-xs font-semibold text-gray-800">
+                              {requisition.order_id}
+                            </span>
+                          ) : null}
                           <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">
                             {requisition.status}
                           </span>

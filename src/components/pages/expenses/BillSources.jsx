@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -97,17 +97,32 @@ export default function BillSources() {
   const filterOptions = allowedBillFilterOptions(functionalities);
   const viewTypes = allowedBillTypes(functionalities);
   const canFilterAll = filterOptions.includes("all");
-  const listTypes = canFilterAll ? ["inventory", "expense"] : viewTypes;
+  const listTypes = canFilterAll && viewTypes.length > 1
+    ? ["inventory", "expense"]
+    : viewTypes;
   const canFilterInventory =
     filterOptions.includes("inventory") && listTypes.includes("inventory");
   const canFilterExpense =
     filterOptions.includes("expense") && listTypes.includes("expense");
   const canCreateInventory = createTypes.includes("inventory");
   const canCreateExpense = createTypes.includes("expense");
-  const showTypeFilter = filterOptions.length > 0;
+  const showTypeFilter = listTypes.length > 1 && filterOptions.length > 0;
   const canCreateBill = canCreateInventory || canCreateExpense;
 
   const effectiveBillType = resolveBillFetchType(functionalities, typeFromUrl);
+
+  const visibleBills = useMemo(() => {
+    if (listTypes.includes("inventory") && listTypes.includes("expense")) {
+      return bills;
+    }
+    if (listTypes.length === 1 && listTypes[0] === "expense") {
+      return bills.filter(isExpenseBill);
+    }
+    if (listTypes.length === 1 && listTypes[0] === "inventory") {
+      return bills.filter((item) => !isExpenseBill(item));
+    }
+    return bills;
+  }, [bills, listTypes]);
 
   const pageSize = pageSizeFromUrl;
 
@@ -535,7 +550,7 @@ export default function BillSources() {
                     ))}
                   </tr>
                 ))
-              ) : bills.length === 0 ? (
+              ) : visibleBills.length === 0 ? (
                 <tr>
                   <td colSpan={fields.length} className="px-4 py-12 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
@@ -555,7 +570,7 @@ export default function BillSources() {
                   </td>
                 </tr>
               ) : (
-                bills.map((item) => (
+                visibleBills.map((item) => (
                   <tr
                     key={item.invoice_id}
                     className="transition-colors hover:bg-slate-50/80"

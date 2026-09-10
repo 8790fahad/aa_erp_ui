@@ -202,38 +202,36 @@ export function canSeeAllPayBills(user, activeBusiness) {
 
 /**
  * Bill types the user may create (Create Bill modal).
- * Nested Inventory Bill / Expense Bill grants win; parent Create Bill
- * with no child grants yet keeps both types.
+ * Nested Inventory Bill / Expense Bill grants win, including for Admin.
+ * Parent Create Bill (or full access) with no child grants keeps both types.
  */
 export function allowedBillCreateTypes(functionalities) {
-  if (hasFullAccess(functionalities)) return ["inventory", "expense"];
   const funcs = Array.isArray(functionalities) ? functionalities : [];
   const granted = [];
   if (funcs.includes(INVENTORY_BILL_PRIVILEGE)) granted.push("inventory");
   if (funcs.includes(EXPENSE_BILL_PRIVILEGE)) granted.push("expense");
   if (granted.length) return granted;
-  if (funcs.includes(CREATE_BILL_PRIVILEGE)) return ["inventory", "expense"];
+  if (hasFullAccess(functionalities) || funcs.includes(CREATE_BILL_PRIVILEGE)) {
+    return ["inventory", "expense"];
+  }
   return [];
 }
 
 /**
  * Bill types the user may see in the list.
+ * Same nested Inventory Bill / Expense Bill grants as create.
  * Parent "Bill" with no child grants yet keeps both types (existing staff).
  */
 export function allowedBillTypes(functionalities) {
-  if (hasFullAccess(functionalities)) return ["inventory", "expense"];
-  const funcs = Array.isArray(functionalities) ? functionalities : [];
   const createTypes = allowedBillCreateTypes(functionalities);
   if (createTypes.length) return createTypes;
-  const granted = [];
-  if (funcs.includes(INVENTORY_BILL_PRIVILEGE)) granted.push("inventory");
-  if (funcs.includes(EXPENSE_BILL_PRIVILEGE)) granted.push("expense");
-  if (granted.length) return granted;
   return ["inventory", "expense"];
 }
 
 /** Filter dropdown options granted under Filter Bills: All / Inventory / Expenses. */
 export function allowedBillFilterOptions(functionalities) {
+  const viewTypes = allowedBillTypes(functionalities);
+  if (viewTypes.length === 1) return [...viewTypes];
   if (hasFullAccess(functionalities)) return ["all", "inventory", "expense"];
   const funcs = Array.isArray(functionalities) ? functionalities : [];
   // Require the Filter Bills parent. "All" / "Inventory" / "Expenses" collide
@@ -241,41 +239,42 @@ export function allowedBillFilterOptions(functionalities) {
   if (!funcs.includes(FILTER_BILLS_PRIVILEGE)) return [];
   const granted = [];
   if (funcs.includes(FILTER_ALL_BILLS_PRIVILEGE)) granted.push("all");
-  if (funcs.includes(FILTER_INVENTORY_BILLS_PRIVILEGE)) {
+  if (
+    funcs.includes(FILTER_INVENTORY_BILLS_PRIVILEGE) &&
+    viewTypes.includes("inventory")
+  ) {
     granted.push("inventory");
   }
-  if (funcs.includes(FILTER_EXPENSE_BILLS_PRIVILEGE)) granted.push("expense");
+  if (
+    funcs.includes(FILTER_EXPENSE_BILLS_PRIVILEGE) &&
+    viewTypes.includes("expense")
+  ) {
+    granted.push("expense");
+  }
   if (granted.length) return granted;
-  return ["all", "inventory", "expense"];
+  return ["all", ...viewTypes];
 }
 
 /**
  * Bill type sent to GET /api/supplier/bills.
- * Generic "Expenses" / "Inventory" access does not pick the type.
- * Fetch All only with Filter Bills → All (or admin). Otherwise fetch the
- * Inventory Bill / Expense Bill grant(s).
+ * A single Inventory Bill / Expense Bill grant always wins (no All fetch).
  */
 export function resolveBillFetchType(functionalities, requestedType = "all") {
+  const viewTypes = allowedBillTypes(functionalities);
+  if (viewTypes.length === 1) return viewTypes[0];
+
   const req = String(requestedType || "all").toLowerCase();
   const filters = allowedBillFilterOptions(functionalities);
   const canAll = filters.includes("all");
-  const viewTypes = canAll
-    ? ["inventory", "expense"]
-    : allowedBillTypes(functionalities);
 
   if (req === "inventory" && viewTypes.includes("inventory")) {
-    if (filters.includes("inventory") || viewTypes.length === 1) {
-      return "inventory";
-    }
+    if (filters.includes("inventory") || canAll) return "inventory";
   }
   if (req === "expense" && viewTypes.includes("expense")) {
-    if (filters.includes("expense") || viewTypes.length === 1) {
-      return "expense";
-    }
+    if (filters.includes("expense") || canAll) return "expense";
   }
 
   if (canAll) return "all";
-  if (viewTypes.length === 1) return viewTypes[0];
   return "all";
 }
 

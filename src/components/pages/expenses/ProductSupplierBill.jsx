@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Calendar,
   Building2,
+  Hash,
 } from "lucide-react";
 import {
   Drawer,
@@ -106,6 +107,7 @@ export default function ProductSupplierBill() {
     payment_type: "credit", // credit | cash
     mode_of_payment: "",
     cheque_number: "",
+    order_id: "",
   });
 
   const [items, setItems] = useState([]);
@@ -786,6 +788,8 @@ export default function ProductSupplierBill() {
         supplier_no: form.supplier_number,
         terms: isCashPayment ? "0" : form.terms,
         remark: form.remark,
+        order_id: form.order_id || undefined,
+        po_no: form.order_id || undefined,
         transaction_date: form.date,
         due_date: isCashPayment ? form.date : form.due_date,
         apply_prepayment: isCashPayment ? false : usePrepayment,
@@ -1059,6 +1063,8 @@ export default function ProductSupplierBill() {
     }
 
     // Map the items from the requisition to the format expected by the items list
+    const orderId = requisition.order_id || requisition.po_no || "";
+
     const requisitionItems = requisition.items.map((item) => {
       const quantity = item.quantity || 1;
       const cost = item.unit_cost || item.cost || 0;
@@ -1084,6 +1090,8 @@ export default function ProductSupplierBill() {
         item_type: item.item_type || matchedProduct?.item_type || "",
         taxable,
         line_tax_id: isProductTaxable(taxable) ? defaultLineTaxId : null,
+        order_id: orderId,
+        pr_no: requisition.pr_no || "",
       };
     });
 
@@ -1139,6 +1147,16 @@ export default function ProductSupplierBill() {
 
       if (requisition.reason && !String(prev.remark || "").trim()) {
         next.remark = requisition.reason;
+      }
+
+      if (orderId) {
+        const existing = String(prev.order_id || "")
+          .split(",")
+          .map((v) => v.trim())
+          .filter(Boolean);
+        if (!existing.includes(orderId)) {
+          next.order_id = [...existing, orderId].join(", ");
+        }
       }
 
       return next;
@@ -1491,6 +1509,22 @@ export default function ProductSupplierBill() {
             </select>
           </div>
 
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
+            <label className="text-sm font-medium text-slate-600 lg:text-right">
+              Order ID
+            </label>
+            <input
+              type="text"
+              name="order_id"
+              value={form.order_id || ""}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, order_id: e.target.value }))
+              }
+              placeholder="Filled from purchase order, or type here"
+              className="h-9 w-full max-w-md rounded-md border border-slate-300 bg-white px-3 font-mono text-sm text-slate-800 outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+            />
+          </div>
+
           {!isCashPayment ? (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
               <label className="text-sm font-medium text-slate-600 lg:text-right">
@@ -1695,7 +1729,7 @@ export default function ProductSupplierBill() {
                             positionFixed
                           />
                           {item.sku && (
-                            <div className="mt-1.5 flex items-center gap-2">
+                            <div className="mt-1.5 flex flex-wrap items-center gap-2">
                               <select
                                 title="VAT status"
                                 value={normalizeTaxableStatus(
@@ -1729,6 +1763,11 @@ export default function ProductSupplierBill() {
                               <span className="text-xs text-slate-500">
                                 {item.sku}
                               </span>
+                              {item.order_id ? (
+                                <span className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-700">
+                                  {item.order_id}
+                                </span>
+                              ) : null}
                             </div>
                           )}
                         </td>
@@ -2227,6 +2266,12 @@ export default function ProductSupplierBill() {
                                 <h3 className="font-mono text-sm font-semibold text-slate-900">
                                   {requisition.pr_no}
                                 </h3>
+                                {requisition.order_id ? (
+                                  <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-800 ring-1 ring-inset ring-slate-200">
+                                    <Hash className="h-3 w-3 text-slate-500" />
+                                    {requisition.order_id}
+                                  </span>
+                                ) : null}
                                 <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-inset ring-amber-200/80">
                                   {requisition.status}
                                 </span>
