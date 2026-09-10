@@ -293,10 +293,11 @@ const CustomRequisitionModal = ({
           }
         />
         <DetailItem label="PR No." value={items?.pr_no} />
+        <DetailItem
+          label="PO No."
+          value={items?.order_id || items?.po_no}
+        />
         <DetailItem label="From warehouse" value={items?.branch} />
-        {mode === "receive" ? (
-          <DetailItem label="PO No." value={items?.po_no} />
-        ) : null}
         {mode !== "review" ? (
           <DetailItem label="Raised by" value={items?.requisitor} />
         ) : null}

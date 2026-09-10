@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
   ChevronDown,
+  Eye,
   FileDown,
   FileSpreadsheet,
   Loader2,
@@ -163,6 +164,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
   const [vatLedger, setVatLedger] = useState(null);
   const [vatLedgerLoading, setVatLedgerLoading] = useState(false);
   const [vatLedgerModalOpen, setVatLedgerModalOpen] = useState(false);
+  const [selectedInvoiceNos, setSelectedInvoiceNos] = useState([]);
 
   const userId = user?.id || user?.user_id || "";
   const vatAccountCode = String(
@@ -351,6 +353,80 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     () => new Set(filteredRows.map((r) => r.invoice_no).filter(Boolean)).size,
     [filteredRows],
   );
+
+  const uniqueInvoiceNos = useMemo(
+    () =>
+      [
+        ...new Set(
+          filteredRows
+            .map((r) => String(r.invoice_no || "").trim())
+            .filter(Boolean),
+        ),
+      ],
+    [filteredRows],
+  );
+
+  useEffect(() => {
+    const visible = new Set(uniqueInvoiceNos);
+    setSelectedInvoiceNos((prev) => {
+      const next = prev.filter((code) => visible.has(code));
+      if (next.length === prev.length) return prev;
+      return next;
+    });
+  }, [uniqueInvoiceNos]);
+
+  const allInvoicesSelected =
+    uniqueInvoiceNos.length > 0 &&
+    uniqueInvoiceNos.every((code) => selectedInvoiceNos.includes(code));
+  const someInvoicesSelected =
+    selectedInvoiceNos.length > 0 && !allInvoicesSelected;
+
+  const toggleInvoiceSelected = (code) => {
+    const next = String(code || "").trim();
+    if (!next) return;
+    setSelectedInvoiceNos((prev) =>
+      prev.includes(next) ? prev.filter((c) => c !== next) : [...prev, next],
+    );
+  };
+
+  const toggleSelectAllInvoices = () => {
+    setSelectedInvoiceNos(allInvoicesSelected ? [] : [...uniqueInvoiceNos]);
+  };
+
+  const invoicePreviewPath = (codes) => {
+    const unique = [
+      ...new Set(
+        (Array.isArray(codes) ? codes : [codes])
+          .map((code) => String(code || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    const params = new URLSearchParams({ doc: "invoice" });
+    if (isVatReport && vatDivisor > 1) {
+      params.set("vat_test_divisor", String(vatDivisor));
+    }
+    if (unique.length === 1) {
+      params.set("sale_code", unique[0]);
+    } else if (unique.length > 1) {
+      params.set("sale_codes", unique.join(","));
+    }
+    return `/app/sales/invoice-preview?${params.toString()}`;
+  };
+
+  const openInvoicePreview = (codes) => {
+    const unique = [
+      ...new Set(
+        (Array.isArray(codes) ? codes : [codes])
+          .map((code) => String(code || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (!unique.length) {
+      toast.error("Select one or more invoices to preview");
+      return;
+    }
+    navigate(invoicePreviewPath(unique));
+  };
 
   const periodLabel = useMemo(() => {
     if (!fromDate || !toDate) return "";
@@ -1130,6 +1206,19 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-slate-600 text-white">
+              <Th className="w-10 px-3 no-print">
+                <input
+                  type="checkbox"
+                  checked={allInvoicesSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someInvoicesSelected;
+                  }}
+                  onChange={toggleSelectAllInvoices}
+                  disabled={!uniqueInvoiceNos.length}
+                  aria-label="Select all invoices"
+                  className="h-4 w-4 cursor-pointer"
+                />
+              </Th>
               <Th className="px-6">Invoice No.</Th>
               <Th className="whitespace-nowrap min-w-[100px]">Date</Th>
               <Th>Customer</Th>
@@ -1150,10 +1239,21 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
               const vat = lineVat(r);
               return (
                 <tr key={`${r.invoice_no}-${idx}`} className="border-b">
+                  <Td className="w-10 px-3 no-print">
+                    {r.invoice_no ? (
+                      <input
+                        type="checkbox"
+                        checked={selectedInvoiceNos.includes(r.invoice_no)}
+                        onChange={() => toggleInvoiceSelected(r.invoice_no)}
+                        aria-label={`Select ${r.invoice_no}`}
+                        className="h-4 w-4"
+                      />
+                    ) : null}
+                  </Td>
                   <Td className="px-6 font-semibold">
                     {r.invoice_no ? (
                       <Link
-                        to={`/app/sales/invoice-preview?sale_code=${encodeURIComponent(r.invoice_no)}`}
+                        to={invoicePreviewPath(r.invoice_no)}
                         className="text-blue-700 hover:underline"
                       >
                         {r.invoice_no}
@@ -1185,7 +1285,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
             })}
             {filteredRows.length > 0 && (
               <tr className="bg-white font-semibold border-t">
-                <td className="py-4 px-6" colSpan={9}>
+                <td className="py-4 px-6" colSpan={10}>
                   Total
                 </td>
                 <Td align="right">{formatNumber1(totalVatAmount)}</Td>
@@ -1197,7 +1297,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
             {filteredRows.length === 0 && (
               <tr>
                 <td
-                  colSpan={11}
+                  colSpan={12}
                   className="py-12 text-center text-sm text-gray-500"
                 >
                   No sales lines found for this period.
@@ -1313,6 +1413,35 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
             >
               {loading ? "Loading..." : "Run Report"}
             </Button>
+            {reportView === "detail" ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-slate-300"
+                  disabled={loading || !uniqueInvoiceNos.length}
+                  onClick={() => openInvoicePreview(uniqueInvoiceNos)}
+                >
+                  <Eye className="h-4 w-4" />
+                  Preview all
+                  {uniqueInvoiceNos.length
+                    ? ` (${uniqueInvoiceNos.length})`
+                    : ""}
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-emerald-700 hover:bg-emerald-800 text-white"
+                  disabled={loading || !selectedInvoiceNos.length}
+                  onClick={() => openInvoicePreview(selectedInvoiceNos)}
+                >
+                  <Eye className="h-4 w-4" />
+                  Preview selected
+                  {selectedInvoiceNos.length
+                    ? ` (${selectedInvoiceNos.length})`
+                    : ""}
+                </Button>
+              </>
+            ) : null}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -1419,6 +1548,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
             <p className="font-semibold">{activeViewMeta.label}</p>
             <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
               <p>{filteredRows.length} line(s)</p>
+              <p>{invoiceCount} invoice(s)</p>
               <p>
                 VAT:{" "}
                 <span className="font-semibold tabular-nums">

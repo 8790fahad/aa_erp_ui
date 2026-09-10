@@ -286,7 +286,7 @@ function buildDividedTestInvoiceView(invoiceData, divisor) {
     invoiceData.sale_code ||
     invoiceData.invoice_ref ||
     "INVOICE";
-  const testReference = originalReference;
+  const testReference = `${originalReference}`;
 
   return {
     ...divideFields(invoiceData, moneyFields),
@@ -847,7 +847,11 @@ function InvoicePreview() {
         `}</style>
         <div className="no-print max-w-4xl mx-auto px-4 mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 flex-1">
-            <strong>VAT output test copy</strong>
+            <strong>
+              {Number.isFinite(vatTestDivisor) && vatTestDivisor > 1
+                ? "VAT output test copy"
+                : "Invoice preview"}
+            </strong>
             <span className="block text-xs text-emerald-800 mt-0.5">
               {batchCopies.length} invoice
               {batchCopies.length === 1 ? "" : "s"}
@@ -857,8 +861,10 @@ function InvoicePreview() {
               {failedCount
                 ? ` · ${failedCount} could not be loaded`
                 : ""}
-              {" — "}one {paperLabel} page per invoice. This does not post to
-              the ledger.
+              {" — "}one {paperLabel} page per invoice.
+              {Number.isFinite(vatTestDivisor) && vatTestDivisor > 1
+                ? " This does not post to the ledger."
+                : ""}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">

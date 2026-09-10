@@ -60,6 +60,38 @@ function requisitionOrderId(requisition) {
   return String(requisition?.order_id || requisition?.po_no || "").trim();
 }
 
+function samePoNo(a, b) {
+  const x = String(a || "").trim().toLowerCase();
+  const y = String(b || "").trim().toLowerCase();
+  return Boolean(x && y && x !== "direct" && x === y);
+}
+
+function productNameOf(product) {
+  return String(product?.name || product?.item_name || "").trim();
+}
+
+function findProductForLine(item, productList = []) {
+  const sku = String(item?.sku || item?.item_code || "").trim();
+  const name = String(item?.item_name || "").trim();
+  const list = Array.isArray(productList) ? productList : [];
+  if (sku) {
+    const bySku = list.find(
+      (p) => String(p.sku || "").trim().toLowerCase() === sku.toLowerCase(),
+    );
+    if (bySku) return bySku;
+  }
+  if (name) {
+    const byName = list.find(
+      (p) => productNameOf(p).toLowerCase() === name.toLowerCase(),
+    );
+    if (byName) return byName;
+  }
+  if (name || sku) {
+    return { name: name || sku, sku, item_name: name || sku };
+  }
+  return null;
+}
+
 const initialItemForm = {
   item_name: "",
   sku: "",
@@ -1044,13 +1076,22 @@ export default function ProductSupplierBill() {
     if (!requisition) return false;
     if (selectedRequisitionIds.includes(requisition.pr_no)) return true;
     const oid = requisitionOrderId(requisition);
+    if (oid && poAlreadyOnThisBill(oid)) return true;
+    return items.some((item) => item.pr_no === requisition.pr_no);
+  };
+
+  const poAlreadyOnThisBill = (poNo) => {
     if (
-      oid &&
-      items.some((item) => String(item.order_id || item.po_no || "") === oid)
+      String(form.order_id || "")
+        .split(",")
+        .map((v) => v.trim())
+        .some((v) => samePoNo(v, poNo))
     ) {
       return true;
     }
-    return items.some((item) => item.pr_no === requisition.pr_no);
+    return items.some((item) =>
+      samePoNo(item.order_id || item.po_no, poNo),
+    );
   };
 
   // Add requisition items to the current items list
@@ -1068,17 +1109,27 @@ export default function ProductSupplierBill() {
     }
 
     const orderId = requisitionOrderId(requisition);
-    if (
-      orderId &&
-      items.some((item) => String(item.order_id || item.po_no || "") === orderId)
-    ) {
-      toast.info(`Order ${orderId} was already added to this bill`);
+    const billAlreadyHasAnotherOrder =
+      (selectedRequisitionIds.length > 0 &&
+        !selectedRequisitionIds.includes(requisition.pr_no)) ||
+      (String(form.order_id || "").trim() &&
+        orderId &&
+        !samePoNo(form.order_id, orderId));
+    if (billAlreadyHasAnotherOrder) {
+      toast.error(
+        "Treat one PO at a time. Save or clear this bill before adding another order.",
+      );
+      return false;
+    }
+
+    if (orderId && poAlreadyOnThisBill(orderId)) {
+      toast.error(`PO ${orderId} is already on this bill and cannot be added twice`);
       return false;
     }
 
     if (String(requisition.status || "").toLowerCase() === "converted") {
       toast.error(
-        `Order ${orderId || requisition.pr_no} already treated and cannot be billed again`,
+        `PO ${orderId || requisition.pr_no} already treated and cannot be billed again`,
       );
       return false;
     }
@@ -1087,31 +1138,46 @@ export default function ProductSupplierBill() {
 
     const requisitionItems = requisition.items.map((item) => {
       const quantity = item.quantity || 1;
-      const cost = item.unit_cost || item.cost || 0;
-
-      // Try to find matching product to derive taxable flag
-      const matchedProduct =
+      const sku = String(item.item_code || item.sku || "").trim();
+      const catalogMatch =
         productList.find(
           (p) =>
-            p.sku === (item.item_code || item.sku) || p.name === item.item_name,
+            (sku &&
+              String(p.sku || "").trim().toLowerCase() ===
+                sku.toLowerCase()) ||
+            (item.item_name &&
+              productNameOf(p).toLowerCase() ===
+                String(item.item_name).trim().toLowerCase()),
         ) || null;
 
+      const cost =
+        parseFloat(item.unit_cost || item.cost || 0) ||
+        parseFloat(catalogMatch?.cost_price || 0) ||
+        0;
+
+      const itemName =
+        catalogMatch?.name ||
+        catalogMatch?.item_name ||
+        item.item_name ||
+        "";
+      const itemSku = catalogMatch?.sku || sku;
+
       const taxable = normalizeTaxableStatus(
-        matchedProduct?.taxable || item.taxable,
+        catalogMatch?.taxable || item.taxable,
         "Non-Taxable",
       );
       return {
         _id: uuidv4(),
-        item_name: item.item_name || "",
-        sku: item.item_code || "",
-        quantity,
-        cost,
+        item_name: itemName,
+        sku: itemSku,
+        quantity: formatNumberWithCommas(String(quantity)),
+        cost: cost > 0 ? formatNumberWithCommas(String(cost)) : "",
         total: parseFloat(quantity) * parseFloat(cost),
-        item_type: item.item_type || matchedProduct?.item_type || "",
+        item_type: item.item_type || catalogMatch?.item_type || "",
         taxable,
         line_tax_id: isProductTaxable(taxable) ? defaultLineTaxId : null,
         order_id: orderId || null,
-        po_no: requisition.po_no || null,
+        po_no: requisition.po_no || orderId || null,
         pr_no: requisition.pr_no || "",
       };
     });
@@ -1171,21 +1237,15 @@ export default function ProductSupplierBill() {
       }
 
       if (orderId) {
-        const existing = String(prev.order_id || "")
-          .split(",")
-          .map((v) => v.trim())
-          .filter(Boolean);
-        if (!existing.includes(orderId)) {
-          next.order_id = [...existing, orderId].join(", ");
-        }
+        next.order_id = orderId;
       }
 
       return next;
     });
 
-    // Track which PRs were already added (still allow adding other PRs)
+    // Track the one PR on this bill
     setSelectedRequisitionIds((prev) =>
-      prev.includes(requisition.pr_no) ? prev : [...prev, requisition.pr_no],
+      prev.includes(requisition.pr_no) ? prev : [requisition.pr_no],
     );
 
     toast.success(
@@ -1534,16 +1594,24 @@ export default function ProductSupplierBill() {
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[9rem_minmax(0,28rem)] lg:items-center">
             <label className="text-sm font-medium text-slate-600 lg:text-right">
-              Order ID
+              PO No.
             </label>
             <input
               type="text"
               name="order_id"
               value={form.order_id || ""}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, order_id: e.target.value }))
-              }
-              placeholder="Filled from purchase order, or type here"
+              onChange={(e) => {
+                const nextPo = e.target.value;
+                setForm((p) => ({ ...p, order_id: nextPo }));
+                setItems((prev) =>
+                  prev.map((item) =>
+                    item.pr_no || item.order_id || item.po_no
+                      ? { ...item, order_id: nextPo, po_no: nextPo }
+                      : item,
+                  ),
+                );
+              }}
+              placeholder="Type PO number or add from purchase order"
               className="h-9 w-full max-w-md rounded-md border border-slate-300 bg-white px-3 font-mono text-sm text-slate-800 outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
             />
           </div>
@@ -1666,9 +1734,25 @@ export default function ProductSupplierBill() {
                           <Typeahead
                             id={`item-name-typeahead-${item._id}`}
                             labelKey={(product) =>
-                              `${product.name || ""} - ${product.sku || ""}`
+                              `${product.name || product.item_name || ""} - ${product.sku || ""}`
                             }
-                            options={productList}
+                            options={(() => {
+                              const match = findProductForLine(
+                                item,
+                                productList,
+                              );
+                              if (
+                                match &&
+                                !productList.some(
+                                  (p) =>
+                                    String(p.sku || "").trim() ===
+                                    String(match.sku || "").trim(),
+                                )
+                              ) {
+                                return [match, ...productList];
+                              }
+                              return productList;
+                            })()}
                             placeholder="Type or click to select a product"
                             onChange={(selected) => {
                               if (selected && selected.length > 0) {
@@ -1727,15 +1811,13 @@ export default function ProductSupplierBill() {
                                 );
                               }
                             }}
-                            selected={
-                              item.item_name && item.sku
-                                ? productList.filter(
-                                    (product) =>
-                                      product.sku === item.sku &&
-                                      product.name === item.item_name,
-                                  )
-                                : []
-                            }
+                            selected={(() => {
+                              const match = findProductForLine(
+                                item,
+                                productList,
+                              );
+                              return match ? [match] : [];
+                            })()}
                             clearButton
                             renderMenuItemChildren={(option) => (
                               <div className="flex w-full items-center justify-between py-1">
@@ -1892,15 +1974,29 @@ export default function ProductSupplierBill() {
                             <option value="">Select a Tax</option>
                             {lineTaxOptions.map((tax) => (
                               <option key={tax.id} value={tax.id}>
-                                {tax.description} ({tax.rate}%)
+                                {tax.description} ({tax.rate}%) ·{" "}
+                                {isTaxInclusive(tax)
+                                  ? "Inclusive"
+                                  : "Exclusive"}
                               </option>
                             ))}
                           </select>
-                          {isProductTaxable(item.taxable) && lineVat > 0 && (
+                          {isProductTaxable(item.taxable) &&
+                          item.line_tax_id ? (
                             <div className="mt-1 text-[11px] tabular-nums text-slate-500">
-                              ₦{formatNumber(lineVat)}
+                              {isTaxInclusive(
+                                lineTaxOptions.find(
+                                  (t) =>
+                                    String(t.id) === String(item.line_tax_id),
+                                ),
+                              )
+                                ? "Inclusive"
+                                : "Exclusive"}
+                              {lineVat > 0
+                                ? ` · ₦${formatNumber(lineVat)}`
+                                : ""}
                             </div>
-                          )}
+                          ) : null}
                         </td>
                         <td className="px-2 py-3 text-right align-top text-sm font-medium tabular-nums text-slate-900">
                           {formatNumber(item.total)}
@@ -2151,8 +2247,8 @@ export default function ProductSupplierBill() {
                     Approved Purchase Requisitions
                   </DrawerTitle>
                   <DrawerDescription className="mt-1 text-xs text-slate-500">
-                    Add one or more requisitions — drawer stays open until you
-                    close it
+                    Add one purchase order at a time. The drawer closes after
+                    you add it.
                   </DrawerDescription>
                 </div>
               </div>
@@ -2196,6 +2292,16 @@ export default function ProductSupplierBill() {
                   .map((requisition) => {
                     const warehouseLabel = warehouseLabelForPr(requisition);
                     const alreadyAdded = isRequisitionOnBill(requisition);
+                    const billHasAnotherOrder =
+                      (selectedRequisitionIds.length > 0 &&
+                        !alreadyAdded) ||
+                      (String(form.order_id || "").trim() &&
+                        requisitionOrderId(requisition) &&
+                        !samePoNo(
+                          form.order_id,
+                          requisitionOrderId(requisition),
+                        ));
+                    const addDisabled = alreadyAdded || billHasAnotherOrder;
                     return (
                     <div
                       key={requisition.pr_no || requisition._id}
@@ -2413,18 +2519,23 @@ export default function ProductSupplierBill() {
                             <button
                               type="button"
                               onClick={() => {
-                                addRequisitionItems(requisition);
+                                const ok = addRequisitionItems(requisition);
+                                if (ok !== false) {
+                                  setIsRequisitionsDrawerOpen(false);
+                                }
                               }}
-                              disabled={alreadyAdded}
+                              disabled={addDisabled}
                               className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-[var(--aa-navy)] transition hover:bg-[var(--aa-sidebar-active)] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {alreadyAdded
                                 ? "✓ Added"
-                                : `Add to List (${
-                                    requisition.item_count ||
-                                    requisition.items?.length ||
-                                    0
-                                  })`}
+                                : billHasAnotherOrder
+                                  ? "One PO at a time"
+                                  : `Add to List (${
+                                      requisition.item_count ||
+                                      requisition.items?.length ||
+                                      0
+                                    })`}
                             </button>
                             <button
                               type="button"
@@ -2434,7 +2545,7 @@ export default function ProductSupplierBill() {
                                   setIsRequisitionsDrawerOpen(false);
                                 }
                               }}
-                              disabled={alreadyAdded}
+                              disabled={addDisabled}
                               className="flex-1 rounded-md border-0 bg-[var(--aa-navy)] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[var(--aa-navy)]/90 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Add &amp; Close
@@ -2452,9 +2563,7 @@ export default function ProductSupplierBill() {
           {selectedRequisitionIds.length > 0 && (
             <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/90 px-5 py-3.5">
               <p className="text-xs text-slate-500">
-                {selectedRequisitionIds.length} requisition
-                {selectedRequisitionIds.length === 1 ? "" : "s"} added — you can
-                still add more
+                One PO on this bill. Save or clear it before adding another.
               </p>
               <button
                 type="button"

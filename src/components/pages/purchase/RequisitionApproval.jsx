@@ -469,8 +469,7 @@ function RequisitionApproval() {
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] uppercase tracking-wide text-slate-500">
                     <th className="px-4 py-2.5 font-medium">Date</th>
-                    <th className="px-4 py-2.5 font-medium">Order ID</th>
-                    <th className="px-4 py-2.5 font-medium">PR No.</th>
+                    <th className="px-4 py-2.5 font-medium">PO No.</th>
                     <th className="px-4 py-2.5 font-medium">Subject</th>
                     <th className="px-4 py-2.5 font-medium">Supplier</th>
                     <th className="px-4 py-2.5 font-medium">Warehouse</th>
@@ -484,7 +483,7 @@ function RequisitionApproval() {
                   {pr.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={7}
                         className="px-4 py-16 text-center text-slate-500"
                       >
                         <FileText className="mx-auto mb-2 h-8 w-8 text-slate-300" />
@@ -512,10 +511,7 @@ function RequisitionApproval() {
                             : "—"}
                         </td>
                         <td className="bg-white px-4 py-2.5 font-mono text-[13px] font-semibold text-slate-800">
-                          {row.order_id || "—"}
-                        </td>
-                        <td className="bg-white px-4 py-2.5 font-mono text-[13px] font-semibold text-slate-800">
-                          {row.pr_no}
+                          {row.order_id || row.po_no || "—"}
                         </td>
                         <td className="max-w-[220px] truncate bg-white px-4 py-2.5 text-slate-700">
                           {row.reason || "—"}

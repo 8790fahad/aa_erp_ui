@@ -1696,16 +1696,29 @@ export default function OperatingExpenses() {
                             <option value="">Select a Tax</option>
                             {lineTaxOptions.map((tax) => (
                               <option key={tax.id} value={tax.id}>
-                                {tax.description} ({tax.rate}%)
+                                {tax.description} ({tax.rate}%) ·{" "}
+                                {isTaxInclusive(tax)
+                                  ? "Inclusive"
+                                  : "Exclusive"}
                               </option>
                             ))}
                           </select>
                           {isProductTaxable(item.taxable) &&
-                            getLineTaxAmount(item) > 0 && (
-                              <div className="mt-1 text-[11px] tabular-nums text-slate-500">
-                                ₦{formatNumber(getLineTaxAmount(item))}
-                              </div>
-                            )}
+                          item.line_tax_id ? (
+                            <div className="mt-1 text-[11px] tabular-nums text-slate-500">
+                              {isTaxInclusive(
+                                lineTaxOptions.find(
+                                  (t) =>
+                                    String(t.id) === String(item.line_tax_id),
+                                ),
+                              )
+                                ? "Inclusive"
+                                : "Exclusive"}
+                              {getLineTaxAmount(item) > 0
+                                ? ` · ₦${formatNumber(getLineTaxAmount(item))}`
+                                : ""}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-2 py-3 text-right align-top text-sm font-medium tabular-nums text-slate-900">
                           {formatNumber(item.total)}
@@ -1849,7 +1862,8 @@ export default function OperatingExpenses() {
                       className="flex items-center justify-between gap-4"
                     >
                       <span className="text-slate-600">
-                        {tax.description} ({tax.rate}%)
+                        {tax.description} ({tax.rate}%) ·{" "}
+                        {isTaxInclusive(tax) ? "Inclusive" : "Exclusive"}
                       </span>
                       <span className="tabular-nums text-slate-900">
                         {formatNumber(taxAmountForDisplay)}

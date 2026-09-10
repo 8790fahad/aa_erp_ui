@@ -50,6 +50,12 @@ function requisitionOrderId(requisition) {
   return String(requisition?.order_id || requisition?.po_no || "").trim();
 }
 
+function samePoNo(a, b) {
+  const x = String(a || "").trim().toLowerCase();
+  const y = String(b || "").trim().toLowerCase();
+  return Boolean(x && y && x !== "direct" && x === y);
+}
+
 export default function ProductCashExpense() {
   const query = useQuery();
   const type = query.get("type");
@@ -390,17 +396,31 @@ export default function ProductCashExpense() {
       return false;
     }
 
+    const billAlreadyHasAnotherOrder =
+      (selectedRequisitionIds.length > 0 &&
+        !selectedRequisitionIds.includes(requisition.pr_no)) ||
+      (String(form.order_id || "").trim() &&
+        orderId &&
+        !samePoNo(form.order_id, orderId));
+    if (billAlreadyHasAnotherOrder) {
+      toast.error(
+        "Treat one PO at a time. Save or clear this bill before adding another order.",
+      );
+      return false;
+    }
+
     if (
       orderId &&
-      items.some((item) => String(item.order_id || item.po_no || "") === orderId)
+      (samePoNo(form.order_id, orderId) ||
+        items.some((item) => samePoNo(item.order_id || item.po_no, orderId)))
     ) {
-      toast.info(`Order ${orderId} was already added to this bill`);
+      toast.error(`PO ${orderId} is already on this bill and cannot be added twice`);
       return false;
     }
 
     if (String(requisition.status || "").toLowerCase() === "converted") {
       toast.error(
-        `Order ${orderId || requisition.pr_no} already treated and cannot be billed again`,
+        `PO ${orderId || requisition.pr_no} already treated and cannot be billed again`,
       );
       return false;
     }
@@ -657,7 +677,7 @@ export default function ProductCashExpense() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Order ID
+                  PO No.
                 </label>
                 <input
                   type="text"
@@ -1227,7 +1247,8 @@ export default function ProductCashExpense() {
                   Approved Purchase Requisitions
                 </DrawerTitle>
                 <DrawerDescription className="text-gray-600 mt-1">
-                  Click "Add to List" button to add requisition items
+                  Click Add to List to add one purchase order. The drawer
+                  closes after you add it.
                 </DrawerDescription>
               </div>
               <DrawerClose asChild>
