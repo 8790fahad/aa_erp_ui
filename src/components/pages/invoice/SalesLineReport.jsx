@@ -823,9 +823,9 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
       ws.mergeCells(r, 1, r, colCount);
-      ws.getCell(r, 1).value = `Period: ${periodLabel} · All amounts in ₦${
-        vatDivisor > 1 ? ` · divided by ${vatDivisor} (test copy)` : ""
-      }${category ? ` · Category: ${category}` : ""}`;
+      // ws.getCell(r, 1).value = `Period: ${periodLabel} · All amounts in ₦${
+      //   vatDivisor > 1 ? ` · divided by ${vatDivisor} (test copy)` : ""
+      // }${category ? ` · Category: ${category}` : ""}`;
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r += 2;
 
@@ -1219,20 +1219,8 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
               {activeViewMeta.label}
             </h2>
           </div>
-        ) : (
-          <div className="mb-2 px-1">
-            <h2 className="text-sm font-semibold text-gray-800">Output VAT</h2>
-            <p className="text-xs text-gray-500">
-              Sales lines with VAT for the selected period (same detail as Sales
-              Detail).
-            </p>
-            {vatDivisor > 1 ? (
-              <p className="text-xs text-emerald-800 mt-1">
-                Amounts divided by {vatDivisor} — test copy, not posted to the
-                ledger or VAT return.
-              </p>
-            ) : null}
-          </div>
+        ) : (<></>
+         
         )}
 
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -1419,9 +1407,8 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
             title={activeViewMeta.label}
             numberLabel={`Period: ${periodLabel}`}
             extraLine={
-              vatDivisor > 1
-                ? `All amounts in ₦ · divided by ${vatDivisor} (test copy, not posted)`
-                : "All amounts in ₦"
+            
+                 "All amounts in ₦"
             }
             date={new Date()}
             dateFormat="dddd, DD MMMM YYYY hh:mm A [GMT]Z"
@@ -1447,12 +1434,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
             </div>
           </div>
 
-          {isVatReport && vatDivisor > 1 ? (
-            <div className="mx-6 mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
-              Test copy: all amounts divided by {vatDivisor}. This is not posted
-              to the General Ledger or official VAT return.
-            </div>
-          ) : null}
+       
 
           {isVatReport && !vatAccountCode ? (
             <div className="mx-6 mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">

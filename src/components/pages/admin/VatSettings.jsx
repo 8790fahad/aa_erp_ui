@@ -769,7 +769,7 @@ export default function VatSettings() {
                         ₦{formatNumber1(dividedOutputVat)}
                       </p>
                       <p className="text-xs text-emerald-700/80 mt-1 mb-0">
-                        Divided Total Output VAT (test copy)
+                        Divided Total Output VAT
                       </p>
                     </>
                   ) : (
@@ -844,7 +844,7 @@ export default function VatSettings() {
               </div>
               <div className="rounded-lg border border-dashed border-emerald-300 bg-emerald-50/60 p-4">
                 <p className="text-sm font-semibold text-emerald-900 mb-1">
-                  VAT output test copy
+                  VAT output
                 </p>
                 <p className="text-xs text-emerald-800/80 mb-3">
                   Choose month and year, type the number to divide Total Output

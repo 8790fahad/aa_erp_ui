@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   Printer,
   Users,
+  Hash,
 } from "lucide-react";
 import moment from "moment";
 import { useNavigate } from "react-router-dom";
@@ -44,6 +45,10 @@ const initialItemForm = {
   total: 0,
   item_type: "",
 };
+
+function requisitionOrderId(requisition) {
+  return String(requisition?.order_id || requisition?.po_no || "").trim();
+}
 
 export default function ProductCashExpense() {
   const query = useQuery();
@@ -259,6 +264,7 @@ export default function ProductCashExpense() {
         remark: form.remark,
         order_id: form.order_id || undefined,
         po_no: form.order_id || undefined,
+        pr_nos: selectedRequisitionIds,
         transaction_date: form.date,
         bankAccount,
         accountHead,
@@ -268,6 +274,7 @@ export default function ProductCashExpense() {
         if (res.success) {
           toast.success(res.message || "Purchase recorded successfully");
           setLoading(false);
+          setSelectedRequisitionIds([]);
 
           // Navigate to print page if shouldPrint is true
           if (printAfterSave) {
@@ -373,10 +380,30 @@ export default function ProductCashExpense() {
     // Check if requisition has items
     if (!requisition.items || requisition.items.length === 0) {
       toast.error("No items found in this requisition");
-      return;
+      return false;
     }
 
-    const orderId = requisition.order_id || requisition.po_no || "";
+    const orderId = requisitionOrderId(requisition);
+
+    if (selectedRequisitionIds.includes(requisition.pr_no)) {
+      toast.info(`Requisition ${requisition.pr_no} was already added`);
+      return false;
+    }
+
+    if (
+      orderId &&
+      items.some((item) => String(item.order_id || item.po_no || "") === orderId)
+    ) {
+      toast.info(`Order ${orderId} was already added to this bill`);
+      return false;
+    }
+
+    if (String(requisition.status || "").toLowerCase() === "converted") {
+      toast.error(
+        `Order ${orderId || requisition.pr_no} already treated and cannot be billed again`,
+      );
+      return false;
+    }
 
     // Map the items from the requisition to the format expected by the items list
     const requisitionItems = requisition.items.map((item) => ({
@@ -389,7 +416,8 @@ export default function ProductCashExpense() {
         parseFloat(item.quantity || 1) *
         parseFloat(item.unit_cost || item.cost || 0),
       item_type: item.item_type || "",
-      order_id: orderId,
+      order_id: orderId || null,
+      po_no: requisition.po_no || null,
       pr_no: requisition.pr_no || "",
     }));
 
@@ -427,8 +455,11 @@ export default function ProductCashExpense() {
     }
 
     toast.success(
-      `Added ${requisitionItems.length} item(s) from requisition ${requisition.pr_no}`
+      `Added ${requisitionItems.length} item(s) from ${
+        orderId ? `order ${orderId}` : `requisition ${requisition.pr_no}`
+      }`,
     );
+    return true;
   };
 
   useEffect(() => {
@@ -1032,8 +1063,9 @@ export default function ProductCashExpense() {
                           <td className="px-3 py-2 text-xs font-medium text-slate-800">
                             <div>{item.item_name}</div>
                             {item.order_id ? (
-                              <div className="mt-0.5 font-mono text-[10px] font-semibold text-slate-500">
-                                {item.order_id}
+                              <div className="mt-0.5 text-[10px] font-semibold text-slate-500">
+                                Order ID{" "}
+                                <span className="font-mono">{item.order_id}</span>
                               </div>
                             ) : null}
                           </td>
@@ -1201,9 +1233,6 @@ export default function ProductCashExpense() {
               <DrawerClose asChild>
                 <button
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                  onClick={() => {
-                    setSelectedRequisitionIds([]);
-                  }}
                 >
                   <X className="h-5 w-5 text-gray-500" />
                 </button>
@@ -1246,11 +1275,18 @@ export default function ProductCashExpense() {
                           <h3 className="text-sm font-bold text-gray-900">
                             {requisition.pr_no}
                           </h3>
-                          {requisition.order_id ? (
-                            <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 font-mono text-xs font-semibold text-gray-800">
-                              {requisition.order_id}
+                          {requisitionOrderId(requisition) ? (
+                            <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-800">
+                              Order ID
+                              <span className="font-mono">
+                                {requisitionOrderId(requisition)}
+                              </span>
                             </span>
-                          ) : null}
+                          ) : (
+                            <span className="rounded bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
+                              No order ID
+                            </span>
+                          )}
                           <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">
                             {requisition.status}
                           </span>
@@ -1284,6 +1320,13 @@ export default function ProductCashExpense() {
                           </span>
                         </div>
                       )}
+                      <div className="col-span-2 flex items-center gap-2">
+                        <Hash className="h-3 w-3 shrink-0 text-gray-400" />
+                        <span>Order ID</span>
+                        <span className="truncate font-mono font-semibold text-gray-900">
+                          {requisitionOrderId(requisition) || "—"}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Items section - now always visible since items are included in the API response */}
@@ -1302,6 +1345,9 @@ export default function ProductCashExpense() {
                                   </h4>
                                   <p className="text-xs text-gray-600">
                                     {item.item_code}
+                                    {requisitionOrderId(requisition)
+                                      ? ` · Order ID ${requisitionOrderId(requisition)}`
+                                      : ""}
                                   </p>
                                 </div>
                                 <div className="text-right">
@@ -1330,8 +1376,10 @@ export default function ProductCashExpense() {
                     <div className="mt-2 space-y-2">
                       <button
                         onClick={() => {
-                          addRequisitionItems(requisition);
-                          setIsRequisitionsDrawerOpen(false);
+                          const ok = addRequisitionItems(requisition);
+                          if (ok !== false) {
+                            setIsRequisitionsDrawerOpen(false);
+                          }
                         }}
                         className="w-full px-3 py-1 bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white rounded-lg transition-colors font-medium text-sm flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={selectedRequisitionIds.includes(
@@ -1344,8 +1392,10 @@ export default function ProductCashExpense() {
                       </button>
                       <button
                         onClick={() => {
-                          addRequisitionItems(requisition);
-                          setIsRequisitionsDrawerOpen(false);
+                          const ok = addRequisitionItems(requisition);
+                          if (ok !== false) {
+                            setIsRequisitionsDrawerOpen(false);
+                          }
                         }}
                         className="w-full px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium text-sm flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={selectedRequisitionIds.includes(

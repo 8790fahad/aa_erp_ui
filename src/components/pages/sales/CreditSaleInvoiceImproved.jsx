@@ -858,7 +858,7 @@ export default function CreditSaleInvoice({
     invoice.sale_code ||
     invoice.invoice_ref ||
     (typeof invoice.transaction?.id === "string" &&
-    /^INV-/i.test(invoice.transaction.id)
+    /^/i.test(invoice.transaction.id)
       ? invoice.transaction.id
       : null) ||
     saleCode ||
@@ -1533,26 +1533,12 @@ export default function CreditSaleInvoice({
                 isA5 ? "mb-2 print:mb-0 a5-section" : "flex-1"
               }`}
             >
-              {invoice?.is_vat_test_copy ? (
-                <div className="mb-1 border-2 border-dashed border-black bg-white px-2 py-1 text-center text-black">
-                  <div className="text-sm font-bold uppercase tracking-wide">
-                    VAT test copy — not posted
-                  </div>
-                  <div className="text-[10px]">
-                    Values are 1/{invoice.test_copy_divisor || 4} of{" "}
-                    {invoice.original_invoice_reference || "the original invoice"}.
-                    Not a tax invoice and not posted to the General Ledger,
-                    stock, customer account, or VAT report.
-                  </div>
-                </div>
-              ) : null}
               <BusinessDocumentHeader
                 business={business}
                 forcePrintInColor={printInColor}
                 title={
-                  invoice?.is_vat_test_copy
-                    ? "VAT Test Copy (Pro Forma)"
-                    : "Sales Invoice"
+                  
+                     "Sales Invoice"
                 }
                 numberLabel={`No: ${invoiceReference}`}
                 warehouse={

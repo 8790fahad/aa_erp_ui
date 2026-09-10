@@ -286,7 +286,7 @@ function buildDividedTestInvoiceView(invoiceData, divisor) {
     invoiceData.sale_code ||
     invoiceData.invoice_ref ||
     "INVOICE";
-  const testReference = `${originalReference}/TEST-1-OF-${n}`;
+  const testReference = originalReference;
 
   return {
     ...divideFields(invoiceData, moneyFields),

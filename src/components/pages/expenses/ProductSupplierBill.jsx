@@ -56,6 +56,10 @@ function applyLineTaxable(item, nextStatus, defaultLineTaxId) {
   };
 }
 
+function requisitionOrderId(requisition) {
+  return String(requisition?.order_id || requisition?.po_no || "").trim();
+}
+
 const initialItemForm = {
   item_name: "",
   sku: "",
@@ -424,7 +428,17 @@ export default function ProductSupplierBill() {
   };
 
   const removeItem = (id) => {
-    setItems(items.filter((item) => item._id !== id));
+    const removed = items.find((item) => item._id === id);
+    const next = items.filter((item) => item._id !== id);
+    setItems(next);
+    if (
+      removed?.pr_no &&
+      !next.some((item) => item.pr_no === removed.pr_no)
+    ) {
+      setSelectedRequisitionIds((prev) =>
+        prev.filter((pr) => pr !== removed.pr_no),
+      );
+    }
     toast.success("Item removed");
   };
 
@@ -799,6 +813,7 @@ export default function ProductSupplierBill() {
         bankAccount: isCashPayment ? bankAccount : undefined,
         accountHead: isCashPayment ? accountHead : undefined,
         cheque_number: isCashPayment ? form.cheque_number : undefined,
+        pr_nos: selectedRequisitionIds,
         payment_splits: isCashPayment
           ? buildPaymentSplits({
               mode: form.mode_of_payment,
@@ -814,30 +829,7 @@ export default function ProductSupplierBill() {
           toast.success(res.message || "Purchase recorded successfully");
           setLoading(false);
           isSavingRef.current = false;
-
-          // Mark requisitions used on this bill as Converted so they cannot be re-billed
-          if (selectedRequisitionIds.length > 0 && activeBusiness?.id) {
-            const invoiceRef =
-              res.data?.reference ||
-              res.data?.invoice_ref ||
-              res.invoice_ref ||
-              res.data?.ref_number ||
-              res.ref_number;
-            selectedRequisitionIds.forEach((pr_no) => {
-              _postApi(
-                "/account/update-pr-status",
-                {
-                  pr_no,
-                  status: "Converted",
-                  facilityId: activeBusiness.id || activeBusiness._id,
-                  invoice_ref: invoiceRef,
-                },
-                () => {},
-                () => {},
-              );
-            });
-            setSelectedRequisitionIds([]);
-          }
+          setSelectedRequisitionIds([]);
 
           // Navigate to print page if shouldPrintAfterSave is true
           if (shouldPrintAfterSave) {
@@ -1048,6 +1040,19 @@ export default function ProductSupplierBill() {
     return "No warehouse assigned";
   };
 
+  const isRequisitionOnBill = (requisition) => {
+    if (!requisition) return false;
+    if (selectedRequisitionIds.includes(requisition.pr_no)) return true;
+    const oid = requisitionOrderId(requisition);
+    if (
+      oid &&
+      items.some((item) => String(item.order_id || item.po_no || "") === oid)
+    ) {
+      return true;
+    }
+    return items.some((item) => item.pr_no === requisition.pr_no);
+  };
+
   // Add requisition items to the current items list
   // Items are now already included in the requisition object from the API
   const addRequisitionItems = (requisition) => {
@@ -1062,8 +1067,23 @@ export default function ProductSupplierBill() {
       return false;
     }
 
+    const orderId = requisitionOrderId(requisition);
+    if (
+      orderId &&
+      items.some((item) => String(item.order_id || item.po_no || "") === orderId)
+    ) {
+      toast.info(`Order ${orderId} was already added to this bill`);
+      return false;
+    }
+
+    if (String(requisition.status || "").toLowerCase() === "converted") {
+      toast.error(
+        `Order ${orderId || requisition.pr_no} already treated and cannot be billed again`,
+      );
+      return false;
+    }
+
     // Map the items from the requisition to the format expected by the items list
-    const orderId = requisition.order_id || requisition.po_no || "";
 
     const requisitionItems = requisition.items.map((item) => {
       const quantity = item.quantity || 1;
@@ -1090,7 +1110,8 @@ export default function ProductSupplierBill() {
         item_type: item.item_type || matchedProduct?.item_type || "",
         taxable,
         line_tax_id: isProductTaxable(taxable) ? defaultLineTaxId : null,
-        order_id: orderId,
+        order_id: orderId || null,
+        po_no: requisition.po_no || null,
         pr_no: requisition.pr_no || "",
       };
     });
@@ -1168,7 +1189,9 @@ export default function ProductSupplierBill() {
     );
 
     toast.success(
-      `Added ${requisitionItems.length} item(s) from requisition ${requisition.pr_no}`,
+      `Added ${requisitionItems.length} item(s) from ${
+        orderId ? `order ${orderId}` : `requisition ${requisition.pr_no}`
+      }`,
     );
     return true;
   };
@@ -1764,8 +1787,9 @@ export default function ProductSupplierBill() {
                                 {item.sku}
                               </span>
                               {item.order_id ? (
-                                <span className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-700">
-                                  {item.order_id}
+                                <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
+                                  Order ID
+                                  <span className="font-mono">{item.order_id}</span>
                                 </span>
                               ) : null}
                             </div>
@@ -1989,6 +2013,8 @@ export default function ProductSupplierBill() {
                 onClick={() => {
                   setItems([]);
                   setExtraEmptyRows(0);
+                  setSelectedRequisitionIds([]);
+                  setForm((prev) => ({ ...prev, order_id: "" }));
                 }}
                 className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
               >
@@ -2134,7 +2160,7 @@ export default function ProductSupplierBill() {
                 <button
                   type="button"
                   className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
-                  onClick={() => setSelectedRequisitionIds([])}
+                  onClick={() => setIsRequisitionsDrawerOpen(false)}
                   aria-label="Close"
                 >
                   <X className="h-4 w-4" />
@@ -2169,13 +2195,14 @@ export default function ProductSupplierBill() {
                   .filter((r) => !dismissedPrIds.includes(r.pr_no))
                   .map((requisition) => {
                     const warehouseLabel = warehouseLabelForPr(requisition);
+                    const alreadyAdded = isRequisitionOnBill(requisition);
                     return (
                     <div
                       key={requisition.pr_no || requisition._id}
                       className={`py-5 transition-colors ${
                         confirmDismissId === requisition.pr_no
                           ? "bg-rose-50/60"
-                          : selectedRequisitionIds.includes(requisition.pr_no)
+                          : alreadyAdded
                             ? "opacity-50"
                             : ""
                       }`}
@@ -2266,12 +2293,18 @@ export default function ProductSupplierBill() {
                                 <h3 className="font-mono text-sm font-semibold text-slate-900">
                                   {requisition.pr_no}
                                 </h3>
-                                {requisition.order_id ? (
-                                  <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-800 ring-1 ring-inset ring-slate-200">
-                                    <Hash className="h-3 w-3 text-slate-500" />
-                                    {requisition.order_id}
+                                {requisitionOrderId(requisition) ? (
+                                  <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-800 ring-1 ring-inset ring-slate-200">
+                                    Order ID
+                                    <span className="font-mono">
+                                      {requisitionOrderId(requisition)}
+                                    </span>
                                   </span>
-                                ) : null}
+                                ) : (
+                                  <span className="rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 ring-1 ring-inset ring-rose-200/80">
+                                    No order ID
+                                  </span>
+                                )}
                                 <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-inset ring-amber-200/80">
                                   {requisition.status}
                                 </span>
@@ -2318,6 +2351,13 @@ export default function ProductSupplierBill() {
                               </div>
                             )}
                             <div className="col-span-2 flex items-center gap-2">
+                              <Hash className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                              <span className="text-slate-500">Order ID</span>
+                              <span className="truncate font-mono font-semibold text-slate-800">
+                                {requisitionOrderId(requisition) || "—"}
+                              </span>
+                            </div>
+                            <div className="col-span-2 flex items-center gap-2">
                               <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                               <span
                                 className={`truncate font-medium ${
@@ -2349,6 +2389,9 @@ export default function ProductSupplierBill() {
                                           </h4>
                                           <p className="font-mono text-xs text-slate-400">
                                             {item.item_code}
+                                            {requisitionOrderId(requisition)
+                                              ? ` · Order ID ${requisitionOrderId(requisition)}`
+                                              : ""}
                                           </p>
                                         </div>
                                         <div className="ml-3 shrink-0 text-right text-sm font-medium tabular-nums text-slate-700">
@@ -2372,14 +2415,10 @@ export default function ProductSupplierBill() {
                               onClick={() => {
                                 addRequisitionItems(requisition);
                               }}
-                              disabled={selectedRequisitionIds.includes(
-                                requisition.pr_no,
-                              )}
+                              disabled={alreadyAdded}
                               className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-[var(--aa-navy)] transition hover:bg-[var(--aa-sidebar-active)] disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {selectedRequisitionIds.includes(
-                                requisition.pr_no,
-                              )
+                              {alreadyAdded
                                 ? "✓ Added"
                                 : `Add to List (${
                                     requisition.item_count ||
@@ -2395,9 +2434,7 @@ export default function ProductSupplierBill() {
                                   setIsRequisitionsDrawerOpen(false);
                                 }
                               }}
-                              disabled={selectedRequisitionIds.includes(
-                                requisition.pr_no,
-                              )}
+                              disabled={alreadyAdded}
                               className="flex-1 rounded-md border-0 bg-[var(--aa-navy)] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[var(--aa-navy)]/90 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Add &amp; Close
