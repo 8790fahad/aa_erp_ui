@@ -30,7 +30,14 @@ import { Typeahead } from "react-bootstrap-typeahead";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import useQuery from "@/hooks/useQuery";
-import { getUserFunctionalities, allowedBillCreateTypes, allowedVendorFetchTypes } from "@/lib/access";
+import {
+  getUserFunctionalities,
+  allowedBillCreateTypes,
+  allowedVendorFetchTypes,
+  canAccessPrivileges,
+  isBusinessOwner,
+  EDIT_PO_BILL_LINES_PRIVILEGE,
+} from "@/lib/access";
 import { filterSuppliersByVendorType, filterSuppliersByAllowedTypes } from "@/utils/vendorType";
 import CashTransferPaymentFields, {
   buildPaymentSplits,
@@ -68,6 +75,14 @@ function samePoNo(a, b) {
 
 function productNameOf(product) {
   return String(product?.name || product?.item_name || "").trim();
+}
+
+function isPoSourcedBillLine(item) {
+  if (!item) return false;
+  if (item.from_po) return true;
+  if (String(item.pr_no || "").trim()) return true;
+  const orderId = String(item.order_id || item.po_no || "").trim();
+  return Boolean(orderId && orderId.toLowerCase() !== "direct");
 }
 
 function findProductForLine(item, productList = []) {
@@ -109,27 +124,33 @@ export default function ProductSupplierBill() {
   const { supplierList } = useSelector((d) => d.suppliers) || [];
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
-  const inventorySuppliers = useMemo(() => {
-    const allowed = allowedVendorFetchTypes(
-      getUserFunctionalities(user, activeBusiness),
+  const userFunctionalities = useMemo(
+    () => getUserFunctionalities(user, activeBusiness),
+    [user, activeBusiness],
+  );
+  const canEditPoBillLines =
+    isBusinessOwner(user, activeBusiness) ||
+    canAccessPrivileges(
+      [EDIT_PO_BILL_LINES_PRIVILEGE],
+      userFunctionalities,
     );
+  const inventorySuppliers = useMemo(() => {
+    const allowed = allowedVendorFetchTypes(userFunctionalities);
     return filterSuppliersByVendorType(
       filterSuppliersByAllowedTypes(supplierList, allowed),
       "inventory",
     );
-  }, [supplierList, user, activeBusiness]);
+  }, [supplierList, userFunctionalities]);
   const today = moment().format("YYYY-MM-DD");
   const navigate = useNavigate();
 
   useEffect(() => {
-    const types = allowedBillCreateTypes(
-      getUserFunctionalities(user, activeBusiness),
-    );
+    const types = allowedBillCreateTypes(userFunctionalities);
     if (!types.includes("inventory")) {
       toast.error("You do not have permission to create inventory bills.");
       navigate("/app/expenses/billing", { replace: true });
     }
-  }, [user, activeBusiness, navigate]);
+  }, [user, activeBusiness, userFunctionalities, navigate]);
 
   const [form, setForm] = useState({
     date: today,
@@ -461,6 +482,12 @@ export default function ProductSupplierBill() {
 
   const removeItem = (id) => {
     const removed = items.find((item) => item._id === id);
+    if (isPoSourcedBillLine(removed) && !canEditPoBillLines) {
+      toast.error(
+        "You need Edit PO Bill Lines permission to remove a purchase order line.",
+      );
+      return;
+    }
     const next = items.filter((item) => item._id !== id);
     setItems(next);
     if (
@@ -1179,6 +1206,7 @@ export default function ProductSupplierBill() {
         order_id: orderId || null,
         po_no: requisition.po_no || orderId || null,
         pr_no: requisition.pr_no || "",
+        from_po: true,
       };
     });
 
@@ -1716,6 +1744,8 @@ export default function ProductSupplierBill() {
 
                   items.forEach((item) => {
                     const lineVat = getLineTaxAmount(item);
+                    const lockPoLine =
+                      isPoSourcedBillLine(item) && !canEditPoBillLines;
                     rows.push(
                       <tr
                         key={item._id}
@@ -1724,6 +1754,7 @@ export default function ProductSupplierBill() {
                         <td className="px-3 py-3 align-top">
                           <Typeahead
                             id={`item-name-typeahead-${item._id}`}
+                            disabled={lockPoLine}
                             labelKey={(product) =>
                               `${product.name || product.item_name || ""} - ${product.sku || ""}`
                             }
@@ -1746,6 +1777,7 @@ export default function ProductSupplierBill() {
                             })()}
                             placeholder="Type or click to select a product"
                             onChange={(selected) => {
+                              if (lockPoLine) return;
                               if (selected && selected.length > 0) {
                                 const product = selected[0];
                                 const qty =
@@ -1809,7 +1841,7 @@ export default function ProductSupplierBill() {
                               );
                               return match ? [match] : [];
                             })()}
-                            clearButton
+                            clearButton={!lockPoLine}
                             renderMenuItemChildren={(option) => (
                               <div className="flex w-full items-center justify-between py-1">
                                 <span className="text-sm">{option.name}</span>
@@ -1819,15 +1851,23 @@ export default function ProductSupplierBill() {
                               </div>
                             )}
                             inputProps={{
-                              className:
-                                "w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none placeholder:text-slate-400 focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]",
+                              className: `w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm outline-none placeholder:text-slate-400 focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)] ${
+                                lockPoLine
+                                  ? "cursor-not-allowed bg-slate-50 text-slate-600"
+                                  : "bg-white"
+                              }`,
                             }}
                             positionFixed
                           />
                           {item.sku && (
                             <div className="mt-1.5 flex flex-wrap items-center gap-2">
                               <select
-                                title="VAT status"
+                                title={
+                                  lockPoLine
+                                    ? "VAT status is locked for purchase order lines"
+                                    : "VAT status"
+                                }
+                                disabled={lockPoLine}
                                 value={normalizeTaxableStatus(
                                   item.taxable,
                                   "Taxable",
@@ -1846,9 +1886,11 @@ export default function ProductSupplierBill() {
                                     ),
                                   );
                                 }}
-                                className={`max-w-[8.5rem] cursor-pointer rounded-full border-0 px-1.5 py-0.5 text-[10px] font-semibold outline-none ${
-                                  taxableStatusStyle(item.taxable).badgeClass
-                                }`}
+                                className={`max-w-[8.5rem] rounded-full border-0 px-1.5 py-0.5 text-[10px] font-semibold outline-none ${
+                                  lockPoLine
+                                    ? "cursor-not-allowed opacity-80"
+                                    : "cursor-pointer"
+                                } ${taxableStatusStyle(item.taxable).badgeClass}`}
                               >
                                 {TAXABLE_STATUS_OPTIONS.map((opt) => (
                                   <option key={opt.value} value={opt.value}>
@@ -1874,6 +1916,12 @@ export default function ProductSupplierBill() {
                             inputMode="decimal"
                             autoComplete="off"
                             placeholder="0.00"
+                            disabled={lockPoLine}
+                            title={
+                              lockPoLine
+                                ? "Quantity is locked for purchase order lines"
+                                : undefined
+                            }
                             value={displayFormattedAmount(item.quantity)}
                             onChange={(e) => {
                               const formattedQty = formatAmountInput(
@@ -1896,7 +1944,11 @@ export default function ProductSupplierBill() {
                                 ),
                               );
                             }}
-                            className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-right text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                            className={`h-9 w-full rounded-md border border-slate-300 px-3 text-right text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)] ${
+                              lockPoLine
+                                ? "cursor-not-allowed bg-slate-50 text-slate-600"
+                                : "bg-white"
+                            }`}
                           />
                         </td>
                         <td className="min-w-[10rem] w-44 px-3 py-3 text-right align-top">
@@ -1937,7 +1989,14 @@ export default function ProductSupplierBill() {
                         <td className="px-2 py-3 align-top">
                           <select
                             value={item.line_tax_id ?? ""}
-                            disabled={!isProductTaxable(item.taxable)}
+                            disabled={
+                              lockPoLine || !isProductTaxable(item.taxable)
+                            }
+                            title={
+                              lockPoLine
+                                ? "Tax is locked for purchase order lines"
+                                : undefined
+                            }
                             onChange={(e) => {
                               const taxId = e.target.value || null;
                               setItems((prev) =>
@@ -1995,8 +2054,21 @@ export default function ProductSupplierBill() {
                         <td className="px-1 py-3 text-center align-top">
                           <button
                             type="button"
-                            onClick={() => removeItem(item._id)}
-                            className="rounded-md p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+                            disabled={lockPoLine}
+                            onClick={() => {
+                              if (lockPoLine) return;
+                              removeItem(item._id);
+                            }}
+                            title={
+                              lockPoLine
+                                ? "Purchase order lines cannot be removed without Edit PO Bill Lines permission"
+                                : "Remove row"
+                            }
+                            className={`rounded-md p-1.5 text-slate-400 transition ${
+                              lockPoLine
+                                ? "cursor-not-allowed opacity-40"
+                                : "hover:bg-red-50 hover:text-red-500"
+                            }`}
                             aria-label="Remove row"
                           >
                             <Trash2 size={16} />

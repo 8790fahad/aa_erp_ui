@@ -118,6 +118,7 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "See All Pay Bills",
   "Inventory Vendors",
   "Expense Vendors",
+  "Edit PO Bill Lines",
 ];
 
 export const CREATE_BILL_PRIVILEGE = "Create Bill";
@@ -126,6 +127,7 @@ export const FILTER_ALL_BILLS_PRIVILEGE = "All";
 export const FILTER_INVENTORY_BILLS_PRIVILEGE = "Inventory";
 export const FILTER_EXPENSE_BILLS_PRIVILEGE = "Expenses";
 export const INVENTORY_BILL_PRIVILEGE = "Inventory Bill";
+export const EDIT_PO_BILL_LINES_PRIVILEGE = "Edit PO Bill Lines";
 export const EXPENSE_BILL_PRIVILEGE = "Expense Bill";
 export const VIEW_EXPENSES_MEMOS_PRIVILEGE = "View Expenses Memos";
 export const MEMO_FILTER_ALL_PRIVILEGE = "All Memos";

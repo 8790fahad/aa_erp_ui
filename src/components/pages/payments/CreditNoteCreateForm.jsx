@@ -58,8 +58,8 @@ export default function CreditNoteCreateForm({
         partyPlaceholder: "Select a customer",
         number: "Credit Note#",
         date: "Credit Note Date",
-        balanceAccount: "Accounts Receivable",
-        save: "Save as Open",
+        balanceAccount: "Customer Deposit",
+        save: "Save to Deposit",
       };
 
   const facilityId = activeBusiness?.id;
@@ -522,7 +522,9 @@ export default function CreditNoteCreateForm({
           toast.success(
             outcome === "refund"
               ? `${isVendor ? "Vendor credit" : "Credit note"} ${cnNo} refunded${closed ? " and closed" : ""}`
-              : `${isVendor ? "Vendor credit" : "Credit note"} ${cnNo} saved as open credits`,
+              : isVendor
+                ? `Vendor credit ${cnNo} saved as open credits`
+                : `Credit note ${cnNo} posted to customer deposit. Use Apply Deposit on Create Invoice.`,
           );
           if (typeof onCreated === "function") onCreated(cnNo);
         } else {
@@ -558,6 +560,28 @@ export default function CreditNoteCreateForm({
       </div>
 
       <div className="space-y-5 px-5 py-5">
+        {!isVendor ? (
+          <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+            <p className="font-medium">Credit a customer for returned inventory</p>
+            <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-[13px] text-sky-800">
+              <li>Select the customer.</li>
+              <li>
+                Reason: <strong>Customer returns goods</strong> (or Incorrect
+                supply / Damaged).
+              </li>
+              <li>
+                Choose the warehouse, add the product lines, and a short
+                inventory note.
+              </li>
+              <li>
+                Save to <strong>Customer deposit</strong>. Then on{" "}
+                <strong>Create Invoice</strong> tick <strong>Apply Deposit</strong>{" "}
+                to use that balance.
+              </li>
+            </ol>
+          </div>
+        ) : null}
+
         {/* Header fields — Zoho layout */}
         <div className="grid gap-4 sm:grid-cols-[180px_1fr] sm:items-start">
           <Label className="pt-2 text-sm text-slate-600">
@@ -715,14 +739,15 @@ export default function CreditNoteCreateForm({
                   : "border-slate-200 bg-white text-slate-700"
               }`}
             >
-              <div className="font-medium">Credits</div>
+              <div className="font-medium">Customer deposit</div>
               <div
                 className={`text-[11px] ${
                   outcome === "credits" ? "text-slate-300" : "text-slate-500"
                 }`}
               >
-                Keep open → apply to future{" "}
-                {isVendor ? "bills" : "invoices"}
+                {isVendor
+                  ? "Keep open → apply to future bills"
+                  : "Adds to deposit — use Apply Deposit on Create Invoice"}
               </div>
             </button>
             <button

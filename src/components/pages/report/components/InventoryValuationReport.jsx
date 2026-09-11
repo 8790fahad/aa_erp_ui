@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from "react";import { useSelector } from "react-redux";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { _postApi } from "@/redux/actions/api";
+import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +42,20 @@ function formatReportDate(dateString) {
   });
 }
 
+function warehouseLabel(branch) {
+  return (
+    (branch?.storeName || branch?.branch_name || branch?.name || "").trim() ||
+    `Warehouse #${branch?.id}`
+  );
+}
+
+const FG_ITEM_TYPES = new Set([
+  "finished good",
+  "by-product",
+  "resalable",
+  "semi finished",
+]);
+
 export default function InventoryValuationReport() {
   const { activeBusiness } = useSelector((state) => state.auth);
   const navigate = useNavigate();
@@ -59,6 +74,12 @@ export default function InventoryValuationReport() {
 
   const [asOfDate, setAsOfDate] = useState(moment().format("YYYY-MM-DD"));
   const [valuationMethod, setValuationMethod] = useState(businessMethod);
+  const [warehouseId, setWarehouseId] = useState("");
+  const [productSku, setProductSku] = useState("");
+  const [category, setCategory] = useState("");
+  const [warehouses, setWarehouses] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -74,7 +95,14 @@ export default function InventoryValuationReport() {
     setError("");
     _postApi(
       "/api/reports/inventory-valuation",
-      { facilityId, asOfDate, valuationMethod },
+      {
+        facilityId,
+        asOfDate,
+        valuationMethod,
+        ...(warehouseId ? { branchId: Number(warehouseId) } : {}),
+        ...(productSku ? { sku: productSku } : {}),
+        ...(category ? { category } : {}),
+      },
       (response) => {
         setLoading(false);
         if (response.success && response.data) {
@@ -88,7 +116,76 @@ export default function InventoryValuationReport() {
         setError("Could not load inventory valuation report.");
       }
     );
-  }, [facilityId, asOfDate, valuationMethod]);
+  }, [facilityId, asOfDate, valuationMethod, warehouseId, productSku, category]);
+
+  useEffect(() => {
+    if (!facilityId) return;
+    let cancelled = false;
+    _fetchApi(
+      `/account/get/branches?facilityId=${encodeURIComponent(facilityId)}`,
+      (res) => {
+        if (cancelled) return;
+        const rows = Array.isArray(res?.results) ? res.results : [];
+        setWarehouses(
+          rows
+            .filter((b) => b?.id != null)
+            .sort((a, b) =>
+              warehouseLabel(a).localeCompare(warehouseLabel(b)),
+            ),
+        );
+      },
+      () => {
+        if (!cancelled) setWarehouses([]);
+      },
+    );
+    _fetchApi(
+      `/api/products?facilityId=${encodeURIComponent(facilityId)}`,
+      (res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res?.data) ? res.data : [];
+        setProducts(
+          list
+            .filter((p) => {
+              const type = String(p.item_type || p.itemType || "")
+                .toLowerCase()
+                .trim();
+              return FG_ITEM_TYPES.has(type);
+            })
+            .sort((a, b) =>
+              String(a.name || "").localeCompare(String(b.name || "")),
+            ),
+        );
+      },
+      () => {
+        if (!cancelled) setProducts([]);
+      },
+    );
+    _fetchApi(
+      `/api/products/categories?facilityId=${encodeURIComponent(facilityId)}`,
+      (res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res?.data) ? res.data : [];
+        const names = [
+          ...new Set(
+            list
+              .map((c) =>
+                typeof c === "string"
+                  ? c.trim()
+                  : String(c.category || c.name || "").trim(),
+              )
+              .filter(Boolean),
+          ),
+        ].sort((a, b) => a.localeCompare(b));
+        setCategories(names);
+      },
+      () => {
+        if (!cancelled) setCategories([]);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [facilityId]);
 
   // Only auto-fetch once on mount if we have the required data
   const hasFetchedOnMount = useRef(false);
@@ -259,6 +356,24 @@ export default function InventoryValuationReport() {
   const fgItems = (data?.finishedGoods?.items || []).filter(
     (item) => parseFloat(item.quantity) > 0
   );
+  const visibleTotal = fgItems.reduce(
+    (sum, item) => sum + (parseFloat(item.total_value) || 0),
+    0,
+  );
+  const selectedWarehouse = warehouses.find(
+    (b) => String(b.id) === String(warehouseId),
+  );
+  const selectedProduct = products.find(
+    (p) => (p.sku || String(p.id)) === productSku,
+  );
+  const filterExtra = [
+    selectedWarehouse ? warehouseLabel(selectedWarehouse) : null,
+    category || null,
+    selectedProduct?.name || null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const showWarehouseCol = Boolean(warehouseId);
 
   return (
     <>
@@ -298,6 +413,67 @@ export default function InventoryValuationReport() {
                     <option value="FIFO">FIFO</option>
                     <option value="LIFO">LIFO</option>
                     <option value="AVCO">Weighted Average (AVCO)</option>
+                  </select>
+                </div>
+                <div className="flex min-w-[12rem] flex-col gap-1">
+                  <label className="text-sm font-semibold text-gray-700">
+                    Warehouse
+                  </label>
+                  <select
+                    value={warehouseId}
+                    onChange={(e) => setWarehouseId(e.target.value)}
+                    className="h-10 rounded border border-gray-300 bg-white px-3 text-sm"
+                  >
+                    <option value="">All warehouses</option>
+                    {warehouses.map((b) => (
+                      <option key={b.id} value={String(b.id)}>
+                        {warehouseLabel(b)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex min-w-[12rem] flex-col gap-1">
+                  <label className="text-sm font-semibold text-gray-700">
+                    Category
+                  </label>
+                  <select
+                    value={category}
+                    onChange={(e) => {
+                      setCategory(e.target.value);
+                      setProductSku("");
+                    }}
+                    className="h-10 rounded border border-gray-300 bg-white px-3 text-sm"
+                  >
+                    <option value="">All categories</option>
+                    {categories.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex min-w-[14rem] max-w-[18rem] flex-col gap-1">
+                  <label className="text-sm font-semibold text-gray-700">
+                    Product
+                  </label>
+                  <select
+                    value={productSku}
+                    onChange={(e) => setProductSku(e.target.value)}
+                    className="h-10 rounded border border-gray-300 bg-white px-3 text-sm"
+                  >
+                    <option value="">All products</option>
+                    {products
+                      .filter((p) =>
+                        category
+                          ? String(p.category || "").trim() === category
+                          : true,
+                      )
+                      .map((p) => (
+                        <option key={p.sku || p.id} value={p.sku || String(p.id)}>
+                          {p.name}
+                          {p.sku ? ` (${p.sku})` : ""}
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>
@@ -359,7 +535,9 @@ export default function InventoryValuationReport() {
                 business={business}
                 title="INVENTORY VALUATION REPORT"
                 numberLabel={`As of ${formatReportDate(asOfDate)}`}
-                extraLine={`Method: ${valuationMethod}`}
+                extraLine={`Method: ${valuationMethod}${
+                  filterExtra ? ` · ${filterExtra}` : ""
+                }`}
                 date={new Date()}
                 dateFormat="dddd, DD MMMM YYYY hh:mm A [GMT]Z"
                 className="mb-0"
@@ -397,8 +575,11 @@ export default function InventoryValuationReport() {
                   <table className="w-full text-sm border-collapse">
                     <thead className="bg-gray-100 border-b-2 border-gray-300">
                       <tr>
-                        {["Product Name", "SKU / Batch", "Unit", "Qty", "Cost/Unit (₦)", "Total Value (₦)"].map((h, i) => (
-                          <th key={h} className={`px-3 py-2 text-xs font-bold text-gray-700 uppercase border-r border-gray-200 ${i >= 3 && i <= 5 ? "text-right" : "text-left"}`}>
+                        {(showWarehouseCol
+                          ? ["Product Name", "SKU / Batch", "Warehouse", "Unit", "Qty", "Cost/Unit (₦)", "Total Value (₦)"]
+                          : ["Product Name", "SKU / Batch", "Unit", "Qty", "Cost/Unit (₦)", "Total Value (₦)"]
+                        ).map((h, i, cols) => (
+                          <th key={h} className={`px-3 py-2 text-xs font-bold text-gray-700 uppercase border-r border-gray-200 ${i >= cols.length - 3 ? "text-right" : "text-left"}`}>
                             {h}
                           </th>
                         ))}
@@ -406,11 +587,16 @@ export default function InventoryValuationReport() {
                     </thead>
                     <tbody>
                       {fgItems.length === 0 ? (
-                        <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400 text-sm">No goods found</td></tr>
+                        <tr><td colSpan={showWarehouseCol ? 7 : 6} className="px-3 py-6 text-center text-gray-400 text-sm">No goods found</td></tr>
                       ) : fgItems.map((item, idx) => (
                         <tr key={item.id ?? idx} className="border-b border-gray-100 hover:bg-gray-50/80">
                           <td className="px-3 py-1.5 text-gray-900 border-r border-gray-100">{item.product_name}</td>
                           <td className="px-3 py-1.5 text-gray-600 text-xs border-r border-gray-100">{item.batch_no || "—"}</td>
+                          {showWarehouseCol ? (
+                            <td className="px-3 py-1.5 text-gray-600 border-r border-gray-100">
+                              {item.warehouse_location || warehouseLabel(selectedWarehouse) || "—"}
+                            </td>
+                          ) : null}
                           <td className="px-3 py-1.5 text-gray-600 border-r border-gray-100">{item.unit || "—"}</td>
                           <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">{formatCell(item.quantity)}</td>
                           <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">{formatNaira(item.cost_per_unit)}</td>
@@ -420,9 +606,9 @@ export default function InventoryValuationReport() {
                     </tbody>
                     <tfoot className="bg-gray-50 border-t-2 border-gray-400">
                       <tr>
-                        <td colSpan={5} className="px-3 py-2 font-bold text-gray-900 text-right border-r border-gray-200">Total Goods</td>
+                        <td colSpan={showWarehouseCol ? 6 : 5} className="px-3 py-2 font-bold text-gray-900 text-right border-r border-gray-200">Total Goods</td>
                         <td className="px-3 py-2 text-right font-bold tabular-nums text-gray-900 border-r border-gray-200">
-                          {formatNaira(data.finishedGoods?.totalValue || 0)}
+                          {formatNaira(visibleTotal)}
                         </td>
                       </tr>
                     </tfoot>

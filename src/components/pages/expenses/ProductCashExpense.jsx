@@ -26,7 +26,13 @@ import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import useQuery from "@/hooks/useQuery";
 import { filterSuppliersByVendorType, filterSuppliersByAllowedTypes } from "@/utils/vendorType";
-import { getUserFunctionalities, allowedVendorFetchTypes } from "@/lib/access";
+import {
+  getUserFunctionalities,
+  allowedVendorFetchTypes,
+  canAccessPrivileges,
+  isBusinessOwner,
+  EDIT_PO_BILL_LINES_PRIVILEGE,
+} from "@/lib/access";
 import {
   Drawer,
   DrawerClose,
@@ -56,6 +62,14 @@ function samePoNo(a, b) {
   return Boolean(x && y && x !== "direct" && x === y);
 }
 
+function isPoSourcedBillLine(item) {
+  if (!item) return false;
+  if (item.from_po) return true;
+  if (String(item.pr_no || "").trim()) return true;
+  const orderId = String(item.order_id || item.po_no || "").trim();
+  return Boolean(orderId && orderId.toLowerCase() !== "direct");
+}
+
 export default function ProductCashExpense() {
   const query = useQuery();
   const type = query.get("type");
@@ -64,15 +78,23 @@ export default function ProductCashExpense() {
   const { supplierList } = useSelector((d) => d.suppliers) || [];
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
-  const inventorySuppliers = useMemo(() => {
-    const allowed = allowedVendorFetchTypes(
-      getUserFunctionalities(user, activeBusiness),
+  const userFunctionalities = useMemo(
+    () => getUserFunctionalities(user, activeBusiness),
+    [user, activeBusiness],
+  );
+  const canEditPoBillLines =
+    isBusinessOwner(user, activeBusiness) ||
+    canAccessPrivileges(
+      [EDIT_PO_BILL_LINES_PRIVILEGE],
+      userFunctionalities,
     );
+  const inventorySuppliers = useMemo(() => {
+    const allowed = allowedVendorFetchTypes(userFunctionalities);
     return filterSuppliersByVendorType(
       filterSuppliersByAllowedTypes(supplierList, allowed),
       "inventory",
     );
-  }, [supplierList, user, activeBusiness]);
+  }, [supplierList, userFunctionalities]);
   const today = moment().format("YYYY-MM-DD");
   const navigate = useNavigate();
 
@@ -113,8 +135,14 @@ export default function ProductCashExpense() {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  const lockPoFormFields =
+    Boolean(editingItem) &&
+    isPoSourcedBillLine(items.find((item) => item._id === editingItem)) &&
+    !canEditPoBillLines;
+
   const handleItemChange = (e) => {
     const { name, value } = e.target;
+    if (lockPoFormFields && name !== "cost") return;
     const updatedItem = { ...currentItem, [name]: value };
 
     if (name === "quantity" || name === "cost") {
@@ -167,6 +195,13 @@ export default function ProductCashExpense() {
   };
 
   const removeItem = (id) => {
+    const removed = items.find((item) => item._id === id);
+    if (isPoSourcedBillLine(removed) && !canEditPoBillLines) {
+      toast.error(
+        "You need Edit PO Bill Lines permission to remove a purchase order line.",
+      );
+      return;
+    }
     setItems(items.filter((item) => item._id !== id));
     toast.success("Item removed");
   };
@@ -184,15 +219,22 @@ export default function ProductCashExpense() {
     }
 
     setItems(
-      items.map((item) =>
-        item._id === editingItem
-          ? {
-              ...currentItem,
-              total:
-                parseFloat(currentItem.quantity) * parseFloat(currentItem.cost),
-            }
-          : item
-      )
+      items.map((item) => {
+        if (item._id !== editingItem) return item;
+        if (isPoSourcedBillLine(item) && !canEditPoBillLines) {
+          const cost = parseFloat(currentItem.cost) || 0;
+          return {
+            ...item,
+            cost: currentItem.cost,
+            total: cost * (parseFloat(item.quantity) || 0),
+          };
+        }
+        return {
+          ...currentItem,
+          total:
+            parseFloat(currentItem.quantity) * parseFloat(currentItem.cost),
+        };
+      }),
     );
 
     setEditingItem(null);
@@ -439,6 +481,7 @@ export default function ProductCashExpense() {
       order_id: orderId || null,
       po_no: requisition.po_no || null,
       pr_no: requisition.pr_no || "",
+      from_po: true,
     }));
 
     // Add to items list
@@ -878,10 +921,12 @@ export default function ProductCashExpense() {
                 <Typeahead
                   ref={productTypeaheadRef}
                   id="product-typeahead"
+                  disabled={lockPoFormFields}
                   labelKey={(item) => item.name + " - " + item.sku}
                   options={productList}
                   placeholder="Search product..."
                   onChange={(selected) => {
+                    if (lockPoFormFields) return;
                     if (selected.length) {
                       const product = selected[0];
                       const cost = product.cost_price || "";
@@ -970,8 +1015,13 @@ export default function ProductCashExpense() {
                   name="quantity"
                   value={currentItem.quantity || ""}
                   onChange={handleItemChange}
+                  disabled={lockPoFormFields}
                   placeholder="0"
-                  className="text-center w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-slate-400 bg-white"
+                  className={`text-center w-full px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all hover:border-slate-400 ${
+                    lockPoFormFields
+                      ? "cursor-not-allowed bg-slate-50"
+                      : "bg-white"
+                  }`}
                 />
               </div>
 
@@ -1070,10 +1120,15 @@ export default function ProductCashExpense() {
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((item, idx) => (
+                      {items.map((item, idx) => {
+                        const lockPoLine =
+                          isPoSourcedBillLine(item) && !canEditPoBillLines;
+                        return (
                         <tr
                           key={item._id}
-                          className={`border-b border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer ${
+                          className={`border-b border-slate-200 hover:bg-slate-50 transition-colors ${
+                            lockPoLine ? "" : "cursor-pointer"
+                          } ${
                             editingItem === item._id ? "bg-blue-50" : ""
                           }`}
                           onDoubleClick={() => handleItemDoubleClick(item)}
@@ -1135,15 +1190,25 @@ export default function ProductCashExpense() {
                               </button>
                               <button
                                 onClick={() => removeItem(item._id)}
-                                className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                title="Remove item"
+                                disabled={lockPoLine}
+                                className={`p-1 rounded-lg transition-all ${
+                                  lockPoLine
+                                    ? "cursor-not-allowed text-slate-300"
+                                    : "text-red-600 hover:bg-red-50"
+                                }`}
+                                title={
+                                  lockPoLine
+                                    ? "Purchase order lines cannot be removed without Edit PO Bill Lines permission"
+                                    : "Remove item"
+                                }
                               >
                                 <Trash2 className="w-3 h-3" />
                               </button>
                             </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

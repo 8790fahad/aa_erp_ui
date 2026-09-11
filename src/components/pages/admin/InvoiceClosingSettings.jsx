@@ -173,12 +173,13 @@ export default function InvoiceClosingSettings({
               <strong>{lastRun || "—"}</strong>
             </div>
             <p className="small text-muted mt-3 mb-3">
-              After {time} {timezone}, every invoice still on Verification
-              Points with no payment is reversed — including credit that has
-              not been approved. Partially paid invoices stay on verification.
-              Paid invoices have already moved to separation and are not
-              touched. Use Run reverse now to reverse immediately without
-              waiting for closing time.
+              After {time} {timezone}, unpaid invoices still on Verification
+              Points reverse automatically — including unapproved credit.
+              Partially paid invoices stay. The job keeps running after closing
+              (Last run is the last sweep, not a stop for the rest of the day).
+              Paid invoices that already moved to separation are not touched.
+              Use Run reverse now to reverse immediately without waiting for
+              closing time.
             </p>
             <Button
               color="outline-primary"

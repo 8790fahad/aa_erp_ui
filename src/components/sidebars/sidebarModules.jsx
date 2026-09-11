@@ -276,7 +276,10 @@ export const modules = [
           {
             title: "Create Bill",
             subFunctionalities: [
-              { title: "Inventory Bill" },
+              {
+                title: "Inventory Bill",
+                subFunctionalities: [{ title: "Edit PO Bill Lines" }],
+              },
               { title: "Expense Bill" },
             ],
           },

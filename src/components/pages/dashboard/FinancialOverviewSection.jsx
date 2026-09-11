@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowDownLeft,
@@ -26,6 +26,7 @@ import {
 } from "recharts";
 import { _fetchApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Popover,
   PopoverContent,
@@ -33,13 +34,6 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import SpecialInvoiceTreatment from "@/components/sales/SpecialInvoiceTreatment";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 
 /** Distinct series colors (Trend-style soft palette, one hue each) */
 const CHART_GRID = "#f1f5f4";
@@ -176,6 +170,89 @@ function ChangeBadge({ value, label, invert = false }) {
 const CARD_CLASS =
   "bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200";
 
+function SkeletonCard({ className = "", children }) {
+  return (
+    <div className={`${CARD_CLASS} ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function DashboardOverviewSkeleton({ period, onPeriodChange }) {
+  return (
+    <div className="mb-8 space-y-5" aria-busy="true" aria-live="polite">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Dashboard</h2>
+          <p className="mt-0.5 text-xs text-gray-500">
+            Revenue − COGS = Gross Profit · Gross Profit − Operating Expenses =
+            Net Profit
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Skeleton className="h-9 w-52 rounded-lg" />
+          <DateRangePicker period={period} onChange={onPeriodChange} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <SkeletonCard key={i} className="p-4 sm:p-5">
+            <Skeleton className="mb-3 h-3 w-24" />
+            <Skeleton className="h-8 w-28" />
+            <Skeleton className="mt-2 h-3 w-20" />
+          </SkeletonCard>
+        ))}
+      </div>
+
+      <SkeletonCard className="p-4 sm:p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <Skeleton className="h-4 w-28" />
+          <div className="flex gap-2">
+            <Skeleton className="h-7 w-28 rounded-lg" />
+            <Skeleton className="h-7 w-16 rounded-lg" />
+          </div>
+        </div>
+        <Skeleton className="h-72 w-full rounded-xl" />
+      </SkeletonCard>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:gap-5">
+        {[0, 1].map((i) => (
+          <SkeletonCard key={i} className="p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-6 w-36 rounded-md" />
+            </div>
+            <Skeleton className="h-9 w-40" />
+            <Skeleton className="mt-2 h-3 w-48" />
+            <div className="mt-4 space-y-2">
+              <Skeleton className="h-2 w-full" />
+              <Skeleton className="h-2 w-4/5" />
+              <Skeleton className="h-2 w-3/5" />
+            </div>
+          </SkeletonCard>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
+        {[0, 1].map((i) => (
+          <SkeletonCard key={i} className="p-4 sm:p-5">
+            <Skeleton className="mb-3 h-4 w-40" />
+            <div className="space-y-2.5">
+              {Array.from({ length: 4 }).map((_, row) => (
+                <div key={row} className="flex items-center justify-between">
+                  <Skeleton className="h-8 w-2/3" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+              ))}
+            </div>
+          </SkeletonCard>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function KpiCard({
   title,
   value,
@@ -226,308 +303,24 @@ function KpiCard({
   );
 }
 
-const KPI_REPORT_META = {
-  revenue: {
-    title: "Revenue report",
-    description: "Sales breakdown for the selected dashboard period",
-    color: PL_COLORS.revenue,
-    amountKey: "revenue",
-    tabs: ["category", "product"],
-  },
-  cogs: {
-    title: "COGS report",
-    description: "Cost of goods sold by category and product",
-    color: PL_COLORS.cogs,
-    amountKey: "cogs",
-    tabs: ["category", "product"],
-  },
-  grossProfit: {
-    title: "Gross profit report",
-    description: "Revenue − COGS by category and product",
-    color: PL_COLORS.grossProfit,
-    amountKey: "grossProfit",
-    tabs: ["category", "product"],
-  },
-  operatingExpenses: {
-    title: "Operating expenses report",
-    description: "Operating expense breakdown for the selected period",
-    color: PL_COLORS.operatingExpenses,
-    amountKey: "amount",
-    tabs: ["category"],
-  },
-  netProfit: {
-    title: "Net profit overview",
-    description: "Revenue − COGS − Operating expenses for the selected period",
-    color: PL_COLORS.netProfit,
-    amountKey: "netProfit",
-    tabs: ["summary"],
-  },
+const KPI_REPORT_PATHS = {
+  revenue: "/app/sales/sales-line-report?view=summary",
+  cogs: "/app/reports/accounting-reports/sales-by-product",
+  grossProfit: "/app/reports/accounting-reports/sales-by-product",
+  operatingExpenses:
+    "/app/reports/accounting-reports/aa_erp-income-statement",
+  netProfit: "/app/reports/accounting-reports/aa_erp-income-statement",
 };
 
-function ReportBreakdownRows({ rows, amountKey, accent }) {
-  const max = Math.max(...rows.map((r) => Math.abs(r.amount || 0)), 1);
-  if (!rows.length) {
-    return (
-      <p className="py-10 text-center text-sm text-gray-400">
-        No activity in this period
-      </p>
-    );
-  }
-  return (
-    <div className="space-y-2.5">
-      {rows.map((row) => {
-        const amt = parseFloat(row.amount || 0);
-        const width = Math.max((Math.abs(amt) / max) * 100, 3);
-        return (
-          <div key={row.id || row.name}>
-            <div className="mb-1 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-gray-900">
-                  {row.name}
-                </p>
-                {row.sub ? (
-                  <p className="truncate text-xs text-gray-400">{row.sub}</p>
-                ) : null}
-              </div>
-              <div className="flex-shrink-0 text-right">
-                <p
-                  className="text-sm font-semibold tabular-nums"
-                  style={{ color: accent }}
-                >
-                  ₦{formatCompact(amt)}
-                </p>
-                {row.units != null ? (
-                  <p className="text-[11px] text-gray-400 tabular-nums">
-                    {formatNumber1(row.units)} units
-                  </p>
-                ) : null}
-              </div>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded bg-gray-100">
-              <div
-                className="h-full rounded"
-                style={{ width: `${width}%`, backgroundColor: accent }}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function KpiReportSheet({
-  open,
-  onOpenChange,
-  kpiKey,
-  period,
-  kpis,
-  salesByCategory,
-  topProducts,
-  operating,
-  navigate,
-}) {
-  const meta = KPI_REPORT_META[kpiKey] || KPI_REPORT_META.revenue;
-  const [tab, setTab] = useState(meta.tabs[0]);
-
-  useEffect(() => {
-    setTab(meta.tabs[0]);
-  }, [kpiKey, meta.tabs]);
-
-  const periodLabel = `${moment(period.from).format("DD MMM YYYY")} – ${moment(
-    period.to,
-  ).format("DD MMM YYYY")}`;
-
-  const products = topProducts?.all || topProducts?.byPrice || [];
-
-  const categoryRows = useMemo(() => {
-    if (kpiKey === "operatingExpenses") {
-      return (operating || []).map((item) => ({
-        name: item.name,
-        amount: item.amount,
-        units: null,
-      }));
-    }
-    return (salesByCategory || []).map((item) => {
-      const revenue = parseFloat(item.revenue || 0);
-      const cogs = parseFloat(item.cogs || 0);
-      let amount = revenue;
-      if (kpiKey === "cogs") amount = cogs;
-      if (kpiKey === "grossProfit") amount = revenue - cogs;
-      return {
-        name: item.name,
-        amount,
-        units: item.units,
-      };
-    });
-  }, [kpiKey, salesByCategory, operating]);
-
-  const productRows = useMemo(() => {
-    return (products || []).map((item) => {
-      const revenue = parseFloat(item.revenue || 0);
-      const cogs = parseFloat(item.cogs || 0);
-      let amount = revenue;
-      if (kpiKey === "cogs") amount = cogs;
-      if (kpiKey === "grossProfit") amount = revenue - cogs;
-      return {
-        id: item.id || item.sku || item.name,
-        name: item.name,
-        sub: [item.sku, item.category].filter(Boolean).join(" · "),
-        amount,
-        units: item.units,
-      };
-    });
-  }, [kpiKey, products]);
-
-  const totalValue =
-    kpiKey === "revenue"
-      ? kpis.totalRevenue ?? kpis.totalIncome
-      : kpiKey === "cogs"
-        ? kpis.cogs
-        : kpiKey === "grossProfit"
-          ? kpis.grossProfit
-          : kpiKey === "operatingExpenses"
-            ? kpis.operatingExpenses ?? kpis.totalExpenses
-            : kpis.netProfit;
-
-  const sortedCategory = [...categoryRows].sort(
-    (a, b) => Math.abs(b.amount) - Math.abs(a.amount),
-  );
-  const sortedProduct = [...productRows].sort(
-    (a, b) => Math.abs(b.amount) - Math.abs(a.amount),
-  );
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-lg overflow-y-auto"
-      >
-        <SheetHeader className="text-left">
-          <SheetTitle style={{ color: meta.color }}>{meta.title}</SheetTitle>
-          <SheetDescription>
-            {meta.description}
-            <span className="mt-1 block text-xs text-gray-500">
-              {periodLabel}
-            </span>
-          </SheetDescription>
-        </SheetHeader>
-
-        <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-          <p className="text-xs text-gray-500">Period total</p>
-          <p
-            className="text-2xl font-bold tabular-nums"
-            style={{ color: meta.color }}
-          >
-            ₦{formatCompact(totalValue)}
-          </p>
-        </div>
-
-        {meta.tabs.includes("summary") ? (
-          <div className="mt-5 space-y-3">
-            {[
-              {
-                label: "Revenue",
-                value: kpis.totalRevenue ?? kpis.totalIncome,
-                color: PL_COLORS.revenue,
-              },
-              {
-                label: "COGS",
-                value: kpis.cogs,
-                color: PL_COLORS.cogs,
-              },
-              {
-                label: "Gross Profit",
-                value: kpis.grossProfit,
-                color: PL_COLORS.grossProfit,
-              },
-              {
-                label: "Operating Expenses",
-                value: kpis.operatingExpenses ?? kpis.totalExpenses,
-                color: PL_COLORS.operatingExpenses,
-              },
-              {
-                label: "Net Profit",
-                value: kpis.netProfit,
-                color: PL_COLORS.netProfit,
-              },
-            ].map((row) => (
-              <div
-                key={row.label}
-                className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2"
-              >
-                <span className="text-sm text-gray-700">{row.label}</span>
-                <span
-                  className="text-sm font-semibold tabular-nums"
-                  style={{ color: row.color }}
-                >
-                  ₦{formatCompact(row.value)}
-                </span>
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={() =>
-                navigate("/app/reports/accounting-reports/aa_erp-income-statement")
-              }
-              className="mt-2 w-full rounded-lg border border-gray-200 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Open full income statement
-            </button>
-          </div>
-        ) : (
-          <>
-            {meta.tabs.length > 1 && (
-              <div className="mt-4 inline-flex w-full items-center rounded-lg border border-gray-200 bg-white p-0.5 text-xs font-medium">
-                {meta.tabs.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTab(t)}
-                    className={`flex-1 rounded-md px-3 py-2 transition-colors ${
-                      tab === t ? "text-white shadow-sm" : "text-gray-500"
-                    }`}
-                    style={
-                      tab === t ? { backgroundColor: meta.color } : undefined
-                    }
-                  >
-                    {t === "category"
-                      ? "By category"
-                      : t === "product"
-                        ? "By product"
-                        : t}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-4">
-              <ReportBreakdownRows
-                rows={
-                  tab === "product" ||
-                  (meta.tabs.length === 1 && meta.tabs[0] === "product")
-                    ? sortedProduct
-                    : sortedCategory
-                }
-                amountKey={meta.amountKey}
-                accent={meta.color}
-              />
-            </div>
-
-            {kpiKey === "revenue" && (
-              <button
-                type="button"
-                onClick={() => navigate("/app/sales/sales-line-report")}
-                className="mt-5 w-full rounded-lg border border-gray-200 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Open sales line report
-              </button>
-            )}
-          </>
-        )}
-      </SheetContent>
-    </Sheet>
-  );
+function openPeriodReport(navigate, path, period) {
+  const from = moment(period.from).format("YYYY-MM-DD");
+  const to = moment(period.to).format("YYYY-MM-DD");
+  const url = new URL(path, window.location.origin);
+  url.searchParams.set("fromDate", from);
+  url.searchParams.set("toDate", to);
+  navigate(`${url.pathname}${url.search}`, {
+    state: { fromDate: from, toDate: to },
+  });
 }
 
 const RECV_AGING_COLORS = {
@@ -1174,7 +967,6 @@ export default function FinancialOverviewSection({
   const [payView, setPayView] = useState("total"); // total | aging
   const [billsMode, setBillsMode] = useState("purchases"); // purchases | expenses
   const [plChartMode, setPlChartMode] = useState("bar"); // bar | line
-  const [kpiReport, setKpiReport] = useState(null); // revenue | cogs | ...
 
   const formatDateForAPI = (date) => moment(date).format("DD-MM-YYYY");
 
@@ -1214,7 +1006,6 @@ export default function FinancialOverviewSection({
   const production = overview?.recentProduction || [];
   const topProducts = overview?.topProducts || {};
   const topCustomers = overview?.topCustomers || {};
-  const salesByCategory = overview?.salesByCategory || [];
   const arAp = overview?.receivablesPayables || {};
   const outstanding = overview?.outstandingBills || {};
   const advanceDeposit = overview?.advanceDepositBalances || {};
@@ -1232,16 +1023,9 @@ export default function FinancialOverviewSection({
     kpis.cashInBank ??
     accounts.reduce((sum, a) => sum + parseFloat(a.balance || 0), 0);
 
-  if (loading && !overview) {
+  if (loading) {
     return (
-      <div className="mb-8 space-y-5 animate-pulse">
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5 lg:gap-5">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-24 rounded-xl bg-gray-100" />
-          ))}
-        </div>
-        <div className="h-80 rounded-xl bg-gray-100" />
-      </div>
+      <DashboardOverviewSkeleton period={period} onPeriodChange={setPeriod} />
     );
   }
 
@@ -1282,7 +1066,9 @@ export default function FinancialOverviewSection({
           change={kpis.revenueChange ?? kpis.incomeChange}
           changeLabel={kpis.revenueChangeLabel ?? kpis.incomeChangeLabel}
           color={PL_COLORS.revenue}
-          onClick={() => setKpiReport("revenue")}
+          onClick={() =>
+            openPeriodReport(navigate, KPI_REPORT_PATHS.revenue, period)
+          }
         />
         <KpiCard
           title="COGS"
@@ -1291,7 +1077,9 @@ export default function FinancialOverviewSection({
           changeLabel={kpis.cogsChangeLabel}
           invertChange
           color={PL_COLORS.cogs}
-          onClick={() => setKpiReport("cogs")}
+          onClick={() =>
+            openPeriodReport(navigate, KPI_REPORT_PATHS.cogs, period)
+          }
         />
         <KpiCard
           title="Gross Profit"
@@ -1299,7 +1087,9 @@ export default function FinancialOverviewSection({
           change={kpis.grossProfitChange}
           changeLabel={kpis.grossProfitChangeLabel}
           color={PL_COLORS.grossProfit}
-          onClick={() => setKpiReport("grossProfit")}
+          onClick={() =>
+            openPeriodReport(navigate, KPI_REPORT_PATHS.grossProfit, period)
+          }
         />
         <KpiCard
           title="Operating Expenses"
@@ -1310,7 +1100,13 @@ export default function FinancialOverviewSection({
           }
           invertChange
           color={PL_COLORS.operatingExpenses}
-          onClick={() => setKpiReport("operatingExpenses")}
+          onClick={() =>
+            openPeriodReport(
+              navigate,
+              KPI_REPORT_PATHS.operatingExpenses,
+              period,
+            )
+          }
         />
         <KpiCard
           title="Net Profit"
@@ -1318,23 +1114,11 @@ export default function FinancialOverviewSection({
           change={kpis.netProfitChange}
           changeLabel={kpis.netProfitChangeLabel}
           color={PL_COLORS.netProfit}
-          onClick={() => setKpiReport("netProfit")}
+          onClick={() =>
+            openPeriodReport(navigate, KPI_REPORT_PATHS.netProfit, period)
+          }
         />
       </div>
-
-      <KpiReportSheet
-        open={!!kpiReport}
-        onOpenChange={(open) => {
-          if (!open) setKpiReport(null);
-        }}
-        kpiKey={kpiReport || "revenue"}
-        period={period}
-        kpis={kpis}
-        salesByCategory={salesByCategory}
-        topProducts={topProducts}
-        operating={operating}
-        navigate={navigate}
-      />
 
       <div className={`${CARD_CLASS} p-4 sm:p-5`}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -1369,8 +1153,10 @@ export default function FinancialOverviewSection({
             <button
               type="button"
               onClick={() =>
-                navigate(
+                openPeriodReport(
+                  navigate,
                   "/app/reports/accounting-reports/aa_erp-income-statement",
+                  period,
                 )
               }
               className="text-xs text-[var(--aa-navy,#1a2d5e)] hover:underline"
@@ -1595,7 +1381,12 @@ export default function FinancialOverviewSection({
               <button
                 type="button"
                 onClick={() =>
-                  navigate("/app/reports/accounting-reports/receivable-aging")
+                  navigate("/app/reports/accounting-reports/receivable-aging", {
+                    state: {
+                      fromDate: moment(period.from).format("YYYY-MM-DD"),
+                      toDate: moment(period.to).format("YYYY-MM-DD"),
+                    },
+                  })
                 }
                 className="text-xs font-medium hover:underline"
                 style={{ color: PL_COLORS.revenue }}
@@ -1609,7 +1400,11 @@ export default function FinancialOverviewSection({
             <button
               type="button"
               onClick={() =>
-                navigate("/app/reports/accounting-reports/receivable-aging")
+                openPeriodReport(
+                  navigate,
+                  "/app/reports/accounting-reports/receivable-aging",
+                  period,
+                )
               }
               className="w-full text-left"
             >
@@ -1641,7 +1436,11 @@ export default function FinancialOverviewSection({
             <button
               type="button"
               onClick={() =>
-                navigate("/app/reports/accounting-reports/receivable-aging")
+                openPeriodReport(
+                  navigate,
+                  "/app/reports/accounting-reports/receivable-aging",
+                  period,
+                )
               }
               className="w-full text-left"
             >
@@ -1682,7 +1481,12 @@ export default function FinancialOverviewSection({
               <button
                 type="button"
                 onClick={() =>
-                  navigate("/app/reports/accounting-reports/payable-aging")
+                  navigate("/app/reports/accounting-reports/payable-aging", {
+                    state: {
+                      fromDate: moment(period.from).format("YYYY-MM-DD"),
+                      toDate: moment(period.to).format("YYYY-MM-DD"),
+                    },
+                  })
                 }
                 className="text-xs font-medium hover:underline"
                 style={{ color: PL_COLORS.operatingExpenses }}
@@ -1696,7 +1500,11 @@ export default function FinancialOverviewSection({
             <button
               type="button"
               onClick={() =>
-                navigate("/app/reports/accounting-reports/payable-aging")
+                openPeriodReport(
+                  navigate,
+                  "/app/reports/accounting-reports/payable-aging",
+                  period,
+                )
               }
               className="w-full text-left"
             >
@@ -1725,7 +1533,11 @@ export default function FinancialOverviewSection({
             <button
               type="button"
               onClick={() =>
-                navigate("/app/reports/accounting-reports/payable-aging")
+                openPeriodReport(
+                  navigate,
+                  "/app/reports/accounting-reports/payable-aging",
+                  period,
+                )
               }
               className="w-full text-left"
             >

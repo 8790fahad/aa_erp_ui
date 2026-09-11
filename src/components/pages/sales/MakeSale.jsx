@@ -212,8 +212,13 @@ function parseDiscountNumber(raw) {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Percentage discount max 100%; fixed discount max invoice subtotal. */
-function capDiscountInputValue(raw, mode, subtotal) {
+/** Percentage discount max 100%; fixed discount max `maxAmount`. */
+function capDiscountInputValue(
+  raw,
+  mode,
+  maxAmount,
+  maxLabel = "the invoice total",
+) {
   let s = String(raw ?? "").replace(/[^\d.]/g, "");
   const parts = s.split(".");
   if (parts.length > 2) s = `${parts[0]}.${parts.slice(1).join("")}`;
@@ -230,15 +235,45 @@ function capDiscountInputValue(raw, mode, subtotal) {
     }
     return { next: s, capped: false, reason: null };
   }
-  const max = Math.max(0, Number(subtotal) || 0);
+  const max = Math.max(0, Number(maxAmount) || 0);
   if (n > max + 0.0001) {
     return {
       next: String(max),
       capped: true,
-      reason: "Discount cannot be more than the invoice total.",
+      reason: `Discount cannot be more than ${maxLabel}.`,
     };
   }
   return { next: s, capped: false, reason: null };
+}
+
+function getItemGrossAmount(item) {
+  if (!item || item.proBono) return 0;
+  const qty = parseFloat(item.quantity_sold ?? item.quantity ?? 0) || 0;
+  const unit = parseFloat(item.selling_price ?? item.price ?? 0) || 0;
+  const fromAmount = parseFloat(item.amount || 0) || 0;
+  const gross = qty * unit;
+  return gross > 0 ? gross : fromAmount;
+}
+
+/** Line discount in NGN from the row's % or fixed value. */
+function computeItemLineDiscount(item) {
+  if (!item || item.proBono) return 0;
+  const gross = getItemGrossAmount(item);
+  const raw = parseDiscountNumber(item.line_discount_value);
+  if (raw <= 0 || gross <= 0) return 0;
+  if (item.line_discount_mode === "flat") {
+    return Math.min(gross, raw);
+  }
+  return Math.min(gross, (gross * Math.min(raw, 100)) / 100);
+}
+
+function catalogPercentForLines(discount) {
+  if (!discount) return "";
+  const isPct =
+    discount.discount_type === "Percentage" ||
+    String(discount.discount_type || "").toLowerCase() === "percentage";
+  if (!isPct) return "";
+  return String(Math.min(Math.max(parseDiscountNumber(discount.value), 0), 100));
 }
 
 function cartQtyForSku(cart, sku, excludeId) {
@@ -447,6 +482,8 @@ function PaymentModePicker({
   selected,
   onToggle,
   options = PAYMENT_MODE_OPTIONS,
+  disabledIds = [],
+  disabledHint = {},
   className = "",
 }) {
   if (!options.length) {
@@ -466,18 +503,25 @@ function PaymentModePicker({
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {
           const checked = selected.includes(opt.id);
+          const disabled = disabledIds.includes(opt.id);
           return (
             <label
               key={opt.id}
-              className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm ${
-                checked
-                  ? "border-[var(--aa-accent)] bg-[var(--aa-accent)]/5 text-slate-900"
-                  : "border-slate-300 bg-white text-slate-700"
+              title={disabled ? disabledHint[opt.id] : undefined}
+              className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm ${
+                disabled
+                  ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
+                  : checked
+                    ? "cursor-pointer border-[var(--aa-accent)] bg-[var(--aa-accent)]/5 text-slate-900"
+                    : "cursor-pointer border-slate-300 bg-white text-slate-700"
               }`}
             >
               <Checkbox
                 checked={checked}
-                onCheckedChange={() => onToggle(opt.id)}
+                disabled={disabled}
+                onCheckedChange={() => {
+                  if (!disabled) onToggle(opt.id);
+                }}
                 className="border-slate-400 data-[state=checked]:border-[var(--aa-accent)] data-[state=checked]:bg-[var(--aa-accent)]"
               />
               {opt.label}
@@ -993,12 +1037,19 @@ function MakeSale() {
   const [walkInPhone, setWalkInPhone] = useState("");
   const allowedPaymentModeOptions = useMemo(
     () =>
-      PAYMENT_MODE_OPTIONS.filter((o) => {
-        if (!allowedPaymentModeIds.includes(o.id)) return false;
-        if (isWalkIn && o.id === "credit") return false;
-        return true;
-      }),
-    [allowedPaymentModeIds, isWalkIn],
+      PAYMENT_MODE_OPTIONS.filter((o) => allowedPaymentModeIds.includes(o.id)),
+    [allowedPaymentModeIds],
+  );
+  const disabledPaymentModeIds = useMemo(
+    () => (isWalkIn ? ["credit"] : []),
+    [isWalkIn],
+  );
+  const disabledPaymentModeHint = useMemo(
+    () => ({
+      credit:
+        "Walk-in customers cannot be invoiced on credit. Uncheck Walk-in and select a registered customer.",
+    }),
+    [],
   );
   const check = parseInt(buz_id) === parseInt(user_id.id);
   const [activeStore, setActiveStore] = useState(user_id.branch_name);
@@ -1312,12 +1363,18 @@ function MakeSale() {
   const togglePaymentMode = useCallback(
     (id) => {
       if (!allowedPaymentModeIds.includes(id)) return;
+      if (isWalkIn && id === "credit") {
+        toast.error(
+          "Walk-in customers cannot be invoiced on credit. Uncheck Walk-in and select a registered customer.",
+        );
+        return;
+      }
       const next = selectedPaymentModes.includes(id)
         ? selectedPaymentModes.filter((m) => m !== id)
         : [...selectedPaymentModes, id];
       applyPaymentModes(next);
     },
-    [selectedPaymentModes, applyPaymentModes, allowedPaymentModeIds],
+    [selectedPaymentModes, applyPaymentModes, allowedPaymentModeIds, isWalkIn],
   );
 
   useEffect(() => {
@@ -1700,8 +1757,7 @@ function MakeSale() {
         }
 
         const lineItems = Array.isArray(data.items) ? data.items : [];
-        setCart(
-          lineItems.map((item) => {
+        const mappedLines = lineItems.map((item) => {
             const qty =
               Number(item.quantity_sold ?? item.quantity ?? 0) || 0;
             const price =
@@ -1716,6 +1772,13 @@ function MakeSale() {
                 : null;
             const lineBranchId =
               Number.isFinite(bid) && bid > 0 ? bid : null;
+            const lineMode =
+              item.line_discount_mode === "flat" ||
+              String(item.line_discount_type || "").toLowerCase() === "fixed"
+                ? "flat"
+                : "%";
+            const lineValRaw =
+              item.line_discount_value ?? item.line_discount ?? "";
             return {
               id: UUIDV4(),
               product_id: item.link_id || item.product_id || item.sku,
@@ -1736,9 +1799,14 @@ function MakeSale() {
               branchId: lineBranchId,
               branch_id: lineBranchId,
               branch_name: item.branch_name || null,
+              line_discount_mode: lineMode,
+              line_discount_value:
+                lineValRaw === "" || lineValRaw == null
+                  ? ""
+                  : String(lineValRaw),
             };
-          }),
-        );
+          });
+        setCart(mappedLines);
         setExtraEmptyLineRows(0);
 
         if (data.date) {
@@ -1766,6 +1834,32 @@ function MakeSale() {
 
         if (data.discount && data.discount.discount_id) {
           setSelectedDiscount(data.discount);
+        }
+        const invoiceDisc = Number(
+          data.discount?.amount ?? data.discount_amount ?? 0,
+        );
+        const restoredLineDisc = mappedLines.reduce(
+          (sum, item) => sum + computeItemLineDiscount(item),
+          0,
+        );
+        if (restoredLineDisc > 0.009) {
+          const leftover = Math.max(0, invoiceDisc - restoredLineDisc);
+          if (leftover > 0.009) {
+            setZohoDiscountPercent(String(Number(leftover.toFixed(2))));
+            setZohoDiscountMode("flat");
+          }
+        } else if (invoiceDisc > 0.009) {
+          const dtype = String(
+            data.discount?.discount_type || data.discount?.type || "",
+          );
+          const isPct = /percent/i.test(dtype);
+          if (isPct && data.discount?.value != null) {
+            setZohoDiscountPercent(String(data.discount.value));
+            setZohoDiscountMode("%");
+          } else {
+            setZohoDiscountPercent(String(Number(invoiceDisc.toFixed(2))));
+            setZohoDiscountMode("flat");
+          }
         }
 
         let modes = Array.isArray(data.payment_modes)
@@ -2348,6 +2442,8 @@ function MakeSale() {
         selectedItem.location_name ||
         getItemBranchLocation(selectedItem) ||
         null,
+      line_discount_mode: "%",
+      line_discount_value: catalogPercentForLines(selectedDiscount),
     };
 
     setCart((prev) => [...prev, cartItem]);
@@ -2369,6 +2465,7 @@ function MakeSale() {
     form.quantity_sold,
     cart,
     getItemBranchLocation,
+    selectedDiscount,
   ]);
 
   const removeFromCart = useCallback((itemId) => {
@@ -2388,8 +2485,7 @@ function MakeSale() {
           // If Pro-bono, amount is always 0, otherwise calculate normally
           const newAmount =
             item.proBono || updates.proBono ? 0 : newQuantity * newPrice;
-
-          return {
+          const next = {
             ...item,
             ...updates,
             quantity: newQuantity, // Update display field
@@ -2398,6 +2494,14 @@ function MakeSale() {
             proBono:
               updates.proBono !== undefined ? updates.proBono : item.proBono,
           };
+          if (next.line_discount_mode === "flat") {
+            const gross = getItemGrossAmount(next);
+            const raw = parseDiscountNumber(next.line_discount_value);
+            if (raw > gross + 0.0001) {
+              next.line_discount_value = gross > 0 ? String(gross) : "";
+            }
+          }
+          return next;
         }
         return item;
       }),
@@ -2411,16 +2515,27 @@ function MakeSale() {
       .reduce((sum, item) => sum + parseFloat(item.amount), 0);
   }, [cart]);
 
-  // Calculate discount amount — editable value (% or NGN) drives the total;
-  // selecting a catalog discount fills that value.
-  const discountAmount = useMemo(() => {
+  const lineDiscountTotal = useMemo(() => {
+    return cart
+      .filter((item) => item.status === "for sale" && !item.proBono)
+      .reduce((sum, item) => sum + computeItemLineDiscount(item), 0);
+  }, [cart]);
+
+  // Invoice-level discount applies to the amount left after line discounts.
+  const headerDiscountAmount = useMemo(() => {
     const n = parseDiscountNumber(zohoDiscountPercent);
     if (n <= 0) return 0;
+    const base = Math.max(0, subtotal - lineDiscountTotal);
     if (zohoDiscountMode === "%") {
-      return (subtotal * Math.min(n, 100)) / 100;
+      return (base * Math.min(n, 100)) / 100;
     }
-    return Math.min(n, Math.max(0, subtotal));
-  }, [subtotal, zohoDiscountPercent, zohoDiscountMode]);
+    return Math.min(n, base);
+  }, [subtotal, lineDiscountTotal, zohoDiscountPercent, zohoDiscountMode]);
+
+  const discountAmount = useMemo(
+    () => lineDiscountTotal + headerDiscountAmount,
+    [lineDiscountTotal, headerDiscountAmount],
+  );
 
   // Actual save function
   const saveSale = useCallback(
@@ -2641,6 +2756,7 @@ function MakeSale() {
                 : null;
             const lineBranchId =
               Number.isFinite(bid) && bid > 0 ? bid : null;
+            const lineDiscAmt = computeItemLineDiscount(item);
             return {
               ...item,
               type: item.proBono ? "Pro-bono" : "Regular",
@@ -2649,6 +2765,9 @@ function MakeSale() {
               // Keep stock warehouse on the line (do not drop / coerce to 0)
               branchId: lineBranchId,
               branch_id: lineBranchId,
+              line_discount_mode: item.line_discount_mode === "flat" ? "flat" : "%",
+              line_discount_value: parseDiscountNumber(item.line_discount_value),
+              line_discount_amount: lineDiscAmt,
             };
           }),
           pro_bono_code: activeBusiness.pro_bono_code,
@@ -2662,7 +2781,21 @@ function MakeSale() {
                 value: parseFloat(selectedDiscount.value),
                 customer_type: selectedDiscount.customer_type,
               }
-            : null,
+            : totalDiscount > 0
+              ? (() => {
+                  const fallback = (availableDiscounts || []).find(
+                    (d) => String(d.status || "").toLowerCase() === "active",
+                  );
+                  if (!fallback) return null;
+                  return {
+                    discount_id: fallback.discount_id,
+                    discount_name: fallback.discount_name || "Discount",
+                    discount_type: "Fixed",
+                    value: totalDiscount,
+                    customer_type: fallback.customer_type,
+                  };
+                })()
+              : null,
           tax_amount: taxAmount,
           total_amount: totalWithTax,
           amountPaid: prepaymentAmount, // Apply prepayment if available
@@ -2874,6 +3007,7 @@ function MakeSale() {
       discountAmount,
       selectedTaxes,
       selectedDiscount,
+      availableDiscounts,
       activeBusiness,
       user_id.id,
       navigate,
@@ -2941,7 +3075,12 @@ function MakeSale() {
       toast.error("Discount cannot be more than 100%.");
       return;
     }
-    if (zohoDiscountMode !== "%" && discountRaw > subtotal + 0.009) {
+    const headerBase = Math.max(0, subtotal - lineDiscountTotal);
+    if (zohoDiscountMode !== "%" && discountRaw > headerBase + 0.009) {
+      toast.error("Discount cannot be more than the invoice total.");
+      return;
+    }
+    if (discountAmount > subtotal + 0.009) {
       toast.error("Discount cannot be more than the invoice total.");
       return;
     }
@@ -3050,6 +3189,8 @@ function MakeSale() {
     bankAccount,
     getItemBranchLocation,
     subtotal,
+    lineDiscountTotal,
+    discountAmount,
     zohoDiscountPercent,
     zohoDiscountMode,
   ]);
@@ -3457,12 +3598,12 @@ function MakeSale() {
     const { next, capped } = capDiscountInputValue(
       zohoDiscountPercent,
       "flat",
-      subtotal,
+      Math.max(0, subtotal - lineDiscountTotal),
     );
     if (capped && next !== zohoDiscountPercent) {
       setZohoDiscountPercent(next);
     }
-  }, [subtotal, zohoDiscountMode, zohoDiscountPercent]);
+  }, [subtotal, lineDiscountTotal, zohoDiscountMode, zohoDiscountPercent]);
 
   // Handle discount selection — fill editable value from the catalog entry
   const handleDiscountSelect = (discount) => {
@@ -3485,17 +3626,30 @@ function MakeSale() {
         discount.discount_type === "Percentage" ||
         String(discount.discount_type || "").toLowerCase() === "percentage";
       if (isPct) {
+        const pct = String(Math.min(Math.max(raw, 0), 100));
         if (raw > 100) {
           toast.error("Discount cannot be more than 100%.");
         }
-        setZohoDiscountPercent(String(Math.min(Math.max(raw, 0), 100)));
+        setCart((prev) =>
+          prev.map((item) =>
+            item.proBono
+              ? item
+              : {
+                  ...item,
+                  line_discount_mode: "%",
+                  line_discount_value: pct,
+                },
+          ),
+        );
+        setZohoDiscountPercent("");
         setZohoDiscountMode("%");
       } else {
-        if (raw > subtotal + 0.009) {
+        const headerBase = Math.max(0, subtotal - lineDiscountTotal);
+        if (raw > headerBase + 0.009) {
           toast.error("Discount cannot be more than the invoice total.");
         }
         setZohoDiscountPercent(
-          String(Math.min(Math.max(raw, 0), Math.max(0, subtotal))),
+          String(Math.min(Math.max(raw, 0), headerBase)),
         );
         setZohoDiscountMode("flat");
       }
@@ -3542,6 +3696,30 @@ function MakeSale() {
     return saleItems.reduce((sum, item) => sum + parseFloat(item.amount), 0);
   }, [cart]);
 
+  const taxableAfterDiscount = useMemo(() => {
+    const taxableLine = cart
+      .filter(
+        (item) =>
+          item.status === "for sale" &&
+          !item.proBono &&
+          isProductTaxable(item.taxable),
+      )
+      .reduce((sum, item) => sum + computeItemLineDiscount(item), 0);
+    const afterLineTaxable = Math.max(0, taxableSubtotal - taxableLine);
+    const afterLineSubtotal = Math.max(0, subtotal - lineDiscountTotal);
+    const taxableHeader =
+      afterLineSubtotal > 0
+        ? (headerDiscountAmount * afterLineTaxable) / afterLineSubtotal
+        : 0;
+    return Math.max(0, afterLineTaxable - taxableHeader);
+  }, [
+    cart,
+    taxableSubtotal,
+    subtotal,
+    lineDiscountTotal,
+    headerDiscountAmount,
+  ]);
+
   const nonTaxableSubtotal = useMemo(() => {
     const saleItems = cart.filter(
       (item) =>
@@ -3564,8 +3742,7 @@ function MakeSale() {
     );
     if (selectedOutputVATTaxes.length === 0) return 0;
 
-    const taxableAmount =
-      taxableSubtotal - discountAmount * (taxableSubtotal / (subtotal || 1));
+    const taxableAmount = taxableAfterDiscount;
 
     const inclusiveTaxes = selectedOutputVATTaxes.filter((t) =>
       isTaxInclusive(t, activeBusiness?.vat_policy || "vat_exclusive"),
@@ -3590,20 +3767,17 @@ function MakeSale() {
       }, 0);
     }
     return total;
-  }, [
+  },     [
     selectedOutputVAT,
     outputVATTaxes,
-    taxableSubtotal,
-    subtotal,
-    discountAmount,
+    taxableAfterDiscount,
     activeBusiness?.vat_policy,
   ]);
   const outputVATAmountToAdd = useMemo(() => {
     const vatPolicy = activeBusiness?.vat_policy || "vat_exclusive";
     if (selectedOutputVAT.length === 0) return 0;
 
-    const taxableAmount =
-      taxableSubtotal - discountAmount * (taxableSubtotal / (subtotal || 1));
+    const taxableAmount = taxableAfterDiscount;
     const selected = outputVATTaxes.filter((t) =>
       selectedOutputVAT.includes(t.id),
     );
@@ -3628,9 +3802,7 @@ function MakeSale() {
     activeBusiness?.vat_policy,
     selectedOutputVAT,
     outputVATTaxes,
-    taxableSubtotal,
-    subtotal,
-    discountAmount,
+    taxableAfterDiscount,
   ]);
 
   const taxBreakdown = useMemo(() => {
@@ -3640,8 +3812,7 @@ function MakeSale() {
     }
 
     const vatPolicy = activeBusiness?.vat_policy || "vat_exclusive";
-    const taxableAmount =
-      taxableSubtotal - discountAmount * (taxableSubtotal / (subtotal || 1));
+    const taxableAmount = taxableAfterDiscount;
 
     const inclusiveTaxes = selectedTaxes.filter((t) =>
       isTaxInclusive(t, vatPolicy),
@@ -3673,9 +3844,7 @@ function MakeSale() {
       display: inclusive + exclusive,
     };
   }, [
-    taxableSubtotal,
-    subtotal,
-    discountAmount,
+    taxableAfterDiscount,
     selectedTaxes,
     activeBusiness?.vat_policy,
   ]);
@@ -3728,13 +3897,15 @@ function MakeSale() {
         parseFloat(item.quantity_sold ?? item.quantity ?? 0) || 0;
       const unit =
         parseFloat(item.selling_price ?? item.price ?? 0) || 0;
-      const gross = item.proBono
-        ? 0
-        : parseFloat(item.amount || 0) || 0;
-      const lineDiscount =
-        !item.proBono && subtotal > 0
-          ? (discountAmount * gross) / subtotal
+      const gross = item.proBono ? 0 : getItemGrossAmount(item);
+      const explicitLine = computeItemLineDiscount(item);
+      const afterLine = Math.max(0, gross - explicitLine);
+      const afterLineSubtotal = Math.max(0, subtotal - lineDiscountTotal);
+      const headerShare =
+        !item.proBono && headerDiscountAmount > 0 && afterLineSubtotal > 0
+          ? (headerDiscountAmount * afterLine) / afterLineSubtotal
           : 0;
+      const lineDiscount = explicitLine + headerShare;
       const afterDiscount = Math.max(0, gross - lineDiscount);
       let vatRate = 0;
       let lineVat = 0;
@@ -3812,7 +3983,8 @@ function MakeSale() {
     },
     [
       subtotal,
-      discountAmount,
+      lineDiscountTotal,
+      headerDiscountAmount,
       selectedTaxes,
       selectedOutputVAT,
       outputVATTaxes,
@@ -3824,9 +3996,7 @@ function MakeSale() {
   /** VAT analysis rows for table footer (document-style). */
   const vatAnalysisRows = useMemo(() => {
     const policy = activeBusiness?.vat_policy || "vat_exclusive";
-    const taxableAmount =
-      taxableSubtotal -
-      discountAmount * (taxableSubtotal / (subtotal || 1));
+    const taxableAmount = taxableAfterDiscount;
     const appliedTaxes = [
       ...(selectedTaxes || []),
       ...outputVATTaxes.filter((t) => selectedOutputVAT.includes(t.id)),
@@ -3853,9 +4023,7 @@ function MakeSale() {
     selectedTaxes,
     selectedOutputVAT,
     outputVATTaxes,
-    taxableSubtotal,
-    discountAmount,
-    subtotal,
+    taxableAfterDiscount,
     activeBusiness?.vat_policy,
   ]);
 
@@ -3863,8 +4031,7 @@ function MakeSale() {
   const salesTaxFooterLines = useMemo(() => {
     if (!selectedTaxes?.length) return [];
     const vatPolicy = activeBusiness?.vat_policy || "vat_exclusive";
-    const taxableAmount =
-      taxableSubtotal - discountAmount * (taxableSubtotal / (subtotal || 1));
+    const taxableAmount = taxableAfterDiscount;
 
     if (vatPolicy === "vat_exclusive" || vatPolicy === "all") {
       return selectedTaxes.map((taxItem) => ({
@@ -3886,8 +4053,8 @@ function MakeSale() {
           amount: 0,
         }));
       }
-      const netAmount = taxableSubtotal / (1 + totalRate);
-      const totalVAT = taxableSubtotal - netAmount;
+      const netAmount = taxableAmount / (1 + totalRate);
+      const totalVAT = taxableAmount - netAmount;
       return selectedTaxes.map((taxItem) => {
         const taxRate = parseFloat(taxItem.rate || 0) / 100;
         const taxAmountForDisplay =
@@ -3904,9 +4071,7 @@ function MakeSale() {
   }, [
     selectedTaxes,
     activeBusiness?.vat_policy,
-    taxableSubtotal,
-    discountAmount,
-    subtotal,
+    taxableAfterDiscount,
   ]);
 
   // New UI Functions
@@ -4079,6 +4244,8 @@ function MakeSale() {
         taxable: product.taxable || "Taxable",
         line_tax_id: defaultLineTaxId,
         proBono: false, // Default to false
+        line_discount_mode: "%",
+        line_discount_value: catalogPercentForLines(selectedDiscount),
         sales_stopped: isSalesStopped(product),
         sales_limit_period: limitPeriod ?? product.sales_limit_period ?? null,
         sales_limit: product.sales_limit ?? null,
@@ -4133,6 +4300,7 @@ function MakeSale() {
       defaultLineTaxId,
       readyForSalesItems,
       serviceProducts,
+      selectedDiscount,
     ],
   );
 
@@ -4731,7 +4899,27 @@ function MakeSale() {
                     selected={selectedPaymentModes}
                     onToggle={togglePaymentMode}
                     options={allowedPaymentModeOptions}
+                    disabledIds={disabledPaymentModeIds}
+                    disabledHint={disabledPaymentModeHint}
                   />
+                  {isWalkIn && allowedPaymentModeIds.includes("credit") ? (
+                    <p className="mt-1.5 text-[11px] text-amber-800">
+                      <strong>Credit</strong> (sell inventory now, collect later)
+                      needs a registered customer. Uncheck Walk-in and pick them
+                      from the customer list, then tick Credit.
+                    </p>
+                  ) : null}
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Returning goods to stock? Create a customer credit on{" "}
+                    <Link
+                      to="/app/payments/credit-note/party-customer"
+                      className="font-medium text-[var(--aa-accent)] underline"
+                    >
+                      Sales → Credit Notes
+                    </Link>
+                    . It is saved as a <strong>deposit</strong>, then tick{" "}
+                    <strong>Apply Deposit</strong> here to use it.
+                  </p>
                   <CustomerPaymentBalances
                     showCash={hasCashMode}
                     showTransfer={hasTransferMode}
@@ -4810,7 +4998,15 @@ function MakeSale() {
                       selected={selectedPaymentModes}
                       onToggle={togglePaymentMode}
                       options={allowedPaymentModeOptions}
+                      disabledIds={disabledPaymentModeIds}
+                      disabledHint={disabledPaymentModeHint}
                     />
+                    {isWalkIn && allowedPaymentModeIds.includes("credit") ? (
+                      <p className="mt-1.5 text-[11px] text-amber-800">
+                        Credit needs a registered customer. Uncheck Walk-in,
+                        then tick Credit.
+                      </p>
+                    ) : null}
                     <CustomerPaymentBalances
                       showCash={hasCashMode}
                       showTransfer={hasTransferMode}
@@ -5513,6 +5709,9 @@ function MakeSale() {
                       <th className="w-28 px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
                         Selling Price
                       </th>
+                      <th className="w-40 px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
+                        Discount
+                      </th>
                       <th className="w-40 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
                         VAT
                       </th>
@@ -5835,13 +6034,71 @@ function MakeSale() {
                                         : ""
                                     }`}
                                   />
-                                  {money.lineDiscount > 0 && (
-                                    <div className="mt-1 text-[11px] text-slate-500">
-                                      Disc −NGN{" "}
-                                      {formatNumber1(money.lineDiscount)}
-                                    </div>
-                                  )}
                                 </>
+                              )}
+                            </td>
+                            <td className="px-2 py-3 text-right align-top">
+                              {item.proBono ? (
+                                <span className="text-slate-400">—</span>
+                              ) : (
+                                <div className="ml-auto flex items-center justify-end gap-1">
+                                  <input
+                                    id={`invoice-line-discount-${item.id}`}
+                                    data-scanner-ignore="true"
+                                    type="text"
+                                    inputMode="decimal"
+                                    autoComplete="off"
+                                    placeholder="0"
+                                    title="Line discount — percentage or fixed NGN"
+                                    value={item.line_discount_value ?? ""}
+                                    onChange={(e) => {
+                                      const mode =
+                                        item.line_discount_mode === "flat"
+                                          ? "flat"
+                                          : "%";
+                                      const { next, capped, reason } =
+                                        capDiscountInputValue(
+                                          e.target.value,
+                                          mode,
+                                          getItemGrossAmount(item),
+                                          "the line amount",
+                                        );
+                                      updateCartItem(item.id, {
+                                        line_discount_value: next,
+                                      });
+                                      if (capped && reason) toast.error(reason);
+                                    }}
+                                    className="w-16 rounded border border-slate-300 px-1.5 py-1.5 text-right text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                                  />
+                                  <select
+                                    value={
+                                      item.line_discount_mode === "flat"
+                                        ? "NGN"
+                                        : "%"
+                                    }
+                                    onChange={(e) => {
+                                      const nextMode =
+                                        e.target.value === "%" ? "%" : "flat";
+                                      const { next, capped, reason } =
+                                        capDiscountInputValue(
+                                          item.line_discount_value,
+                                          nextMode,
+                                          getItemGrossAmount(item),
+                                          "the line amount",
+                                        );
+                                      updateCartItem(item.id, {
+                                        line_discount_mode: nextMode,
+                                        line_discount_value: next,
+                                      });
+                                      if (capped && reason) toast.error(reason);
+                                    }}
+                                    className="rounded border border-slate-300 px-1 py-1.5 text-xs text-slate-600 outline-none focus:border-[var(--aa-accent)]"
+                                    title="Percentage or fixed amount"
+                                  >
+                                    <option value="%">%</option>
+                                    <option value="NGN">NGN</option>
+                                  </select>
+                                </div>
                               )}
                             </td>
                             <td className="px-2 py-3 align-top">
@@ -6068,6 +6325,24 @@ function MakeSale() {
                               0.00
                             </td>
                             <td className="px-2 py-3">
+                              <div className="flex items-center justify-end gap-1">
+                                <input
+                                  disabled
+                                  className="w-16 rounded border border-slate-200 bg-slate-50 px-1.5 py-1.5 text-right text-sm text-slate-300"
+                                  defaultValue=""
+                                  placeholder="0"
+                                />
+                                <select
+                                  disabled
+                                  className="rounded border border-slate-200 bg-slate-50 px-1 py-1.5 text-xs text-slate-300"
+                                  defaultValue="%"
+                                >
+                                  <option value="%">%</option>
+                                  <option value="NGN">NGN</option>
+                                </select>
+                              </div>
+                            </td>
+                            <td className="px-2 py-3">
                               <select
                                 disabled
                                 className="w-full min-w-[9rem] rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm text-slate-400"
@@ -6123,7 +6398,7 @@ function MakeSale() {
                   </button>
 
                   <div className="ml-auto flex flex-wrap items-center gap-1.5">
-                    <span className="text-sm text-slate-600">Discount</span>
+                    <span className="text-sm text-slate-600">Invoice discount</span>
                     <select
                       value={selectedDiscount?.discount_id || ""}
                       onChange={(e) => {
@@ -6162,7 +6437,7 @@ function MakeSale() {
                         const { next, capped, reason } = capDiscountInputValue(
                           e.target.value,
                           zohoDiscountMode,
-                          subtotal,
+                          Math.max(0, subtotal - lineDiscountTotal),
                         );
                         setZohoDiscountPercent(next);
                         if (selectedDiscount) setSelectedDiscount(null);
@@ -6182,7 +6457,7 @@ function MakeSale() {
                         const { next, capped, reason } = capDiscountInputValue(
                           zohoDiscountPercent,
                           nextMode,
-                          subtotal,
+                          Math.max(0, subtotal - lineDiscountTotal),
                         );
                         if (next !== zohoDiscountPercent) {
                           setZohoDiscountPercent(next);
@@ -6739,18 +7014,13 @@ function MakeSale() {
                             <div>
                               Less Discount: -₦
                               {formatNumber1(
-                                discountAmount *
-                                  (taxableSubtotal / (subtotal || 1)),
+                                taxableSubtotal - taxableAfterDiscount,
                               )}
                             </div>
                           )}
                           <div className="font-medium text-blue-700">
                             Taxable Amount: ₦
-                            {formatNumber1(
-                              taxableSubtotal -
-                                discountAmount *
-                                  (taxableSubtotal / (subtotal || 1)),
-                            )}
+                            {formatNumber1(taxableAfterDiscount)}
                           </div>
                         </div>
                       </div>
@@ -6758,9 +7028,7 @@ function MakeSale() {
                     {outputVATTaxes
                       .filter((tax) => selectedOutputVAT.includes(tax.id))
                       .map((vatTax) => {
-                        const taxableAmount =
-                          taxableSubtotal -
-                          discountAmount * (taxableSubtotal / (subtotal || 1));
+                        const taxableAmount = taxableAfterDiscount;
                         const rateDecimal = parseFloat(vatTax.rate || 0) / 100;
 
                         // Inclusive: 37,000 includes 7.5% → extract = 2,581.40 | Exclusive: 7.5% on 37,000 = 2,775.00
@@ -6903,9 +7171,7 @@ function MakeSale() {
                   selectedTaxes.length > 0 && (
                     <>
                       {selectedTaxes.map((taxItem) => {
-                        const taxableAmount =
-                          taxableSubtotal -
-                          discountAmount * (taxableSubtotal / (subtotal || 1));
+                        const taxableAmount = taxableAfterDiscount;
                         const taxAmount =
                           (taxableAmount * parseFloat(taxItem.rate)) / 100;
                         return (

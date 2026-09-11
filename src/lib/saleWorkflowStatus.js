@@ -114,15 +114,20 @@ const STATUS_TO_PROCESS = (() => {
   return map;
 })();
 
-/** Line-item edit is allowed only while the invoice is still on Verification Points. */
-export const EDITABLE_SALES_INVOICE_STATUSES = [
-  "submitted",
+/** Invoices currently sitting on Verification Points (cashier / credit / discount). */
+export const VERIFICATION_POINT_STATUSES = [
   "awaiting_payment",
   "awaiting_cashier_confirm",
   "awaiting_discount_approval",
   "awaiting_credit_approval",
   "awaiting_payment_mode_approval",
   "awaiting_payment_method",
+];
+
+/** Line-item edit is allowed only while the invoice is still on Verification Points. */
+export const EDITABLE_SALES_INVOICE_STATUSES = [
+  "submitted",
+  ...VERIFICATION_POINT_STATUSES,
 ];
 
 /**

@@ -106,10 +106,14 @@ export default function SalesPerProductReport() {
   const facilityId = activeBusiness?.id || "";
 
   const [fromDate, setFromDate] = useState(
-    location.state?.fromDate || moment().startOf("month").format("YYYY-MM-DD"),
+    location.state?.fromDate ||
+      new URLSearchParams(location.search).get("fromDate") ||
+      moment().startOf("month").format("YYYY-MM-DD"),
   );
   const [toDate, setToDate] = useState(
-    location.state?.toDate || moment().format("YYYY-MM-DD"),
+    location.state?.toDate ||
+      new URLSearchParams(location.search).get("toDate") ||
+      moment().format("YYYY-MM-DD"),
   );
   const [byLocation, setByLocation] = useState(false);
   const [locationFilter, setLocationFilter] = useState("");

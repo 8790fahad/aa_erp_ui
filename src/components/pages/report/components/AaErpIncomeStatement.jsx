@@ -52,16 +52,18 @@ const AaErpIncomeStatement = () => {
     const today = new Date().toISOString().split("T")[0];
     const currentYear = new Date().getFullYear();
     const firstDayOfYear = `${currentYear}-01-01`;
+    const params = new URLSearchParams(location.search);
+    const fromParam = params.get("fromDate") || location.state?.fromDate;
+    const toParam = params.get("toDate") || location.state?.toDate;
 
-    // Check if dates are passed from navigation
-    if (location.state?.fromDate && location.state?.toDate) {
-      setFromDate(location.state.fromDate);
-      setToDate(location.state.toDate);
+    if (fromParam && toParam) {
+      setFromDate(fromParam);
+      setToDate(toParam);
     } else {
       setFromDate(firstDayOfYear);
       setToDate(today);
     }
-  }, [location.state]);
+  }, [location.state, location.search]);
 
   const fetchIncomeStatementData = useCallback(
     async (params = {}) => {

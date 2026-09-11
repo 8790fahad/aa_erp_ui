@@ -48,6 +48,23 @@ import { Input } from "@/components/ui/input";
 import useQuery from "@/hooks/useQuery";
 import { isProductTaxable, normalizeTaxableStatus } from "@/utils/taxableStatus";
 
+function txQtyIn(tx) {
+  return parseFloat(tx.qty_in ?? tx.quantity_in ?? 0) || 0;
+}
+
+function txQtyOut(tx) {
+  return parseFloat(tx.qty_out ?? tx.quantity_out ?? 0) || 0;
+}
+
+function txDelta(tx) {
+  return txQtyIn(tx) - txQtyOut(tx);
+}
+
+function txTime(tx) {
+  const raw = tx.createdAt || tx.inserted_time || tx.receive_date;
+  return raw ? moment(raw).valueOf() : 0;
+}
+
 export default function InventoryItemView() {
   const { activeBusiness } = useSelector((state) => state.auth);
   const { id: productId } = useParams();
@@ -63,6 +80,8 @@ export default function InventoryItemView() {
   const [summaryStats, setSummaryStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState([]);
+  const [balanceBroughtForward, setBalanceBroughtForward] = useState(0);
+  const [periodClosingBalance, setPeriodClosingBalance] = useState(0);
   const [filters, setFilters] = useState({
     type: "all",
     searchTerm: "",
@@ -72,6 +91,7 @@ export default function InventoryItemView() {
     toDate: "",
     branchId: branchIdFromUrl || "all",
   });
+  const [dateDraft, setDateDraft] = useState({ fromDate: "", toDate: "" });
 
   useEffect(() => {
     if (!activeBusiness?.id) return;
@@ -95,8 +115,11 @@ export default function InventoryItemView() {
     }
   }, [branchIdFromUrl]);
 
-  const fetchItemDetails = () => {
+  const fetchItemDetails = (dateRange) => {
     if (!productId || !activeBusiness?.id) return;
+
+    const fromDate = dateRange?.fromDate ?? filters.fromDate;
+    const toDate = dateRange?.toDate ?? filters.toDate;
 
     setLoading(true);
     const salesTypeParam = type || "all";
@@ -105,8 +128,8 @@ export default function InventoryItemView() {
       facilityId: activeBusiness.id,
       salesType: salesTypeParam,
     });
-    if (filters.fromDate) params.set("fromDate", filters.fromDate);
-    if (filters.toDate) params.set("toDate", filters.toDate);
+    if (fromDate) params.set("fromDate", fromDate);
+    if (toDate) params.set("toDate", toDate);
     if (filters.branchId && filters.branchId !== "all") {
       params.set("branchId", String(filters.branchId));
     }
@@ -120,6 +143,9 @@ export default function InventoryItemView() {
           setTransactionHistory(resp.data?.transactionHistory || []);
           setFilteredHistory(resp.data?.transactionHistory || []);
           setSummaryStats(resp.data?.summaryStats || null);
+          setBalanceBroughtForward(
+            Number(resp.data?.balanceBroughtForward || 0),
+          );
         } else {
           toast.error("Failed to load item details.");
         }
@@ -134,20 +160,29 @@ export default function InventoryItemView() {
 
   useEffect(() => {
     fetchItemDetails();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch on product/facility/date/warehouse
-  }, [
-    productId,
-    activeBusiness?.id,
-    filters.fromDate,
-    filters.toDate,
-    filters.branchId,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch on product/facility/warehouse; dates apply on Run
+  }, [productId, activeBusiness?.id, filters.branchId]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({
       ...prev,
       [key]: value
     }));
+  };
+
+  const runDateFilter = () => {
+    const next = {
+      fromDate: dateDraft.fromDate,
+      toDate: dateDraft.toDate,
+    };
+    setFilters((prev) => ({ ...prev, ...next }));
+    fetchItemDetails(next);
+  };
+
+  const clearDates = () => {
+    setDateDraft({ fromDate: "", toDate: "" });
+    setFilters((prev) => ({ ...prev, fromDate: "", toDate: "" }));
+    fetchItemDetails({ fromDate: "", toDate: "" });
   };
 
   const handleWarehouseChange = (value) => {
@@ -165,27 +200,15 @@ export default function InventoryItemView() {
 
   // Apply filters whenever filters or transaction history changes
   useEffect(() => {
+    const opening = Number(balanceBroughtForward) || 0;
+
     if (!transactionHistory.length) {
       setFilteredHistory([]);
+      setPeriodClosingBalance(opening);
       return;
     }
 
     let filtered = [...transactionHistory];
-
-    // Filter by type
-    if (filters.type !== "all") {
-      const wanted =
-        filters.type === "in"
-          ? "IN"
-          : filters.type === "out"
-            ? "OUT"
-            : filters.type === "reverse"
-              ? "REVERSE"
-              : filters.type === "return"
-                ? "RETURN"
-                : String(filters.type).toUpperCase();
-      filtered = filtered.filter((tx) => tx.movement_type === wanted);
-    }
 
     // Filter by date range (client-side as well, using createdAt / inserted_time)
     if (filters.fromDate || filters.toDate) {
@@ -206,10 +229,40 @@ export default function InventoryItemView() {
       );
     }
 
+    const chrono = [...filtered].sort((a, b) => {
+      const timeDiff = txTime(a) - txTime(b);
+      if (timeDiff !== 0) return timeDiff;
+      return (Number(a.id) || 0) - (Number(b.id) || 0);
+    });
+
+    let running = opening;
+    const withBalance = chrono.map((tx) => {
+      running += txDelta(tx);
+      return { ...tx, running_balance: running };
+    });
+    setPeriodClosingBalance(running);
+
+    let display = withBalance;
+
+    // Filter by type (running balance already includes every movement in the period)
+    if (filters.type !== "all") {
+      const wanted =
+        filters.type === "in"
+          ? "IN"
+          : filters.type === "out"
+            ? "OUT"
+            : filters.type === "reverse"
+              ? "REVERSE"
+              : filters.type === "return"
+                ? "RETURN"
+                : String(filters.type).toUpperCase();
+      display = display.filter((tx) => tx.movement_type === wanted);
+    }
+
     // Filter by search term
     if (filters.searchTerm) {
       const term = filters.searchTerm.toLowerCase();
-      filtered = filtered.filter(tx => 
+      display = display.filter(tx =>
         (tx.reference_number && tx.reference_number.toLowerCase().includes(term)) ||
         (tx.source_info && tx.source_info.toLowerCase().includes(term)) ||
         (tx.destination_info && tx.destination_info.toLowerCase().includes(term)) ||
@@ -219,47 +272,74 @@ export default function InventoryItemView() {
     }
 
     // Sort
-    filtered.sort((a, b) => {
+    display.sort((a, b) => {
       let comparison = 0;
       switch (filters.sortBy) {
         case 'date':
-          comparison = new Date(b.createdAt) - new Date(a.createdAt);
+          comparison = txTime(b) - txTime(a);
           break;
         case 'quantity':
-          const qtyA = a.movement_type === 'IN' ? a.quantity_in : a.quantity_out;
-          const qtyB = b.movement_type === 'IN' ? b.quantity_in : b.quantity_out;
-          comparison = qtyB - qtyA;
+          comparison = Math.max(txQtyIn(b), txQtyOut(b)) - Math.max(txQtyIn(a), txQtyOut(a));
           break;
         case 'value':
           comparison = (b.transaction_value || 0) - (a.transaction_value || 0);
           break;
         default:
-          comparison = new Date(b.createdAt) - new Date(a.createdAt);
+          comparison = txTime(b) - txTime(a);
       }
-      
+
       return filters.sortOrder === 'desc' ? comparison : -comparison;
     });
 
-    setFilteredHistory(filtered);
-  }, [transactionHistory, filters]);
+    setFilteredHistory(display);
+  }, [transactionHistory, filters, balanceBroughtForward]);
 
   const exportToCSV = () => {
-    // Create CSV content
     const headers = [
-      'Date', 'Type', 'Reference',
-      'Quantity In', 'Quantity Out'
+      "Date",
+      "Type",
+      "Reference",
+      "Warehouse",
+      "Quantity In",
+      "Quantity Out",
+      "Balance",
     ];
-    
-    const csvContent = [
-      headers.join(','),
-      ...filteredHistory.map(tx => [
-        `"${moment(tx.inserted_time || tx.createdAt).format('DD/MM/YYYY hh:mm A')}"`,
+    const bfDate = filters.fromDate
+      ? moment(filters.fromDate).format("DD/MM/YYYY")
+      : "";
+    const bfLine = [
+      `"${bfDate}"`,
+      `""`,
+      `"Balance brought forward"`,
+      `""`,
+      `""`,
+      `""`,
+      `"${Number(balanceBroughtForward) || 0}"`,
+    ].join(",");
+    const closingLine = [
+      `""`,
+      `""`,
+      `"Closing balance"`,
+      `""`,
+      `""`,
+      `""`,
+      `"${Number(periodClosingBalance) || 0}"`,
+    ].join(",");
+    const txLines = filteredHistory.map((tx) =>
+      [
+        `"${moment(tx.inserted_time || tx.createdAt).format("DD/MM/YYYY hh:mm A")}"`,
         `"${tx.movement_type}"`,
-        `"${tx.reference_number || ''}"`,
-        `"${tx.qty_in || 0}"`,
-        `"${tx.qty_out || 0}"`
-      ].join(','))
-    ].join('\n');
+        `"${tx.reference_number || ""}"`,
+        `"${tx.warehouse_name || tx.branch_name || ""}"`,
+        `"${txQtyIn(tx)}"`,
+        `"${txQtyOut(tx)}"`,
+        `"${tx.running_balance ?? ""}"`,
+      ].join(","),
+    );
+
+    const csvContent = [headers.join(","), bfLine, ...txLines, closingLine].join(
+      "\n",
+    );
 
     // Create download link
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -372,6 +452,37 @@ export default function InventoryItemView() {
       </div>
     );
   }
+
+  const bfDateLabel = filters.fromDate
+    ? moment(filters.fromDate).format("DD/MM/YYYY")
+    : "";
+  const broughtForwardRow = (
+    <TableRow className="text-xs bg-amber-50 hover:bg-amber-50">
+      <TableCell className="py-1.5 whitespace-nowrap">
+        {bfDateLabel ? (
+          <div className="font-medium text-amber-900">{bfDateLabel}</div>
+        ) : (
+          <span className="text-amber-800/70">—</span>
+        )}
+      </TableCell>
+      <TableCell className="py-1.5">
+        <Badge
+          variant="outline"
+          className="text-xs border-amber-300 bg-amber-100 text-amber-900"
+        >
+          B/F
+        </Badge>
+      </TableCell>
+      <TableCell className="py-1.5 font-medium text-amber-950" colSpan={2}>
+        Balance brought forward
+      </TableCell>
+      <TableCell className="py-1.5 text-right text-gray-300">—</TableCell>
+      <TableCell className="py-1.5 text-right text-gray-300">—</TableCell>
+      <TableCell className="py-1.5 text-right font-bold tabular-nums text-amber-950">
+        {formatNumber1(balanceBroughtForward)}
+      </TableCell>
+    </TableRow>
+  );
 
   return (
     <div className="p-4">
@@ -533,9 +644,12 @@ export default function InventoryItemView() {
                     <Input
                       id="history-from-date"
                       type="date"
-                      value={filters.fromDate}
+                      value={dateDraft.fromDate}
                       onChange={(e) =>
-                        handleFilterChange("fromDate", e.target.value)
+                        setDateDraft((prev) => ({
+                          ...prev,
+                          fromDate: e.target.value,
+                        }))
                       }
                       className="h-8 w-[9.5rem] text-xs"
                     />
@@ -550,27 +664,35 @@ export default function InventoryItemView() {
                     <Input
                       id="history-to-date"
                       type="date"
-                      value={filters.toDate}
-                      min={filters.fromDate || undefined}
+                      value={dateDraft.toDate}
+                      min={dateDraft.fromDate || undefined}
                       onChange={(e) =>
-                        handleFilterChange("toDate", e.target.value)
+                        setDateDraft((prev) => ({
+                          ...prev,
+                          toDate: e.target.value,
+                        }))
                       }
                       className="h-8 w-[9.5rem] text-xs"
                     />
                   </div>
-                  {(filters.fromDate || filters.toDate) && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 px-3 text-xs bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
+                    onClick={runDateFilter}
+                  >
+                    Run
+                  </Button>
+                  {(dateDraft.fromDate ||
+                    dateDraft.toDate ||
+                    filters.fromDate ||
+                    filters.toDate) && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       className="h-8 px-2 text-xs text-slate-500"
-                      onClick={() =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          fromDate: "",
-                          toDate: "",
-                        }))
-                      }
+                      onClick={clearDates}
                     >
                       Clear dates
                     </Button>
@@ -658,19 +780,24 @@ export default function InventoryItemView() {
                         <TableHead className="text-xs py-2">Warehouse</TableHead>
                         <TableHead className="text-xs py-2 text-right">Qty In</TableHead>
                         <TableHead className="text-xs py-2 text-right">Qty Out</TableHead>
+                        <TableHead className="text-xs py-2 text-right whitespace-nowrap">Balance</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
+                      {broughtForwardRow}
                       {filteredHistory.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                          <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                             <FileText className="h-8 w-8 text-gray-300 mx-auto mb-2" />
                             No transaction history found
+                            {filters.fromDate || filters.toDate
+                              ? " in this date range"
+                              : ""}
                           </TableCell>
                         </TableRow>
                       ) : (
                         filteredHistory.map((tx, index) => (
-                          <TableRow key={index} className="text-xs hover:bg-gray-50">
+                          <TableRow key={tx.id || index} className="text-xs hover:bg-gray-50">
                             <TableCell className="py-1.5 whitespace-nowrap">
                               <div className="font-medium">{moment(tx.createdAt).format('DD/MM/YYYY')}</div>
                               <div className="text-gray-400">{moment(tx.createdAt).format('hh:mm A')}</div>
@@ -723,19 +850,41 @@ export default function InventoryItemView() {
                             </TableCell>
 
                             <TableCell className="py-1.5 text-right">
-                              {parseFloat(tx.qty_in || 0) > 0 ? (
-                                <span className="text-green-600 font-medium">+{formatNumber1(tx.qty_in)}</span>
+                              {txQtyIn(tx) > 0 ? (
+                                <span className="text-green-600 font-medium">+{formatNumber1(txQtyIn(tx))}</span>
                               ) : <span className="text-gray-300">-</span>}
                             </TableCell>
 
                             <TableCell className="py-1.5 text-right">
-                              {parseFloat(tx.qty_out || 0) > 0 ? (
-                                <span className="text-red-600 font-medium">-{formatNumber1(tx.qty_out)}</span>
+                              {txQtyOut(tx) > 0 ? (
+                                <span className="text-red-600 font-medium">-{formatNumber1(txQtyOut(tx))}</span>
                               ) : <span className="text-gray-300">-</span>}
+                            </TableCell>
+
+                            <TableCell className="py-1.5 text-right font-semibold tabular-nums text-slate-900">
+                              {formatNumber1(tx.running_balance ?? 0)}
                             </TableCell>
                           </TableRow>
                         ))
                       )}
+                      <TableRow className="text-xs bg-slate-50 hover:bg-slate-50">
+                        <TableCell className="py-1.5" colSpan={4}>
+                          <span className="font-semibold text-slate-800">
+                            Closing balance
+                          </span>
+                          {filters.fromDate || filters.toDate ? (
+                            <span className="text-slate-500 font-normal">
+                              {" "}
+                              for selected dates
+                            </span>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="py-1.5 text-right text-gray-300">—</TableCell>
+                        <TableCell className="py-1.5 text-right text-gray-300">—</TableCell>
+                        <TableCell className="py-1.5 text-right font-bold tabular-nums text-slate-900">
+                          {formatNumber1(periodClosingBalance)}
+                        </TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </div>
@@ -772,6 +921,22 @@ export default function InventoryItemView() {
                     {formatNumber1(summaryStats?.totalIssued || 0)} {item.unit_of_measure || ''}
                   </span>
                 </div>
+                {(filters.fromDate || filters.toDate) && (
+                  <>
+                    <div className="flex justify-between items-center py-1 border-b">
+                      <span className="text-xs text-gray-500">Balance brought forward</span>
+                      <span className="text-sm font-medium tabular-nums">
+                        {formatNumber1(balanceBroughtForward)} {item.unit_of_measure || ""}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b">
+                      <span className="text-xs text-gray-500">Closing (period)</span>
+                      <span className="text-sm font-medium tabular-nums">
+                        {formatNumber1(periodClosingBalance)} {item.unit_of_measure || ""}
+                      </span>
+                    </div>
+                  </>
+                )}
                 <div className="flex justify-between items-center py-1 border-b">
                   <span className="text-xs text-gray-600 flex items-center gap-1">
                     <Package className="h-3 w-3 text-blue-500" />

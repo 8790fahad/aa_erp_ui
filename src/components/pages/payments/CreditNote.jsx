@@ -87,7 +87,8 @@ export default function CreditNote() {
         apply: "Apply to Invoices",
         invoice: "Invoice",
         invoices: "invoices",
-        subtitle: "Returns, refunds, or corrections for customers",
+        subtitle:
+          "Returns post to customer deposit — apply on Create Invoice with Apply Deposit",
       };
 
   const [view, setView] = useState("list"); // list | create
