@@ -68,6 +68,9 @@ const WORKFLOW_STEPS = [
 /** Same shape as MakeSale lines view (`/account/get-ready-for-sales*`). */
 const normalizeReadyForSalesItem = (item) => {
   const balance = parseFloat(item.balance ?? item.qty ?? 0) || 0;
+  const pending = Math.max(0, parseFloat(item.pending_to_collect) || 0);
+  const rawTotal = parseFloat(item.total);
+  const total = Number.isFinite(rawTotal) ? rawTotal : balance + pending;
   const productId = item.product_id || item.sku || item.item_code || "";
   return {
     ...item,
@@ -79,6 +82,8 @@ const normalizeReadyForSalesItem = (item) => {
     sku: item.sku || item.product_id || "",
     qty: balance,
     balance,
+    pending_to_collect: pending,
+    total,
     branch_name: item.branch_name || "for sales",
     branch_id: item.branch_id ?? item.branchId ?? null,
     branchId: item.branchId ?? item.branch_id ?? null,
@@ -358,7 +363,11 @@ export default function GoodsTransfer() {
         }
         const rows = (resp.results || resp.data || [])
           .map(normalizeReadyForSalesItem)
-          .filter((item) => (parseFloat(item.qty ?? item.balance) || 0) > 0);
+          .filter((item) => {
+            const balance = parseFloat(item.qty ?? item.balance) || 0;
+            const pending = parseFloat(item.pending_to_collect) || 0;
+            return balance > 0 || pending > 0;
+          });
         setGoodsListItems(rows);
       },
       () => {
@@ -1480,7 +1489,7 @@ export default function GoodsTransfer() {
                 ) : filteredGoodsList.length === 0 ? (
                   <div className="text-center py-12 text-slate-500">
                     <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>No transferable goods in stock at this warehouse</p>
+                    <p>No goods or pending collections at this warehouse</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -1491,8 +1500,10 @@ export default function GoodsTransfer() {
                           <th className="px-3 py-2.5 text-left">SKU</th>
                           <th className="px-3 py-2.5 text-left">Item Type</th>
                           <th className="px-3 py-2.5 text-right">
-                            Available Stock
+                            Pending to collect
                           </th>
+                          <th className="px-3 py-2.5 text-right">Balance</th>
+                          <th className="px-3 py-2.5 text-right">Total</th>
                           <th className="px-3 py-2.5 text-left">UoM</th>
                           {canWriteOff && (
                             <th className="px-3 py-2.5 text-center">Actions</th>
@@ -1515,6 +1526,11 @@ export default function GoodsTransfer() {
                               <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-sky-50 text-sky-800">
                                 {item.item_type || "—"}
                               </span>
+                            </td>
+                            <td className="px-3 py-2.5 text-right tabular-nums font-medium text-amber-700">
+                              {formatNumber1(
+                                parseFloat(item.pending_to_collect) || 0,
+                              )}
                             </td>
                             <td className="px-3 py-2.5 text-right">
                               <button
@@ -1552,9 +1568,16 @@ export default function GoodsTransfer() {
                                 className="tabular-nums font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800"
                               >
                                 {formatNumber1(
-                                  parseFloat(item.qty ?? item.balance) || 0,
+                                  parseFloat(item.balance ?? item.qty) || 0,
                                 )}
                               </button>
+                            </td>
+                            <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-900">
+                              {formatNumber1(
+                                parseFloat(item.total) ||
+                                  (parseFloat(item.balance ?? item.qty) || 0) +
+                                    (parseFloat(item.pending_to_collect) || 0),
+                              )}
                             </td>
                             <td className="px-3 py-2.5 text-slate-600">
                               {item.unit_of_measure || item.uom || "Pcs"}

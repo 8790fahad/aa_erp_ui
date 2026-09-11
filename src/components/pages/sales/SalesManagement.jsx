@@ -170,7 +170,9 @@ export default function SalesManagement() {
           ];
           const hasCash = privs.includes("Cash Collection");
           const hasTransfer = privs.includes("Transfer Collection");
-          const hasCard = privs.includes("Card Collection");
+          const hasCard =
+            privs.includes("Card Collection") ||
+            privs.includes("POS Collection");
           const hasAnyCollectionTab =
             hasCash ||
             hasTransfer ||
@@ -391,9 +393,9 @@ export default function SalesManagement() {
       return {
         title: "Next: Discount approval",
         description:
-          "Approve the discount at Verification Points before cash/transfer collection.",
-        to: "/app/payments/verification-points",
-        label: "Open Verification Points",
+          "Approve the discount on Collection Reconciliation before cash/transfer collection.",
+        to: "/app/payments/collection-reconciliation?tab=discount",
+        label: "Open Discount approvals",
       };
     }
     if (s === "awaiting_credit_approval") {

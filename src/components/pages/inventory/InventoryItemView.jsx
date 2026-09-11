@@ -175,11 +175,17 @@ export default function InventoryItemView() {
 
     // Filter by type
     if (filters.type !== "all") {
-      filtered = filtered.filter((tx) =>
+      const wanted =
         filters.type === "in"
-          ? tx.movement_type === "IN"
-          : tx.movement_type === "OUT",
-      );
+          ? "IN"
+          : filters.type === "out"
+            ? "OUT"
+            : filters.type === "reverse"
+              ? "REVERSE"
+              : filters.type === "return"
+                ? "RETURN"
+                : String(filters.type).toUpperCase();
+      filtered = filtered.filter((tx) => tx.movement_type === wanted);
     }
 
     // Filter by date range (client-side as well, using createdAt / inserted_time)
@@ -619,6 +625,7 @@ export default function InventoryItemView() {
                       <SelectItem value="all">All Types</SelectItem>
                       <SelectItem value="in">Received (IN)</SelectItem>
                       <SelectItem value="out">Issued (OUT)</SelectItem>
+                      <SelectItem value="reverse">Reverse</SelectItem>
                     </SelectContent>
                   </Select>
                   
@@ -692,18 +699,36 @@ export default function InventoryItemView() {
 
                             <TableCell className="py-1.5">
                               <Badge
-                                variant={tx.movement_type === 'IN' ? 'default' : 'destructive'}
-                                className="text-xs"
+                                variant={
+                                  tx.movement_type === "IN"
+                                    ? "default"
+                                    : tx.movement_type === "OUT"
+                                      ? "destructive"
+                                      : "outline"
+                                }
+                                className={
+                                  tx.movement_type === "REVERSE"
+                                    ? "text-xs border-amber-300 bg-amber-50 text-amber-800"
+                                    : tx.movement_type === "RETURN"
+                                      ? "text-xs border-sky-300 bg-sky-50 text-sky-800"
+                                      : "text-xs"
+                                }
                               >
-                                {tx.movement_type}
+                                {tx.movement_type === "REVERSE"
+                                  ? "Reverse"
+                                  : tx.movement_type === "RETURN"
+                                    ? "Return"
+                                    : tx.movement_type}
                               </Badge>
                             </TableCell>
 
                             <TableCell className="py-1.5">
                               <div className="font-medium">{tx.reference_number || '-'}</div>
-                              {tx.supplier_code && (
+                              {tx.movement_type === "REVERSE" ? (
+                                <div className="text-amber-700">Invoice reversed</div>
+                              ) : tx.supplier_code ? (
                                 <div className="text-gray-400">{tx.supplier_code}</div>
-                              )}
+                              ) : null}
                             </TableCell>
 
                             <TableCell className="py-1.5">
@@ -788,6 +813,10 @@ export default function InventoryItemView() {
                 <div className="flex justify-between py-1 border-b">
                   <span className="text-xs text-gray-500">Sales</span>
                   <span className="text-sm">{summaryStats?.salesCount || 0}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b">
+                  <span className="text-xs text-gray-500">Reverse</span>
+                  <span className="text-sm">{summaryStats?.reverseCount || 0}</span>
                 </div>
                 <div className="flex justify-between py-1">
                   <span className="text-xs text-gray-500">WIP</span>

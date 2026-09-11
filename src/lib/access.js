@@ -88,13 +88,17 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "Apply Deposit Payment",
   "Cash Collection",
   "Transfer Collection",
+  "POS Collection",
   "Card Collection",
   "Credit Collection",
   "Discount Collection",
   "Make Deposit",
   "Apply Deposit",
   "Collection Reconciliation",
+  "Hand-in",
+  "History",
   "Cash",
+  "POS",
   "Card",
   "Transfer",
   "Imprest",
@@ -132,21 +136,45 @@ export const ALL_VENDORS_PRIVILEGE = "All Vendors";
 export const INVENTORY_VENDORS_PRIVILEGE = "Inventory Vendors";
 export const EXPENSE_VENDORS_PRIVILEGE = "Expense Vendors";
 export const COLLECTION_RECONCILIATION_PRIVILEGE = "Collection Reconciliation";
+export const DISCOUNT_COLLECTION_PRIVILEGE = "Discount Collection";
+export const HAND_IN_PRIVILEGE = "Hand-in";
+export const RECONCILIATION_HISTORY_PRIVILEGE = "History";
 export const RECONCILE_CASH_PRIVILEGE = "Cash";
-export const RECONCILE_CARD_PRIVILEGE = "Card";
+export const RECONCILE_CARD_PRIVILEGE = "POS";
+export const RECONCILE_CARD_PRIVILEGE_LEGACY = "Card";
 export const RECONCILE_TRANSFER_PRIVILEGE = "Transfer";
 
 const ALL_RECONCILIATION_MODES = ["cash", "card", "transfer"];
 
 const RECONCILIATION_MODE_PRIVILEGES = {
-  cash: RECONCILE_CASH_PRIVILEGE,
-  card: RECONCILE_CARD_PRIVILEGE,
-  transfer: RECONCILE_TRANSFER_PRIVILEGE,
+  cash: [RECONCILE_CASH_PRIVILEGE],
+  card: [RECONCILE_CARD_PRIVILEGE, RECONCILE_CARD_PRIVILEGE_LEGACY],
+  transfer: [RECONCILE_TRANSFER_PRIVILEGE],
 };
 
 /**
+ * Collection Reconciliation page tabs.
+ * Hand-in / History / Discount Collection are each granted on their own.
+ * Collection Reconciliation parent (no tab children) still opens Hand-in and
+ * History so existing supervisors are not locked out. Discount is never
+ * auto-enabled from the parent.
+ */
+export function allowedCollectionReconciliationTabs(functionalities) {
+  if (hasFullAccess(functionalities)) return ["handin", "history", "discount"];
+  const funcs = Array.isArray(functionalities) ? functionalities : [];
+  const hasParent = funcs.includes(COLLECTION_RECONCILIATION_PRIVILEGE);
+  const tabs = [];
+  if (funcs.includes(HAND_IN_PRIVILEGE) || hasParent) tabs.push("handin");
+  if (funcs.includes(RECONCILIATION_HISTORY_PRIVILEGE) || hasParent) {
+    tabs.push("history");
+  }
+  if (funcs.includes(DISCOUNT_COLLECTION_PRIVILEGE)) tabs.push("discount");
+  return tabs;
+}
+
+/**
  * Payment modes shown on Collection Reconciliation.
- * Check Cash / Card / Transfer under Collection Reconciliation.
+ * Check Cash / POS / Transfer under Collection Reconciliation.
  * Parent with no child grants keeps every mode (existing supervisors).
  */
 export function allowedReconciliationModes(functionalities) {
@@ -156,7 +184,9 @@ export function allowedReconciliationModes(functionalities) {
     return [...ALL_RECONCILIATION_MODES];
   }
   const granted = ALL_RECONCILIATION_MODES.filter((id) =>
-    funcs.includes(RECONCILIATION_MODE_PRIVILEGES[id]),
+    (RECONCILIATION_MODE_PRIVILEGES[id] || []).some((key) =>
+      funcs.includes(key),
+    ),
   );
   return granted.length ? granted : [...ALL_RECONCILIATION_MODES];
 }
@@ -366,6 +396,10 @@ export function collectSubFunctionalityTitles(item) {
     (nodes || []).forEach((node) => {
       const title = String(node?.title || "").trim();
       if (title) titles.push(title);
+      (node?.aliases || []).forEach((alias) => {
+        const a = String(alias || "").trim();
+        if (a) titles.push(a);
+      });
       if (node?.subFunctionalities?.length) walk(node.subFunctionalities);
     });
   };
@@ -386,6 +420,9 @@ export function privilegeKeysForItem(item) {
     keys.push(...item.privileges);
   } else if (item.privileges) {
     keys.push(item.privileges);
+  }
+  if (Array.isArray(item.aliases) && item.aliases.length) {
+    keys.push(...item.aliases);
   }
   return [
     ...new Set(

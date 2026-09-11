@@ -1324,6 +1324,8 @@ export default function Markup() {
         multiplier_id: data.multiplier_id || selectedItem?.multiplier_id,
         sku: data.sku || data.item_code || selectedItem?.sku,
         unit_of_measure: data.unit_of_measure || selectedItem?.unit_of_measure,
+        facilityId: activeBusiness?.id,
+        userId: user?.id || user?.user_id,
       };
 
       _postApi(
@@ -5557,6 +5559,7 @@ export default function Markup() {
       expiry_date: item.expiry_date || null,
       selling_price: sellingPrice,
       facilityId: activeBusiness?.id,
+      userId: user?.id || user?.user_id,
     };
 
     _putApi(

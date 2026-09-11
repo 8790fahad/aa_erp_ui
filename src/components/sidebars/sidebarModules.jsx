@@ -453,15 +453,17 @@ export const modules = [
         subFunctionalities: [
           { title: "Cash Collection" },
           { title: "Transfer Collection" },
-          { title: "Card Collection" },
+          { title: "POS Collection", aliases: ["Card Collection"] },
           { title: "Credit Collection" },
           { title: "Apply Deposit" },
-          { title: "Discount Collection" },
           {
             title: "Collection Reconciliation",
             subFunctionalities: [
+              { title: "Hand-in" },
+              { title: "History" },
+              { title: "Discount Collection" },
               { title: "Cash" },
-              { title: "Card" },
+              { title: "POS", aliases: ["Card"] },
               { title: "Transfer" },
             ],
           },

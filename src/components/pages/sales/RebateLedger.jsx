@@ -1688,7 +1688,14 @@ export default function RebateLedger() {
 
       {tab === "rebates" && (
         <section className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-slate-500">
+              Progress reminders email Rebate Ledger at{" "}
+              <span className="font-semibold text-slate-700">50%</span>,{" "}
+              <span className="font-semibold text-slate-700">75%</span>, and{" "}
+              <span className="font-semibold text-slate-700">100%</span> of
+              target qty, including the rebate %.
+            </p>
             <Button
               type="button"
               size="sm"

@@ -682,7 +682,9 @@ export default function VatSettings() {
         >
           <h5 className="mb-0 fw-bold">VAT position</h5>
           <small className="opacity-75">
-            Debits and credits on the selected VAT Recoverable head only
+            Debits and credits on the selected VAT Recoverable head only.
+            Payment reminder emails go out on the 21st of each month (deadline
+            is the 22nd) for the previous month.
           </small>
         </div>
 

@@ -137,6 +137,11 @@ const PayrollPage = () => {
       </div>
 
       <div className="p-2 px-0 pt-6">
+        <p className="text-xs text-muted-foreground mb-4 px-1">
+          After payroll is initiated, people with Payroll Payment access are emailed.
+          When payment is released, each employee is sent their payment slip
+          (using the email on their linked user account).
+        </p>
         {tab === "run" && canViewTab("Run Payroll") && <RunPayrollTab />}
         {tab === "history" && canViewTab("Payroll History") && (
           <PayrollHistory mode="history" />

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowRightLeft,
@@ -26,6 +26,7 @@ import {
   Pencil,
   Split,
   Trash2,
+  UserPlus,
   Wallet,
   ChevronRight,
 } from "lucide-react";
@@ -33,7 +34,7 @@ import ExcelJS from "exceljs";
 import moment from "moment";
 import { toast } from "sonner";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
-import { hasFullAccess, isBusinessOwner } from "@/lib/access";
+import { hasFullAccess, isBusinessOwner, DISCOUNT_COLLECTION_PRIVILEGE, HAND_IN_PRIVILEGE, RECONCILIATION_HISTORY_PRIVILEGE, COLLECTION_RECONCILIATION_PRIVILEGE } from "@/lib/access";
 import { formatNumber1 } from "@/components/router/utilities";
 import {
   POSTING_DATE_MIN,
@@ -66,6 +67,13 @@ import { useAdvancePaymentAccounts, isCashInHandHead } from "@/components/common
 import { WorkflowStatusBadge, isEditableSalesInvoiceStatus, isProcessedSalesInvoiceStatus, alreadyProcessedInvoiceMessage } from "@/lib/saleWorkflowStatus.js";
 import useScanDetection from "@/hooks/useScanDetection";
 import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
+import { getCustomers } from "@/redux/actions/customer";
+import {
+  normalizeNigerianPhone,
+  isValidNigerianPhone,
+  sanitizePhoneInput,
+  NIGERIAN_PHONE_HINT,
+} from "@/lib/nigerianPhone";
 import CreditSaleInvoiceImproved from "@/components/pages/sales/CreditSaleInvoiceImproved";
 import CreateImprestDrawer from "@/components/common/CreateImprestDrawer";
 import RecordSupplierPaymentForm from "@/components/pages/payments/RecordSupplierPaymentForm";
@@ -465,7 +473,7 @@ const METHOD_TABS = [
     id: "card",
     label: "POS",
     icon: Nfc,
-    privilege: "Card Collection",
+    privilege: "POS Collection",
   },
   {
     id: "credit",
@@ -478,12 +486,6 @@ const METHOD_TABS = [
     label: "Apply Deposit",
     icon: Wallet,
     privilege: "Apply Deposit",
-  },
-  {
-    id: "discount",
-    label: "Discount",
-    icon: Percent,
-    privilege: "Discount Collection",
   },
 ];
 
@@ -1291,6 +1293,7 @@ async function saveElementAsPdf(el, filename) {
 }
 
 export default function ReceivePayment() {
+  const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1316,6 +1319,17 @@ export default function ReceivePayment() {
     isBusinessOwner(user, activeBusiness) ||
     hasFullAccess(functionalities) ||
     functionalities.includes(EDIT_INVOICE_PRIVILEGE);
+  const canDiscountCollection =
+    isBusinessOwner(user, activeBusiness) ||
+    hasFullCollectionAccess ||
+    functionalities.includes(DISCOUNT_COLLECTION_PRIVILEGE);
+  const canOpenCollectionReconciliation =
+    isBusinessOwner(user, activeBusiness) ||
+    hasFullCollectionAccess ||
+    functionalities.includes(COLLECTION_RECONCILIATION_PRIVILEGE) ||
+    functionalities.includes(HAND_IN_PRIVILEGE) ||
+    functionalities.includes(RECONCILIATION_HISTORY_PRIVILEGE) ||
+    canDiscountCollection;
 
   const canUseHeaderAction = useCallback(
     (privilege) => {
@@ -1329,8 +1343,17 @@ export default function ReceivePayment() {
     (privilege) => {
       if (hasFullAccess(functionalities) || !functionalities.length)
         return true;
-
-      return functionalities.includes(privilege);
+      if (functionalities.includes(privilege)) return true;
+      if (
+        privilege === "Card Collection" ||
+        privilege === "POS Collection"
+      ) {
+        return (
+          functionalities.includes("Card Collection") ||
+          functionalities.includes("POS Collection")
+        );
+      }
+      return false;
     },
     [functionalities],
   );
@@ -1349,6 +1372,35 @@ export default function ReceivePayment() {
     return "cash";
   });
   const [activeTab, setActiveTab] = useState("pending");
+
+  useEffect(() => {
+    const q = String(searchParams.get("tab") || "").toLowerCase();
+    if (q === "discount") {
+      navigate("/app/payments/collection-reconciliation?tab=discount", {
+        replace: true,
+      });
+      return;
+    }
+    if (
+      canDiscountCollection &&
+      !visibleMethodTabs.length &&
+      !canEditInvoice &&
+      !functionalities.includes(RECONCILIATION_PRIVILEGE) &&
+      !hasFullCollectionAccess
+    ) {
+      navigate("/app/payments/collection-reconciliation?tab=discount", {
+        replace: true,
+      });
+    }
+  }, [
+    searchParams,
+    navigate,
+    canDiscountCollection,
+    visibleMethodTabs.length,
+    canEditInvoice,
+    functionalities,
+    hasFullCollectionAccess,
+  ]);
   const [loading, setLoading] = useState(false);
   const [dashboardReady, setDashboardReady] = useState(false);
   const todayYmd = moment().format("YYYY-MM-DD");
@@ -1415,6 +1467,10 @@ export default function ReceivePayment() {
   const [editInvoiceDate, setEditInvoiceDate] = useState("");
   const [editInvoiceDiscount, setEditInvoiceDiscount] = useState("");
   const [editInvoiceCustomer, setEditInvoiceCustomer] = useState(null);
+  const [editNewCustomerOpen, setEditNewCustomerOpen] = useState(false);
+  const [editNewCustomerName, setEditNewCustomerName] = useState("");
+  const [editNewCustomerPhone, setEditNewCustomerPhone] = useState("");
+  const [editNewCustomerSaving, setEditNewCustomerSaving] = useState(false);
   const [editPaymentModes, setEditPaymentModes] = useState([]);
   const [editProductOptions, setEditProductOptions] = useState([]);
   const [editProductQuery, setEditProductQuery] = useState("");
@@ -2507,6 +2563,10 @@ export default function ReceivePayment() {
     setEditInvoiceLoading(false);
     setEditInvoiceSaving(false);
     setEditInvoiceCustomer(null);
+    setEditNewCustomerOpen(false);
+    setEditNewCustomerName("");
+    setEditNewCustomerPhone("");
+    setEditNewCustomerSaving(false);
     setEditInvoiceDate("");
     setEditInvoiceDiscount("");
     setEditPaymentModes([]);
@@ -2627,6 +2687,108 @@ export default function ReceivePayment() {
       total: Math.max(0, subtotal - discount + exclusiveTax),
     };
   }, [editInvoiceLines, editInvoiceDiscount, editInvoiceSale?.taxes]);
+
+  const createInstantEditCustomer = useCallback(() => {
+    const name = String(editNewCustomerName || "").trim();
+    const phone = String(editNewCustomerPhone || "").trim();
+    if (!name) {
+      toast.error("Enter the customer name");
+      return;
+    }
+    if (!phone) {
+      toast.error("Enter the customer phone number");
+      return;
+    }
+    if (!isValidNigerianPhone(phone)) {
+      toast.error(NIGERIAN_PHONE_HINT);
+      return;
+    }
+    if (!activeBusiness?.id) {
+      toast.error("Select a business first");
+      return;
+    }
+    if (
+      !activeBusiness?.receivable_code ||
+      !activeBusiness?.receivable_accural_code ||
+      !activeBusiness?.opening_balance_equity
+    ) {
+      toast.error(
+        "Set receivable, deposit, and opening balance equity accounts before creating a customer.",
+      );
+      return;
+    }
+    const branchId =
+      editInvoiceLines.find((l) => l.branchId)?.branchId ||
+      editInvoiceSale?.branch_id ||
+      editInvoiceSale?.branchId ||
+      user?.branchId ||
+      (Array.isArray(user?.branchIds) ? user.branchIds[0] : null) ||
+      null;
+    setEditNewCustomerSaving(true);
+    _postApi(
+      "/create-customer",
+      {
+        query_type: "create",
+        fullname: name,
+        name,
+        phone: normalizeNigerianPhone(phone),
+        customer_type: "walk-in",
+        entity_type: "individual",
+        credit_limit: 0,
+        facilityId: activeBusiness.id,
+        branch_id: branchId,
+        receivable_code: activeBusiness.receivable_code,
+        deposit_code: activeBusiness.receivable_accural_code,
+        head: activeBusiness.receivable_code,
+        opening_balance_equity: activeBusiness.opening_balance_equity,
+        created_by: user?.id,
+      },
+      (res) => {
+        setEditNewCustomerSaving(false);
+        if (!res?.success) {
+          toast.error(res?.message || "Failed to create customer");
+          return;
+        }
+        const createdRaw = res.data?.customer || res.customer;
+        const created = createdRaw?.dataValues || createdRaw;
+        const customerNo = created?.customerNo || res.data?.customerNo;
+        const customer = created
+          ? {
+              ...created,
+              customerNo: created.customerNo || customerNo,
+              fullname: created.fullname || created.name || name,
+              phone: created.phone || normalizeNigerianPhone(phone),
+              customer_type: created.customer_type || "walk-in",
+              credit_limit: 0,
+            }
+          : {
+              customerNo,
+              fullname: name,
+              phone: normalizeNigerianPhone(phone),
+              customer_type: "walk-in",
+              credit_limit: 0,
+            };
+        setEditInvoiceCustomer(customer);
+        dispatch(getCustomers());
+        setEditNewCustomerOpen(false);
+        setEditNewCustomerName("");
+        setEditNewCustomerPhone("");
+        toast.success("Customer created and selected");
+      },
+      (err) => {
+        setEditNewCustomerSaving(false);
+        toast.error(err?.message || "Failed to create customer");
+      },
+    );
+  }, [
+    editNewCustomerName,
+    editNewCustomerPhone,
+    activeBusiness,
+    editInvoiceLines,
+    editInvoiceSale,
+    user,
+    dispatch,
+  ]);
 
   const saveEditInvoiceQuantities = useCallback(() => {
     if (!canEditInvoice) {
@@ -3621,7 +3783,7 @@ export default function ReceivePayment() {
     ) {
       setMethodTab("transfer");
     } else if (
-      tab === "card" &&
+      (tab === "card" || tab === "pos") &&
       canViewCollectionTab("Card Collection")
     ) {
       setMethodTab("card");
@@ -4282,7 +4444,9 @@ export default function ReceivePayment() {
   if (
     !visibleMethodTabs.length &&
     !canReconcileCollections &&
-    !canEditInvoice
+    !canEditInvoice &&
+    !canDiscountCollection &&
+    !canOpenCollectionReconciliation
   ) {
     return (
       <div className="min-h-full bg-[#f5f7fb] px-4 py-5 sm:px-6 lg:px-8">
@@ -4294,8 +4458,8 @@ export default function ReceivePayment() {
             <p className="text-sm font-medium text-slate-600">
               You do not have permission to collect payments. Ask an admin to
               grant Cash Collection, Transfer Collection, POS Collection, Credit Collection,
-              Apply Deposit, or Discount Collection under Sales →
-              Verification Points.
+              or Apply Deposit under Sales → Verification Points. Discount
+              approval is on Collection Reconciliation.
             </p>
           </div>
         </div>
@@ -4317,13 +4481,31 @@ export default function ReceivePayment() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {canReconcileCollections ? (
+            {canOpenCollectionReconciliation ? (
             <Link
               to="/app/payments/collection-reconciliation"
               className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
             >
               <ClipboardCheck className="h-4 w-4" />
               Collection Reconciliation
+            </Link>
+            ) : null}
+            {canDiscountCollection ? (
+            <Link
+              to="/app/payments/collection-reconciliation?tab=discount"
+              className="inline-flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-800 shadow-sm hover:bg-orange-100"
+            >
+              <Percent className="h-4 w-4" />
+              Discount
+              {methodPendingCounts.discount > 0 ? (
+                <span className="rounded-full bg-orange-600 px-1.5 text-[10px] font-bold text-white">
+                  {methodPendingCounts.discount}
+                </span>
+              ) : (
+                <span className="rounded-full bg-orange-200 px-1.5 text-[10px] font-bold text-orange-800">
+                  {methodPendingCounts.discount || 0}
+                </span>
+              )}
             </Link>
             ) : null}
             {canEditInvoice ? (
@@ -6407,12 +6589,29 @@ export default function ReceivePayment() {
                     <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
                       Customer
                     </div>
-                    <div className="mt-1">
-                      <SearchCustomerInput
-                        selected={editInvoiceCustomer ? [editInvoiceCustomer] : []}
-                        onChange={(cus) => setEditInvoiceCustomer(cus)}
+                    <div className="mt-1 flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <SearchCustomerInput
+                          selected={
+                            editInvoiceCustomer ? [editInvoiceCustomer] : []
+                          }
+                          onChange={(cus) => setEditInvoiceCustomer(cus)}
+                          disabled={editInvoiceSaving}
+                        />
+                      </div>
+                      <button
+                        type="button"
                         disabled={editInvoiceSaving}
-                      />
+                        onClick={() => {
+                          setEditNewCustomerName("");
+                          setEditNewCustomerPhone("");
+                          setEditNewCustomerOpen(true);
+                        }}
+                        className="mt-0 inline-flex h-9 shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-[var(--aa-accent)] hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        New
+                      </button>
                     </div>
                     {editInvoiceCustomer?.phone || editInvoiceCustomer?.address ? (
                       <div className="mt-1 text-xs text-slate-500">
@@ -6835,6 +7034,84 @@ export default function ReceivePayment() {
                 Open invoice
               </button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={editNewCustomerOpen}
+        onOpenChange={(open) => {
+          if (editNewCustomerSaving) return;
+          setEditNewCustomerOpen(open);
+          if (!open) {
+            setEditNewCustomerName("");
+            setEditNewCustomerPhone("");
+          }
+        }}
+      >
+        <DialogContent className="z-[260] w-[min(96vw,28rem)] border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl sm:rounded-xl">
+          <DialogHeader className="border-b border-slate-200 px-5 py-4 text-left">
+            <DialogTitle>New customer</DialogTitle>
+            <DialogDescription>
+              Create a customer instantly and attach them to this invoice.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 px-5 py-4">
+            <div>
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                Name
+              </label>
+              <input
+                type="text"
+                autoFocus
+                value={editNewCustomerName}
+                disabled={editNewCustomerSaving}
+                onChange={(e) => setEditNewCustomerName(e.target.value)}
+                placeholder="Customer name"
+                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                Phone
+              </label>
+              <input
+                type="tel"
+                value={editNewCustomerPhone}
+                disabled={editNewCustomerSaving}
+                onChange={(e) =>
+                  setEditNewCustomerPhone(sanitizePhoneInput(e.target.value))
+                }
+                placeholder="0803…"
+                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+              />
+              <p className="mt-1 text-[11px] text-slate-500">
+                {NIGERIAN_PHONE_HINT}
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="border-t border-slate-200 px-5 py-3">
+            <button
+              type="button"
+              disabled={editNewCustomerSaving}
+              onClick={() => setEditNewCustomerOpen(false)}
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={editNewCustomerSaving}
+              onClick={createInstantEditCustomer}
+              className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-navy)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {editNewCustomerSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UserPlus className="h-4 w-4" />
+              )}
+              {editNewCustomerSaving ? "Creating…" : "Create & select"}
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1999,8 +1999,11 @@ const StaffManagementDashboard = () => {
                                           type="checkbox"
                                           className="form-check-input"
                                           checked={
-                                            form.functionalities?.includes(
-                                              sub.title,
+                                            privilegeKeysForItem(sub).some(
+                                              (key) =>
+                                                form.functionalities?.includes(
+                                                  key,
+                                                ),
                                             ) ||
                                             (sub.title === "Goods" &&
                                               form.functionalities?.includes(
@@ -2029,8 +2032,12 @@ const StaffManagementDashboard = () => {
                                                 <input
                                                   type="checkbox"
                                                   className="form-check-input"
-                                                  checked={form.functionalities?.includes(
-                                                    nested.title,
+                                                  checked={privilegeKeysForItem(
+                                                    nested,
+                                                  ).some((key) =>
+                                                    form.functionalities?.includes(
+                                                      key,
+                                                    ),
                                                   )}
                                                   onChange={() =>
                                                     handleChildChechBoxChange(

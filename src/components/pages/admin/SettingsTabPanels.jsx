@@ -1625,6 +1625,30 @@ export default function SettingsTabPanels({
         </TabsContent>
       )}
 
+      {tabVisible("collection-reconciliation") && (
+        <TabsContent value="collection-reconciliation" className="mt-0">
+          <Row className="g-4">
+            <Col md={12}>
+              <div id="collection-reconciliation">
+                <TripleSelectSettings
+                  title="Collection Reconciliation"
+                  description="Default heads for Move cash to Safe: till cash, Safe, and shortage"
+                  icon="🏦"
+                  apiEndpoint="bank-configuration"
+                  primaryCode={activeBusiness.recon_cash_account_code}
+                  secondaryCode={activeBusiness.recon_safe_account_code}
+                  tertiaryCode={activeBusiness.recon_shortage_account_code}
+                  primaryLabel="Cash on Hand"
+                  secondaryLabel="Safe"
+                  tertiaryLabel="Shortage"
+                  chartOfAccount={chartOfAccount}
+                />
+              </div>
+            </Col>
+          </Row>
+        </TabsContent>
+      )}
+
       {tabVisible("tax-setup") && (
         <TabsContent value="tax-setup" className="mt-0">
           <Row className="g-4">

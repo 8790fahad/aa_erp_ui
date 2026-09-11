@@ -7,7 +7,9 @@ export function isCashInHandHead(head) {
   if (!head) return false;
   const code = String(head.head || head.code || "").trim();
   const desc = String(head.description || "").toLowerCase();
-  if (code === "112199" || code === "112100") return true;
+  if (/receivable/.test(desc)) return false;
+  if (code === "112199") return true;
+  if (code === "112100" && /cash/.test(desc)) return true;
   return /cash\s*(on|in)\s*hand/.test(desc);
 }
 

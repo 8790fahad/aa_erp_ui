@@ -79,13 +79,15 @@ const TripleSelectSettings = ({
           chartOfAccount={chartOfAccount}
         />
 
-        {/* <SingleSelectSetting
-          label={tertiaryLabel}
-          code={tertiaryCode}
-          settingKey={tertiaryLabel}
-          title={title}
-          chartOfAccount={chartOfAccount}
-        /> */}
+        {tertiaryLabel ? (
+          <SingleSelectSetting
+            label={tertiaryLabel}
+            code={tertiaryCode}
+            settingKey={tertiaryLabel}
+            title={title}
+            chartOfAccount={chartOfAccount}
+          />
+        ) : null}
       </div>
     </Card>
   );

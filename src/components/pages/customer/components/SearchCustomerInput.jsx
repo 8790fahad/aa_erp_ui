@@ -76,7 +76,8 @@ function SearchCustomerInput(props) {
         id={controlId}
         disabled={disabled}
         options={validOptions}
-        className="z-100"
+        className="z-[300]"
+        position="fixed"
         placeholder="Select Customer"
         labelKey={labelKeyFn}
         clearButton
