@@ -1745,7 +1745,7 @@ export default function ReceivePayment() {
     _fetchApi(
       `/api/v1/sale-workflows/verification-invoices?facilityId=${encodeURIComponent(
         String(activeBusiness.id),
-      )}`,
+      )}&date=${encodeURIComponent(moment().format("YYYY-MM-DD"))}`,
       (res) => {
         setLoadingVerificationInvoices(false);
         setVerificationInvoices(Array.isArray(res?.results) ? res.results : []);
@@ -6573,7 +6573,7 @@ export default function ReceivePayment() {
             <DialogDescription>
               {editInvoiceSale
                 ? "Change customer, date, lines, prices, discount, or payment mode. Saving rebuilds the invoice, customer ledger, stock, and general ledger."
-                : "All invoices at Verification Points, any payment mode. Reduce the amount when the customer says the total is not correct."}
+                : "Today's invoices still at Verification Points. Reduce the amount when the customer says the total is not correct."}
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -6909,13 +6909,13 @@ export default function ReceivePayment() {
                 <div className="max-h-[28rem] overflow-y-auto rounded-md border border-slate-200">
                   {loadingVerificationInvoices ? (
                     <p className="px-3 py-6 text-center text-sm text-slate-500">
-                      Loading invoices still on Verification Points…
+                      Loading today's invoices at Verification Points…
                     </p>
                   ) : filteredEditInvoices.length === 0 ? (
                     <p className="px-3 py-6 text-center text-sm text-slate-500">
-                      No invoices on Verification Points
+                      No invoices at Verification Points for today
                       {editInvoiceQuery.trim() ? " match this search" : ""}.
-                      Reversed and already processed invoices are not listed.
+                      Only today's unpaid invoices still in store are listed.
                     </p>
                   ) : (
                     <table className="min-w-full text-sm">

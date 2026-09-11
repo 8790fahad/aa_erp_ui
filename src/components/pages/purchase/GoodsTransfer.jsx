@@ -1503,7 +1503,9 @@ export default function GoodsTransfer() {
                             Pending to collect
                           </th>
                           <th className="px-3 py-2.5 text-right">Balance</th>
-                          <th className="px-3 py-2.5 text-right">Total</th>
+                          <th className="px-3 py-2.5 text-right">
+                            Balance in store
+                          </th>
                           <th className="px-3 py-2.5 text-left">UoM</th>
                           {canWriteOff && (
                             <th className="px-3 py-2.5 text-center">Actions</th>
