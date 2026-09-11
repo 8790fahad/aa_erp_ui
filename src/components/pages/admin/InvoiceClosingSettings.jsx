@@ -80,7 +80,28 @@ export default function InvoiceClosingSettings({
       (resp) => {
         setRunning(false);
         if (resp?.success) {
-          toast.success(resp.message || "Closing reverse completed");
+          const lastRun = resp?.data?.last_run;
+          if (lastRun && activeBusiness?.id) {
+            dispatch({
+              type: "UPDATE_BUSINESS_SETTINGS",
+              payload: {
+                business: {
+                  ...activeBusiness,
+                  invoice_closing_last_run: lastRun,
+                },
+              },
+            });
+          }
+          const reversed = Number(resp?.data?.reversed) || 0;
+          const candidates = Number(resp?.data?.candidates) || 0;
+          const skipped = Number(resp?.data?.skipped) || 0;
+          toast.success(
+            reversed
+              ? resp.message || `Reversed ${reversed} unpaid invoice(s)`
+              : candidates
+                ? `No unpaid invoices to reverse (${skipped} kept with payment)`
+                : "No invoices on Verification Points to reverse",
+          );
         } else {
           toast.error(resp?.message || "Failed to run closing reverse");
         }
@@ -152,10 +173,12 @@ export default function InvoiceClosingSettings({
               <strong>{lastRun || "—"}</strong>
             </div>
             <p className="small text-muted mt-3 mb-3">
-              After closing time, every invoice still on Verification Points
-              with no payment is reversed — including credit that has not been
-              approved. Partially paid invoices stay on verification. Paid
-              invoices have already moved to separation and are not touched.
+              After {time} {timezone}, every invoice still on Verification
+              Points with no payment is reversed — including credit that has
+              not been approved. Partially paid invoices stay on verification.
+              Paid invoices have already moved to separation and are not
+              touched. Use Run reverse now to reverse immediately without
+              waiting for closing time.
             </p>
             <Button
               color="outline-primary"

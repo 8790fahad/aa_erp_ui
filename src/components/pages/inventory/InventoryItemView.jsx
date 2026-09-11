@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
   Package,
-  DollarSign,
   Calendar,
   Tag,
   Users,
@@ -451,31 +450,11 @@ export default function InventoryItemView() {
                     </Badge>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Cost Price</p>
-                    <p className="text-sm font-medium text-gray-900">₦{formatNumber1(item.cost_price || 0)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Selling Price</p>
-                    <p className="text-sm font-medium text-gray-900">₦{formatNumber1(item.selling_price || 0)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Mark-up</p>
-                    <p className="text-sm text-gray-900">
-                      {item.mark_up != null
-                        ? `${item.mark_up}${item.markup_mode === 'percentage' ? '%' : ' (fixed)'}`
-                        : 'N/A'}
-                    </p>
-                  </div>
-                  <div>
                     <p className="text-xs text-gray-500 mb-0.5">Current Stock</p>
                     <p className="text-lg font-semibold text-gray-900">
                       {formatNumber1(item.current_stock || 0)}
                       <span className="text-xs font-normal text-gray-500 ml-1">{item.unit_of_measure || 'units'}</span>
                     </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Total Stock Value</p>
-                    <p className="text-sm font-medium text-green-600">₦{formatNumber1(item.total_value || 0)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 mb-0.5">Taxable</p>
@@ -836,55 +815,6 @@ export default function InventoryItemView() {
                       <AlertCircle className="h-3 w-3 inline mr-1" />
                       Out of stock
                     </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Additional Info Card */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Additional Info</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Reorder Level</p>
-                  <p className="text-sm text-gray-900">{formatNumber1(item.reorder_level || 0)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Cost Price</p>
-                  <p className="text-sm font-medium text-gray-900">₦{formatNumber1(item.cost_price || 0)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Selling Price</p>
-                  <p className="text-sm font-medium text-gray-900">₦{formatNumber1(item.selling_price || 0)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Mark-up</p>
-                  <p className="text-sm text-gray-900">
-                    {item.mark_up != null
-                      ? `${item.mark_up}${item.markup_mode === 'percentage' ? '%' : ' fixed'}`
-                      : 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Stock Value</p>
-                  <p className="text-sm font-semibold text-green-600">₦{formatNumber1(item.total_value || 0)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Avg. Unit Cost</p>
-                  <p className="text-sm text-gray-900">₦{formatNumber1(summaryStats?.averageCost || 0)}</p>
-                </div>
-                {item.supplier_id && (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Supplier Code</p>
-                    <p className="text-sm text-gray-900">{item.supplier_id}</p>
-                  </div>
-                )}
-                {item.notes && (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Notes</p>
-                    <p className="text-sm text-gray-700">{item.notes}</p>
                   </div>
                 )}
               </CardContent>
