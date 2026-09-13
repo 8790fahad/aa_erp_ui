@@ -206,6 +206,21 @@ export const SETTINGS_TABS = [
     category: "organization",
   },
   {
+    value: "financial-year",
+    label: "Financial Year",
+    privilege: "Settings Financial Year",
+    altPrivileges: [
+      "Settings VAT Policy",
+      "Settings Manage Branches",
+      "Settings Manage Departments",
+      "Settings",
+      "Admin",
+      "Administrator",
+      "Super Administrator",
+    ],
+    category: "organization",
+  },
+  {
     value: "bank-setup",
     label: "Bank Setup",
     privilege: "Settings Bank Setup",
@@ -351,6 +366,7 @@ export const SETTINGS_HASH_TO_TAB = {
   "production-scrap-inventory-account": "scrap-inventory",
   "invoice-closing": "invoice-closing",
   "process-emails": "process-emails",
+  "financial-year": "financial-year",
   session: "session",
   "login-hours": "login-hours",
 };

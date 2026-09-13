@@ -25,12 +25,14 @@ import { Switch } from "@/components/ui/switch";
 import ProfitLossSummaryTable from "./ProfitLossSummaryTable";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 import { buildIncomeStatementNotesUrl } from "./IncomeStatementNotesSection";
+import useFinancialYear from "@/hooks/useFinancialYear";
 
 const AaErpIncomeStatement = () => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const location = useLocation();
   const facilityId = activeBusiness?.id;
   const navigate = useNavigate();
+  const { defaultFromDate, defaultToDate } = useFinancialYear();
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [loading, setLoading] = useState(false);
@@ -47,11 +49,8 @@ const AaErpIncomeStatement = () => {
   const [plsLoading, setPlsLoading] = useState(false);
   const reportExportRef = useRef(null);
 
-  // Initialize dates
+  // Initialize dates from navigation or current financial year
   useEffect(() => {
-    const today = new Date().toISOString().split("T")[0];
-    const currentYear = new Date().getFullYear();
-    const firstDayOfYear = `${currentYear}-01-01`;
     const params = new URLSearchParams(location.search);
     const fromParam = params.get("fromDate") || location.state?.fromDate;
     const toParam = params.get("toDate") || location.state?.toDate;
@@ -59,11 +58,11 @@ const AaErpIncomeStatement = () => {
     if (fromParam && toParam) {
       setFromDate(fromParam);
       setToDate(toParam);
-    } else {
-      setFromDate(firstDayOfYear);
-      setToDate(today);
+    } else if (defaultFromDate && defaultToDate) {
+      setFromDate(defaultFromDate);
+      setToDate(defaultToDate);
     }
-  }, [location.state, location.search]);
+  }, [location.state, location.search, defaultFromDate, defaultToDate]);
 
   const fetchIncomeStatementData = useCallback(
     async (params = {}) => {

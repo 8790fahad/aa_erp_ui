@@ -19,6 +19,7 @@ import ProductMultiplier from "./ProductMultiplier";
 import VATPolicySelector from "./VATPolicySelector";
 import VatSettings from "./VatSettings";
 import InvoiceClosingSettings from "./InvoiceClosingSettings";
+import FinancialYearSettings from "./FinancialYearSettings";
 import CustomerType from "./CustomerType";
 import BankListSettings from "./BankListSettings";
 import PriceSetup from "./PriceSetup";
@@ -1771,6 +1772,16 @@ export default function SettingsTabPanels({
           </p>
         )}
       </TabsContent>
+
+      {tabVisible("financial-year") && (
+        <TabsContent value="financial-year" className="mt-0">
+          <Row className="g-4">
+            <Col md={12}>
+              <FinancialYearSettings />
+            </Col>
+          </Row>
+        </TabsContent>
+      )}
 
       {tabVisible("user-roles") && (
         <TabsContent value="user-roles" className="mt-0">

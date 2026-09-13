@@ -30,12 +30,14 @@ import ExcelJS from "exceljs";
 import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
+import useFinancialYear from "@/hooks/useFinancialYear";
 
 const AaErpGeneralLedger = () => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const location = useLocation();
   const navigate = useNavigate();
   const facilityId = activeBusiness?.id;
+  const { defaultFromDate, defaultToDate } = useFinancialYear();
 
   const [expandedAccounts, setExpandedAccounts] = useState({});
   const [fromDate, setFromDate] = useState("");
@@ -46,25 +48,21 @@ const AaErpGeneralLedger = () => {
   const [templateView, setTemplateView] = useState(true);
   const printRef = useRef(null);
 
-  // Initialize dates - default to current month-to-date
+  // Initialize dates from navigation or current financial year
   useEffect(() => {
-    const today = new Date();
-    const todayStr = today.toISOString().split("T")[0];
-    const firstDayStr = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      1
-    ).toISOString().split("T")[0];
-
     if (location.state?.fromDate && location.state?.toDate) {
       setFromDate(location.state.fromDate);
       setToDate(location.state.toDate);
-    } else {
-      // 2025-12-01 → 2025-12-26
-      setFromDate(firstDayStr);
-      setToDate(todayStr);
+    } else if (defaultFromDate && defaultToDate) {
+      setFromDate(defaultFromDate);
+      setToDate(defaultToDate);
     }
-  }, [location.state?.fromDate, location.state?.toDate]);
+  }, [
+    location.state?.fromDate,
+    location.state?.toDate,
+    defaultFromDate,
+    defaultToDate,
+  ]);
 
   const fetchGeneralLedgerData = useCallback(async () => {
     if (!facilityId || !fromDate || !toDate) {

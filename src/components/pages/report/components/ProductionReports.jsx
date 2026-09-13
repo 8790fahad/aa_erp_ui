@@ -15,10 +15,12 @@ import {
 import { Loader2, FileText, Download, TrendingUp, Package, DollarSign, BarChart3, Receipt } from "lucide-react";
 import { apiURL } from "@/redux/actions/api";
 import { formatNumber1, formatNaira } from "@/components/router/utilities";
+import useFinancialYear from "@/hooks/useFinancialYear";
 
 const ProductionReports = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
+  const { defaultFromDate, defaultToDate, defaultAsOfDate } = useFinancialYear();
 
   const [selectedReport, setSelectedReport] = useState("");
   const [fromDate, setFromDate] = useState("");
@@ -30,14 +32,13 @@ const ProductionReports = () => {
   const [reportTotals, setReportTotals] = useState(null);
   const [error, setError] = useState("");
 
-  // Set default dates
+  // Set default dates from financial year
   useEffect(() => {
-    const today = new Date().toISOString().split("T")[0];
-    const currentYear = new Date().getFullYear();
-    setFromDate(`${currentYear}-01-01`);
-    setToDate(today);
-    setAsOfDate(today);
-  }, []);
+    if (!defaultFromDate) return;
+    setFromDate(defaultFromDate);
+    setToDate(defaultToDate);
+    setAsOfDate(defaultAsOfDate);
+  }, [defaultFromDate, defaultToDate, defaultAsOfDate]);
 
   const reportOptions = [
     {

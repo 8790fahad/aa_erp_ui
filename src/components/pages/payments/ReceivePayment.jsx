@@ -28,6 +28,7 @@ import {
   UserPlus,
   Wallet,
   ChevronRight,
+  Plus,
 } from "lucide-react";
 import ExcelJS from "exceljs";
 import moment from "moment";
@@ -1556,6 +1557,8 @@ export default function ReceivePayment() {
   const [depositConfirmRow, setDepositConfirmRow] = useState(null);
   const [cashAmount, setCashAmount] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
+  /** Transfer can be split across several banks (e.g. 20k UBA + rest Access). */
+  const [transferLegs, setTransferLegs] = useState([]);
   const [creditAmount, setCreditAmount] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const collectOpen =
@@ -1932,7 +1935,64 @@ export default function ReceivePayment() {
     if (!isSplitPaymentType(selected.payment_type)) return;
     setCashAmount("");
     setTransferAmount("");
+    setTransferLegs([]);
   }, [collectOpen, selected?.sale_code, selected?.payment_type]);
+
+  // Seed transfer bank legs when collecting a transfer / transfer portion
+  useEffect(() => {
+    if (!collectOpen || !selected || hubAction !== "collect") return;
+    if (!showTransferFields || showCardFields) {
+      return;
+    }
+    const due = Number(
+      isSplit
+        ? suggestedPortion > 0.05
+          ? suggestedPortion
+          : remainingDue
+        : remainingDue,
+    );
+    const defaultBank =
+      bankAccounts.bankAccount || bankAccounts.accountList?.[0] || null;
+    setTransferLegs([
+      {
+        key: `leg-${selected.sale_code || "1"}`,
+        bankId: defaultBank?.id != null ? String(defaultBank.id) : "",
+        // Pure transfer: prefill full due. Cash+Transfer side: leave blank to enter portion.
+        amount:
+          isSplit || due <= 0.05
+            ? ""
+            : formatNumberWithCommas(String(due)),
+      },
+    ]);
+    // Only re-seed when the invoice / tab context changes — not on every bank list flicker
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    collectOpen,
+    hubAction,
+    selected?.sale_code,
+    showTransferFields,
+    showCardFields,
+    isSplit,
+    methodTab,
+  ]);
+
+  // Once bank list loads, fill empty Pay Through on the first transfer leg
+  useEffect(() => {
+    if (!showTransferFields || showCardFields) return;
+    const list = bankAccounts.accountList || [];
+    if (!list.length) return;
+    setTransferLegs((prev) => {
+      if (!prev.length) return prev;
+      if (prev.some((l) => l.bankId)) return prev;
+      return prev.map((leg, idx) =>
+        idx === 0 ? { ...leg, bankId: String(list[0].id) } : leg,
+      );
+    });
+  }, [
+    showTransferFields,
+    showCardFields,
+    bankAccounts.accountList,
+  ]);
 
   // Prefill Apply Deposit with available balance when the hub opens.
   useEffect(() => {
@@ -3975,6 +4035,7 @@ export default function ReceivePayment() {
       setSelected(null);
       setCashAmount("");
       setTransferAmount("");
+      setTransferLegs([]);
       treatingInvoiceRef.current = null;
     }, 200);
     return () => window.clearTimeout(t);
@@ -4334,16 +4395,42 @@ export default function ReceivePayment() {
         accountHead: cashAccounts.accountHead,
       });
     }
-    if (showTransferFields && transferAmt > 0) {
-      if (!bankAccounts.bankAccount?.id) {
-        toast.error("Select a bank account (Pay Through)");
+    if (showTransferFields) {
+      const bankList = bankAccounts.accountList || [];
+      const legs = (transferLegs.length
+        ? transferLegs
+        : [
+            {
+              bankId: bankAccounts.bankAccount?.id
+                ? String(bankAccounts.bankAccount.id)
+                : "",
+              amount: transferAmount,
+            },
+          ]
+      )
+        .map((leg) => {
+          const amount = parseFormattedAmount(leg.amount);
+          const bank =
+            bankList.find((b) => String(b.id) === String(leg.bankId)) || null;
+          return { amount, bank, bankId: leg.bankId };
+        })
+        .filter((leg) => leg.amount > 0.005);
+
+      if (!legs.length) {
+        toast.error("Enter at least one transfer amount");
         return;
       }
-      splits.push({
-        mode: "bank",
-        amount: transferAmt,
-        bankAccount: bankAccounts.bankAccount,
-      });
+      for (const leg of legs) {
+        if (!leg.bank?.id) {
+          toast.error("Select a bank account for each transfer amount");
+          return;
+        }
+        splits.push({
+          mode: "bank",
+          amount: leg.amount,
+          bankAccount: leg.bank,
+        });
+      }
     }
 
     if (showCardFields && transferAmt > 0) {
@@ -4397,9 +4484,22 @@ export default function ReceivePayment() {
         );
         return;
       }
+      // Transfer (and POS) side must be paid in full — no partial confirm.
+      if (collectionSide === "transfer" || collectionSide === "card") {
+        const target =
+          suggestedPortion > 0.05 ? suggestedPortion : remainingDue;
+        if (Math.abs(total - target) > 0.05) {
+          toast.error(
+            `Transfer must equal the full amount ₦${formatNumber1(target)} to confirm (entered ₦${formatNumber1(total)})`,
+          );
+          return;
+        }
+      }
     } else if (Math.abs(total - amountDue) > 0.05) {
       toast.error(
-        `Payment must equal ₦${formatNumber1(amountDue)} (entered ₦${formatNumber1(total)})`,
+        isTransferOnly
+          ? `Transfer must equal the full amount ₦${formatNumber1(amountDue)} to confirm (entered ₦${formatNumber1(total)})`
+          : `Payment must equal ₦${formatNumber1(amountDue)} (entered ₦${formatNumber1(total)})`,
       );
       return;
     }
@@ -4495,8 +4595,38 @@ export default function ReceivePayment() {
     );
   };
 
+  const transferLegsTotal = (transferLegs || []).reduce(
+    (sum, leg) => sum + parseFormattedAmount(leg.amount),
+    0,
+  );
+
+  /** Transfer invoices (and transfer side of a split): must pay the full due to confirm. */
+  const transferTargetAmount = isSplit
+    ? suggestedPortion > 0.05
+      ? suggestedPortion
+      : remainingDue
+    : remainingDue;
+  const transferPayTotal = transferLegs.length
+    ? transferLegsTotal
+    : parseFormattedAmount(transferAmount);
+  const transferBanksReady = transferLegs.length
+    ? transferLegs
+        .filter((leg) => parseFormattedAmount(leg.amount) > 0.005)
+        .every((leg) => Boolean(leg.bankId)) &&
+      transferLegs.some((leg) => parseFormattedAmount(leg.amount) > 0.005)
+    : Boolean(bankAccounts.bankAccount?.id) && transferPayTotal > 0.005;
+  const transferPaidInFull =
+    transferBanksReady &&
+    transferPayTotal > 0.05 &&
+    Math.abs(transferPayTotal - transferTargetAmount) <= 0.05;
+  const canConfirmCollectPayment =
+    !submitting &&
+    Boolean(selected) &&
+    (!isTransferOnly || transferPaidInFull);
+
   const splitHintTotal =
-    parseFormattedAmount(cashAmount) + parseFormattedAmount(transferAmount);
+    parseFormattedAmount(cashAmount) +
+    (showTransferFields ? transferLegsTotal : parseFormattedAmount(transferAmount));
 
   const fillAllRemaining = (side) => {
     const amt =
@@ -4506,21 +4636,99 @@ export default function ReceivePayment() {
           ? remainingDue
           : 0;
     const formatted = amt > 0 ? formatNumberWithCommas(String(amt)) : "";
-    if (side === "transfer" || side === "card") setTransferAmount(formatted);
+    if (side === "transfer") {
+      setTransferLegs((prev) => {
+        if (!prev.length) {
+          const defaultBank =
+            bankAccounts.bankAccount || bankAccounts.accountList?.[0] || null;
+          return [
+            {
+              key: `leg-${Date.now()}`,
+              bankId: defaultBank?.id != null ? String(defaultBank.id) : "",
+              amount: formatted,
+            },
+          ];
+        }
+        if (prev.length === 1) {
+          return [{ ...prev[0], amount: formatted }];
+        }
+        // Multiple banks: put remainder on the last empty/zero row, else last row
+        const usedExceptLast = prev
+          .slice(0, -1)
+          .reduce((s, l) => s + parseFormattedAmount(l.amount), 0);
+        const rem = Math.max(0, Number((amt - usedExceptLast).toFixed(2)));
+        return prev.map((leg, idx) =>
+          idx === prev.length - 1
+            ? {
+                ...leg,
+                amount:
+                  rem > 0.05 ? formatNumberWithCommas(String(rem)) : "",
+              }
+            : leg,
+        );
+      });
+      setTransferAmount(formatted);
+      return;
+    }
+    if (side === "card") setTransferAmount(formatted);
     else setCashAmount(formatted);
+  };
+
+  const updateTransferLeg = (key, patch) => {
+    setTransferLegs((prev) =>
+      prev.map((leg) => (leg.key === key ? { ...leg, ...patch } : leg)),
+    );
+  };
+
+  const addTransferLeg = () => {
+    const cap =
+      suggestedPortion > 0.05 ? suggestedPortion : remainingDue;
+    const used = transferLegsTotal;
+    const rem = Math.max(0, Number((cap - used).toFixed(2)));
+    if (rem <= 0.05 && transferLegs.length >= 1) {
+      toast.message("Adjust bank amounts first", {
+        description: `Total is already ₦${formatNumber1(used)}. Lower one amount to add another bank.`,
+      });
+    }
+    const usedIds = new Set(
+      transferLegs.map((l) => String(l.bankId || "")).filter(Boolean),
+    );
+    const nextBank = (bankAccounts.accountList || []).find(
+      (b) => !usedIds.has(String(b.id)),
+    );
+    setTransferLegs((prev) => [
+      ...prev,
+      {
+        key: `leg-${Date.now()}`,
+        bankId: nextBank?.id != null ? String(nextBank.id) : "",
+        amount: rem > 0.05 ? formatNumberWithCommas(String(rem)) : "",
+      },
+    ]);
+  };
+
+  const removeTransferLeg = (key) => {
+    setTransferLegs((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((leg) => leg.key !== key);
+    });
   };
 
   const confirmButtonAmount = (() => {
     if (isSplit) {
-      return collectionSide === "transfer" || collectionSide === "card"
-        ? parseFormattedAmount(transferAmount)
-        : parseFormattedAmount(cashAmount);
+      return collectionSide === "transfer"
+        ? transferLegsTotal
+        : collectionSide === "card"
+          ? parseFormattedAmount(transferAmount)
+          : parseFormattedAmount(cashAmount);
     }
     if (showCashFields) {
       const v = parseFormattedAmount(cashAmount);
       return v > 0 ? v : remainingDue;
     }
-    if (showTransferFields || showCardFields) {
+    if (showTransferFields) {
+      return transferLegsTotal > 0 ? transferLegsTotal : remainingDue;
+    }
+    if (showCardFields) {
       const v = parseFormattedAmount(transferAmount);
       return v > 0 ? v : remainingDue;
     }
@@ -5793,77 +6001,178 @@ export default function ReceivePayment() {
                     ) : null}
 
                     {showTransferFields ? (
-                      <div className="space-y-2">
-                        {isSplit || !isTransferOnly ? (
-                          <>
-                            <div className="flex items-center justify-between gap-2">
-                              <label className="text-sm font-medium text-slate-700">
-                                Transfer amount
-                              </label>
-                              <button
-                                type="button"
-                                onClick={() => fillAllRemaining("transfer")}
-                                className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
-                              >
-                                All (₦{formatNumber1(suggestedPortion > 0.05 ? suggestedPortion : remainingDue)})
-                              </button>
-                            </div>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={transferAmount}
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                const max = remainingDue;
-                                const parsed = parseFormattedAmount(raw);
-                                if (max > 0 && parsed > max + 0.05) {
-                                  setTransferAmount(
-                                    formatNumberWithCommas(String(max)),
-                                  );
-                                  toast.error(
-                                    `Transfer cannot exceed ₦${formatNumber1(max)}`,
-                                  );
-                                  return;
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="text-sm font-medium text-slate-700">
+                            Pay Through (Transfer)
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => fillAllRemaining("transfer")}
+                              className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                            >
+                              All (₦
+                              {formatNumber1(
+                                suggestedPortion > 0.05
+                                  ? suggestedPortion
+                                  : remainingDue,
+                              )}
+                              )
+                            </button>
+                            <button
+                              type="button"
+                              onClick={addTransferLeg}
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                            >
+                              <Plus className="h-3 w-3" />
+                              Add bank
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-[11px] leading-relaxed text-slate-500">
+                          Split across banks if needed — e.g. ₦20,000 to UBA and
+                          the rest to Access. Amounts must total ₦
+                          {formatNumber1(
+                            isSplit
+                              ? suggestedPortion > 0.05
+                                ? suggestedPortion
+                                : remainingDue
+                              : remainingDue,
+                          )}
+                          .
+                        </p>
+                        <div className="space-y-2">
+                          {(transferLegs.length
+                            ? transferLegs
+                            : [
+                                {
+                                  key: "leg-fallback",
+                                  bankId: bankAccounts.bankAccount?.id
+                                    ? String(bankAccounts.bankAccount.id)
+                                    : "",
+                                  amount: transferAmount,
+                                },
+                              ]
+                          ).map((leg, idx) => (
+                            <div
+                              key={leg.key}
+                              className="rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 space-y-2"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                  Bank {idx + 1}
+                                </span>
+                                {transferLegs.length > 1 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeTransferLeg(leg.key)}
+                                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-rose-600 hover:bg-rose-50"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                    Remove
+                                  </button>
+                                ) : null}
+                              </div>
+                              <Select
+                                value={
+                                  leg.bankId ? String(leg.bankId) : undefined
                                 }
-                                setTransferAmount(formatNumberWithCommas(raw));
-                              }}
-                              className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                              placeholder={isSplit ? "Enter any amount" : "0.00"}
-                            />
-                          </>
-                        ) : null}
-                        <label className="text-sm font-medium text-slate-700">
-                          {isTransferOnly || isSplit
-                            ? "Pay Through"
-                            : "Bank account"}
-                        </label>
-                        <Select
-                          value={
-                            bankAccounts.bankAccount?.id != null
-                              ? String(bankAccounts.bankAccount.id)
-                              : undefined
-                          }
-                          onValueChange={(val) => {
-                            const found = (bankAccounts.accountList || []).find(
-                              (b) => String(b.id) === String(val),
-                            );
-                            bankAccounts.setBankAccount(found || null);
-                          }}
-                        >
-                          <SelectTrigger className={payThroughSelectTriggerClass}>
-                            <SelectValue placeholder="Select bank account…" />
-                          </SelectTrigger>
-                          <SelectContent className={payThroughSelectContentClass}>
-                            {(bankAccounts.accountList || []).map((b) => (
-                              <SelectItem
-                                key={String(b.id)}
-                                value={String(b.id)}
+                                onValueChange={(val) =>
+                                  updateTransferLeg(leg.key, {
+                                    bankId: String(val),
+                                  })
+                                }
                               >
-                                {bankPayThroughLabel(b)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                                <SelectTrigger
+                                  className={payThroughSelectTriggerClass}
+                                >
+                                  <SelectValue placeholder="Select bank account…" />
+                                </SelectTrigger>
+                                <SelectContent
+                                  className={payThroughSelectContentClass}
+                                >
+                                  {(bankAccounts.accountList || []).map((b) => (
+                                    <SelectItem
+                                      key={String(b.id)}
+                                      value={String(b.id)}
+                                    >
+                                      {bankPayThroughLabel(b)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={leg.amount}
+                                onChange={(e) => {
+                                  const raw = e.target.value;
+                                  const max = remainingDue;
+                                  const parsed = parseFormattedAmount(raw);
+                                  if (max > 0 && parsed > max + 0.05) {
+                                    updateTransferLeg(leg.key, {
+                                      amount: formatNumberWithCommas(
+                                        String(max),
+                                      ),
+                                    });
+                                    toast.error(
+                                      `Amount cannot exceed ₦${formatNumber1(max)}`,
+                                    );
+                                    return;
+                                  }
+                                  updateTransferLeg(leg.key, {
+                                    amount: formatNumberWithCommas(raw),
+                                  });
+                                }}
+                                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                                placeholder="Amount for this bank"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        {transferLegs.length > 1 || isTransferOnly ? (
+                          <p className="text-xs tabular-nums text-slate-600">
+                            Banks total: ₦{formatNumber1(transferPayTotal)}
+                            {Number(
+                              (transferTargetAmount - transferPayTotal).toFixed(
+                                2,
+                              ),
+                            ) > 0.05 ? (
+                              <span className="text-amber-700">
+                                {" "}
+                                · Left ₦
+                                {formatNumber1(
+                                  Math.max(
+                                    0,
+                                    transferTargetAmount - transferPayTotal,
+                                  ),
+                                )}
+                                {" "}
+                                · Pay full amount to confirm
+                              </span>
+                            ) : transferPayTotal - transferTargetAmount >
+                              0.05 ? (
+                              <span className="text-red-700">
+                                {" "}
+                                · Over by ₦
+                                {formatNumber1(
+                                  transferPayTotal - transferTargetAmount,
+                                )}
+                              </span>
+                            ) : transferPaidInFull ? (
+                              <span className="text-emerald-700">
+                                {" "}
+                                · Matches due
+                              </span>
+                            ) : (
+                              <span className="text-amber-700">
+                                {" "}
+                                · Select bank(s) and pay full amount to confirm
+                              </span>
+                            )}
+                          </p>
+                        ) : null}
                       </div>
                     ) : null}
 
@@ -6108,7 +6417,12 @@ export default function ReceivePayment() {
                         <button
                           type="button"
                           onClick={confirmPayment}
-                          disabled={submitting}
+                          disabled={!canConfirmCollectPayment}
+                          title={
+                            isTransferOnly && !transferPaidInFull
+                              ? `Enter the full transfer amount ₦${formatNumber1(transferTargetAmount)} across bank(s) to confirm`
+                              : undefined
+                          }
                           className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:opacity-50"
                         >
                           {submitting ? (

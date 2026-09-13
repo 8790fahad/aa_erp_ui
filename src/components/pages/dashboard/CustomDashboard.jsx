@@ -28,6 +28,11 @@ import { Button } from "@/components/ui/button";
 import { useSelector, useDispatch } from "react-redux";
 import { UPDATE_BUSINESS_SETTINGS } from "@/redux/actions/actionTypes";
 import { today } from "@/utilities";
+import {
+  getFinancialYearByStartYear,
+  getFinancialYearForDate,
+  getFinancialYearStartMonth,
+} from "@/utils/financialYear";
 import { format } from "date-fns";
 import PropTypes from "prop-types";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -552,6 +557,12 @@ export default function CustomDashboard() {
     const now = new Date();
     let from = new Date();
     let to = new Date();
+    const fyStartMonth = getFinancialYearStartMonth(activeBusiness);
+    const thisFy = getFinancialYearForDate(fyStartMonth, now);
+    const lastFy = getFinancialYearByStartYear(
+      fyStartMonth,
+      thisFy.startYear - 1,
+    );
 
     switch (expensesPeriod) {
       case "last30days":
@@ -576,11 +587,11 @@ export default function CustomDashboard() {
         break;
       }
       case "thisFinancialYear":
-        from = new Date(now.getFullYear(), 0, 1);
-        to = new Date(now.getFullYear(), 11, 31);
+        from = new Date(`${thisFy.fromDate}T00:00:00`);
+        to = new Date(`${thisFy.toDate}T00:00:00`);
         break;
       case "thisFinancialYearToDate":
-        from = new Date(now.getFullYear(), 0, 1);
+        from = new Date(`${thisFy.fromDate}T00:00:00`);
         break;
       case "lastMonth": {
         const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -598,14 +609,14 @@ export default function CustomDashboard() {
         break;
       }
       case "lastFinancialYear":
-        from = new Date(now.getFullYear() - 1, 0, 1);
-        to = new Date(now.getFullYear() - 1, 11, 31);
+        from = new Date(`${lastFy.fromDate}T00:00:00`);
+        to = new Date(`${lastFy.toDate}T00:00:00`);
         break;
       default:
         from.setDate(now.getDate() - 30);
     }
     return { from, to };
-  }, [expensesPeriod]);
+  }, [expensesPeriod, activeBusiness]);
 
   // Calculate prior period dates (same duration, before current period)
   const getPriorPeriodDates = useCallback(() => {

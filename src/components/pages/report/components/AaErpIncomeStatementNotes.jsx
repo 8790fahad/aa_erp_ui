@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import IncomeStatementNotesSection from "./IncomeStatementNotesSection";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
+import useFinancialYear from "@/hooks/useFinancialYear";
 
 export default function AaErpIncomeStatementNotes() {
   const { activeBusiness } = useSelector((state) => state.auth);
@@ -19,6 +20,7 @@ export default function AaErpIncomeStatementNotes() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const notesExportRef = useRef(null);
+  const { defaultFromDate, defaultToDate } = useFinancialYear();
 
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -30,21 +32,19 @@ export default function AaErpIncomeStatementNotes() {
   const highlightNoteRef = searchParams.get("note") || "";
 
   useEffect(() => {
-    const today = new Date().toISOString().split("T")[0];
-    const currentYear = new Date().getFullYear();
-    const firstDayOfYear = `${currentYear}-01-01`;
-
     const from =
       searchParams.get("from") ||
       location.state?.fromDate ||
-      firstDayOfYear;
+      defaultFromDate;
     const to =
       searchParams.get("to") ||
       location.state?.toDate ||
-      today;
-    setFromDate(from);
-    setToDate(to);
-  }, [searchParams, location.state]);
+      defaultToDate;
+    if (from && to) {
+      setFromDate(from);
+      setToDate(to);
+    }
+  }, [searchParams, location.state, defaultFromDate, defaultToDate]);
 
   const fetchNotesData = useCallback(() => {
     if (!facilityId || !fromDate || !toDate) return;
