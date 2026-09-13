@@ -32,6 +32,7 @@ import Expenses from "../pages/report/Expenses";
 import PendingSales from "../pages/sales/pendingSales";
 import ReciveForm from "../pages/sales/ReciveForm";
 import MakeSale from "../pages/sales/MakeSale";
+import EditInvoice from "../pages/sales/EditInvoice";
 import ExpensesReport from "../pages/report/ExpensesReport";
 import InvoiceForm from "../pages/report/InvoiceForm";
 import SignUp from "../Signup";
@@ -850,6 +851,10 @@ const routeModules = {
       {
         path: "sale",
         element: <MakeSale />,
+      },
+      {
+        path: "edit-invoice",
+        element: <EditInvoice />,
       },
       {
         path: "invoices",

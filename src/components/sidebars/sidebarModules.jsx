@@ -472,8 +472,22 @@ export const modules = [
           },
           { title: "Imprest" },
           { title: "Pay Bill" },
-          { title: "Edit Invoice" },
-          { title: "Switch Payment Mode" },
+        ],
+        access: [
+          "services",
+          "retailers",
+          "recycling",
+          "manufacturing",
+          "contractors",
+        ],
+      },
+      {
+        title: "Edit Invoice",
+        url: "/app/sales/edit-invoice",
+        functionality: ["Edit Invoice"],
+        subFunctionalities: [
+          { title: "Edit" },
+          { title: "Change" },
         ],
         access: [
           "services",

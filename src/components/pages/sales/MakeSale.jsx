@@ -1305,8 +1305,15 @@ function MakeSale() {
   const invoiceViewMode =
     searchParams.get("view") === "cards" ? "cards" : "lines";
   const editSaleCodeFromUrl = (searchParams.get("edit") || "").trim();
+  const editFromParam = String(searchParams.get("from") || "").trim();
+  const editReturnPath =
+    editFromParam === "edit-invoice"
+      ? "/app/sales/edit-invoice"
+      : editFromParam === "verification"
+        ? "/app/payments/verification-points"
+        : "/app/sales/invoices";
   const editFromVerification =
-    searchParams.get("from") === "verification";
+    editFromParam === "verification" || editFromParam === "edit-invoice";
   const [editingSaleCode, setEditingSaleCode] = useState("");
   const [loadingEditSale, setLoadingEditSale] = useState(
     Boolean((searchParams.get("edit") || "").trim()),
@@ -1747,11 +1754,7 @@ function MakeSale() {
         if (!response?.success || !response.data) {
           toast.error(response?.message || "Failed to load invoice");
           loadedEditRef.current = "";
-          navigate(
-            editFromVerification
-              ? "/app/payments/verification-points"
-              : "/app/sales/invoices",
-          );
+          navigate(editReturnPath);
           return;
         }
         const data = response.data;
@@ -1761,7 +1764,7 @@ function MakeSale() {
           );
           navigate(
             editFromVerification
-              ? "/app/payments/verification-points"
+              ? editReturnPath
               : `/app/sales/invoice-preview?sale_code=${encodeURIComponent(code)}`,
           );
           return;
@@ -1919,16 +1922,13 @@ function MakeSale() {
         loadedEditRef.current = "";
         console.error("Load invoice for edit:", error);
         toast.error("Failed to load invoice for editing");
-        navigate(
-          editFromVerification
-            ? "/app/payments/verification-points"
-            : "/app/sales/invoices",
-        );
+        navigate(editReturnPath);
       },
     );
   }, [
     editSaleCodeFromUrl,
     editFromVerification,
+    editReturnPath,
     activeBusiness?.id,
     loadingTaxes,
     taxes,
@@ -3014,7 +3014,7 @@ function MakeSale() {
             if (response?.sale_code) {
               navigate(
                 editFromVerification
-                  ? "/app/payments/verification-points"
+                  ? editReturnPath
                   : `/app/sales/process?sale_code=${encodeURIComponent(
                       response.sale_code,
                     )}`,

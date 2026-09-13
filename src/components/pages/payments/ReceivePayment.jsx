@@ -23,7 +23,6 @@ import {
   Receipt,
   ScanLine,
   Search,
-  Pencil,
   Split,
   Trash2,
   UserPlus,
@@ -4624,16 +4623,6 @@ export default function ReceivePayment() {
               )}
             </Link>
             ) : null}
-            {canEditInvoice ? (
-            <button
-              type="button"
-              onClick={openEditInvoice}
-              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              <Pencil className="h-4 w-4" />
-              Edit Invoice
-            </button>
-            ) : null}
             <button
               type="button"
               onClick={fetchDashboard}
@@ -5250,28 +5239,6 @@ export default function ReceivePayment() {
                               Collect
                             </button>
                           )}
-                          {canSwitchPaymentMode &&
-                          (methodTab === "cash" ||
-                            methodTab === "transfer" ||
-                            methodTab === "card" ||
-                            methodTab === "credit") ? (
-                            <button
-                              type="button"
-                              disabled={
-                                switchingModeCode === row.sale_code ||
-                                submitting
-                              }
-                              onClick={() => openModeChange(row)}
-                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                            >
-                              {switchingModeCode === row.sale_code ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <ArrowRightLeft className="h-3 w-3" />
-                              )}
-                              Change
-                            </button>
-                          ) : null}
                           </div>
                         </td>
                       </tr>
@@ -5385,28 +5352,6 @@ export default function ReceivePayment() {
                           <span className="text-xs text-slate-400">—</span>
                         ) : (
                           <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-                          {canSwitchPaymentMode &&
-                          (methodTab === "cash" ||
-                            methodTab === "transfer" ||
-                            methodTab === "card" ||
-                            methodTab === "credit") ? (
-                            <button
-                              type="button"
-                              disabled={
-                                switchingModeCode === row.sale_code ||
-                                submitting
-                              }
-                              onClick={() => openModeChange(row)}
-                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                            >
-                              {switchingModeCode === row.sale_code ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <ArrowRightLeft className="h-3 w-3" />
-                              )}
-                              Change
-                            </button>
-                          ) : null}
                           <button
                             type="button"
                             onClick={() => downloadSalesInvoice(row)}
@@ -6093,24 +6038,6 @@ export default function ReceivePayment() {
 
                   {hubAction === "view" && selected?.sale_code ? (
                     <>
-                      {canSwitchPaymentMode ? (
-                        <button
-                          type="button"
-                          disabled={
-                            switchingModeCode === selected.sale_code ||
-                            submitting
-                          }
-                          onClick={() => openModeChange(selected)}
-                          className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                        >
-                          {switchingModeCode === selected.sale_code ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <ArrowRightLeft className="h-4 w-4" />
-                          )}
-                          Change
-                        </button>
-                      ) : null}
                     <button
                       type="button"
                       onClick={() =>

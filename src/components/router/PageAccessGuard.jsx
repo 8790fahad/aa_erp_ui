@@ -39,7 +39,13 @@ function collectNavEntries(modules) {
 /** Extra privileges that may open a path even if the sidebar item is hidden. */
 const RELATED_PAGE_PRIVILEGES = {
   "/app/inventory/inventory-list": ["Goods", "Goods List", "Goods list"],
-  "/app/payments/verification-points": ["Receive Payment"],
+  "/app/payments/verification-points": [
+    "Receive Payment",
+    "Verification Points",
+    "Collection Points",
+    "Cashier",
+  ],
+  "/app/sales/edit-invoice": ["Edit Invoice", "Edit", "Change"],
   "/app/payments/pay-bills": ["Pay Bill", "Pay Bills"],
   "/app/payments/receive-payment": [
     "Received Payment",

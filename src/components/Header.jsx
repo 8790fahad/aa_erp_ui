@@ -108,7 +108,6 @@ const QUICK_CREATE = [
       "History",
       "Imprest",
       "Pay Bill",
-      "Edit Invoice",
     ],
   },
 ];
