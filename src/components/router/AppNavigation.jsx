@@ -232,6 +232,7 @@ import PayBills from "../pages/payments/PayBills";
 import CreditNote, {
   CreditNoteIndexRedirect,
 } from "../pages/payments/CreditNote";
+import CreditNotePreview from "../pages/payments/CreditNotePreview";
 import ApplyCustomerAdvance from "../pages/payments/ApplyCustomerAdvance";
 import ApplySupplierDeposit from "../pages/payments/ApplySupplierDeposit";
 import ProductSupplierBill from "../pages/expenses/ProductSupplierBill";
@@ -601,6 +602,10 @@ const routeModules = {
           {
             index: true,
             element: <CreditNoteIndexRedirect />,
+          },
+          {
+            path: "preview",
+            element: <CreditNotePreview />,
           },
           {
             path: "party-vendor",

@@ -192,6 +192,20 @@ export const SETTINGS_TABS = [
     category: "pricing",
   },
   {
+    value: "process-emails",
+    label: "Process Emails",
+    privilege: "Settings Process Emails",
+    altPrivileges: [
+      "Settings",
+      "Settings Invoice Closing",
+      "Settings Payable",
+      "Administrator",
+      "Admin",
+      "Super Administrator",
+    ],
+    category: "organization",
+  },
+  {
     value: "bank-setup",
     label: "Bank Setup",
     privilege: "Settings Bank Setup",
@@ -336,6 +350,7 @@ export const SETTINGS_HASH_TO_TAB = {
   "production-abnormal-loss-account": "abnormal-loss",
   "production-scrap-inventory-account": "scrap-inventory",
   "invoice-closing": "invoice-closing",
+  "process-emails": "process-emails",
   session: "session",
   "login-hours": "login-hours",
 };

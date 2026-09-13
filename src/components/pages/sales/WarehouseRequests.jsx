@@ -30,6 +30,8 @@ export default function WarehouseRequests() {
   const [invoiceItems, setInvoiceItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [listTab, setListTab] = useState("pending");
+  /** List stays hidden until staff search / scan an invoice. */
+  const [searchActive, setSearchActive] = useState(false);
 
   const userBranchIds = useMemo(() => {
     if (Array.isArray(user?.branchIds) && user.branchIds.length > 0) {
@@ -74,13 +76,9 @@ export default function WarehouseRequests() {
         if (res.success) {
           const list = res.results || [];
           setRows(list);
-          setSelectedId((prev) => {
-            if (prev && list.some((r) => r.id === prev)) return prev;
-            const pending = list.filter(
-              (r) => String(r.status || "").toLowerCase() !== "collected",
-            );
-            return pending[0]?.id || list[0]?.id || null;
-          });
+          setSelectedId((prev) =>
+            prev && list.some((r) => r.id === prev) ? prev : null,
+          );
         } else {
           toast.error(res.message || "Failed to load warehouse requests");
           setRows([]);
@@ -159,17 +157,15 @@ export default function WarehouseRequests() {
     fetchList();
   }, [fetchList]);
 
-  useEffect(() => {
-    const pool = listTab === "history" ? collectedRows : pendingRows;
-    if (!pool.length) return;
-    if (selectedId && pool.some((r) => r.id === selectedId)) return;
-    setSelectedId(pool[0].id);
-  }, [listTab, collectedRows, pendingRows, selectedId]);
-
   const visibleRows = useMemo(() => {
+    if (!searchActive) return [];
     const q = searchQuery.trim().toLowerCase();
     const source = listTab === "history" ? collectedRows : pendingRows;
-    if (!q) return source;
+    if (!q) {
+      return selectedId
+        ? source.filter((r) => r.id === selectedId)
+        : [];
+    }
     return source.filter(
       (r) =>
         String(r.sale_code || "")
@@ -185,9 +181,29 @@ export default function WarehouseRequests() {
           .toLowerCase()
           .includes(q),
     );
-  }, [rows, pendingRows, collectedRows, searchQuery, listTab]);
+  }, [
+    searchActive,
+    pendingRows,
+    collectedRows,
+    searchQuery,
+    listTab,
+    selectedId,
+  ]);
+
+  const handleSearchQueryChange = useCallback((value) => {
+    const next = String(value || "");
+    setSearchQuery(next);
+    if (next.trim()) {
+      setSearchActive(true);
+      setSelectedId(null);
+    } else {
+      setSearchActive(false);
+      setSelectedId(null);
+    }
+  }, []);
 
   const handleSearchSelect = useCallback((row) => {
+    setSearchActive(true);
     if (row?.id != null) {
       if (String(row.status || "").toLowerCase() === "collected") {
         setListTab("history");
@@ -381,7 +397,7 @@ export default function WarehouseRequests() {
                 Warehouse Collection
               </h1>
               <p className="text-gray-600 mt-1">
-                Collect goods after Invoice Separation for each branch invoice.
+                Search or scan a branch invoice, then open it to collect goods.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -455,18 +471,29 @@ export default function WarehouseRequests() {
               <div className="font-semibold text-gray-800">
                 {listTab === "history"
                   ? "Collected invoices"
-                  : "Warehouse invoices to collect"}
+                  : "Search warehouse invoices"}
               </div>
               <SaleWorkflowSearchBar
                 facilityId={activeBusiness?.id}
                 rows={rows}
                 getRowCode={(r) => r.pack_code || r.sale_code}
                 onSelect={handleSearchSelect}
-                onQueryChange={setSearchQuery}
+                onQueryChange={handleSearchQueryChange}
                 placeholder="Search or scan invoice, pack, customer…"
               />
             </div>
-            {loading ? (
+            {!searchActive ? (
+              <div className="p-8 text-center text-gray-500 text-sm space-y-2">
+                <Package className="mx-auto h-10 w-10 text-gray-300" />
+                <p className="font-medium text-gray-600">
+                  Search for an invoice to begin
+                </p>
+                <p>
+                  Enter or scan the invoice / pack / customer. Matching
+                  invoices appear here after you search.
+                </p>
+              </div>
+            ) : loading ? (
               <div className="p-4 space-y-3">
                 {[1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-16 w-full" />
@@ -475,8 +502,8 @@ export default function WarehouseRequests() {
             ) : visibleRows.length === 0 ? (
               <div className="p-8 text-center text-gray-500 text-sm">
                 {listTab === "history"
-                  ? "No collected invoices yet. Marked collections appear here."
-                  : "No branch invoices waiting. After separation, each branch copy appears here for collection."}
+                  ? "No collected invoices match this search."
+                  : "No warehouse invoices match this search."}
               </div>
             ) : (
               <ul className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
@@ -534,9 +561,16 @@ export default function WarehouseRequests() {
 
           <div className="lg:col-span-3 bg-white rounded-lg shadow-sm p-6">
             {!selected ? (
-              <div className="h-64 flex flex-col items-center justify-center text-gray-500 gap-2">
+              <div className="h-64 flex flex-col items-center justify-center text-gray-500 gap-2 px-6 text-center">
                 <Package className="w-10 h-10 text-gray-300" />
-                Select a branch invoice
+                <p className="font-medium text-gray-600">
+                  {searchActive
+                    ? "Click an invoice to open collection"
+                    : "Search an invoice first"}
+                </p>
+                <p className="text-sm">
+                  Collect buttons appear only after you open the invoice.
+                </p>
               </div>
             ) : (
               <>

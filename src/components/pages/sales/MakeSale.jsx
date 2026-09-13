@@ -110,10 +110,11 @@ function invoiceCoverageError({
     return "Walk-in customers cannot be invoiced on credit. Use Cash, Transfer, or POS.";
   }
   if (hasCash || hasTransfer || hasCard) return null;
-  if (!hasCredit && !hasDeposit) return null;
+  const usePrepaid = hasDeposit;
+  if (!hasCredit && !usePrepaid) return null;
   const invoiceTotal = Number(total) || 0;
   if (!(invoiceTotal > 0.009)) return "Invoice total must be greater than zero.";
-  const deposit = Math.max(0, Number(depositBalance) || 0);
+  const prepaidPool = Math.max(0, Number(depositBalance) || 0);
   const outstanding = Math.max(0, Number(creditOutstanding) || 0);
   const unlimitedCredit = isUnlimitedCreditLimit(creditLimit, {
     walkIn: isWalkIn,
@@ -124,12 +125,13 @@ function invoiceCoverageError({
     : Math.max(0, limit - outstanding);
 
   const fmt = (n) => `₦${formatNumber1(n)}`;
+  const prepaidLabel = "deposit";
 
-  if (hasCredit && hasDeposit) {
+  if (hasCredit && usePrepaid) {
     if (unlimitedCredit) return null;
-    const cap = creditLeft + deposit;
+    const cap = creditLeft + prepaidPool;
     if (invoiceTotal > cap + 0.009) {
-      return `Invoice ${fmt(invoiceTotal)} exceeds credit available (${fmt(creditLeft)}) plus deposit (${fmt(deposit)}).`;
+      return `Invoice ${fmt(invoiceTotal)} exceeds credit available (${fmt(creditLeft)}) plus ${prepaidLabel} (${fmt(prepaidPool)}).`;
     }
     return null;
   }
@@ -140,8 +142,8 @@ function invoiceCoverageError({
     }
     return null;
   }
-  if (invoiceTotal > deposit + 0.009) {
-    return `Invoice ${fmt(invoiceTotal)} exceeds deposit available ${fmt(deposit)}.`;
+  if (invoiceTotal > prepaidPool + 0.009) {
+    return `Invoice ${fmt(invoiceTotal)} exceeds ${prepaidLabel} available ${fmt(prepaidPool)}.`;
   }
   return null;
 }
@@ -484,6 +486,7 @@ function PaymentModePicker({
   options = PAYMENT_MODE_OPTIONS,
   disabledIds = [],
   disabledHint = {},
+  showRoleFilterHint = false,
   className = "",
 }) {
   if (!options.length) {
@@ -491,8 +494,8 @@ function PaymentModePicker({
       <div className={className}>
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           You don&apos;t have permission to select a payment method. Ask an
-          admin to grant Cash Payment, Transfer Payment, POS, Credit Payment, or
-          Apply Deposit Payment under Create Invoice.
+          admin to grant Cash Payment, Transfer Payment, POS, Credit Payment,
+          or Apply Deposit Payment under Create Invoice.
         </p>
       </div>
     );
@@ -531,7 +534,7 @@ function PaymentModePicker({
       </div>
       <p className="mt-1 text-[11px] text-slate-500">
         {paymentModesHint(selected)}
-        {options.length < PAYMENT_MODE_OPTIONS.length
+        {showRoleFilterHint
           ? " Only payment methods granted to your role are shown."
           : ""}
       </p>
@@ -551,7 +554,13 @@ function CustomerPaymentBalances({
   depositBalance,
   currency = "₦",
 }) {
-  if (!showCash && !showTransfer && !showCard && !showCredit && !showDeposit)
+  if (
+    !showCash &&
+    !showTransfer &&
+    !showCard &&
+    !showCredit &&
+    !showDeposit
+  )
     return null;
   const fmt = (n) =>
     `${currency}${formatNumber1(Math.max(0, Number(n) || 0))}`;
@@ -1335,6 +1344,7 @@ function MakeSale() {
   const hasCardMode = selectedPaymentModes.includes("card");
   const hasCreditMode = selectedPaymentModes.includes("credit");
   const hasDepositMode = selectedPaymentModes.includes("deposit");
+  const hasPrepaidMode = hasDepositMode;
   const modeOfPayment = encodePaymentModes(selectedPaymentModes);
   const [depositBalance, setDepositBalance] = useState(null);
   const [creditOutstanding, setCreditOutstanding] = useState(null);
@@ -1343,6 +1353,11 @@ function MakeSale() {
   const hasInvoiceParty =
     Boolean(selectedCustomer) ||
     (isWalkIn && String(walkInName || "").trim().length > 0);
+
+  const visiblePaymentModeOptions = useMemo(
+    () => allowedPaymentModeOptions,
+    [allowedPaymentModeOptions],
+  );
 
   const applyPaymentModes = useCallback(
     (modes) => {
@@ -1374,7 +1389,12 @@ function MakeSale() {
         : [...selectedPaymentModes, id];
       applyPaymentModes(next);
     },
-    [selectedPaymentModes, applyPaymentModes, allowedPaymentModeIds, isWalkIn],
+    [
+      selectedPaymentModes,
+      applyPaymentModes,
+      allowedPaymentModeIds,
+      isWalkIn,
+    ],
   );
 
   useEffect(() => {
@@ -1404,7 +1424,11 @@ function MakeSale() {
   useEffect(() => {
     const customerNo = selectedCustomer?.customerNo;
     const facilityId = activeBusiness?.id;
-    if (!customerNo || !facilityId || (!hasCreditMode && !hasDepositMode)) {
+    if (
+      !customerNo ||
+      !facilityId ||
+      (!hasCreditMode && !hasPrepaidMode)
+    ) {
       setDepositBalance(null);
       setCreditOutstanding(null);
       setCreditLimitDisplay(
@@ -1425,7 +1449,9 @@ function MakeSale() {
         const receivables =
           parseFloat(res?.receivables ?? res?.balance) || 0;
         const deposit = parseFloat(res?.deposit) || 0;
-        if (hasDepositMode) setDepositBalance(deposit);
+        if (hasDepositMode) {
+          setDepositBalance(deposit);
+        }
         if (hasCreditMode) setCreditOutstanding(receivables);
         setCreditLimitDisplay(
           isWalkIn || isWalkInCustomer(selectedCustomer)
@@ -1436,7 +1462,9 @@ function MakeSale() {
       },
       () => {
         if (cancelled) return;
-        if (hasDepositMode) setDepositBalance(0);
+        if (hasDepositMode) {
+          setDepositBalance(0);
+        }
         if (hasCreditMode) setCreditOutstanding(0);
         setCreditLimitDisplay(
           isWalkIn || isWalkInCustomer(selectedCustomer)
@@ -1455,8 +1483,10 @@ function MakeSale() {
     activeBusiness?.id,
     hasCreditMode,
     hasDepositMode,
+    hasPrepaidMode,
     isWalkIn,
   ]);
+
   const [invoiceNumberDisplay] = useState(
     () => `INV-${moment().format("YYMMDD")}-DRAFT`,
   );
@@ -1865,6 +1895,9 @@ function MakeSale() {
         let modes = Array.isArray(data.payment_modes)
           ? data.payment_modes.map((m) => String(m || "").toLowerCase())
           : [];
+        modes = modes.map((m) =>
+          m === "apply_credit" || m === "apply credit" ? "deposit" : m,
+        );
         if (!modes.length) {
           const mop = String(data.mode_of_payment || "").toLowerCase();
           if (mop.includes("cash")) modes.push("cash");
@@ -1873,7 +1906,9 @@ function MakeSale() {
           }
           if (mop.includes("card")) modes.push("card");
           if (mop.includes("credit")) modes.push("credit");
-          if (mop.includes("deposit")) modes.push("deposit");
+          if (mop.includes("deposit") || mop.includes("apply_credit") || mop === "apply credit") {
+            modes.push("deposit");
+          }
         }
         applyPaymentModes(modes);
         setEditingSaleCode(code);
@@ -3095,7 +3130,7 @@ function MakeSale() {
     }
 
     if (
-      (hasCreditMode || hasDepositMode) &&
+      (hasCreditMode || hasPrepaidMode) &&
       !hasCashMode &&
       !hasTransferMode &&
       !hasCardMode &&
@@ -3178,6 +3213,7 @@ function MakeSale() {
     hasCardMode,
     hasCreditMode,
     hasDepositMode,
+    hasPrepaidMode,
     creditLimitDisplay,
     creditOutstanding,
     depositBalance,
@@ -4858,7 +4894,7 @@ function MakeSale() {
                     max={moment().format("YYYY-MM-DD")}
                     className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                   />
-                  {(hasCreditMode || hasDepositMode) && (
+                  {(hasCreditMode || hasPrepaidMode) && (
                     <>
                       <div className="flex items-center gap-2">
                         <label className="text-sm text-slate-600">Terms</label>
@@ -4898,9 +4934,13 @@ function MakeSale() {
                   <PaymentModePicker
                     selected={selectedPaymentModes}
                     onToggle={togglePaymentMode}
-                    options={allowedPaymentModeOptions}
+                    options={visiblePaymentModeOptions}
                     disabledIds={disabledPaymentModeIds}
                     disabledHint={disabledPaymentModeHint}
+                    showRoleFilterHint={
+                      allowedPaymentModeOptions.length <
+                      PAYMENT_MODE_OPTIONS.length
+                    }
                   />
                   {isWalkIn && allowedPaymentModeIds.includes("credit") ? (
                     <p className="mt-1.5 text-[11px] text-amber-800">
@@ -4917,8 +4957,9 @@ function MakeSale() {
                     >
                       Sales → Credit Notes
                     </Link>
-                    . It is saved as a <strong>deposit</strong>, then tick{" "}
-                    <strong>Apply Deposit</strong> here to use it.
+                    . Saved as <strong>Customer deposit</strong>, then tick{" "}
+                    <strong>Apply Deposit</strong> here (hidden while balance is
+                    ₦0).
                   </p>
                   <CustomerPaymentBalances
                     showCash={hasCashMode}
@@ -4997,9 +5038,13 @@ function MakeSale() {
                     <PaymentModePicker
                       selected={selectedPaymentModes}
                       onToggle={togglePaymentMode}
-                      options={allowedPaymentModeOptions}
+                      options={visiblePaymentModeOptions}
                       disabledIds={disabledPaymentModeIds}
                       disabledHint={disabledPaymentModeHint}
+                      showRoleFilterHint={
+                        allowedPaymentModeOptions.length <
+                        PAYMENT_MODE_OPTIONS.length
+                      }
                     />
                     {isWalkIn && allowedPaymentModeIds.includes("credit") ? (
                       <p className="mt-1.5 text-[11px] text-amber-800">

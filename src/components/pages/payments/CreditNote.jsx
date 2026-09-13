@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
-import { Navigate, useLocation, useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import moment from "moment";
 import { toast } from "sonner";
 import { FaPlus } from "react-icons/fa";
@@ -8,7 +8,6 @@ import { Input as AntInput } from "antd";
 import {
   FileText,
   MoreVerticalIcon,
-  Printer,
   RefreshCw,
   Undo2,
   Ban,
@@ -60,11 +59,10 @@ export function CreditNoteIndexRedirect() {
 export default function CreditNote() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const facilityId = activeBusiness?.id;
   const userId = user?.id || user?.email;
-  const businessName =
-    activeBusiness?.business_name || activeBusiness?.name || "Business";
 
   const partyParam = resolveCreditNoteParty(location.pathname, searchParams);
   const isVendor =
@@ -100,20 +98,37 @@ export default function CreditNote() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const [selectedNo, setSelectedNo] = useState(null);
-  const [showDetail, setShowDetail] = useState(false);
   const [detail, setDetail] = useState(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
   const [showApply, setShowApply] = useState(false);
   const [openInvoices, setOpenInvoices] = useState([]);
   const [applyAmounts, setApplyAmounts] = useState({});
   const [applying, setApplying] = useState(false);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
 
+  const previewPath = useCallback(
+    (cnNo, { apply = false } = {}) => {
+      const q = new URLSearchParams({
+        cn: cnNo,
+        party: isVendor ? "vendor" : "customer",
+      });
+      if (apply) q.set("apply", "1");
+      return `/app/payments/credit-note/preview?${q.toString()}`;
+    },
+    [isVendor],
+  );
+
+  const openDetail = useCallback(
+    (cnNo) => {
+      if (!cnNo) return;
+      navigate(previewPath(cnNo));
+    },
+    [navigate, previewPath],
+  );
+
   const fetchList = useCallback(() => {
     if (!facilityId) return;
     setLoading(true);
-      _postApi(
+    _postApi(
       "/api/credit-notes/list",
       {
         facilityId,
@@ -122,7 +137,7 @@ export default function CreditNote() {
         search: search.trim() || undefined,
         limit: 500,
       },
-        (resp) => {
+      (resp) => {
         setLoading(false);
         if (!resp?.success) {
           toast.error(resp?.message || `Failed to load ${labels.plural}`);
@@ -149,71 +164,58 @@ export default function CreditNote() {
     setCurrentPage(1);
   }, [statusFilter, search, isVendor]);
 
-  const fetchDetail = useCallback(
-    (cnNo) => {
-      if (!facilityId || !cnNo) {
-        setDetail(null);
-      return;
-    }
-      setLoadingDetail(true);
-      _fetchApi(
-        `/api/credit-notes/${encodeURIComponent(cnNo)}?facilityId=${facilityId}`,
-        (resp) => {
-          setLoadingDetail(false);
-          if (resp?.success) setDetail(resp.data);
-          else {
-            toast.error(resp?.message || "Not found");
-            setDetail(null);
-          }
-        },
-        () => {
-          setLoadingDetail(false);
-          toast.error("Failed to load details");
-          setDetail(null);
-        },
-      );
-    },
-    [facilityId],
-  );
-
-  const openDetail = (cnNo) => {
-    setSelectedNo(cnNo);
-    setShowDetail(true);
-    fetchDetail(cnNo);
-  };
-
-  const openApply = (fromDetail = true) => {
-    const doc = fromDetail ? detail : null;
-    if (!doc?.entityId) {
-      toast.error(`${labels.party} not found on this document`);
-      return;
-    }
+  const openApplyFromList = (item) => {
+    setDetail(null);
     setShowApply(true);
     setLoadingInvoices(true);
     setApplyAmounts({});
     _fetchApi(
-      `/api/credit-notes/invoices/${encodeURIComponent(doc.entityId)}?facilityId=${facilityId}&type=${apiType}`,
+      `/api/credit-notes/${encodeURIComponent(item.creditNoteNumber)}?facilityId=${facilityId}`,
       (resp) => {
-        setLoadingInvoices(false);
-        const list = Array.isArray(resp?.data) ? resp.data : [];
-        setOpenInvoices(list);
-        const seed = {};
-        let left = doc.creditsRemaining || 0;
-        for (const inv of list) {
-          if (left <= 0) break;
-          const due = parseFloat(inv.amount) || 0;
-          const apply = Math.min(due, left);
-          if (apply > 0) {
-            seed[inv.invoiceRef || inv.invoice_ref] = String(apply);
-            left -= apply;
-          }
+        if (!resp?.success) {
+          setLoadingInvoices(false);
+          setShowApply(false);
+          toast.error(resp?.message || "Not found");
+          return;
         }
-        setApplyAmounts(seed);
+        const doc = resp.data;
+        setDetail(doc);
+        if (!doc?.entityId) {
+          setLoadingInvoices(false);
+          setShowApply(false);
+          toast.error(`${labels.party} not found on this document`);
+          return;
+        }
+        _fetchApi(
+          `/api/credit-notes/invoices/${encodeURIComponent(doc.entityId)}?facilityId=${facilityId}&type=${apiType}`,
+          (invResp) => {
+            setLoadingInvoices(false);
+            const list = Array.isArray(invResp?.data) ? invResp.data : [];
+            setOpenInvoices(list);
+            const seed = {};
+            let left = doc.creditsRemaining || 0;
+            for (const inv of list) {
+              if (left <= 0) break;
+              const due = parseFloat(inv.amount) || 0;
+              const applyAmt = Math.min(due, left);
+              if (applyAmt > 0) {
+                seed[inv.invoiceRef || inv.invoice_ref] = String(applyAmt);
+                left -= applyAmt;
+              }
+            }
+            setApplyAmounts(seed);
+          },
+          () => {
+            setLoadingInvoices(false);
+            setOpenInvoices([]);
+            toast.error(`Failed to load open ${labels.invoices}`);
+          },
+        );
       },
       () => {
         setLoadingInvoices(false);
-        setOpenInvoices([]);
-        toast.error(`Failed to load open ${labels.invoices}`);
+        setShowApply(false);
+        toast.error("Failed to load details");
       },
     );
   };
@@ -247,7 +249,6 @@ export default function CreditNote() {
         toast.success("Credits applied");
         setShowApply(false);
         fetchList();
-        fetchDetail(detail.creditNoteNumber);
       },
       () => {
         setApplying(false);
@@ -255,8 +256,6 @@ export default function CreditNote() {
       },
     );
   };
-
-  const printDoc = () => window.print();
 
   const totalCount = meta.openCount + meta.closedCount;
   const filteredRows = useMemo(() => {
@@ -380,61 +379,7 @@ export default function CreditNote() {
                   View details
                 </DropdownMenuItem>
                 {item.status === "open" && (
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSelectedNo(item.creditNoteNumber);
-                      setShowDetail(true);
-                      setLoadingDetail(true);
-                      _fetchApi(
-                        `/api/credit-notes/${encodeURIComponent(item.creditNoteNumber)}?facilityId=${facilityId}`,
-                        (resp) => {
-                          setLoadingDetail(false);
-                          if (resp?.success) {
-                            setDetail(resp.data);
-                            setShowApply(true);
-                            setLoadingInvoices(true);
-                            setApplyAmounts({});
-                            const entityId = resp.data.entityId;
-                            const left = resp.data.creditsRemaining || 0;
-                            _fetchApi(
-                              `/api/credit-notes/invoices/${encodeURIComponent(entityId)}?facilityId=${facilityId}&type=${apiType}`,
-                              (invResp) => {
-                                setLoadingInvoices(false);
-                                const list = Array.isArray(invResp?.data)
-                                  ? invResp.data
-                                  : [];
-                                setOpenInvoices(list);
-                                const seed = {};
-                                let rem = left;
-                                for (const inv of list) {
-                                  if (rem <= 0) break;
-                                  const due = parseFloat(inv.amount) || 0;
-                                  const applyAmt = Math.min(due, rem);
-                                  if (applyAmt > 0) {
-                                    seed[
-                                      inv.invoiceRef || inv.invoice_ref
-                                    ] = String(applyAmt);
-                                    rem -= applyAmt;
-                                  }
-                                }
-                                setApplyAmounts(seed);
-                              },
-                              () => {
-                                setLoadingInvoices(false);
-                                setOpenInvoices([]);
-                              },
-                            );
-    } else {
-                            toast.error(resp?.message || "Not found");
-                          }
-                        },
-                        () => {
-                          setLoadingDetail(false);
-                          toast.error("Failed to load details");
-                        },
-                      );
-                    }}
-                  >
+                  <DropdownMenuItem onClick={() => openApplyFromList(item)}>
                     {labels.apply}
                   </DropdownMenuItem>
                 )}
@@ -450,7 +395,7 @@ export default function CreditNote() {
         ),
       },
     ],
-    [labels.apply, labels.party, facilityId, apiType],
+    [labels.apply, labels.party, openDetail, openApplyFromList],
   );
 
   if (view === "create") {
@@ -462,10 +407,8 @@ export default function CreditNote() {
           onCancel={() => setView("list")}
           onCreated={(cnNo) => {
             setView("list");
-            setSelectedNo(cnNo);
-            setShowDetail(true);
             fetchList();
-            if (cnNo) fetchDetail(cnNo);
+            if (cnNo) openDetail(cnNo);
           }}
         />
       </div>
@@ -696,219 +639,6 @@ export default function CreditNote() {
         )}
       </div>
 
-      {/* Detail modal */}
-      {showDetail && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4">
-          <div className="my-6 w-full max-w-3xl rounded-lg border border-slate-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 print:hidden">
-              <div className="flex items-center gap-2">
-                {detail && <StatusBadge status={detail.status} />}
-                <span className="font-mono text-sm font-semibold">
-                  {selectedNo}
-                  </span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {detail?.status === "open" && (
-                  <Button size="sm" onClick={() => openApply(true)}>
-                    {labels.apply}
-                  </Button>
-                )}
-                <Button size="sm" variant="outline" onClick={printDoc}>
-                  <Printer className="mr-1.5 h-3.5 w-3.5" />
-                  Print / PDF
-                </Button>
-                  <Button
-                  variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                    setShowDetail(false);
-                    setSelectedNo(null);
-                    setDetail(null);
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                  </Button>
-              </div>
-                </div>
-
-            {loadingDetail && (
-              <div className="space-y-3 p-6">
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-40 w-full" />
-              </div>
-            )}
-
-            {!loadingDetail && detail && (
-              <article className="credit-note-sheet p-6">
-                <div
-                  className="mb-6 rounded-md px-5 py-4 text-white"
-                    style={{
-                    background:
-                      "linear-gradient(135deg, #0f2744 0%, #1a3a5c 55%, #0f2744 100%)",
-                    }}
-                  >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-300">
-                        {labels.singular}
-                  </div>
-                      <h2 className="mt-1 text-lg font-semibold">
-                        {businessName}
-                      </h2>
-                      </div>
-                    <div className="text-right">
-                      <div className="font-mono text-base font-semibold text-[var(--aa-accent,#c4a35a)]">
-                        {detail.creditNoteNumber}
-                          </div>
-                      <div className="mt-1 text-xs text-slate-300">
-                        {moment(detail.date).format("DD MMM YYYY")}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mb-6 grid gap-4 sm:grid-cols-2">
-                          <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      {labels.party}
-                          </div>
-                    <div className="mt-1 font-semibold text-slate-900">
-                      {detail.entityName}
-                        </div>
-                    {detail.entityId ? (
-                      <div className="font-mono text-xs text-slate-500">
-                        {detail.entityId}
-                        </div>
-                    ) : null}
-                      </div>
-                  <div className="sm:text-right">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      Reference
-                  </div>
-                    <div className="mt-1 text-sm text-slate-700">
-                      {detail.reference || "—"}
-                </div>
-              </div>
-                </div>
-
-                <p className="mb-4 text-sm text-slate-600">
-                  {detail.description || detail.reason || "—"}
-                </p>
-
-                <div className="mb-6 grid grid-cols-3 gap-3 rounded-md border border-slate-200 bg-slate-50/80 p-3 text-center">
-                <div>
-                    <div className="text-[10px] uppercase text-slate-500">
-                      Total
-                    </div>
-                    <div className="font-mono text-sm font-semibold">
-                      {formatNumber1(detail.totalAmount)}
-                    </div>
-                </div>
-                <div>
-                    <div className="text-[10px] uppercase text-slate-500">
-                      Applied
-                </div>
-                    <div className="font-mono text-sm font-semibold text-emerald-700">
-                      {formatNumber1(detail.creditsApplied)}
-              </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase text-slate-500">
-                      Credits remaining
-                    </div>
-                    <div className="font-mono text-sm font-semibold text-slate-900">
-                      {formatNumber1(detail.creditsRemaining)}
-                    </div>
-                  </div>
-                </div>
-
-                {detail.applications?.length > 0 && (
-                  <div className="mb-6">
-                    <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      Applications
-                  </div>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-500">
-                          <th className="py-1.5 font-semibold">
-                            {labels.invoice}
-                          </th>
-                          <th className="py-1.5 text-right font-semibold">
-                            Amount
-                          </th>
-                          <th className="py-1.5 text-right font-semibold">
-                            Date
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {detail.applications.map((a) => (
-                          <tr key={a.id} className="border-b border-slate-100">
-                            <td className="py-2 font-mono text-xs">
-                              {String(a.invoiceRef).toUpperCase() === "REFUND"
-                                ? "Refund (cash / bank)"
-                                : a.invoiceRef}
-                            </td>
-                            <td className="py-2 text-right font-mono">
-                              {formatNumber1(a.amount)}
-                              </td>
-                            <td className="py-2 text-right text-xs text-slate-500">
-                              {moment(a.date).format("DD MMM YYYY")}
-                              </td>
-                            </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {detail.entries?.length > 0 && (
-                  <div>
-                    <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      Journal entries
-                      </div>
-                          <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-500">
-                          <th className="py-1.5 font-semibold">Account</th>
-                          <th className="py-1.5 text-right font-semibold">
-                            Debit
-                          </th>
-                          <th className="py-1.5 text-right font-semibold">
-                            Credit
-                          </th>
-                              </tr>
-                            </thead>
-                      <tbody>
-                        {detail.entries.map((e, idx) => (
-                          <tr
-                            key={`${e.account_code}-${idx}`}
-                            className="border-b border-slate-100"
-                          >
-                            <td className="py-2 text-xs">
-                              <span className="font-mono">
-                                {e.account_code}
-                              </span>{" "}
-                              {e.account_description}
-                                  </td>
-                            <td className="py-2 text-right font-mono">
-                              {Number(e.dr) > 0 ? formatNumber1(e.dr) : "—"}
-                            </td>
-                            <td className="py-2 text-right font-mono">
-                              {Number(e.cr) > 0 ? formatNumber1(e.cr) : "—"}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-              </article>
-            )}
-          </div>
-                        </div>
-                      )}
-
       {showApply && detail && (
         <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4">
           <div className="my-8 w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-xl">
@@ -985,18 +715,7 @@ export default function CreditNote() {
       </div>
       )}
 
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          .credit-note-sheet, .credit-note-sheet * { visibility: visible !important; }
-          .credit-note-sheet {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-          }
-        }
-      `}</style>
+
     </div>
   );
 }

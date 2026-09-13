@@ -364,12 +364,20 @@ export function getProcessStage(status, paymentType) {
   const raw = normalizeWorkflowStatus(status);
   const pt = String(paymentType || "").toLowerCase();
   const isCredit = pt === "credit";
-  const isDeposit = pt === "deposit" || pt === "apply_deposit";
+  const isDeposit =
+    pt === "deposit" || pt === "apply_deposit" || pt === "apply_credit";
   if (
     isDeposit &&
     ["awaiting_payment", "awaiting_cashier_confirm"].includes(raw)
   ) {
-    return DEPOSIT_PROCESS_STAGE;
+    return pt === "apply_credit"
+      ? {
+          ...DEPOSIT_PROCESS_STAGE,
+          id: "apply_credit",
+          short: "Credit",
+          label: "Apply credit",
+        }
+      : DEPOSIT_PROCESS_STAGE;
   }
   // Credit sales in separation are still unpaid — show Credit, not Paid
   if (
@@ -417,20 +425,22 @@ export function getWorkflowStatusMeta(status, paymentType) {
   const detail = SALE_WORKFLOW_STATUS_META[raw];
   const pt = String(paymentType || "").toLowerCase();
   const isCredit = pt === "credit";
-  const isDeposit = pt === "deposit" || pt === "apply_deposit";
+  const isDeposit =
+    pt === "deposit" || pt === "apply_deposit" || pt === "apply_credit";
   if (
     isDeposit &&
     ["awaiting_payment", "awaiting_cashier_confirm"].includes(raw)
   ) {
+    const applyCredit = pt === "apply_credit";
     return {
-      label: "Apply deposit",
-      short: "Deposit",
+      label: applyCredit ? "Apply credit" : "Apply deposit",
+      short: applyCredit ? "Credit" : "Deposit",
       color: "teal",
       badge: DEPOSIT_PROCESS_STAGE.badge,
       dot: DEPOSIT_PROCESS_STAGE.dot,
       row: DEPOSIT_PROCESS_STAGE.row,
-      processId: "deposit",
-      processLabel: "Apply deposit",
+      processId: applyCredit ? "apply_credit" : "deposit",
+      processLabel: applyCredit ? "Apply credit" : "Apply deposit",
     };
   }
   if (

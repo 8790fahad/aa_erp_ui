@@ -58,6 +58,7 @@ function lineModeLabel(paymentType) {
   const pt = String(paymentType || "").toLowerCase();
   if (pt === "card") return "POS";
   if (pt === "apply_deposit" || pt === "deposit") return "Apply Deposit";
+  if (pt === "apply_credit") return "Apply Credit";
   if (pt === "credit" || pt === "credit_split") return "Credit";
   return paymentType || "—";
 }
@@ -66,6 +67,7 @@ function visibleLine(line, reconModes) {
   const pt = String(line?.payment_type || "").toLowerCase();
   if (pt === "credit" || pt === "credit_split") return true;
   if (pt === "apply_deposit" || pt === "deposit") return true;
+  if (pt === "apply_credit") return true;
   return reconModes.some((m) => pt.includes(m));
 }
 

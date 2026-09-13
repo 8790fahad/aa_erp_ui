@@ -3,7 +3,7 @@ import { useSelector } from "react-redux";
 import { useLocation, useSearchParams } from "react-router-dom";
 import moment from "moment";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { FileText, Loader2, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { Typeahead } from "react-bootstrap-typeahead";
 import "react-bootstrap-typeahead/css/Typeahead.css";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -13,9 +13,8 @@ import {
   parseNumberFromFormatted,
 } from "@/utilities";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
 
 /**
  * Zoho Books–style create form.
@@ -23,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
  * Invoice is optional (can apply credit later).
  */
 export default function CreditNoteCreateForm({
-  embedded = false,
+  embedded: _embedded = false,
   onCancel,
   onCreated,
   forcedParty,
@@ -51,6 +50,9 @@ export default function CreditNoteCreateForm({
         date: "Vendor Credit Date",
         balanceAccount: "Accounts Payable",
         save: "Save as Open",
+        saveRefund: "Save and Refund",
+        creditsTitle: "Open credits",
+        creditsHint: "Keep open — apply to future bills",
       }
     : {
         title: "New Credit Note",
@@ -60,6 +62,10 @@ export default function CreditNoteCreateForm({
         date: "Credit Note Date",
         balanceAccount: "Customer Deposit",
         save: "Save to Deposit",
+        saveRefund: "Save and Refund",
+        creditsTitle: "Customer deposit",
+        creditsHint:
+          "Adds to deposit — use Apply Deposit on Create Invoice",
       };
 
   const facilityId = activeBusiness?.id;
@@ -343,6 +349,9 @@ export default function CreditNoteCreateForm({
       rows.length <= 1 ? rows : rows.filter((_, i) => i !== idx),
     );
 
+  const productLabel = (product) =>
+    String(product?.name || product?.item_name || product?.description || "").trim();
+
   const pickProduct = (idx, product) => {
     if (!product) {
       updateLine(idx, { product: null, description: "", account: null });
@@ -354,9 +363,10 @@ export default function CreditNoteCreateForm({
       product.inventory_account ||
       "";
     const acc = accounts.find((a) => String(a.code) === String(accCode));
+    const name = productLabel(product);
     updateLine(idx, {
       product,
-      description: product.name || "",
+      description: name,
       rate: String(product.selling_price ?? product.cost_price ?? "0"),
       quantity: "1",
       account: acc
@@ -365,7 +375,7 @@ export default function CreditNoteCreateForm({
           ? { code: accCode, description: accCode, head: accCode }
           : null,
       lineKind:
-        String(product.item_type || "").toLowerCase() === "service"
+        String(product.item_type || product.type || "").toLowerCase() === "service"
           ? "service"
           : "product",
       product_id: product.sku || product.product_id || product.id || null,
@@ -544,116 +554,165 @@ export default function CreditNoteCreateForm({
     );
   };
 
-  return (
-    <div
-      className={
-        embedded
-          ? "rounded-lg border border-slate-200 bg-white"
-          : "mx-auto max-w-5xl rounded-lg border border-slate-200 bg-white shadow-sm"
-      }
-    >
-      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-        <h2 className="text-xl font-semibold text-slate-900">{labels.title}</h2>
-        <Button type="button" variant="ghost" size="sm" onClick={handleClose}>
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
+  const fieldInputClass =
+    "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]";
 
-      <div className="space-y-5 px-5 py-5">
+  return (
+    <div className="min-h-screen bg-white">
+      <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <FileText
+              className="size-6 text-[var(--aa-accent)]"
+              strokeWidth={1.75}
+            />
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900">
+                {labels.title}
+              </h1>
+              <p className="text-xs text-slate-500">
+                {isVendor
+                  ? "Credit a vendor for returns or adjustments"
+                  : "Credit a customer for returned inventory"}
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 border-slate-300 px-3 text-xs font-medium text-slate-700 shadow-sm"
+            onClick={handleClose}
+          >
+            <X className="h-4 w-4" />
+            Close
+          </Button>
+        </div>
         {!isVendor ? (
-          <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
-            <p className="font-medium">Credit a customer for returned inventory</p>
-            <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-[13px] text-sky-800">
-              <li>Select the customer.</li>
-              <li>
-                Reason: <strong>Customer returns goods</strong> (or Incorrect
-                supply / Damaged).
-              </li>
-              <li>
-                Choose the warehouse, add the product lines, and a short
-                inventory note.
-              </li>
-              <li>
-                Save to <strong>Customer deposit</strong>. Then on{" "}
-                <strong>Create Invoice</strong> tick <strong>Apply Deposit</strong>{" "}
-                to use that balance.
-              </li>
-            </ol>
+          <div className="mt-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
+            Select the customer, add returned product lines, then save. Apply
+            the balance on Create Invoice with Apply Deposit.
           </div>
         ) : null}
+      </div>
 
-        {/* Header fields — Zoho layout */}
-        <div className="grid gap-4 sm:grid-cols-[180px_1fr] sm:items-start">
-          <Label className="pt-2 text-sm text-slate-600">
-            {labels.party} <span className="text-red-500">*</span>
-          </Label>
-          <Typeahead
-            id="cn-party"
-            labelKey="label"
-            options={partyOptions}
-            selected={selectedParty}
-            onChange={setSelectedParty}
-            placeholder={labels.partyPlaceholder}
-            clearButton
-          />
-
-          <Label className="pt-2 text-sm text-slate-600">
-            {labels.number} <span className="text-red-500">*</span>
-          </Label>
-          <div className="flex max-w-md flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <Input
-                readOnly
-                value={
-                  loadingNumber
-                    ? "Generating…"
-                    : creditNoteNumber || "—"
+      <div className="space-y-4 border-b border-slate-100 bg-white px-6 py-5">
+        <FormRow label={labels.party} required>
+          {isVendor ? (
+            <Typeahead
+              id="cn-party"
+              labelKey="label"
+              options={partyOptions}
+              selected={selectedParty}
+              onChange={setSelectedParty}
+              placeholder={labels.partyPlaceholder}
+              clearButton
+              size="sm"
+              className="z-[300] w-full"
+              positionFixed
+              inputProps={{
+                className: fieldInputClass,
+              }}
+            />
+          ) : (
+            <SearchCustomerInput
+              size="sm"
+              selected={
+                selectedParty[0]
+                  ? [
+                      {
+                        customerNo: selectedParty[0].id,
+                        name: selectedParty[0].label,
+                        Account: selectedParty[0].label,
+                      },
+                    ]
+                  : []
+              }
+              onChange={(customer) => {
+                if (!customer) {
+                  setSelectedParty([]);
+                  return;
                 }
-                className="bg-slate-50 font-mono font-semibold text-slate-900"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                title="Regenerate from number generator"
-                disabled={loadingNumber}
-                onClick={reserveNoteNumber}
-              >
-                <RefreshCw
-                  className={`h-3.5 w-3.5 ${loadingNumber ? "animate-spin" : ""}`}
-                />
-              </Button>
-            </div>
-            <p className="text-[11px] text-slate-500">
+                setSelectedParty([
+                  {
+                    id: customer.customerNo,
+                    label:
+                      customer.Account ||
+                      customer.name ||
+                      customer.customerNo ||
+                      "Customer",
+                  },
+                ]);
+              }}
+              className="w-full"
+            />
+          )}
+        </FormRow>
+
+        <FormRow
+          label={labels.number}
+          required
+          hint={
+            <p className="mt-1 text-[11px] text-slate-500">
               From number generator ({numberQueryType})
             </p>
+          }
+        >
+          <div className="flex items-center gap-2">
+            <input
+              readOnly
+              value={loadingNumber ? "Generating…" : creditNoteNumber || "—"}
+              className={`${fieldInputClass} max-w-xs bg-slate-50 font-medium`}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 w-9 shrink-0 p-0"
+              title="Regenerate from number generator"
+              disabled={loadingNumber}
+              onClick={reserveNoteNumber}
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${loadingNumber ? "animate-spin" : ""}`}
+              />
+            </Button>
           </div>
+        </FormRow>
 
-          <Label className="pt-2 text-sm text-slate-600">Reference</Label>
-          <Input
+        <FormRow label="Reference">
+          <input
             value={reference}
             onChange={(e) => setReference(e.target.value)}
             placeholder="Optional invoice / order number"
+            className={fieldInputClass}
           />
+        </FormRow>
 
-          <Label className="pt-2 text-sm text-slate-600">
-            {labels.date} <span className="text-red-500">*</span>
-          </Label>
-          <Input
+        <FormRow label={labels.date} required>
+          <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="max-w-xs"
+            className={`${fieldInputClass} max-w-xs`}
           />
+        </FormRow>
 
-          <Label className="pt-2 text-sm text-slate-600">
-            Reason <span className="text-red-500">*</span>
-          </Label>
+        <FormRow
+          label="Reason"
+          required
+          hint={
+            selectedReason?.explanation ? (
+              <p className="mt-1 text-[11px] text-slate-500">
+                {selectedReason.explanation}
+              </p>
+            ) : null
+          }
+        >
           <select
             value={reasonCategory}
             onChange={(e) => setReasonCategory(e.target.value)}
-            className="h-9 max-w-md rounded-md border border-slate-200 bg-white px-2 text-sm"
+            className={fieldInputClass}
           >
             {reasons.length === 0 ? (
               <option value="RETURN">Customer returns goods</option>
@@ -665,21 +724,15 @@ export default function CreditNoteCreateForm({
               ))
             )}
           </select>
-          {selectedReason?.explanation ? (
-            <p className="text-[11px] text-slate-500 md:col-span-1 md:col-start-2">
-              {selectedReason.explanation}
-            </p>
-          ) : null}
+        </FormRow>
 
-          {needsInventory ? (
-            <>
-              <Label className="pt-2 text-sm text-slate-600">
-                Warehouse / Store <span className="text-red-500">*</span>
-              </Label>
+        {needsInventory ? (
+          <>
+            <FormRow label="Warehouse / Store" required>
               <select
                 value={branchId}
                 onChange={(e) => setBranchId(e.target.value)}
-                className="h-9 max-w-md rounded-md border border-slate-200 bg-white px-2 text-sm"
+                className={fieldInputClass}
               >
                 <option value="">Select store…</option>
                 {branches.map((b) => (
@@ -688,10 +741,9 @@ export default function CreditNoteCreateForm({
                   </option>
                 ))}
               </select>
+            </FormRow>
 
-              <Label className="pt-2 text-sm text-slate-600">
-                Inventory note <span className="text-red-500">*</span>
-              </Label>
+            <FormRow label="Inventory note" required align="start">
               <Textarea
                 value={inventoryExplanation}
                 onChange={(e) => setInventoryExplanation(e.target.value)}
@@ -700,82 +752,55 @@ export default function CreditNoteCreateForm({
                   "Describe how inventory is affected…"
                 }
                 rows={2}
-                className="resize-none"
+                className="min-h-[4.5rem] resize-none border-slate-300"
               />
-            </>
-          ) : null}
+            </FormRow>
+          </>
+        ) : null}
 
-          <Label className="pt-2 text-sm text-slate-600">Subject</Label>
+        <FormRow label="Subject" align="start">
           <Textarea
             value={subject}
             onChange={(e) => setSubject(e.target.value.slice(0, 250))}
             placeholder="Enter a subject within 250 characters"
             rows={2}
-            className="resize-none"
+            className="min-h-[4.5rem] resize-none border-slate-300"
           />
+        </FormRow>
 
-          <Label className="pt-2 text-sm text-slate-600">
+        <FormRow label={labels.balanceAccount}>
+          <div className="flex h-9 max-w-xs items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
             {labels.balanceAccount}
-          </Label>
-          <Input
-            disabled
-            value={labels.balanceAccount}
-            className="max-w-md bg-slate-50 text-slate-600"
-          />
-        </div>
-
-        {/* Outcome — Zoho lifecycle: Refund vs Credits */}
-        <div className="rounded-md border border-slate-200 bg-slate-50/80 p-3">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            After save
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setOutcome("credits")}
-              className={`rounded-md border px-3 py-2 text-left text-sm ${
-                outcome === "credits"
-                  ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-200 bg-white text-slate-700"
-              }`}
-            >
-              <div className="font-medium">Customer deposit</div>
-              <div
-                className={`text-[11px] ${
-                  outcome === "credits" ? "text-slate-300" : "text-slate-500"
-                }`}
-              >
-                {isVendor
-                  ? "Keep open → apply to future bills"
-                  : "Adds to deposit — use Apply Deposit on Create Invoice"}
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setOutcome("refund")}
-              className={`rounded-md border px-3 py-2 text-left text-sm ${
-                outcome === "refund"
-                  ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-200 bg-white text-slate-700"
-              }`}
-            >
-              <div className="font-medium">Refund</div>
-              <div
-                className={`text-[11px] ${
-                  outcome === "refund" ? "text-slate-300" : "text-slate-500"
-                }`}
-              >
-                Pay out now via cash / bank (closes note)
-              </div>
-            </button>
-          </div>
+        </FormRow>
 
-          {outcome === "refund" && (
-            <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2">
+        <FormRow label="After save" required align="start" wide>
+          <div
+            className="grid max-w-3xl gap-2 sm:grid-cols-2"
+            role="radiogroup"
+            aria-label="After save"
+          >
+            <OutcomeOption
+              checked={outcome === "credits"}
+              title={labels.creditsTitle}
+              description={labels.creditsHint}
+              onSelect={() => setOutcome("credits")}
+            />
+            <OutcomeOption
+              checked={outcome === "refund"}
+              title="Refund"
+              description="Pay out now via cash / bank (closes note)"
+              onSelect={() => setOutcome("refund")}
+            />
+          </div>
+          {outcome === "refund" ? (
+            <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">
               <div>
-                <Label className="text-xs text-slate-600">Mode</Label>
+                <label className="text-xs font-medium text-slate-600">
+                  Mode
+                </label>
                 <select
-                  className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
+                  className={`mt-1 ${fieldInputClass}`}
                   value={refundMode}
                   onChange={(e) => setRefundMode(e.target.value)}
                 >
@@ -785,9 +810,11 @@ export default function CreditNoteCreateForm({
               </div>
               {refundMode === "bank" ? (
                 <div>
-                  <Label className="text-xs text-slate-600">Bank account</Label>
+                  <label className="text-xs font-medium text-slate-600">
+                    Bank account
+                  </label>
                   <select
-                    className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
+                    className={`mt-1 ${fieldInputClass}`}
                     value={refundBankAccount?.id || ""}
                     onChange={(e) => {
                       const b = bankList.find(
@@ -807,13 +834,13 @@ export default function CreditNoteCreateForm({
                 </div>
               ) : (
                 <div>
-                  <Label className="text-xs text-slate-600">Cash account</Label>
+                  <label className="text-xs font-medium text-slate-600">
+                    Cash account
+                  </label>
                   <select
-                    className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
+                    className={`mt-1 ${fieldInputClass}`}
                     value={
-                      refundCashHead?.head ||
-                      refundCashHead?.code ||
-                      ""
+                      refundCashHead?.head || refundCashHead?.code || ""
                     }
                     onChange={(e) => {
                       const h = cashHeads.find(
@@ -825,57 +852,130 @@ export default function CreditNoteCreateForm({
                   >
                     <option value="">Select cash account</option>
                     {cashHeads.map((h) => (
-                      <option
-                        key={h.head || h.code}
-                        value={h.head || h.code}
-                      >
-                        {h.head || h.code} —{" "}
-                        {h.description || h.name || "Cash"}
+                      <option key={h.head || h.code} value={h.head || h.code}>
+                        {h.head || h.code} — {h.description || h.name || "Cash"}
                       </option>
                     ))}
                   </select>
                 </div>
               )}
             </div>
-          )}
-        </div>
+          ) : null}
+        </FormRow>
+      </div>
 
-        {/* Line items table */}
-        <div className="overflow-x-auto rounded-md border border-slate-200">
-          <table className="w-full min-w-[720px] text-sm">
+      <div className="flex w-full flex-col bg-white">
+        <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-6 py-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Item Table
+          </p>
+        </div>
+        <div className="w-full overflow-x-auto px-4 sm:px-6">
+          <table className="min-w-full">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
-                <th className="px-3 py-2 font-semibold">Item details</th>
-                <th className="px-3 py-2 font-semibold">Account</th>
-                <th className="px-3 py-2 text-right font-semibold">Quantity</th>
-                <th className="px-3 py-2 text-right font-semibold">Rate</th>
-                <th className="px-3 py-2 text-right font-semibold">Amount</th>
-                <th className="w-10 px-2 py-2" />
+              <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                <th className="min-w-[280px] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
+                  Item Details
+                </th>
+                <th className="min-w-[180px] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
+                  Account
+                </th>
+                <th className="w-24 px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
+                  Quantity
+                </th>
+                <th className="w-28 px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
+                  Rate
+                </th>
+                <th className="w-28 px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
+                  Amount
+                </th>
+                <th className="w-10 px-1 py-2.5" />
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100 bg-white">
               {lineItems.map((row, idx) => (
-                <tr key={row.id} className="border-b border-slate-100 align-top">
-                  <td className="px-3 py-2">
-                    <Typeahead
-                      id={`cn-item-${row.id}`}
-                      labelKey="name"
-                      options={products}
-                      selected={row.product ? [row.product] : []}
-                      onChange={(sel) => pickProduct(idx, sel[0] || null)}
-                      placeholder="Type or click to select an item"
-                      clearButton
-                    />
-                    <Input
-                      className="mt-1.5 h-8"
-                      value={row.description}
-                      onChange={(e) =>
-                        updateLine(idx, { description: e.target.value })
-                      }
-                      placeholder="Description"
-                    />
+                <tr
+                  key={row.id}
+                  className="bg-white hover:bg-slate-50/80 align-top"
+                >
+                  <td className="px-3 py-3">
+                    {row.product || (row.description || "").trim() ? (
+                      <div className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-900">
+                              {productLabel(row.product) || row.description || "Item"}
+                            </p>
+                            {(row.product?.sku || row.product?.product_id) && (
+                              <p className="text-[11px] text-slate-500">
+                                SKU: {row.product.sku || row.product.product_id}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="shrink-0 text-[11px] font-medium text-[var(--aa-accent)] hover:underline"
+                            onClick={() => pickProduct(idx, null)}
+                          >
+                            Change
+                          </button>
+                        </div>
+                        <input
+                          className="h-8 w-full rounded border border-slate-300 px-2 text-sm outline-none focus:border-[var(--aa-accent)]"
+                          value={row.description}
+                          onChange={(e) =>
+                            updateLine(idx, { description: e.target.value })
+                          }
+                          placeholder="Description (optional)"
+                        />
+                      </div>
+                    ) : (
+                      <Typeahead
+                        id={`cn-item-${row.id}`}
+                        labelKey={(opt) => productLabel(opt)}
+                        options={products}
+                        selected={[]}
+                        onChange={(sel) => pickProduct(idx, sel[0] || null)}
+                        placeholder="Type or click to select an item"
+                        clearButton
+                        size="sm"
+                        className="z-[300] w-full"
+                        positionFixed
+                        filterBy={(opt, props) => {
+                          const q = String(props.text || "").toLowerCase();
+                          if (!q) return true;
+                          return [
+                            opt.name,
+                            opt.item_name,
+                            opt.sku,
+                            opt.product_id,
+                            opt.description,
+                          ].some((v) =>
+                            String(v || "")
+                              .toLowerCase()
+                              .includes(q),
+                          );
+                        }}
+                        inputProps={{
+                          className:
+                            "border border-slate-300 rounded px-2 py-1.5 text-sm w-full h-9",
+                        }}
+                        renderMenuItemChildren={(opt) => (
+                          <div className="py-1">
+                            <div className="text-sm font-medium text-slate-800">
+                              {productLabel(opt)}
+                            </div>
+                            {(opt.sku || opt.product_id) && (
+                              <small className="text-xs text-slate-500">
+                                {opt.sku || opt.product_id}
+                              </small>
+                            )}
+                          </div>
+                        )}
+                      />
+                    )}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-3">
                     <Typeahead
                       id={`cn-acc-${row.id}`}
                       labelKey="label"
@@ -906,20 +1006,27 @@ export default function CreditNoteCreateForm({
                       }}
                       placeholder="Select an account"
                       clearButton
+                      size="sm"
+                      className="z-[300] w-full"
+                      positionFixed
+                      inputProps={{
+                        className:
+                          "border border-slate-300 rounded px-2 py-1.5 text-sm w-full h-9",
+                      }}
                     />
                   </td>
-                  <td className="px-3 py-2">
-                    <Input
-                      className="h-9 text-right font-mono"
+                  <td className="px-2 py-3">
+                    <input
+                      className="h-9 w-full rounded border border-slate-300 px-2 text-right text-sm tabular-nums outline-none focus:border-[var(--aa-accent)]"
                       value={row.quantity}
                       onChange={(e) =>
                         updateLine(idx, { quantity: e.target.value })
                       }
                     />
                   </td>
-                  <td className="px-3 py-2">
-                    <Input
-                      className="h-9 text-right font-mono"
+                  <td className="px-2 py-3">
+                    <input
+                      className="h-9 w-full rounded border border-slate-300 px-2 text-right text-sm tabular-nums outline-none focus:border-[var(--aa-accent)]"
                       value={
                         row.rate === ""
                           ? ""
@@ -932,67 +1039,150 @@ export default function CreditNoteCreateForm({
                       }
                     />
                   </td>
-                  <td className="px-3 py-2 text-right font-mono text-sm font-medium">
+                  <td className="px-2 py-3 text-right text-sm font-semibold tabular-nums text-slate-900">
                     {formatNumber1(row.amount || 0)}
                   </td>
-                  <td className="px-2 py-2">
-                    <Button
+                  <td className="px-1 py-3 text-center">
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-slate-400 hover:text-red-600"
+                      className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
                       onClick={() => removeLine(idx)}
                       disabled={lineItems.length <= 1}
+                      title="Remove"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                      <Trash2 size={14} />
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <div className="border-t border-slate-100 px-3 py-2">
-            <Button type="button" variant="outline" size="sm" onClick={addLine}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
+            <button
+              type="button"
+              onClick={addLine}
+              className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-[var(--aa-accent)] hover:bg-slate-50"
+            >
+              <Plus size={14} />
               Add New Row
-            </Button>
-          </div>
-        </div>
-
-        {/* Totals */}
-        <div className="flex justify-end">
-          <div className="w-full max-w-xs space-y-2 text-sm">
-            <div className="flex justify-between text-slate-600">
-              <span>Sub Total</span>
-              <span className="font-mono">{formatNumber1(totals.subtotal)}</span>
-            </div>
-            <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-semibold text-slate-900">
-              <span>Total</span>
-              <span className="font-mono">{formatNumber1(totals.total)}</span>
+            </button>
+            <div className="w-full max-w-xs space-y-1.5 text-sm">
+              <div className="flex justify-between text-slate-600">
+                <span>Sub Total</span>
+                <span className="tabular-nums">
+                  {formatNumber1(totals.subtotal)}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-slate-200 pt-1.5 text-base font-semibold text-slate-900">
+                <span>Total</span>
+                <span className="tabular-nums">
+                  {formatNumber1(totals.total)}
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-5 py-4">
-        <Button
-          type="button"
-          onClick={handleSaveOpen}
-          disabled={loading}
-          className="bg-[var(--aa-navy,#0f2744)] text-white hover:bg-[var(--aa-navy,#0f2744)]/90"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            labels.save
-          )}
-        </Button>
-        <Button type="button" variant="outline" onClick={handleClose}>
-          Cancel
-        </Button>
+      <div className="sticky bottom-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-[#f7f7f8] px-6 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleSaveOpen}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              outcome === "refund" ? labels.saveRefund : labels.save
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+          >
+            Cancel
+          </button>
+        </div>
+        <div className="text-right text-sm">
+          <div className="font-semibold text-slate-900">
+            Total Amount:{" "}
+            <span className="text-slate-800">
+              {formatNumber1(totals.total)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OutcomeOption({ checked, title, description, onSelect }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={checked}
+      onClick={onSelect}
+      className={`flex w-full items-start gap-2.5 rounded-md border px-3 py-2.5 text-left ${
+        checked
+          ? "border-[var(--aa-accent)] bg-[var(--aa-accent)]/5"
+          : "border-slate-300 bg-white hover:bg-slate-50"
+      }`}
+    >
+      <span
+        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+          checked ? "border-[var(--aa-accent)]" : "border-slate-400"
+        }`}
+      >
+        {checked ? (
+          <span className="h-2 w-2 rounded-full bg-[var(--aa-accent)]" />
+        ) : null}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-slate-900">
+          {title}
+        </span>
+        <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">
+          {description}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function FormRow({
+  label,
+  required = false,
+  children,
+  hint = null,
+  align = "center",
+  wide = false,
+}) {
+  return (
+    <div
+      className={`grid grid-cols-1 gap-4 ${
+        wide
+          ? "lg:grid-cols-[9rem_minmax(0,1fr)]"
+          : "lg:grid-cols-[9rem_minmax(0,28rem)]"
+      } ${align === "start" ? "lg:items-start" : "lg:items-center"}`}
+    >
+      <label
+        className={`text-sm font-medium text-slate-600 lg:text-right ${
+          align === "start" ? "lg:pt-2" : ""
+        }`}
+      >
+        {label}
+        {required ? <span className="text-red-500"> *</span> : null}
+      </label>
+      <div className="min-w-0">
+        {children}
+        {hint}
       </div>
     </div>
   );

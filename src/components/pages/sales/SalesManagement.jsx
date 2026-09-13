@@ -66,6 +66,7 @@ const FILTERS = [
 function paymentTypeLabel(type) {
   if (type === "credit") return "Credit";
   if (type === "deposit") return "Apply Deposit";
+  if (type === "apply_credit") return "Apply Credit";
   if (type === "credit_split") return "Credit + Cash + Transfer";
   if (type === "card") return "POS";
   if (type === "transfer" || type === "bank") return "Transfer";

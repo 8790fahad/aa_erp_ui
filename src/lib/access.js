@@ -348,7 +348,7 @@ const ALL_INVOICE_PAYMENT_MODE_IDS = [
 
 /**
  * Payment modes the user may select on Create Invoice.
- * If none of the five privileges are assigned yet, all modes stay available
+ * If none of the privileges are assigned yet, all modes stay available
  * so existing Create Invoice users are not locked out.
  */
 export function allowedInvoicePaymentModeIds(functionalities) {

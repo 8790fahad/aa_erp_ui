@@ -560,6 +560,7 @@ function normalizePaymentMode(type) {
   if (t === "credit") return "credit";
   if (t === "deposit" || t === "apply_deposit" || t === "apply deposit")
     return "deposit";
+  if (t === "apply_credit" || t === "apply credit") return "apply_credit";
   if (t === "transfer") return "transfer";
   if (t === "card" || t === "pos") return "card";
   if (t === "cash") return "cash";
@@ -612,14 +613,16 @@ function paymentTypeFromModeChecks(checked) {
 }
 
 function modeChecksFromRow(row) {
-  const fromRow = rowPaymentModes(row).filter((id) =>
-    MODE_CHECK_OPTIONS.some((opt) => opt.value === id),
-  );
-  if (fromRow.length) return fromRow;
+  const fromRow = rowPaymentModes(row)
+    .map((id) =>
+      id === "apply_credit" || id === "apply credit" ? "deposit" : id,
+    )
+    .filter((id) => MODE_CHECK_OPTIONS.some((opt) => opt.value === id));
+  if (fromRow.length) return [...new Set(fromRow)];
   const pt = normalizePaymentMode(row?.payment_type);
   if (pt === "credit_split") return ["credit", "cash", "transfer"];
   if (pt === "split") return ["cash", "transfer"];
-  if (pt === "deposit") return ["deposit"];
+  if (pt === "deposit" || pt === "apply_credit") return ["deposit"];
   if (pt === "card") return ["card"];
   if (pt === "transfer") return ["transfer"];
   if (pt === "credit") return ["credit"];
@@ -641,13 +644,19 @@ const MODE_LABELS = {
   card: "POS",
   credit: "Credit",
   deposit: "Apply Deposit",
+  apply_credit: "Apply Deposit",
 };
 
 function paymentTypeLabel(type, row = null) {
   const modes = row ? rowPaymentModes(row) : [];
-  const named = ["cash", "transfer", "card", "credit", "deposit"].filter((id) =>
-    modes.includes(id),
-  );
+  const named = [
+    "cash",
+    "transfer",
+    "card",
+    "credit",
+    "deposit",
+    "apply_credit",
+  ].filter((id) => modes.includes(id));
   if (named.length > 1) {
     return named.map((id) => MODE_LABELS[id]).join(" + ");
   }
@@ -657,6 +666,7 @@ function paymentTypeLabel(type, row = null) {
   const opt = PAYMENT_MODE_OPTIONS.find((o) => o.value === t);
   if (opt) return opt.label;
   if (t === "customer_advance" || t === "deposit") return "Deposit";
+  if (t === "apply_credit") return "Apply Deposit";
   if (t === "warehouse") return "Warehouse";
   return type || "—";
 }
@@ -669,6 +679,7 @@ function paymentTypeBadgeClass(type) {
   if (t === "card") return "bg-indigo-50 text-indigo-700 ring-indigo-200";
   if (t === "credit") return "bg-amber-50 text-amber-700 ring-amber-200";
   if (t === "deposit") return "bg-teal-50 text-teal-700 ring-teal-200";
+  if (t === "apply_credit") return "bg-cyan-50 text-cyan-700 ring-cyan-200";
   return "bg-emerald-50 text-emerald-700 ring-emerald-200";
 }
 
@@ -692,15 +703,24 @@ function isCreditedRow(row) {
   return CREDITED_STATUSES.has(String(row?.status || "").toLowerCase());
 }
 
-/** True only for Apply Deposit workflows — not Credit / Credit+Cash+Transfer. */
+/** True for Apply Deposit prepaid workflows (includes legacy apply_credit) — not Credit A/R. */
 function isDepositWorkflowRow(row) {
   const pt = normalizePaymentMode(row?.payment_type);
   return (
     pt === "deposit" ||
+    pt === "apply_credit" ||
     Boolean(row?.deposit_pending) ||
     Boolean(row?.credit_after_deposit) ||
     Boolean(row?.collect_after_deposit)
   );
+}
+
+function isApplyCreditPaymentRow(row) {
+  return normalizePaymentMode(row?.payment_type) === "apply_credit";
+}
+
+function isApplyDepositPaymentRow(row) {
+  return normalizePaymentMode(row?.payment_type) === "deposit";
 }
 
 /** Verification Points Credit tab: deposit invoices that still need apply-then-credit. */
@@ -795,8 +815,8 @@ function depositApplyPreview(row) {
 }
 
 function collectModeIds(row) {
-  return ["cash", "transfer", "card", "credit", "deposit"].filter((id) =>
-    rowPaymentModes(row).includes(id),
+  return ["cash", "transfer", "card", "credit", "deposit", "apply_credit"].filter(
+    (id) => rowPaymentModes(row).includes(id),
   );
 }
 
@@ -810,11 +830,11 @@ function collectionSideDone(row, method) {
     if (Boolean(p.card_done) || Number(p.card) > 0.05) return true;
   } else if (method === "credit") {
     if (Number(p.credit_allocated) > 0.05) return true;
-  } else if (method === "deposit") {
+  } else if (method === "deposit" || method === "apply_credit") {
     if (Number(p.deposit_applied) > 0.05) return true;
   }
   const history = Array.isArray(row?.history) ? row.history : [];
-  if (method === "deposit") {
+  if (method === "deposit" || method === "apply_credit") {
     return history.some((h) => Number(h?.deposit_application?.amount) > 0.05);
   }
   if (method === "credit") {
@@ -837,7 +857,13 @@ function rowCollectsAsSplit(row) {
     .trim();
   if (isSplitPaymentType(pt)) return true;
   if (collectModeIds(row).length > 1) return true;
-  if (pt === "deposit" || pt === "apply_deposit" || pt === "apply deposit") {
+  if (
+    pt === "deposit" ||
+    pt === "apply_deposit" ||
+    pt === "apply deposit" ||
+    pt === "apply_credit" ||
+    pt === "apply credit"
+  ) {
     const modes = rowPaymentModes(row);
     return (
       modes.includes("cash") ||
@@ -852,11 +878,19 @@ function rowCollectsAsSplit(row) {
 function unappliedDepositCover(row) {
   if (!row) return 0;
   if ((Number(row.split_progress?.deposit_applied) || 0) > 0.05) return 0;
-  if (!rowPaymentModes(row).includes("deposit")) return 0;
+  const modes = rowPaymentModes(row);
+  if (!modes.includes("deposit") && !modes.includes("apply_credit")) return 0;
   return Math.max(0, Number(row.deposit_available) || 0);
 }
 
-const MODE_BREAKDOWN_ORDER = ["cash", "transfer", "card", "deposit", "credit"];
+const MODE_BREAKDOWN_ORDER = [
+  "cash",
+  "transfer",
+  "card",
+  "deposit",
+  "apply_credit",
+  "credit",
+];
 
 function fallbackModeIds(row) {
   const pt = normalizePaymentMode(row?.payment_type);
@@ -894,7 +928,7 @@ function rowPaymentModeBreakdown(row) {
     if (id === "cash") amount = cash;
     else if (id === "transfer") amount = transfer;
     else if (id === "card") amount = card;
-    else if (id === "deposit") amount = depositAmt;
+    else if (id === "deposit" || id === "apply_credit") amount = depositAmt;
     else if (id === "credit") {
       amount = creditKnown;
     }
@@ -903,7 +937,7 @@ function rowPaymentModeBreakdown(row) {
       (id === "cash" && cash > 0.05) ||
       (id === "transfer" && transfer > 0.05) ||
       (id === "card" && card > 0.05) ||
-      (id === "deposit" && depositApplied > 0.05) ||
+      ((id === "deposit" || id === "apply_credit") && depositApplied > 0.05) ||
       (id === "credit" &&
         (Number(sp.credit_allocated) > 0.05 || Number(sp.credit) > 0.05));
     return {
@@ -960,6 +994,12 @@ function rowPaymentModes(row) {
     if (row?.collect_after_deposit) extra.push("cash");
     if (row?.credit_after_deposit) extra.push("credit");
     return ["deposit", ...extra];
+  }
+  if (pt === "apply_credit") {
+    const extra = [];
+    if (row?.collect_after_deposit) extra.push("cash");
+    if (row?.credit_after_deposit) extra.push("credit");
+    return ["apply_credit", ...extra];
   }
   if (pt === "credit") return ["credit"];
   if (pt === "credit_split") return ["credit", "cash", "transfer"];
@@ -1121,7 +1161,8 @@ function matchesMethod(paymentType, method, row = null) {
   }
   if (method === "credit") return pt === "credit_split";
   if (method === "credit_approval") return pt === "credit";
-  if (method === "deposit") return pt === "deposit";
+  if (method === "deposit")
+    return pt === "deposit" || pt === "apply_credit";
   if (method === "discount") {
     return (
       Boolean(row?.has_discount) ||
@@ -1239,7 +1280,8 @@ function paymentModesFromSale(data) {
   if (mop.includes("transfer") || mop.includes("bank")) next.push("transfer");
   if (mop.includes("card")) next.push("card");
   if (mop.includes("credit")) next.push("credit");
-  if (mop.includes("deposit")) next.push("deposit");
+  if (mop.includes("deposit") || mop.includes("apply_credit") || mop.includes("apply credit"))
+    next.push("deposit");
   return next;
 }
 
@@ -1341,8 +1383,13 @@ export default function ReceivePayment() {
 
   const canViewCollectionTab = useCallback(
     (privilege) => {
-      if (hasFullAccess(functionalities) || !functionalities.length)
+      if (
+        isBusinessOwner(user, activeBusiness) ||
+        hasFullAccess(functionalities) ||
+        !functionalities.length
+      ) {
         return true;
+      }
       if (functionalities.includes(privilege)) return true;
       if (
         privilege === "Card Collection" ||
@@ -1355,7 +1402,7 @@ export default function ReceivePayment() {
       }
       return false;
     },
-    [functionalities],
+    [functionalities, user, activeBusiness],
   );
 
   const visibleMethodTabs = useMemo(
@@ -1365,6 +1412,7 @@ export default function ReceivePayment() {
 
   const [methodTab, setMethodTab] = useState(() => {
     const q = String(searchParams.get("tab") || "").toLowerCase();
+    if (q === "apply_credit") return "deposit";
     if (q === "deposit" || q === "credit") return q;
     if (q === "credit_approval") return "credit";
     if (String(location.pathname || "").includes("credit-approval"))
@@ -1424,6 +1472,11 @@ export default function ReceivePayment() {
     () => depositPending.filter((r) => isRowOnQueueDay(r, todayYmd)),
     [depositPending, todayYmd],
   );
+  const applyDepositPendingToday = useMemo(
+    () => depositPendingToday,
+    [depositPendingToday],
+  );
+  const applyCreditPendingToday = useMemo(() => [], []);
   const discountPendingToday = useMemo(
     () => discountPending.filter((r) => isRowOnQueueDay(r, todayYmd)),
     [discountPending, todayYmd],
@@ -1524,7 +1577,8 @@ export default function ReceivePayment() {
   const isSplit = rowCollectsAsSplit(selected);
   const isCreditSplitHub =
     normalizePaymentMode(paymentType) === "credit_split" ||
-    (paymentType === "deposit" && selectedModes.includes("credit"));
+    (paymentType === "deposit" || paymentType === "apply_credit") &&
+      selectedModes.includes("credit");
   const awaitingCollection = [
     "awaiting_cashier_confirm",
     "awaiting_payment",
@@ -2133,7 +2187,8 @@ export default function ReceivePayment() {
         pending_split: 0,
         pending_credit: 0,
         pending_deposit:
-          Number(summary.pending_deposit) || sumAmounts(depositPendingToday),
+          Number(summary.pending_deposit) ||
+          sumAmounts(applyDepositPendingToday),
         pending_discount: 0,
         pending_mode: 0,
         collected_cash_today: 0,
@@ -2141,7 +2196,32 @@ export default function ReceivePayment() {
         applied_deposit_today: Number(summary.applied_deposit_today) || 0,
         applied_deposit_count_today:
           Number(summary.applied_deposit_count_today) || 0,
-        pending_count: depositPendingToday.length,
+        pending_count: applyDepositPendingToday.length,
+      };
+    }
+    if (methodTab === "apply_credit") {
+      return {
+        showCash: false,
+        showTransfer: false,
+        showSplit: false,
+        showCredit: false,
+        showDeposit: true,
+        showApplyCredit: true,
+        showDiscount: false,
+        showMode: false,
+        pending_cash: 0,
+        pending_transfer: 0,
+        pending_split: 0,
+        pending_credit: 0,
+        pending_deposit: sumAmounts(applyCreditPendingToday),
+        pending_discount: 0,
+        pending_mode: 0,
+        collected_cash_today: 0,
+        collected_transfer_today: 0,
+        applied_deposit_today: Number(summary.applied_deposit_today) || 0,
+        applied_deposit_count_today:
+          Number(summary.applied_deposit_count_today) || 0,
+        pending_count: applyCreditPendingToday.length,
       };
     }
     if (methodTab === "discount") {
@@ -2181,7 +2261,7 @@ export default function ReceivePayment() {
       collected_transfer_today: summary.collected_transfer_today,
       pending_count: summary.pending_count,
     };
-  }, [methodTab, pendingToday, creditPendingToday, depositPendingToday, discountPendingToday, modePendingToday, summary]);
+  }, [methodTab, pendingToday, creditPendingToday, depositPendingToday, applyDepositPendingToday, applyCreditPendingToday, discountPendingToday, modePendingToday, summary]);
 
   const tillHub = useMemo(() => {
     if (methodTab === "transfer") {
@@ -2338,7 +2418,8 @@ export default function ReceivePayment() {
       transfer: transferCodes.size,
       card: cardCodes.size,
       credit: creditCodes.size + creditSplitPending.length,
-      deposit: depositPendingToday.length,
+      deposit: applyDepositPendingToday.length,
+      apply_credit: applyCreditPendingToday.length,
       discount: discountPendingToday.length,
       mode: modePendingToday.length,
     };
@@ -2347,6 +2428,8 @@ export default function ReceivePayment() {
     pendingToday,
     creditPendingToday,
     depositPendingToday,
+    applyDepositPendingToday,
+    applyCreditPendingToday,
     discountPendingToday,
     modePendingToday,
   ]);
@@ -2370,7 +2453,9 @@ export default function ReceivePayment() {
       }
       list = [...byCode.values()];
     } else if (methodTab === "deposit") {
-      list = depositPendingToday;
+      list = applyDepositPendingToday;
+    } else if (methodTab === "apply_credit") {
+      list = applyCreditPendingToday;
     } else if (methodTab === "discount") {
       list = discountPendingToday;
     } else {
@@ -2396,8 +2481,9 @@ export default function ReceivePayment() {
     pendingToday,
     creditPendingToday,
     depositPendingToday,
+    applyDepositPendingToday,
+    applyCreditPendingToday,
     discountPendingToday,
-    modePendingToday,
     methodTab,
   ]);
 
@@ -2962,6 +3048,13 @@ export default function ReceivePayment() {
           r.kind === "deposit_applied"
         );
       }
+      if (methodTab === "apply_credit") {
+        return (
+          matchesMethod(r.payment_type, "apply_credit") ||
+          (r.kind === "deposit_applied" &&
+            matchesMethod(r.payment_type, "apply_credit"))
+        );
+      }
       if (methodTab === "discount") {
         return matchesMethod(r.payment_type, "discount", r);
       }
@@ -3324,13 +3417,20 @@ export default function ReceivePayment() {
       if (pt === "credit_split" || pt === "split") return "collect";
       if (methodTab === "cash" || methodTab === "transfer" || methodTab === "card") {
         if (
-          pt === "deposit" &&
+          (pt === "deposit" || pt === "apply_credit") &&
           isDepositPendingCollection(row, methodTab)
         ) {
           return "collect";
         }
       }
-      if (methodTab === "deposit" || pt === "deposit") return "deposit";
+      if (
+        methodTab === "deposit" ||
+        methodTab === "apply_credit" ||
+        pt === "deposit" ||
+        pt === "apply_credit"
+      ) {
+        return "deposit";
+      }
       if (
         row?.status === "awaiting_credit_approval" ||
         pt === "credit"
@@ -3616,6 +3716,12 @@ export default function ReceivePayment() {
         );
       if (pendingMatch) {
         const pt = String(pendingMatch.payment_type || "").toLowerCase();
+        if (pt === "apply_credit" || pt === "apply credit") {
+          setMethodTab("deposit");
+          openHub(pendingMatch, "deposit");
+          if (fromScan) toast.success(`Scanned ${pendingMatch.sale_code}`);
+          return;
+        }
         if (pt === "deposit" || depositPending.includes(pendingMatch)) {
           setMethodTab("deposit");
           openHub(pendingMatch, "deposit");
@@ -3722,6 +3828,12 @@ export default function ReceivePayment() {
             return;
           }
           const pt = String(live.payment_type || "").toLowerCase();
+          if (pt === "apply_credit" || pt === "apply credit") {
+            setMethodTab("deposit");
+            openHub(live, "deposit", { skipLiveCheck: true });
+            if (fromScan) toast.success(`Scanned ${live.sale_code}`);
+            return;
+          }
           if (pt === "deposit") {
             setMethodTab("deposit");
             openHub(live, "deposit", { skipLiveCheck: true });
@@ -3790,6 +3902,8 @@ export default function ReceivePayment() {
     } else if (tab === "cash" && canViewCollectionTab("Cash Collection")) {
       setMethodTab("cash");
     } else if (tab === "deposit") {
+      setMethodTab("deposit");
+    } else if (tab === "apply_credit") {
       setMethodTab("deposit");
     }
 
@@ -4090,7 +4204,10 @@ export default function ReceivePayment() {
     const modes = rowPaymentModes(selected);
     if (
       pt !== "credit_split" &&
-      !(pt === "deposit" && modes.includes("credit"))
+      !(
+        (pt === "deposit" || pt === "apply_credit") &&
+        modes.includes("credit")
+      )
     ) {
       toast.error("Only mixed Cash / Transfer / Credit invoices can confirm a credit amount");
       return;
@@ -4476,8 +4593,7 @@ export default function ReceivePayment() {
               Verification Points
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Collect invoice payments. Apply Deposit uses prepaid customer
-              funds.
+              Collect invoice payments. Apply Deposit uses prepaid customer funds (including credit notes).
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -4679,7 +4795,9 @@ export default function ReceivePayment() {
             <div className="rounded-xl border border-teal-200 bg-teal-50/70 p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-teal-800">
                 <Wallet className="h-4 w-4 text-teal-600" />
-                Awaiting apply deposit
+                {viewSummary.showApplyCredit
+                  ? "Awaiting apply credit"
+                  : "Awaiting apply deposit"}
               </div>
               <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">
                 ₦{formatNumber1(viewSummary.pending_deposit)}
@@ -4695,9 +4813,13 @@ export default function ReceivePayment() {
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                {historyFrom === todayYmd && historyTo === todayYmd
-                  ? "Deposits applied today"
-                  : "Deposits applied"}
+                {viewSummary.showApplyCredit
+                  ? historyFrom === todayYmd && historyTo === todayYmd
+                    ? "Credits applied today"
+                    : "Credits applied"
+                  : historyFrom === todayYmd && historyTo === todayYmd
+                    ? "Deposits applied today"
+                    : "Deposits applied"}
               </div>
               <p className="mt-2 text-2xl font-semibold tabular-nums text-emerald-700">
                 ₦{formatNumber1(viewSummary.applied_deposit_today)}
@@ -4880,9 +5002,11 @@ export default function ReceivePayment() {
                   ? "credit"
                   : methodTab === "deposit"
                     ? "apply deposit"
-                    : methodTab === "discount"
-                      ? "discount approval"
-                      : methodTab === "transfer"
+                    : methodTab === "apply_credit"
+                      ? "apply credit"
+                      : methodTab === "discount"
+                        ? "discount approval"
+                        : methodTab === "transfer"
                           ? "transfer payment"
                           : methodTab === "card"
                             ? "POS payment"
@@ -4938,9 +5062,13 @@ export default function ReceivePayment() {
                           <div className="text-xs text-slate-500">
                             {row.customer_no}
                           </div>
-                          {methodTab === "deposit" ? (
+                          {methodTab === "deposit" ||
+                          methodTab === "apply_credit" ? (
                             <div className="mt-1 text-[11px] text-slate-500">
-                              Deposit available ₦
+                              {methodTab === "apply_credit"
+                                ? "Credit"
+                                : "Deposit"}{" "}
+                              available ₦
                               {formatNumber1(row.deposit_available || 0)}
                               {Number(row.credit_remainder) > 0.05 ||
                               (Number(row.amount) || 0) -
@@ -4954,7 +5082,10 @@ export default function ReceivePayment() {
                                       : (Number(row.amount) || 0) -
                                           (Number(row.deposit_available) || 0),
                                   )}{" "}
-                                  after deposit
+                                  after{" "}
+                                  {methodTab === "apply_credit"
+                                    ? "credit"
+                                    : "deposit"}
                                 </span>
                               ) : row.credit_after_deposit ? (
                                 <span className="block text-teal-700">
@@ -5016,7 +5147,8 @@ export default function ReceivePayment() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-                          {methodTab === "deposit" ? (
+                          {methodTab === "deposit" ||
+                          methodTab === "apply_credit" ? (
                             <button
                               type="button"
                               disabled={
@@ -5025,8 +5157,12 @@ export default function ReceivePayment() {
                               }
                               title={
                                 Number(row.deposit_available) <= 0.05
-                                  ? "No deposit available — Apply is blocked"
-                                  : "Apply deposit"
+                                  ? methodTab === "apply_credit"
+                                    ? "No credit available — Apply is blocked"
+                                    : "No deposit available — Apply is blocked"
+                                  : methodTab === "apply_credit"
+                                    ? "Apply credit"
+                                    : "Apply deposit"
                               }
                               onClick={() => openHub(row, "deposit")}
                               className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -5151,9 +5287,11 @@ export default function ReceivePayment() {
                 ? "credited invoices"
                 : methodTab === "deposit"
                   ? "deposit applications"
-                  : methodTab === "discount"
-                    ? "discounted invoices"
-                    : "payments"}{" "}
+                  : methodTab === "apply_credit"
+                    ? "credit applications"
+                    : methodTab === "discount"
+                      ? "discounted invoices"
+                      : "payments"}{" "}
               for{" "}
               {historyFrom === historyTo
                 ? moment(historyFrom).format("DD MMM YYYY")
@@ -5414,7 +5552,12 @@ export default function ReceivePayment() {
                   {hubAction === "deposit" ? (
                     <div className="mt-3 space-y-3 border-t border-slate-200 pt-3 text-sm">
                       <div className="flex justify-between gap-3 text-slate-600">
-                        <span>Deposit available</span>
+                        <span>
+                          {isApplyCreditPaymentRow(selected) ||
+                          methodTab === "apply_credit"
+                            ? "Credit available"
+                            : "Deposit available"}
+                        </span>
                         <span className="font-semibold tabular-nums text-teal-700">
                           ₦
                           {formatNumber1(
@@ -5425,7 +5568,10 @@ export default function ReceivePayment() {
                       <div>
                         <div className="mb-1 flex items-center justify-between gap-2">
                           <label className="text-sm font-medium text-slate-700">
-                            Apply deposit
+                            {isApplyCreditPaymentRow(selected) ||
+                            methodTab === "apply_credit"
+                              ? "Apply credit"
+                              : "Apply deposit"}
                           </label>
                           <button
                             type="button"
@@ -5460,7 +5606,12 @@ export default function ReceivePayment() {
                                 formatNumberWithCommas(String(max)),
                               );
                               toast.error(
-                                `Deposit cannot exceed ₦${formatNumber1(max)}`,
+                                `${
+                                  isApplyCreditPaymentRow(selected) ||
+                                  methodTab === "apply_credit"
+                                    ? "Credit"
+                                    : "Deposit"
+                                } cannot exceed ₦${formatNumber1(max)}`,
                               );
                               return;
                             }
@@ -5472,7 +5623,12 @@ export default function ReceivePayment() {
                       </div>
                       {depositApplyPreview(selected).available <= 0.05 ? (
                         <p className="text-xs text-amber-800">
-                          This customer has no available deposit.
+                          This customer has no available{" "}
+                          {isApplyCreditPaymentRow(selected) ||
+                          methodTab === "apply_credit"
+                            ? "credit"
+                            : "deposit"}
+                          .
                         </p>
                       ) : null}
                     </div>
@@ -6521,7 +6677,7 @@ export default function ReceivePayment() {
                   approval.
                 </p>
               ) : null}
-            </div>
+              </div>
           ) : null}
 
           <DialogFooter className="gap-2 sm:gap-0">

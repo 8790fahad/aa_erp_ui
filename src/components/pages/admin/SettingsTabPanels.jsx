@@ -36,6 +36,7 @@ import MaterialRequisitionSettings from "./MaterialRequisitionSettings";
 import ProductionCorrectionSettings from "./ProductionCorrectionSettings";
 import SessionSettings from "./SessionSettings";
 import LoginHoursSettings from "./LoginHoursSettings";
+import WorkflowMailSettings from "./WorkflowMailSettings";
 import { getConfiguredSocialCount } from "./MarketplaceSocialMediaModal";
 import BusinessDocumentHeader, {
   DocumentHeaderPreview,
@@ -1760,6 +1761,16 @@ export default function SettingsTabPanels({
           </Row>
         </TabsContent>
       )}
+
+      <TabsContent value="process-emails" className="mt-0 space-y-4">
+        {tabVisible("process-emails") ? (
+          <WorkflowMailSettings />
+        ) : (
+          <p className="text-sm text-slate-500">
+            You do not have permission to manage process emails.
+          </p>
+        )}
+      </TabsContent>
 
       {tabVisible("user-roles") && (
         <TabsContent value="user-roles" className="mt-0">

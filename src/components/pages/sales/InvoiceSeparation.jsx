@@ -40,7 +40,9 @@ export default function InvoiceSeparation() {
   const [historyRows, setHistoryRows] = useState([]);
   const [selectedCode, setSelectedCode] = useState(saleFromUrl);
   const [packs, setPacks] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(saleFromUrl);
+  /** List stays hidden until staff search / scan an invoice (same as Warehouse). */
+  const [searchActive, setSearchActive] = useState(Boolean(saleFromUrl));
 
   const rows = activeTab === "history" ? historyRows : pendingRows;
 
@@ -52,10 +54,12 @@ export default function InvoiceSeparation() {
         if (saleFromUrl) {
           if (pending.some((r) => r.sale_code === saleFromUrl)) {
             setActiveTab("pending");
+            setSearchActive(true);
             return saleFromUrl;
           }
           if (history.some((r) => r.sale_code === saleFromUrl)) {
             setActiveTab("history");
+            setSearchActive(true);
             return saleFromUrl;
           }
         }
@@ -63,7 +67,8 @@ export default function InvoiceSeparation() {
           if (pending.some((r) => r.sale_code === prev)) return prev;
           if (history.some((r) => r.sale_code === prev)) return prev;
         }
-        return pending[0]?.sale_code || history[0]?.sale_code || "";
+        // Do not auto-open the first invoice — wait for search / scan.
+        return "";
       });
     },
     [saleFromUrl],
@@ -162,8 +167,13 @@ export default function InvoiceSeparation() {
   );
 
   const visibleRows = useMemo(() => {
+    if (!searchActive) return [];
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return rows;
+    if (!q) {
+      return selectedCode
+        ? rows.filter((r) => r.sale_code === selectedCode)
+        : [];
+    }
     return rows.filter(
       (r) =>
         String(r.sale_code || "")
@@ -176,12 +186,37 @@ export default function InvoiceSeparation() {
           .toLowerCase()
           .includes(q),
     );
-  }, [rows, searchQuery]);
+  }, [rows, searchQuery, searchActive, selectedCode]);
+
+  const handleSearchQueryChange = useCallback(
+    (value) => {
+      const next = String(value || "");
+      setSearchQuery(next);
+      if (next.trim()) {
+        setSearchActive(true);
+        const q = next.trim().toLowerCase();
+        // Keep selection when scan/select fills the same code; clear when filtering.
+        setSelectedCode((prev) =>
+          prev && String(prev).toLowerCase() === q ? prev : "",
+        );
+      } else {
+        setSearchActive(false);
+        setSelectedCode("");
+        setSearchParams((params) => {
+          const nextParams = new URLSearchParams(params);
+          nextParams.delete("sale_code");
+          return nextParams;
+        }, { replace: true });
+      }
+    },
+    [setSearchParams],
+  );
 
   const handleSearchSelect = useCallback(
     (row, code) => {
       const saleCode = row?.sale_code || code;
       if (!saleCode) return;
+      setSearchActive(true);
       const inHistory = historyRows.some((r) => r.sale_code === saleCode);
       const inPending = pendingRows.some((r) => r.sale_code === saleCode);
       if (inHistory && !inPending) setActiveTab("history");
@@ -255,9 +290,9 @@ export default function InvoiceSeparation() {
     setActiveTab(tab);
     const list = tab === "history" ? historyRows : pendingRows;
     const nextCode =
-      (selectedCode && list.some((r) => r.sale_code === selectedCode)
+      selectedCode && list.some((r) => r.sale_code === selectedCode)
         ? selectedCode
-        : list[0]?.sale_code) || "";
+        : "";
     setSelectedCode(nextCode);
     const next = new URLSearchParams(searchParams);
     if (tab === "history") next.set("tab", "history");
@@ -505,11 +540,22 @@ export default function InvoiceSeparation() {
                 facilityId={activeBusiness?.id}
                 rows={[...pendingRows, ...historyRows]}
                 onSelect={handleSearchSelect}
-                onQueryChange={setSearchQuery}
+                onQueryChange={handleSearchQueryChange}
                 placeholder="Search or scan invoice, customer…"
               />
             </div>
-            {loading ? (
+            {!searchActive ? (
+              <div className="p-8 text-center text-gray-500 text-sm space-y-2">
+                <FileStack className="mx-auto h-10 w-10 text-gray-300" />
+                <p className="font-medium text-gray-600">
+                  Search for an invoice to begin
+                </p>
+                <p>
+                  Enter or scan the invoice / customer. Matching invoices appear
+                  here after you search.
+                </p>
+              </div>
+            ) : loading ? (
               <div className="p-4 space-y-3">
                 {[1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-16 w-full" />
@@ -518,8 +564,8 @@ export default function InvoiceSeparation() {
             ) : visibleRows.length === 0 ? (
               <div className="p-8 text-center text-gray-500 text-sm">
                 {activeTab === "history"
-                  ? "No separated invoices yet. Mark Separated moves sales here."
-                  : "No invoices waiting. After Verification Points confirms payment (or approves credit), sales appear here to split by store."}
+                  ? "No separated invoices match this search."
+                  : "No invoices waiting match this search."}
               </div>
             ) : (
               <ul className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
@@ -579,10 +625,16 @@ export default function InvoiceSeparation() {
 
           <div className="lg:col-span-3 bg-white rounded-lg shadow-sm p-6 min-h-[420px]">
             {!selected ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-500 py-16">
-                <FileStack className="w-12 h-12 text-gray-300 mb-3" />
+              <div className="h-full flex flex-col items-center justify-center text-gray-500 gap-2 py-16 px-6 text-center">
+                <FileStack className="w-12 h-12 text-gray-300" />
+                <p className="font-medium text-gray-600">
+                  {searchActive
+                    ? "Click an invoice to open separation"
+                    : "Search an invoice first"}
+                </p>
                 <p className="text-sm">
-                  Select a sale to view printed evidence by store.
+                  Print store copies and Mark Separated only after you open the
+                  invoice.
                 </p>
               </div>
             ) : (
