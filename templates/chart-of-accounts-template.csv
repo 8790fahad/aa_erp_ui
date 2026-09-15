@@ -1,0 +1,8 @@
+Category,Account Code,Description,Type,Detail type
+Assets,1,Cash and cash equivalents,Cash and cash equivalents,Bank
+Assets,101,FlowPay Bank,Cash and cash equivalents,Bank
+Assets,102,Cash in hand,Cash and cash equivalents,Cash in hand
+Liabilities,2,Accounts payable,Current liabilities,Trade payables
+Equity,3,Owner's equity,Equity,Capital
+Revenue,4,Sales,Operating revenue,Sales
+Expenses,5,Cost of goods sold,Cost of sales,Cost of goods sold
