@@ -151,7 +151,7 @@ export const ACCOUNTING_REPORT_SECTIONS = [
       {
         title: "Deposit Report",
         description:
-          "Customers with a prepaid / deposit balance not yet applied to an invoice",
+          "Deposit summary balances and deposit payment history with receipt print",
         path: `${BASE}/deposit-report`,
         dateMode: "asOf",
       },

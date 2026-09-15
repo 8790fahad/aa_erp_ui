@@ -508,7 +508,6 @@ function tabWorkflowBadge(methodTab, row) {
 
 const SWITCH_PAYMENT_MODE_PRIVILEGE = "Switch Payment Mode";
 
-const MAKE_DEPOSIT_PRIVILEGE = "Make Deposit";
 const RECONCILIATION_PRIVILEGE = "Collection Reconciliation";
 const IMPREST_PRIVILEGE = "Imprest";
 const PAY_BILL_PRIVILEGE = "Pay Bill";
@@ -1564,14 +1563,6 @@ export default function ReceivePayment() {
   const collectOpen =
     hubOpen && (hubAction === "collect" || hubAction === "deposit");
 
-  const [advanceOpen, setAdvanceOpen] = useState(false);
-  const [advanceCustomer, setAdvanceCustomer] = useState(null);
-  const [advanceMode, setAdvanceMode] = useState("cash"); // cash | transfer | split
-  const [advanceAmount, setAdvanceAmount] = useState("");
-  const [advanceCashAmount, setAdvanceCashAmount] = useState("");
-  const [advanceTransferAmount, setAdvanceTransferAmount] = useState("");
-  const [advanceNarration, setAdvanceNarration] = useState("");
-  const [advanceSubmitting, setAdvanceSubmitting] = useState(false);
 
   const amountDue = Number(selected?.amount) || 0;
   const paymentType = String(selected?.payment_type || "").toLowerCase();
@@ -1637,13 +1628,9 @@ export default function ReceivePayment() {
       )
     : amountDue;
 
-  const loadCashPayThrough =
-    (collectOpen && showCashFields) ||
-    (advanceOpen && (advanceMode === "cash" || advanceMode === "split"));
+  const loadCashPayThrough = collectOpen && showCashFields;
   const loadBankPayThrough =
-    (collectOpen && (showTransferFields || showCardFields)) ||
-    (advanceOpen &&
-      (advanceMode === "transfer" || advanceMode === "split"));
+    collectOpen && (showTransferFields || showCardFields);
 
   const cashAccounts = useAdvancePaymentAccounts(
     loadCashPayThrough,
@@ -2020,11 +2007,9 @@ export default function ReceivePayment() {
   ]);
 
   useEffect(() => {
-    if (!collectOpen && !advanceOpen) return;
+    if (!collectOpen) return;
     if (
-      (showCashFields ||
-        (advanceOpen &&
-          (advanceMode === "cash" || advanceMode === "split"))) &&
+      showCashFields &&
       !cashAccounts.accountHead?.head &&
       cashAccounts.headList?.length
     ) {
@@ -2035,8 +2020,6 @@ export default function ReceivePayment() {
     }
   }, [
     collectOpen,
-    advanceOpen,
-    advanceMode,
     showCashFields,
     cashAccounts.accountHead?.head,
     cashAccounts.headList,
@@ -2044,12 +2027,9 @@ export default function ReceivePayment() {
   ]);
 
   useEffect(() => {
-    if (!collectOpen && !advanceOpen) return;
+    if (!collectOpen) return;
     if (
-      (showTransferFields ||
-        showCardFields ||
-        (advanceOpen &&
-          (advanceMode === "transfer" || advanceMode === "split"))) &&
+      (showTransferFields || showCardFields) &&
       !bankAccounts.bankAccount?.id &&
       bankAccounts.accountList?.length
     ) {
@@ -2057,8 +2037,6 @@ export default function ReceivePayment() {
     }
   }, [
     collectOpen,
-    advanceOpen,
-    advanceMode,
     showTransferFields,
     showCardFields,
     bankAccounts.bankAccount?.id,
@@ -3219,192 +3197,23 @@ export default function ReceivePayment() {
     };
   }, [invoiceDownloadData, downloadingSaleCode]);
 
-  const openAdvanceSheet = useCallback((prefillCustomer = null) => {
-    const defaultMode =
-      methodTab === "transfer"
-        ? "transfer"
-        : methodTab === "cash"
-          ? "cash"
-          : "cash";
-    setAdvanceMode(defaultMode);
-    setAdvanceCustomer(prefillCustomer || null);
-    setAdvanceAmount("");
-    setAdvanceCashAmount("");
-    setAdvanceTransferAmount("");
-    setAdvanceNarration("Verification Points customer deposit");
-    setAdvanceOpen(true);
-  }, [methodTab]);
-
-  // Deep-link: /collection-points?action=deposit&customerNo=CUS-…
+  // Customer deposits live on Received Payment — redirect old VP deep-links
   useEffect(() => {
     const action = String(searchParams.get("action") || "").toLowerCase();
     if (action !== "deposit" && action !== "make-deposit") return;
-    if (!canUseHeaderAction(MAKE_DEPOSIT_PRIVILEGE)) return;
-    if (methodTab === "credit") setMethodTab("cash");
     const customerNo = searchParams.get("customerNo") || "";
     const customerName = searchParams.get("customerName") || "";
-    const prefill =
-      customerNo
-        ? {
-            customerNo,
-            fullname: customerName || customerNo,
-            name: customerName || customerNo,
-          }
-        : null;
-    openAdvanceSheet(prefill);
-    // Clear query so refresh doesn't reopen
-    const next = new URLSearchParams(searchParams);
-    next.delete("action");
-    next.delete("customerNo");
-    next.delete("customerName");
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams, openAdvanceSheet, methodTab, canUseHeaderAction]);
-
-  const closeAdvanceSheet = () => {
-    setAdvanceOpen(false);
-    setAdvanceCustomer(null);
-    setAdvanceAmount("");
-    setAdvanceCashAmount("");
-    setAdvanceTransferAmount("");
-    setAdvanceNarration("");
-  };
-
-  const submitCustomerAdvance = () => {
-    if (!activeBusiness?.id || !user?.id) {
-      toast.error("Session required");
-      return;
-    }
-    if (!advanceCustomer?.customerNo) {
-      toast.error("Select a customer");
-      return;
-    }
-
-    const cashAmt = parseFormattedAmount(advanceCashAmount || advanceAmount);
-    const transferAmt = parseFormattedAmount(advanceTransferAmount);
-    const singleAmt = parseFormattedAmount(advanceAmount);
-
-    if (advanceMode === "split") {
-      if (cashAmt <= 0 || transferAmt <= 0) {
-        toast.error("Enter both cash and transfer amounts");
-        return;
-      }
-      if (!cashAccounts.accountHead?.head) {
-        toast.error("Select cash Pay Through");
-        return;
-      }
-      if (!bankAccounts.bankAccount?.id) {
-        toast.error("Select transfer Pay Through");
-        return;
-      }
-    } else if (advanceMode === "cash") {
-      if (singleAmt <= 0) {
-        toast.error("Enter advance amount");
-        return;
-      }
-      if (!cashAccounts.accountHead?.head) {
-        toast.error("Select cash Pay Through");
-        return;
-      }
-    } else {
-      if (singleAmt <= 0) {
-        toast.error("Enter advance amount");
-        return;
-      }
-      if (!bankAccounts.bankAccount?.id) {
-        toast.error("Select transfer Pay Through");
-        return;
-      }
-    }
-
-    const base = {
-      transaction_date: moment().format("YYYY-MM-DD"),
-      customer_no: advanceCustomer.customerNo,
-      facilityId: activeBusiness.id,
-      userId: user.id,
-      narration:
-        advanceNarration.trim() ||
-        "Verification Points customer deposit",
-      receivable_deposit_code: activeBusiness.receivable_accural_code,
-      receivable_code: activeBusiness.receivable_code,
-      pure_advance: true,
-      source: "collection_points",
-      invoices: [],
-    };
-
-    let payload;
-    if (advanceMode === "split") {
-      payload = {
-        ...base,
-        amount_paid: cashAmt + transferAmt,
-        mode_of_payment: "cash+transfer",
-        payment_splits: [
-          {
-            mode: "cash",
-            amount: cashAmt,
-            accountHead: {
-              head: cashAccounts.accountHead.head,
-              description: cashAccounts.accountHead.description,
-            },
-          },
-          {
-            mode: "bank",
-            amount: transferAmt,
-            bankAccount: { id: bankAccounts.bankAccount.id },
-          },
-        ],
-      };
-    } else if (advanceMode === "cash") {
-      payload = {
-        ...base,
-        amount_paid: singleAmt,
-        mode_of_payment: "cash",
-        accountHead: {
-          head: cashAccounts.accountHead.head,
-          description: cashAccounts.accountHead.description,
-        },
-      };
-    } else {
-      payload = {
-        ...base,
-        amount_paid: singleAmt,
-        mode_of_payment: "bank transfer",
-        bankAccount: { id: bankAccounts.bankAccount.id },
-      };
-    }
-
-    setAdvanceSubmitting(true);
-    _postApi(
-      "/api/v1/customer-advance-payment",
-      payload,
-      (resp) => {
-        setAdvanceSubmitting(false);
-        if (resp?.error) {
-          toast.error(String(resp.error));
-          return;
-        }
-        if (resp?.success) {
-          const ref =
-            resp.data?.reference_number ||
-            resp.data?.transaction_ref ||
-            "";
-          toast.success(
-            ref
-              ? `Customer deposit recorded (${ref})`
-              : "Customer deposit recorded",
-          );
-          closeAdvanceSheet();
-          fetchDashboard();
-          setActiveTab("history");
-        } else {
-          toast.error(resp?.message || "Could not record advance");
-        }
-      },
-      (err) => {
-        setAdvanceSubmitting(false);
-        toast.error(err?.message || "Could not record advance");
-      },
+    const params = new URLSearchParams();
+    if (customerNo) params.set("customerNo", customerNo);
+    if (customerName) params.set("customerName", customerName);
+    const qs = params.toString();
+    navigate(
+      qs
+        ? `/app/payments/receive-payment/new?${qs}`
+        : "/app/payments/receive-payment/new",
+      { replace: true },
     );
-  };
+  }, [searchParams, navigate]);
 
   const loadHubInvoice = useCallback(
     (saleCode) => {
@@ -6504,290 +6313,6 @@ export default function ReceivePayment() {
           </div>
         </DialogContent>
       </Dialog>
-
-      <Sheet
-        open={advanceOpen}
-        onOpenChange={(open) => {
-          if (!open) closeAdvanceSheet();
-        }}
-      >
-        <SheetContent
-          side="right"
-          className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 sm:!max-w-md [&>button]:text-white [&>button]:opacity-90 [&>button]:hover:bg-white/15"
-        >
-          <SheetHeader className="shrink-0 space-y-1 border-b border-white/10 bg-[var(--aa-navy)] px-5 py-4 text-left">
-            <SheetTitle className="pr-8 text-lg font-semibold text-white">
-              Make Deposit
-            </SheetTitle>
-            <SheetDescription className="text-sm text-white/70">
-              Record a prepaid customer deposit (Cash, Transfer, or Cash +
-              Transfer). Use Collect Payment for invoices awaiting collection.
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">
-                Customer
-              </label>
-              <SearchCustomerInput
-                selected={advanceCustomer ? [advanceCustomer] : []}
-                onChange={(cus) => setAdvanceCustomer(cus)}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">
-                Payment method
-              </label>
-              <select
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                value={advanceMode}
-                onChange={(e) => {
-                  setAdvanceMode(e.target.value);
-                  setAdvanceAmount("");
-                  setAdvanceCashAmount("");
-                  setAdvanceTransferAmount("");
-                }}
-              >
-                <option value="cash">Cash</option>
-                <option value="transfer">Transfer</option>
-                <option value="split">Transfer + Cash</option>
-              </select>
-            </div>
-
-            {advanceMode === "split" ? (
-              <>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">
-                    Cash amount
-                  </label>
-                  <input
-                    inputMode="decimal"
-                    value={advanceCashAmount}
-                    onChange={(e) =>
-                      setAdvanceCashAmount(
-                        formatNumberWithCommas(e.target.value),
-                      )
-                    }
-                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                    placeholder="0.00"
-                  />
-                  <label className="text-sm font-medium text-slate-700">
-                    Pay Through (Cash)
-                  </label>
-                  <Select
-                    value={
-                      cashAccounts.accountHead?.head
-                        ? String(cashAccounts.accountHead.head)
-                        : undefined
-                    }
-                    onValueChange={(val) => {
-                      const cash = (cashAccounts.headList || []).find(
-                        (h) => String(h.head) === String(val),
-                      );
-                      cashAccounts.setAccountHead(
-                        cash
-                          ? {
-                              head: cash.head || "",
-                              description: cash.description || "",
-                            }
-                          : {},
-                      );
-                    }}
-                  >
-                    <SelectTrigger className={payThroughSelectTriggerClass}>
-                      <SelectValue placeholder="Select cash account…" />
-                    </SelectTrigger>
-                    <SelectContent className={payThroughSelectContentClass}>
-                      {(cashAccounts.headList || []).map((h) => (
-                        <SelectItem key={String(h.head)} value={String(h.head)}>
-                          {cashPayThroughLabel(h)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">
-                    Transfer amount
-                  </label>
-                  <input
-                    inputMode="decimal"
-                    value={advanceTransferAmount}
-                    onChange={(e) =>
-                      setAdvanceTransferAmount(
-                        formatNumberWithCommas(e.target.value),
-                      )
-                    }
-                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                    placeholder="0.00"
-                  />
-                  <label className="text-sm font-medium text-slate-700">
-                    Pay Through (Transfer)
-                  </label>
-                  <Select
-                    value={
-                      bankAccounts.bankAccount?.id != null
-                        ? String(bankAccounts.bankAccount.id)
-                        : undefined
-                    }
-                    onValueChange={(val) => {
-                      const found = (bankAccounts.accountList || []).find(
-                        (b) => String(b.id) === String(val),
-                      );
-                      bankAccounts.setBankAccount(found || null);
-                    }}
-                  >
-                    <SelectTrigger className={payThroughSelectTriggerClass}>
-                      <SelectValue placeholder="Select bank account…" />
-                    </SelectTrigger>
-                    <SelectContent className={payThroughSelectContentClass}>
-                      {(bankAccounts.accountList || []).map((b) => (
-                        <SelectItem key={String(b.id)} value={String(b.id)}>
-                          {bankPayThroughLabel(b)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <p className="text-xs text-slate-500">
-                  Total advance: ₦
-                  {formatNumber1(
-                    parseFormattedAmount(advanceCashAmount) +
-                      parseFormattedAmount(advanceTransferAmount),
-                  )}
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">
-                    Advance amount
-                  </label>
-                  <input
-                    inputMode="decimal"
-                    value={advanceAmount}
-                    onChange={(e) =>
-                      setAdvanceAmount(formatNumberWithCommas(e.target.value))
-                    }
-                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                    placeholder="0.00"
-                  />
-                </div>
-                {advanceMode === "cash" ? (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">
-                      Pay Through
-                    </label>
-                    <Select
-                      value={
-                        cashAccounts.accountHead?.head
-                          ? String(cashAccounts.accountHead.head)
-                          : undefined
-                      }
-                      onValueChange={(val) => {
-                        const cash = (cashAccounts.headList || []).find(
-                          (h) => String(h.head) === String(val),
-                        );
-                        cashAccounts.setAccountHead(
-                          cash
-                            ? {
-                                head: cash.head || "",
-                                description: cash.description || "",
-                              }
-                            : {},
-                        );
-                      }}
-                    >
-                      <SelectTrigger className={payThroughSelectTriggerClass}>
-                        <SelectValue placeholder="Select cash account…" />
-                      </SelectTrigger>
-                      <SelectContent className={payThroughSelectContentClass}>
-                        {(cashAccounts.headList || []).map((h) => (
-                          <SelectItem
-                            key={String(h.head)}
-                            value={String(h.head)}
-                          >
-                            {cashPayThroughLabel(h)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">
-                      Pay Through
-                    </label>
-                    <Select
-                      value={
-                        bankAccounts.bankAccount?.id != null
-                          ? String(bankAccounts.bankAccount.id)
-                          : undefined
-                      }
-                      onValueChange={(val) => {
-                        const found = (bankAccounts.accountList || []).find(
-                          (b) => String(b.id) === String(val),
-                        );
-                        bankAccounts.setBankAccount(found || null);
-                      }}
-                    >
-                      <SelectTrigger className={payThroughSelectTriggerClass}>
-                        <SelectValue placeholder="Select bank account…" />
-                      </SelectTrigger>
-                      <SelectContent className={payThroughSelectContentClass}>
-                        {(bankAccounts.accountList || []).map((b) => (
-                          <SelectItem key={String(b.id)} value={String(b.id)}>
-                            {bankPayThroughLabel(b)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </>
-            )}
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">
-                Narration
-              </label>
-              <textarea
-                value={advanceNarration}
-                onChange={(e) => setAdvanceNarration(e.target.value)}
-                rows={2}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                placeholder="Verification Points customer deposit"
-              />
-            </div>
-          </div>
-
-          <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
-            <button
-              type="button"
-              onClick={closeAdvanceSheet}
-              disabled={advanceSubmitting}
-              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={submitCustomerAdvance}
-              disabled={advanceSubmitting}
-              className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:opacity-50"
-            >
-              {advanceSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <CheckCircle2 className="h-4 w-4" />
-              )}
-              Make Deposit
-            </button>
-          </div>
-        </SheetContent>
-      </Sheet>
 
       {/* Change payment mode — button picker + confirm */}
       <Dialog

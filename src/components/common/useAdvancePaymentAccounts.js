@@ -64,7 +64,19 @@ export function useAdvancePaymentAccounts(open, facilityId, modeOfPayment) {
         `/api/get/bank-accounts?facilityId=${facilityId}`,
         (data) => {
           if (data.success) {
-            setAccountList(data.results || []);
+            const list = [...(data.results || [])].sort((a, b) => {
+              const aName = String(
+                a?.account_name || a?.bank_name || a?.head || "",
+              ).toLowerCase();
+              const bName = String(
+                b?.account_name || b?.bank_name || b?.head || "",
+              ).toLowerCase();
+              if (aName !== bName) return aName.localeCompare(bName);
+              const aNum = String(a?.account_number || "");
+              const bNum = String(b?.account_number || "");
+              return aNum.localeCompare(bNum);
+            });
+            setAccountList(list);
           } else {
             toast.error("Failed to load bank accounts");
           }

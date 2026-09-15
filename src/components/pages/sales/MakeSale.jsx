@@ -6605,14 +6605,6 @@ function MakeSale() {
                     type="button"
                     disabled={cart.length === 0 || processingCheckout}
                     onClick={handleSubmit}
-                    className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Save as Draft
-                  </button>
-                  <button
-                    type="button"
-                    disabled={cart.length === 0 || processingCheckout}
-                    onClick={handleSubmit}
                     className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
                     {processingCheckout ? (
@@ -6621,7 +6613,7 @@ function MakeSale() {
                         Processing...
                       </>
                     ) : (
-                      "Save and Send"
+                      "Save and Send[Draft]"
                     )}
                   </button>
                   <Link

@@ -50,7 +50,10 @@ const RELATED_PAGE_PRIVILEGES = {
   "/app/payments/receive-payment": [
     "Received Payment",
     "Receive Payment",
+    "Deposit Summary",
+    "Credit Summary",
     "Deposit History",
+    "Make Deposit",
     "Customer Deposit",
   ],
 };

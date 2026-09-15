@@ -191,6 +191,10 @@ const ProductServiceForm = () => {
   /** Rows from GET /inventory/get-all-measure/:facilityId */
   const [allMeasures, setAllMeasures] = useState([]);
   const [creatingUom, setCreatingUom] = useState(false);
+  const [productCategories, setProductCategories] = useState([]);
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const dataLoadedRef = useRef(false);
   const {
     register,
@@ -238,6 +242,7 @@ const ProductServiceForm = () => {
         supplierId: "",
         warehouseId: "",
         branchId: "",
+        productCategory: "",
         category: "",
         unit: "",
       },
@@ -395,6 +400,22 @@ const ProductServiceForm = () => {
     );
   }, [facilityId]);
 
+  const loadProductCategories = useCallback(() => {
+    if (!facilityId) return;
+    _fetchApi(
+      `/api/product-categories?facilityId=${encodeURIComponent(facilityId)}`,
+      (response) => {
+        const list =
+          response?.results || response?.data || (Array.isArray(response) ? response : []);
+        setProductCategories(Array.isArray(list) ? list : []);
+      },
+      (error) => {
+        console.error("Error loading product categories:", error);
+        setProductCategories([]);
+      },
+    );
+  }, [facilityId]);
+
   const measureOptions = useMemo(() => {
     return (allMeasures || [])
       .filter((m) => !m.status || String(m.status).toLowerCase() === "active")
@@ -469,6 +490,87 @@ const ProductServiceForm = () => {
     [facilityId, loadAllMeasures, setValue],
   );
 
+  const productCategoryOptions = useMemo(
+    () =>
+      (productCategories || [])
+        .filter(
+          (c) =>
+            !c.status || String(c.status).toLowerCase() === "active",
+        )
+        .map((c) => ({
+          value: String(c.name),
+          label: String(c.name),
+          id: c.id,
+        })),
+    [productCategories],
+  );
+
+  const currentProductCategory = watch("settings.productCategory");
+
+  const selectedProductCategoryOption = useMemo(() => {
+    const name = String(currentProductCategory || "").trim();
+    if (!name) return null;
+    const match = productCategoryOptions.find(
+      (o) => o.value.toLowerCase() === name.toLowerCase(),
+    );
+    return match || { value: name, label: name };
+  }, [currentProductCategory, productCategoryOptions]);
+
+  const createProductCategory = useCallback(
+    (rawName, { select = true } = {}) => {
+      const trimmed = String(rawName || "").trim();
+      if (!trimmed) {
+        toast.error("Enter a category name");
+        return;
+      }
+      if (!facilityId) {
+        toast.error("Facility is required");
+        return;
+      }
+      const dup = (productCategories || []).find(
+        (c) =>
+          String(c.status || "active").toLowerCase() === "active" &&
+          String(c.name || "").trim().toLowerCase() === trimmed.toLowerCase(),
+      );
+      if (dup) {
+        toast.error(`Category "${dup.name}" already exists for this business`);
+        setValue("settings.productCategory", dup.name);
+        setCategoryModalOpen(false);
+        setNewCategoryName("");
+        return;
+      }
+      setCreatingCategory(true);
+      _postApi(
+        `/api/product-categories`,
+        { facilityId, name: trimmed },
+        (resp) => {
+          setCreatingCategory(false);
+          if (resp?.success) {
+            toast.success(resp.message || "Category saved");
+            setNewCategoryName("");
+            setCategoryModalOpen(false);
+            loadProductCategories();
+            if (select) {
+              setValue(
+                "settings.productCategory",
+                resp.results?.name || resp.data?.name || trimmed,
+              );
+            }
+          } else {
+            toast.error(resp?.message || "Failed to create category");
+          }
+        },
+        (err) => {
+          setCreatingCategory(false);
+          toast.error(
+            err?.message || "Category name already exists for this business",
+          );
+        },
+      );
+    },
+    [facilityId, loadProductCategories, productCategories, setValue],
+  );
+
   // Load product data for edit/view mode
   const loadProductData = useCallback(() => {
     if (!facilityId || !id) return;
@@ -538,7 +640,9 @@ const ProductServiceForm = () => {
             supplierId: p.supplier_id || "",
             warehouseId: p.warehouse_id || "",
             branchId: "",
-            category: p.category || "",
+            productCategory: p.category || "",
+            // UOM table category (e.g. General) — resolved from measures when unit matches
+            category: "",
             unit: p.unit_of_measure || "",
           },
         });
@@ -555,6 +659,20 @@ const ProductServiceForm = () => {
     );
   }, [facilityId, id, navigate, reset]);
 
+  // After measures + product load, attach UOM category from the measures table
+  useEffect(() => {
+    const unit = String(watch("settings.unit") || "").trim();
+    if (!unit || !allMeasures?.length) return;
+    if (watch("settings.category")) return;
+    const match = allMeasures.find(
+      (m) =>
+        String(m.unit || "").toLowerCase() === unit.toLowerCase() &&
+        (!m.status || String(m.status).toLowerCase() === "active"),
+    );
+    if (match?.category) setValue("settings.category", match.category);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allMeasures, watch("settings.unit")]);
+
   // Load initial data - wait until facilityId is available
   useEffect(() => {
     if (!facilityId) return;
@@ -565,6 +683,7 @@ const ProductServiceForm = () => {
         loadAccounts();
         loadSuppliers();
         loadAllMeasures();
+        loadProductCategories();
         loadBranches();
         if ((isEditMode || isViewMode) && id) {
           loadProductData();
@@ -905,7 +1024,7 @@ const ProductServiceForm = () => {
         data.itemType === "Finished Good" || data.itemType === "Resalable"
           ? data.settings?.branchId || null
           : null,
-      category: data.settings?.category || "",
+      category: data.settings?.productCategory || "",
       unit: data.settings?.unit || "",
       // Line of business - set to false by default
       line_of_business: false,
@@ -2878,25 +2997,115 @@ const ProductServiceForm = () => {
                     </div>
 
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Tags/Categories
-                      </label>
-                      <input
-                        type="text"
-                        {...register("settings.tags")}
-                        placeholder="e.g. electronics, gadgets, office"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          // const tagsArray = value
-                          //   ? value
-                          //       .split(",")
-                          //       .map((tag) => tag.trim())
-                          //       .filter((tag) => tag)
-                          //   : [];
-                          setValue("settings.tags", value);
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent"
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Category
+                        </label>
+                        {!isViewMode ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8 gap-1.5 border-[var(--aa-navy)]/25 text-[var(--aa-navy)] hover:bg-[var(--aa-sidebar-active)]"
+                            onClick={() => {
+                              setNewCategoryName("");
+                              setCategoryModalOpen(true);
+                            }}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Add
+                          </Button>
+                        ) : null}
+                      </div>
+                      <Controller
+                        name="settings.productCategory"
+                        control={control}
+                        render={({ field }) => (
+                          <Select
+                            inputId="product-category"
+                            isClearable
+                            isSearchable
+                            isDisabled={isViewMode}
+                            options={productCategoryOptions}
+                            value={selectedProductCategoryOption}
+                            onChange={(opt) => {
+                              field.onChange(opt?.value || "");
+                            }}
+                            placeholder="Select a category…"
+                            noOptionsMessage={() =>
+                              "No categories yet — click Add to create one"
+                            }
+                            styles={customSelectStyles}
+                            menuPortalTarget={
+                              typeof document !== "undefined"
+                                ? document.body
+                                : null
+                            }
+                            menuPosition="fixed"
+                          />
+                        )}
                       />
+
+                      <Dialog
+                        open={categoryModalOpen}
+                        onOpenChange={setCategoryModalOpen}
+                      >
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Add category</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-3 py-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                              Category name
+                            </label>
+                            <input
+                              type="text"
+                              autoFocus
+                              value={newCategoryName}
+                              onChange={(e) =>
+                                setNewCategoryName(e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  createProductCategory(newCategoryName, {
+                                    select: true,
+                                  });
+                                }
+                              }}
+                              placeholder="e.g. Bua Product"
+                              className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                            />
+                          </div>
+                          <DialogFooter className="gap-2 sm:gap-0">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={creatingCategory}
+                              onClick={() => setCategoryModalOpen(false)}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button"
+                              disabled={creatingCategory}
+                              onClick={() =>
+                                createProductCategory(newCategoryName, {
+                                  select: true,
+                                })
+                              }
+                              className="gap-1.5 bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy-hover)]"
+                            >
+                              {creatingCategory ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Plus className="h-4 w-4" />
+                              )}
+                              Save category
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                     </div>
 
                     <div className="md:col-span-2">

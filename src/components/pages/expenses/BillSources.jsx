@@ -89,6 +89,10 @@ export default function BillSources() {
     : 10;
   const statusFromUrl = searchParams.get("status") || STATUS_ALL;
   const typeFromUrl = searchParams.get("billType") || TYPE_ALL;
+  const todayYmd = moment().format("YYYY-MM-DD");
+  // Default to today when no date params are in the URL
+  const fromDateFromUrl = searchParams.get("fromDate") || todayYmd;
+  const toDateFromUrl = searchParams.get("toDate") || todayYmd;
   const [searchInput, setSearchInput] = useState(searchFromUrl);
   const searchDebounceRef = useRef(null);
 
@@ -148,6 +152,12 @@ export default function BillSources() {
     if (effectiveBillType && effectiveBillType !== TYPE_ALL) {
       params.set("billType", effectiveBillType);
     }
+    if (fromDateFromUrl) {
+      params.set("fromDate", fromDateFromUrl);
+    }
+    if (toDateFromUrl) {
+      params.set("toDate", toDateFromUrl);
+    }
     _fetchApi(
       `/api/supplier/bills?${params.toString()}`,
       (resp) => {
@@ -175,6 +185,8 @@ export default function BillSources() {
     searchFromUrl,
     statusFromUrl,
     effectiveBillType,
+    fromDateFromUrl,
+    toDateFromUrl,
   ]);
 
   useEffect(() => {
@@ -229,6 +241,14 @@ export default function BillSources() {
           next.set("billType", updates.billType);
         } else next.delete("billType");
       }
+      if (updates.fromDate !== undefined) {
+        if (updates.fromDate) next.set("fromDate", updates.fromDate);
+        else next.delete("fromDate");
+      }
+      if (updates.toDate !== undefined) {
+        if (updates.toDate) next.set("toDate", updates.toDate);
+        else next.delete("toDate");
+      }
       setSearchParams(next, { replace: true });
     },
     [searchParams, setSearchParams]
@@ -257,6 +277,28 @@ export default function BillSources() {
 
   const handleTypeFilter = (billType) => {
     updateUrl({ billType: billType || TYPE_ALL, page: 1 });
+  };
+
+  const handleFromDateChange = (value) => {
+    const from = value || todayYmd;
+    const to =
+      toDateFromUrl && moment(toDateFromUrl).isBefore(from)
+        ? from
+        : toDateFromUrl || todayYmd;
+    updateUrl({ fromDate: from, toDate: to, page: 1 });
+  };
+
+  const handleToDateChange = (value) => {
+    const to = value || todayYmd;
+    const from =
+      fromDateFromUrl && moment(fromDateFromUrl).isAfter(to)
+        ? to
+        : fromDateFromUrl || todayYmd;
+    updateUrl({ fromDate: from, toDate: to, page: 1 });
+  };
+
+  const handleTodayFilter = () => {
+    updateUrl({ fromDate: todayYmd, toDate: todayYmd, page: 1 });
   };
 
   const handlePageChange = (newPageIndex) => {
@@ -464,6 +506,41 @@ export default function BillSources() {
           />
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+          <div className="flex items-center gap-1.5">
+            <label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              From
+            </label>
+            <input
+              type="date"
+              value={fromDateFromUrl}
+              onChange={(e) => handleFromDateChange(e.target.value)}
+              className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              To
+            </label>
+            <input
+              type="date"
+              value={toDateFromUrl}
+              onChange={(e) => handleToDateChange(e.target.value)}
+              className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={`h-9 border-slate-200 ${
+              fromDateFromUrl === todayYmd && toDateFromUrl === todayYmd
+                ? "bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy)]/90"
+                : "text-[var(--aa-navy)] hover:bg-[var(--aa-sidebar-active)]"
+            }`}
+            onClick={handleTodayFilter}
+          >
+            Today
+          </Button>
           {showTypeFilter ? (
             <div className="w-full sm:w-[12rem] lg:w-[11rem]">
               <Select

@@ -470,8 +470,8 @@ export default function RecordPaymentForm() {
         : baseDesc;
 
     const mode = modeForCustomerDeposit(modeOfPayment);
-    const clearedApplied =
-      outstandingInvoices.length > 0 && invoicesPayload.length === 0;
+    // No invoice lines → always pure deposit (credit balance is unrelated).
+    const isPureDeposit = invoicesPayload.length === 0;
 
     const basePayload = {
       transaction_date: paymentDate,
@@ -484,6 +484,7 @@ export default function RecordPaymentForm() {
       narration,
       receivable_deposit_code: activeBusiness.receivable_accural_code,
       receivable_code: activeBusiness.receivable_code,
+      source: "received_payment",
       attachments: attachments
         .filter((doc) => doc.file_path && !doc.uploading)
         .map((doc) => ({
@@ -521,15 +522,9 @@ export default function RecordPaymentForm() {
       basePayload.payment_splits = paymentSplits;
     }
 
-    const payload =
-      invoicesPayload.length > 0
-        ? { ...basePayload, invoices: invoicesPayload }
-        : {
-            ...basePayload,
-            ...(clearedApplied
-              ? { pure_advance: true }
-              : { allocation_order: "fifo" }),
-          };
+    const payload = isPureDeposit
+      ? { ...basePayload, pure_advance: true, invoices: [] }
+      : { ...basePayload, invoices: invoicesPayload };
 
     const advancePortion = Math.max(
       0,
@@ -539,7 +534,7 @@ export default function RecordPaymentForm() {
       ).toFixed(2),
     );
 
-    setPendingSave({ payload, advancePortion, amountPaidNum });
+    setPendingSave({ payload, advancePortion, amountPaidNum, isPureDeposit });
     setConfirmOpen(true);
   };
 
@@ -631,9 +626,14 @@ export default function RecordPaymentForm() {
       >
         <AlertDialogContent className="z-[200] border border-slate-200 bg-white text-slate-900 shadow-2xl sm:rounded-xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>Confirm deposit?</AlertDialogTitle>
             <AlertDialogDescription className="text-slate-600">
-              {pendingSave?.advancePortion > 0.02 ? (
+              {pendingSave?.isPureDeposit ? (
+                <>
+                  {currency} {formatNumber1(pendingSave.amountPaidNum || 0)} will
+                  be recorded as customer deposit. Continue?
+                </>
+              ) : pendingSave?.advancePortion > 0.02 ? (
                 <>
                   Excess {currency} {formatNumber1(pendingSave.advancePortion)}{" "}
                   will be kept as customer deposit / prepaid funds. Continue?
@@ -672,11 +672,11 @@ export default function RecordPaymentForm() {
               />
               <div>
                 <h1 className="text-xl font-semibold text-slate-900">
-                  New Payment
+                  Make Deposit
                 </h1>
                 <p className="text-xs text-slate-500">
-                  Apply this payment to unpaid invoices. Excess is kept as
-                  customer deposit.
+                  Record prepaid customer funds. Unpaid invoices are optional —
+                  credit balance (Credit Summary) is separate from deposit.
                 </p>
               </div>
             </div>
@@ -705,7 +705,7 @@ export default function RecordPaymentForm() {
                 <span className="mr-3">Select a customer.</span>
               )}
               {missingAmount && (
-                <span className="mr-3">Enter the payment amount.</span>
+                <span className="mr-3">Enter the deposit amount.</span>
               )}
               {missingMode && (
                 <span className="mr-3">Choose a payment mode.</span>
@@ -730,7 +730,7 @@ export default function RecordPaymentForm() {
             )}
           </Field>
 
-          <Field label="Payment Made" required error={errors.amount}>
+          <Field label="Deposit Amount" required error={errors.amount}>
             <div className="flex h-9 max-w-md overflow-hidden rounded-md border border-slate-300 bg-white focus-within:border-[var(--aa-accent)] focus-within:ring-1 focus-within:ring-[var(--aa-accent)]">
               <span className="flex items-center border-r border-slate-300 bg-slate-50 px-3 text-sm font-medium text-slate-600">
                 {currency}
@@ -746,8 +746,9 @@ export default function RecordPaymentForm() {
               />
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
-              Apply to invoices below, or leave payments at 0 to record the full
-              amount as customer deposit.
+              Enter the deposit amount. If the customer has unpaid invoices, you
+              can apply part of it below; otherwise the full amount is saved as
+              deposit.
             </p>
           </Field>
 
@@ -1021,8 +1022,16 @@ export default function RecordPaymentForm() {
                 ))}
               </div>
             ) : outstandingInvoices.length === 0 ? (
-              <div className="px-3 py-8 text-center text-sm text-slate-500">
-                There are no invoices for this customer.
+              <div className="mx-3 my-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-5 text-center sm:mx-0">
+                <p className="text-sm font-semibold text-emerald-900">
+                  No unpaid invoices for this customer
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-emerald-800/90">
+                  That is fine for a deposit. Enter the amount above, choose
+                  Cash/Transfer and Pay Through, then save — the full amount
+                  goes to customer deposit. Credit on Credit Summary is not used
+                  here.
+                </p>
               </div>
             ) : (
               <table className="min-w-full">

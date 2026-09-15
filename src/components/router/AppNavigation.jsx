@@ -225,6 +225,7 @@ import ProductCashExpense from "../pages/expenses/ProductCashExpense";
 import ReceivePayment from "../pages/payments/ReceivePayment";
 import CollectionReconciliation from "../pages/payments/CollectionReconciliation";
 import ReceivedFunds from "../pages/payments/ReceivedFunds";
+import CustomerBalanceStatement from "../pages/payments/CustomerBalanceStatement";
 import RecordPaymentForm from "../pages/payments/RecordPaymentForm";
 import RedirectToPayBills from "../pages/payments/RedirectToPayBills";
 import PaymentsMade from "../pages/payments/PaymentsMade";
@@ -585,6 +586,10 @@ const routeModules = {
           {
             path: "",
             element: <ReceivedFunds />,
+          },
+          {
+            path: "balance-statement",
+            element: <CustomerBalanceStatement />,
           },
           {
             path: "new",

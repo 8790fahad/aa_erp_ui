@@ -505,7 +505,12 @@ export const modules = [
           "Receive Payment",
           "Payments",
           "Customer Deposit",
-          "Deposit History",
+        ],
+        subFunctionalities: [
+          { title: "Deposit Summary" },
+          { title: "Credit Summary" },
+          { title: "Deposit History" },
+          { title: "Make Deposit" },
         ],
         access: [
           "services",

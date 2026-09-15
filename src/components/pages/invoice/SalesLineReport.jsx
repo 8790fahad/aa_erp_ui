@@ -70,6 +70,14 @@ function divideMoney(v, divisor) {
   return Math.round((n / divisor) * 100) / 100;
 }
 
+/** "Bua Product" / "IRS Products" → "Bua" / "IRS" */
+function canonicalizeCategoryName(name) {
+  return String(name || "")
+    .trim()
+    .replace(/\s+products?$/i, "")
+    .trim();
+}
+
 function lineVat(row) {
   return num(row.vat_amount ?? row.vat);
 }
@@ -149,7 +157,11 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
   const [category, setCategory] = useState(
     () => searchParams.get("category") || "",
   );
+  const [productSku, setProductSku] = useState(
+    () => searchParams.get("productSku") || "",
+  );
   const [categories, setCategories] = useState([]);
+  const [categoryProducts, setCategoryProducts] = useState([]);
   const [branchFromUrl, setBranchFromUrl] = useState(
     () => searchParams.get("branchId") || "",
   );
@@ -198,19 +210,57 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
       `/api/products/categories?facilityId=${activeBusiness.id}`,
       (res) => {
         const list = Array.isArray(res?.data) ? res.data : [];
-        setCategories(
-          list
-            .map((c) =>
-              typeof c === "string"
-                ? c
-                : String(c.category || c.name || "").trim(),
-            )
-            .filter(Boolean),
-        );
+        const seen = new Map();
+        for (const c of list) {
+          const raw =
+            typeof c === "string"
+              ? c
+              : String(c.category || c.name || "").trim();
+          const key = canonicalizeCategoryName(raw);
+          if (!key) continue;
+          const mapKey = key.toLowerCase();
+          if (!seen.has(mapKey)) seen.set(mapKey, key);
+        }
+        setCategories([...seen.values()].sort((a, b) => a.localeCompare(b)));
       },
       () => setCategories([]),
     );
+    _fetchApi(
+      `/api/products?facilityId=${activeBusiness.id}`,
+      (res) => {
+        const list = Array.isArray(res?.data) ? res.data : [];
+        setCategoryProducts(
+          list
+            .map((p) => ({
+              sku: String(p.sku || "").trim(),
+              name: String(p.name || p.sku || "").trim(),
+              category: canonicalizeCategoryName(p.category),
+              status: String(p.status || "").toLowerCase(),
+            }))
+            .filter((p) => p.sku),
+        );
+      },
+      () => setCategoryProducts([]),
+    );
   }, [activeBusiness?.id]);
+
+  const productsInCategory = useMemo(() => {
+    if (!category.trim()) return [];
+    const want = canonicalizeCategoryName(category).toLowerCase();
+    return categoryProducts
+      .filter((p) => p.category.toLowerCase() === want)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [category, categoryProducts]);
+
+  useEffect(() => {
+    if (!productSku) return;
+    if (!category) {
+      setProductSku("");
+      return;
+    }
+    const ok = productsInCategory.some((p) => p.sku === productSku);
+    if (!ok) setProductSku("");
+  }, [category, productSku, productsInCategory]);
 
   const branchOptions = branches.map((b) => ({
     value: String(b.id),
@@ -238,6 +288,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
         toDate,
         search: search.trim(),
         category: category.trim(),
+        productSku: productSku.trim(),
         branchId: branchFromUrl,
       });
       setRows(allRows);
@@ -256,6 +307,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     toDate,
     search,
     category,
+    productSku,
     branchFromUrl,
   ]);
 
@@ -305,16 +357,20 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     }
     if (category) next.set("category", category);
     else next.delete("category");
+    if (productSku) next.set("productSku", productSku);
+    else next.delete("productSku");
     if (paymentModeFilter) next.set("mode", paymentModeFilter);
     else next.delete("mode");
     setSearchParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportView, isVatReport, paymentModeFilter, vatDivisor]);
+  }, [reportView, isVatReport, paymentModeFilter, vatDivisor, category, productSku]);
 
   const paymentModeOptions = useMemo(() => {
     const set = new Set();
     rows.forEach((r) => set.add(formatSalesPaymentMode(r.mode_of_payment)));
-    return [...set].sort((a, b) => a.localeCompare(b));
+    return [...set]
+      .filter((m) => m && m !== "Unspecified")
+      .sort((a, b) => a.localeCompare(b));
   }, [rows]);
 
   const filteredRows = useMemo(() => {
@@ -1359,13 +1415,36 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
               </label>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  setProductSku("");
+                }}
                 className="border rounded px-2 py-2 text-sm bg-white w-full"
               >
                 <option value="">All categories</option>
                 {categories.map((c) => (
                   <option key={c} value={c}>
                     {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="min-w-[180px]">
+              <label className="text-xs text-gray-600 block mb-1">
+                Product
+              </label>
+              <select
+                value={productSku}
+                onChange={(e) => setProductSku(e.target.value)}
+                disabled={!category}
+                className="border rounded px-2 py-2 text-sm bg-white w-full disabled:bg-slate-50 disabled:text-slate-400"
+              >
+                <option value="">
+                  {category ? "All products in category" : "Select category first"}
+                </option>
+                {productsInCategory.map((p) => (
+                  <option key={p.sku} value={p.sku}>
+                    {p.name}
                   </option>
                 ))}
               </select>
@@ -1855,6 +1934,7 @@ async function fetchAllSalesLines({
   toDate,
   search,
   category,
+  productSku,
   branchId,
 }) {
   let page = 1;
@@ -1868,6 +1948,7 @@ async function fetchAllSalesLines({
       toDate,
       search,
       category,
+      productSku,
       branchId,
       page,
       pageSize: PAGE_SIZE,
@@ -1889,6 +1970,7 @@ function fetchSalesLinePage({
   toDate,
   search,
   category,
+  productSku,
   branchId,
   page,
   pageSize,
@@ -1904,6 +1986,7 @@ function fetchSalesLinePage({
     });
     if (search) params.set("search", search);
     if (category) params.set("category", category);
+    if (productSku) params.set("productSku", productSku);
     if (branchId) params.set("branchId", branchId);
 
     _fetchApi(
