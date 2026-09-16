@@ -858,7 +858,7 @@ export default function CreditSaleInvoice({
     invoice.sale_code ||
     invoice.invoice_ref ||
     (typeof invoice.transaction?.id === "string" &&
-    /^/i.test(invoice.transaction.id)
+    /^INV-/i.test(invoice.transaction.id)
       ? invoice.transaction.id
       : null) ||
     saleCode ||
