@@ -4,7 +4,7 @@
 // in `api.jsx` (which imports the store) there would create an init cycle.
 
 // let remoteEndpoint = "http://localhost:42843";
-let remoteEndpoint = "https://server.brainstorm.ng/flowbooks";
+let remoteEndpoint = "https://nexifour.ng/nexifour";
 let localEndpoint = "http://localhost:42844";
 // let remoteEndpoint = "https://server.brainstorm.ng/inventria_new";
 // let localEndpoint = "http://192.168.1.87:42844"
