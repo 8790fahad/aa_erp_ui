@@ -130,10 +130,12 @@ export default function CashTransferPaymentFields({
   bankTypeaheadRef,
   disabled = false,
   lockMode = false,
+  allowCashTransfer = true,
   /** Custom row wrapper for Pay Bills (Row component) */
   Row,
 }) {
-  const isSplit = isCashTransferSplitMode(modeOfPayment);
+  const isSplit =
+    allowCashTransfer && isCashTransferSplitMode(modeOfPayment);
   const expected =
     expectedTotal != null && Number.isFinite(Number(expectedTotal))
       ? Number(expectedTotal)
@@ -209,7 +211,9 @@ export default function CashTransferPaymentFields({
       <option value="">Select mode...</option>
       <option value="cash">Cash</option>
       <option value="bank">Bank Transfer</option>
-      <option value="cash+transfer">Cash + Transfer</option>
+      {allowCashTransfer ? (
+        <option value="cash+transfer">Cash + Transfer</option>
+      ) : null}
       <option value="cheque">Cheque</option>
       <option value="card">Card</option>
     </select>

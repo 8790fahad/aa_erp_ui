@@ -836,6 +836,7 @@ export default function RecordPaymentForm() {
             }}
             cashTypeaheadRef={cashTypeaheadRef}
             disabled={saving}
+            allowCashTransfer={false}
           />
           {(errors.mode || errors.paidThrough || errors.cheque) && (
             <p className="ml-0 flex items-center gap-1 text-xs text-red-600 lg:ml-[9rem] lg:pl-4">

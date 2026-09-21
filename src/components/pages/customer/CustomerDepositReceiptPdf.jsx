@@ -46,6 +46,45 @@ function formatDepositAccountLine(info, chequeNumber) {
   return bits.filter(Boolean).join(" | ") || "N/A";
 }
 
+function isCashDepositMode(mode) {
+  const m = String(mode || "")
+    .toLowerCase()
+    .trim();
+  return m === "cash" || m === "cash payment";
+}
+
+function accountInfoFromBankRow(row, paidThrough) {
+  if (!row) return null;
+  const name =
+    row.account_name || row.bank_name || row.description || row.category || "";
+  if (!name && !row.account_number) return null;
+  return {
+    kind: "bank",
+    code: row.account_code || row.head || row.code || paidThrough || null,
+    name: name || null,
+    account_number: row.account_number || null,
+    bank_code: row.bank_code || null,
+    bank_name: row.bank_name || null,
+  };
+}
+
+function findBankAccountRow(list, paidThrough) {
+  const id = String(paidThrough || "").trim();
+  if (!id || !Array.isArray(list)) return null;
+  return (
+    list.find((a) => String(a.id) === id) ||
+    list.find((a) => String(a.head) === id) ||
+    list.find((a) => String(a.account_code) === id) ||
+    null
+  );
+}
+
+function needsClientBankLookup(deposit) {
+  if (deposit?.account_info?.name) return false;
+  if (!deposit?.bank_account_id) return false;
+  return !isCashDepositMode(deposit?.mode_of_payment || deposit?.payment_method);
+}
+
 function isCashAccountKind(depositData) {
   const kind = String(depositData?.account_info?.kind || "").toLowerCase();
   if (kind === "cash") return true;
@@ -589,38 +628,67 @@ const CustomerDepositReceiptPdf = () => {
 
   useEffect(() => {
     if (invoice_ref && customer_no && activeBusiness?.id) {
+      let cancelled = false;
       setLoading(true);
       _fetchApi(
         `/api/v1/get-customer-deposit/${customer_no}/${activeBusiness.id}/${invoice_ref}`,
         (data) => {
-          setLoading(false);
-          if (data.success) {
-            // Merge the data object with additional fields from the response
-            setDepositData({
-              ...data.data,
-              // Add customer information from response
-              fullname: data.customer?.fullname || data.data?.fullname,
-              customerNo: data.customer?.customerNo || data.data?.customerNo,
-              address: data.customer?.address || data.data?.address,
-              outstanding_balance: data.outstanding_balance,
-              business_name: data.business_name,
-              business_address: data.business_address,
-              business_phone: data.business_phone,
-              invoice_ref: data.invoice_ref,
-            });
-          } else {
+          if (cancelled) return;
+          if (!data.success) {
+            setLoading(false);
             toast.error(data.message || "Error fetching deposit receipt");
+            return;
           }
+          const merged = {
+            ...data.data,
+            fullname: data.customer?.fullname || data.data?.fullname,
+            customerNo: data.customer?.customerNo || data.data?.customerNo,
+            address: data.customer?.address || data.data?.address,
+            outstanding_balance: data.outstanding_balance,
+            business_name: data.business_name,
+            business_address: data.business_address,
+            business_phone: data.business_phone,
+            invoice_ref: data.invoice_ref,
+          };
+          if (!needsClientBankLookup(merged)) {
+            setDepositData(merged);
+            setLoading(false);
+            return;
+          }
+          _fetchApi(
+            `/api/get/bank-accounts?facilityId=${activeBusiness.id}`,
+            (bankResp) => {
+              if (cancelled) return;
+              const row = findBankAccountRow(
+                bankResp?.results || [],
+                merged.bank_account_id,
+              );
+              const info = accountInfoFromBankRow(row, merged.bank_account_id);
+              setDepositData(
+                info ? { ...merged, account_info: info } : merged,
+              );
+              setLoading(false);
+            },
+            () => {
+              if (cancelled) return;
+              setDepositData(merged);
+              setLoading(false);
+            },
+          );
         },
         (err) => {
+          if (cancelled) return;
           setLoading(false);
           console.error("Error fetching deposit receipt:", err);
           toast.error("Error fetching deposit receipt");
-        }
+        },
       );
-    } else {
-      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
     }
+    setLoading(false);
+    return undefined;
   }, [invoice_ref, customer_no, activeBusiness?.id]);
 
   const handleReactToPrint = useReactToPrint({
