@@ -1530,9 +1530,7 @@ export default function GoodsTransfer() {
                               </span>
                             </td>
                             <td className="px-3 py-2.5 text-right tabular-nums font-medium text-amber-700">
-                              {formatNumber1(
-                                parseFloat(item.pending_to_collect) || 0,
-                              )}
+                              {formatNumber1(item.pending_to_collect)}
                             </td>
                             <td className="px-3 py-2.5 text-right">
                               <button
@@ -1570,15 +1568,15 @@ export default function GoodsTransfer() {
                                 className="tabular-nums font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800"
                               >
                                 {formatNumber1(
-                                  parseFloat(item.balance ?? item.qty) || 0,
+                                  item.balance ?? item.qty ?? 0,
                                 )}
                               </button>
                             </td>
                             <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-900">
                               {formatNumber1(
-                                parseFloat(item.total) ||
-                                  (parseFloat(item.balance ?? item.qty) || 0) +
-                                    (parseFloat(item.pending_to_collect) || 0),
+                                item.total ??
+                                  (Number(item.balance ?? item.qty) || 0) +
+                                    (Number(item.pending_to_collect) || 0),
                               )}
                             </td>
                             <td className="px-3 py-2.5 text-slate-600">

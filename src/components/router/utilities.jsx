@@ -30,8 +30,7 @@ export function formatNumber1(n = 0) {
     return "0";
   }
 
-  // Convert n to a number if it's a string and round it to a certain number of decimal places
-  n = parseFloat(n);
+  n = parseFloat(String(n).replace(/,/g, "").trim());
 
   if (isNaN(n)) {
     return "0";

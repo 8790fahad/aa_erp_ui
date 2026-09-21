@@ -813,6 +813,7 @@ export default function ProductSupplierBill() {
       item_code: item.sku,
       cost: getItemCost(item),
       qty: getItemQty(item),
+      quantity: getItemQty(item),
     }));
 
     // Aggregate per-line taxes for API (Make Sale–style line tax)
@@ -1164,7 +1165,12 @@ export default function ProductSupplierBill() {
     // Map the items from the requisition to the format expected by the items list
 
     const requisitionItems = requisition.items.map((item) => {
-      const quantity = item.quantity || 1;
+      const quantity =
+        parseFloat(
+          parseNumberFromFormatted(
+            item.receivedQuantity ?? item.quantity ?? 1,
+          ),
+        ) || 1;
       const sku = String(item.item_code || item.sku || "").trim();
       const catalogMatch =
         productList.find(
@@ -1178,9 +1184,11 @@ export default function ProductSupplierBill() {
         ) || null;
 
       const cost =
-        parseFloat(item.unit_cost || item.cost || 0) ||
-        parseFloat(catalogMatch?.cost_price || 0) ||
-        0;
+        parseFloat(
+          parseNumberFromFormatted(
+            item.unit_cost || item.cost || catalogMatch?.cost_price || 0,
+          ),
+        ) || 0;
 
       const itemName =
         catalogMatch?.name ||
@@ -1199,7 +1207,7 @@ export default function ProductSupplierBill() {
         sku: itemSku,
         quantity: formatNumberWithCommas(String(quantity)),
         cost: cost > 0 ? formatNumberWithCommas(String(cost)) : "",
-        total: parseFloat(quantity) * parseFloat(cost),
+        total: quantity * cost,
         item_type: item.item_type || catalogMatch?.item_type || "",
         taxable,
         line_tax_id: isProductTaxable(taxable) ? defaultLineTaxId : null,

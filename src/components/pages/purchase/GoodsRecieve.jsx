@@ -227,6 +227,17 @@ function GoodsReceive() {
     // Prepare items with their additional costs
     const itemsWithAdditionalCosts = itemList.map((item) => ({
       ...item,
+      quantity: parseFloat(String(item.quantity ?? "").replace(/,/g, "")) || 0,
+      receivedQuantity:
+        parseFloat(String(item.receivedQuantity ?? "").replace(/,/g, "")) ||
+        parseFloat(String(item.quantity ?? "").replace(/,/g, "")) ||
+        0,
+      est_cost: parseFloat(String(item.est_cost ?? "").replace(/,/g, "")) || 0,
+      additionalCostValue:
+        parseFloat(String(item.additionalCostValue ?? "").replace(/,/g, "")) ||
+        0,
+      averageCostPerUom:
+        parseFloat(String(item.averageCostPerUom ?? "").replace(/,/g, "")) || 0,
     }));
 
     _postApi(

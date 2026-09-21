@@ -32,6 +32,12 @@ const thClass =
 const tdClass = "border-b border-slate-100 px-3 py-2.5 text-sm text-slate-700";
 const trClass = "bg-white transition-colors hover:bg-slate-50/80";
 
+function parseQty(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  const n = parseFloat(String(value).replace(/,/g, "").trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
 function attachmentHref(doc) {
   const path = [doc?.file_path, doc?.url].find(
     (value) => value && /^https?:\/\/res\.cloudinary\.com\//i.test(value),
@@ -138,15 +144,15 @@ const CustomRequisitionModal = ({
   useEffect(() => {
     if (isOpen) {
       const updatedItems = (initialItems || []).map((item, i) => {
-        const cost = parseFloat(item.est_cost) || 0;
-        const additionalCost = parseFloat(item.additionalCostValue) || 0;
-        const requestedQty = parseFloat(item.quantity) || 0;
+        const cost = parseQty(item.est_cost);
+        const additionalCost = parseQty(item.additionalCostValue);
+        const requestedQty = parseQty(item.quantity);
         const approvedQty =
           item.approved_qty != null && item.approved_qty !== ""
-            ? parseFloat(item.approved_qty)
+            ? parseQty(item.approved_qty)
             : requestedQty;
         const receivedQty =
-          parseInt(item.receivedQuantity || item.quantity) || 0;
+          parseQty(item.receivedQuantity) || requestedQty;
         const averageCostPerUom =
           receivedQty > 0 ? (cost + additionalCost) / receivedQty : 0;
 
@@ -393,7 +399,7 @@ const CustomRequisitionModal = ({
                     className={`${inputClass} ml-auto w-20 text-center`}
                     value={item.quantity || 0}
                     onChange={(e) => {
-                      const purchaseQty = parseInt(e.target.value) || 0;
+                      const purchaseQty = parseQty(e.target.value);
                       setItemList((prev) =>
                         prev.map((listItem) => {
                           if (listItem.rowId !== item.rowId) return listItem;
@@ -426,9 +432,9 @@ const CustomRequisitionModal = ({
                     className={`${inputClass} ml-auto w-20 text-center`}
                     value={item.receivedQuantity ?? ""}
                     onChange={(e) => {
-                      let receivedQty = parseInt(e.target.value) || 0;
-                      if (receivedQty > item.quantity) {
-                        receivedQty = item.quantity;
+                      let receivedQty = parseQty(e.target.value);
+                      if (receivedQty > parseQty(item.quantity)) {
+                        receivedQty = parseQty(item.quantity);
                       }
                       setItemList((prev) =>
                         prev.map((listItem) => {
@@ -520,7 +526,7 @@ const CustomRequisitionModal = ({
               itemList
                 .filter((item) => item.approved)
                 .reduce((sum, item) => {
-                  const totalQty = parseInt(item.quantity) || 0;
+                  const totalQty = parseQty(item.quantity);
                   const cost = parseFloat(item.est_cost) || 0;
                   return sum + totalQty * cost;
                 }, 0),

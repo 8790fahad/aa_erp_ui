@@ -182,7 +182,9 @@ function GenerateGoodReceiveNote() {
                     style={{ width: "80px", margin: "0 auto" }}
                     value={item.receivedQuantity || item.quantity}
                     onChange={(e) => {
-                      const receivedQty = parseInt(e.target.value) || 0;
+                      const receivedQty =
+                        parseFloat(String(e.target.value).replace(/,/g, "")) ||
+                        0;
                       setItemList((prev) =>
                         prev.map((listItem) =>
                           listItem.id === item.id
