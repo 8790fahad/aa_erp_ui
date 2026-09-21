@@ -109,19 +109,28 @@ export default function OperatingCashExpenses() {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  const parseNumberFromFormatted = (value) => {
+    if (value === null || value === undefined || value === "") return "";
+    return String(value).replace(/,/g, "");
+  };
+
   const handleItemChange = (e) => {
     const { name, value } = e.target;
     const updatedItem = { ...currentItem, [name]: value };
 
     if (name === "quantity" || name === "cost") {
       const qty =
-        name === "quantity"
-          ? parseFloat(value) || 0
-          : parseFloat(updatedItem.quantity) || 0;
+        parseFloat(
+          parseNumberFromFormatted(
+            name === "quantity" ? value : updatedItem.quantity,
+          ),
+        ) || 0;
       const cost =
-        name === "cost"
-          ? parseFloat(value) || 0
-          : parseFloat(updatedItem.cost) || 0;
+        parseFloat(
+          parseNumberFromFormatted(
+            name === "cost" ? value : updatedItem.cost,
+          ),
+        ) || 0;
       updatedItem.total = qty * cost;
     }
 
@@ -217,7 +226,15 @@ export default function OperatingCashExpenses() {
   };
 
   const calculateTotal = () => {
-    return items.reduce((sum, item) => sum + parseFloat(item.total || 0), 0);
+    return items.reduce((sum, item) => {
+      const stored = parseFloat(parseNumberFromFormatted(item.total ?? ""));
+      if (Number.isFinite(stored) && stored !== 0) return sum + stored;
+      const qty =
+        parseFloat(parseNumberFromFormatted(item.quantity ?? 1)) || 1;
+      const cost =
+        parseFloat(parseNumberFromFormatted(item.cost ?? 0)) || 0;
+      return sum + qty * cost;
+    }, 0);
   };
 
   const handleDirectPurchase = () => {
@@ -255,14 +272,18 @@ export default function OperatingCashExpenses() {
       return;
     }
 
-    // Prepare purchase data with items
-    const purchaseData = items.map((item) => ({
-      head: item.head || item.item_type,
-      description: item.description || item.item_name,
-      quantity: item.quantity,
-      cost: item.cost,
-      qty: item.quantity,
-    }));
+    const purchaseData = items.map((item) => {
+      const qty =
+        parseFloat(parseNumberFromFormatted(item.quantity ?? 1)) || 1;
+      const cost = parseFloat(parseNumberFromFormatted(item.cost ?? 0)) || 0;
+      return {
+        head: item.head || item.item_type,
+        description: item.description || item.item_name,
+        quantity: qty,
+        cost,
+        qty,
+      };
+    });
     setLoading(true);
     // Save purchase to stock
     _postApi(
@@ -390,20 +411,32 @@ export default function OperatingCashExpenses() {
     }
 
     // Map the items from the memo to the format expected by the items list
-    const memoItems = memo.items.map((item) => ({
-      _id: uuidv4(),
-      item_name: "",
-      head: "",
-      description: item.description || item.item_name || "",
-      sku: item.item_code || item.sku || "",
-      quantity: item.quantity || 1,
-      cost: item.unit_cost || item.cost || item.amount || 0,
-      total:
-        parseFloat(item.quantity || 1) *
-        parseFloat(item.unit_cost || item.cost || item.amount || 0),
-      item_type: item.item_subhead || item.item_type || "",
-      taxable: item.taxable || false,
-    }));
+    const memoItems = memo.items.map((item) => {
+      const qty =
+        parseFloat(parseNumberFromFormatted(item.quantity ?? 1)) || 1;
+      const cost =
+        parseFloat(
+          parseNumberFromFormatted(
+            item.unit_cost ?? item.cost ?? item.amount ?? 0,
+          ),
+        ) || 0;
+      const head = item.item_subhead || item.chart_code || item.head || "";
+      const matched = head
+        ? expenseList.find((e) => String(e.code) === String(head))
+        : null;
+      return {
+        _id: uuidv4(),
+        item_name: matched?.name || item.item_name || "",
+        head: matched?.code || head,
+        description: item.description || item.item_name || "",
+        sku: item.item_code || item.sku || "",
+        quantity: qty,
+        cost,
+        total: qty * cost,
+        item_type: item.item_subhead || item.item_type || "",
+        taxable: item.taxable || false,
+      };
+    });
 
     // Add to items list
     setItems([...items, ...memoItems]);

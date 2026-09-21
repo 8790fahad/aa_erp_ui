@@ -228,11 +228,8 @@ export default function OperatingExpenses() {
 
   // Parse formatted number (remove commas)
   const parseNumberFromFormatted = (value) => {
-    if (!value || value === "") return "";
-    // Convert to string first to handle both string and number inputs
-    const stringValue = String(value);
-    // Remove commas and keep only numbers and decimal point
-    return stringValue.replace(/,/g, "");
+    if (value === null || value === undefined || value === "") return "";
+    return String(value).replace(/,/g, "");
   };
 
   // Handle numeric input (allow numbers, dots, and commas)
@@ -965,22 +962,32 @@ export default function OperatingExpenses() {
       return false;
     }
 
-    // Map the items from the memo to the format expected by the items list
-    const memoItems = memo.items.map((item) => ({
-      _id: uuidv4(),
-      item_name: "",
-      head: "",
-      description: item.description || item.item_name || "",
-      sku: item.item_code || item.sku || "",
-      quantity: item.quantity || 1,
-      cost: item.unit_cost || item.cost || item.amount || 0,
-      total:
-        parseFloat(item.quantity || 1) *
-        parseFloat(item.unit_cost || item.cost || item.amount || 0),
-      item_type: item.item_subhead || item.item_type || "",
-      taxable: item.taxable || "Non-Taxable",
-      line_tax_id: null,
-    }));
+    const memoItems = memo.items.map((item) => {
+      const qtyParsed = parseNumberFromFormatted(item.quantity ?? 1);
+      const costParsed = parseNumberFromFormatted(
+        item.unit_cost ?? item.cost ?? item.amount ?? 0,
+      );
+      const qty = qtyParsed === "" ? 1 : parseFloat(qtyParsed) || 1;
+      const cost = costParsed === "" ? 0 : parseFloat(costParsed) || 0;
+      const head = item.item_subhead || item.chart_code || item.head || "";
+      const matched = head
+        ? expenseList.find((e) => String(e.code) === String(head))
+        : null;
+      return {
+        _id: uuidv4(),
+        item_name: matched?.name || item.item_name || "",
+        head: matched?.code || head,
+        account_type: matched?.account_type || "",
+        description: item.description || item.item_name || "",
+        sku: item.item_code || item.sku || "",
+        quantity: formatNumberWithCommas(String(qty)),
+        cost: formatNumberWithCommas(String(cost)),
+        total: qty * cost,
+        item_type: item.item_subhead || item.item_type || "",
+        taxable: item.taxable || "Non-Taxable",
+        line_tax_id: null,
+      };
+    });
 
     // Functional update so multiple memos can be added without losing prior lines
     setItems((prev) => [...prev, ...memoItems]);

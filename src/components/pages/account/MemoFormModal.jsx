@@ -158,11 +158,12 @@ export default function MemoFormModal({
       return;
     }
     const unitCost = parseJournalAmount(draft.unit_cost);
+    const qty = parseJournalAmount(draft.quantity);
     if (unitCost <= 0) {
       toast.error("Unit cost must be greater than 0");
       return;
     }
-    if (!draft.quantity || Number(draft.quantity) <= 0) {
+    if (!draft.quantity || qty <= 0) {
       toast.error("Quantity must be greater than 0");
       return;
     }
@@ -171,7 +172,7 @@ export default function MemoFormModal({
       {
         item_name: draft.item_name.trim(),
         unit_cost: unitCost,
-        quantity: Number(draft.quantity),
+        quantity: qty,
         description: draft.description.trim() || draft.item_name.trim(),
       },
     ]);
@@ -307,8 +308,8 @@ export default function MemoFormModal({
       expenses: lines.map((row) => ({
         item: row.item_name,
         description: row.description || row.item_name,
-        unitCost: Number(row.unit_cost),
-        quantity: Number(row.quantity) || 1,
+        unitCost: parseJournalAmount(row.unit_cost),
+        quantity: parseJournalAmount(row.quantity) || 1,
         item_code: "",
         chart_code: "",
       })),

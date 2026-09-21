@@ -10,6 +10,53 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 import { printThermalReceipt } from "@/components/pages/sales/ThermalReceipt";
+import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
+
+function formatReceiptPaymentMode(mode) {
+  const raw = String(mode || "")
+    .trim()
+    .toLowerCase();
+  if (
+    raw === "bank" ||
+    raw === "bank transfer" ||
+    raw === "transfer"
+  ) {
+    return "BANK TRANSFER";
+  }
+  const labeled = formatExpensePaymentMode(mode);
+  return labeled && labeled !== "—" ? labeled.toUpperCase() : "N/A";
+}
+
+function formatDepositAccountLine(info, chequeNumber) {
+  if (!info && !chequeNumber) return "N/A";
+  const names = [info?.bank_name, info?.name]
+    .map((v) => String(v || "").trim())
+    .filter(Boolean);
+  const uniqueNames = [...new Set(names)];
+  const bits = [...uniqueNames];
+  if (info?.kind === "cash" && info?.code) {
+    bits.push(`Code: ${info.code}`);
+  }
+  if (info?.account_number) {
+    bits.push(`Account: ${info.account_number}`);
+  }
+  if (chequeNumber) {
+    bits.push(`Cheque Number: ${chequeNumber}`);
+  }
+  return bits.filter(Boolean).join(" | ") || "N/A";
+}
+
+function isCashAccountKind(depositData) {
+  const kind = String(depositData?.account_info?.kind || "").toLowerCase();
+  if (kind === "cash") return true;
+  if (kind === "bank") return false;
+  const mode = String(
+    depositData?.payment_method || depositData?.mode_of_payment || "",
+  )
+    .toLowerCase()
+    .trim();
+  return mode === "cash" || mode === "cash payment";
+}
 
 const receiptBwCss = `
   .invoice-bw,
@@ -165,41 +212,82 @@ const CustomerDepositReceiptHTML = ({
             Payment Details
           </h3>
           <div className="bg-blue-50 border border-blue-200 p-3 rounded-md">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex-1">
-                <p className="text-xs text-gray-600 mb-1 font-semibold">
-                  Mode of Payment
-                </p>
-                <div className="bg-white border border-blue-300 rounded px-2 py-1.5">
-                  <p className="text-sm font-bold text-blue-800">
-                    {depositData?.payment_method?.toUpperCase() ||
-                      depositData?.mode_of_payment?.toUpperCase() ||
-                      "N/A"}
+            {Array.isArray(depositData?.payment_legs) &&
+            depositData.payment_legs.length > 1 ? (
+              <div className="space-y-2">
+                {depositData.payment_legs.map((leg, idx) => (
+                  <div
+                    key={`${leg.mode_of_payment || "leg"}-${idx}`}
+                    className="grid grid-cols-2 gap-4"
+                  >
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-600 mb-1 font-semibold">
+                        Mode of Payment
+                      </p>
+                      <div className="bg-white border border-blue-300 rounded px-2 py-1.5">
+                        <p className="text-sm font-bold text-blue-800">
+                          {formatReceiptPaymentMode(leg.mode_of_payment)}
+                          {leg.amount
+                            ? ` · ₦${formatNumber1(leg.amount)}`
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-600 mb-1 font-semibold">
+                        {String(leg.account_info?.kind || "").toLowerCase() ===
+                        "cash"
+                          ? "Cash Head"
+                          : "Account / Bank"}
+                      </p>
+                      <div className="bg-white border border-blue-300 rounded px-2 py-1.5">
+                        <p className="text-sm font-bold text-blue-800">
+                          {formatDepositAccountLine(
+                            leg.account_info,
+                            idx === 0 ? depositData?.cheque_number : null,
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex-1">
+                  <p className="text-xs text-gray-600 mb-1 font-semibold">
+                    Mode of Payment
                   </p>
+                  <div className="bg-white border border-blue-300 rounded px-2 py-1.5">
+                    <p className="text-sm font-bold text-blue-800">
+                      {formatReceiptPaymentMode(
+                        depositData?.payment_method ||
+                          depositData?.mode_of_payment,
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-600 mb-1 font-semibold">
+                    {isCashAccountKind(depositData)
+                      ? "Cash Head"
+                      : "Account / Bank"}
+                  </p>
+                  <div className="bg-white border border-blue-300 rounded px-2 py-1.5">
+                    <p className="text-sm font-bold text-blue-800">
+                      {(() => {
+                        const line = formatDepositAccountLine(
+                          depositData?.account_info,
+                          depositData?.cheque_number,
+                        );
+                        if (line !== "N/A") return line;
+                        return depositData?.bank_name || "N/A";
+                      })()}
+                    </p>
+                  </div>
                 </div>
               </div>
-              <div className="flex-1">
-                <p className="text-xs text-gray-600 mb-1 font-semibold">
-                  Account / Bank
-                </p>
-                <div className="bg-white border border-blue-300 rounded px-2 py-1.5">
-                  <p className="text-sm font-bold text-blue-800">
-                    {depositData?.account_info?.name ||
-                      depositData?.bank_name ||
-                      "N/A"}
-                    {depositData?.account_info?.code && (
-                      <> | Code: {depositData.account_info.code}</>
-                    )}
-                    {depositData?.account_info?.account_number && (
-                      <> | Account: {depositData.account_info.account_number}</>
-                    )}
-                    {depositData?.cheque_number && (
-                      <> | Cheque Number: {depositData.cheque_number}</>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
         {/* Deposit Summary */}
@@ -366,14 +454,13 @@ function ThermalDepositReceipt({ depositData, company }) {
     depositData?.reference_number ||
     "N/A";
   const amount = Number(depositData?.cost || depositData?.amount_paid || 0);
-  const mode =
-    depositData?.payment_method ||
-    depositData?.mode_of_payment ||
-    "N/A";
-  const account =
-    depositData?.account_info?.name ||
-    depositData?.bank_name ||
-    "";
+  const mode = formatReceiptPaymentMode(
+    depositData?.payment_method || depositData?.mode_of_payment,
+  );
+  const account = formatDepositAccountLine(
+    depositData?.account_info,
+    depositData?.cheque_number,
+  );
 
   return (
     <div className="flex justify-center">
@@ -447,9 +534,9 @@ function ThermalDepositReceipt({ depositData, company }) {
           <div className="tr-divider" />
           <div className="tr-row">
             <span>Mode</span>
-            <span>{String(mode).toUpperCase()}</span>
+            <span>{mode}</span>
           </div>
-          {account ? (
+          {account && account !== "N/A" ? (
             <div className="tr-row">
               <span>Account</span>
               <span>{account}</span>
