@@ -946,6 +946,27 @@ export default function CreditSaleInvoice({
     return [...new Set(transferLines.map((p) => p.bank_name).filter(Boolean))];
   })();
 
+  const cardAccounts = (() => {
+    const fromApi =
+      invoice?.card_accounts || invoice?.transaction?.card_accounts || [];
+    if (Array.isArray(fromApi) && fromApi.length)
+      return fromApi.filter(Boolean);
+    return [
+      ...new Set(
+        cardLines
+          .map((p) => p.account_number || p.bank_name)
+          .filter(Boolean),
+      ),
+    ];
+  })();
+
+  const posAccountDetail = (line) => {
+    const number = String(line?.account_number || "").trim();
+    const name = String(line?.bank_name || "").trim();
+    if (number && name) return `${name} · ${number}`;
+    return number || name;
+  };
+
   const depositPaid = Number(
     invoice?.deposit_paid ??
       invoice?.transaction?.deposit_paid ??
@@ -1948,17 +1969,22 @@ export default function CreditSaleInvoice({
                 }
                 if (cardLines.length > 0) {
                   cardLines.forEach((line) => {
+                    const account = posAccountDetail(line);
                     fields.push({
                       label: "POS received",
                       value: `₦${formatNumber(line.amount)}${
-                        line.bank_name ? ` · ${line.bank_name}` : ""
+                        account ? ` · ${account}` : ""
                       }`,
                     });
                   });
                 } else if (cardPaid > 0.05) {
                   fields.push({
                     label: "POS received",
-                    value: `₦${formatNumber(cardPaid)}`,
+                    value: `₦${formatNumber(cardPaid)}${
+                      cardAccounts.length > 0
+                        ? ` · ${cardAccounts.join(", ")}`
+                        : ""
+                    }`,
                   });
                 }
                 if (depositApplied > 0.05) {

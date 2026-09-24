@@ -220,9 +220,15 @@ function buildBranchInvoiceView(
       invoiceData.cash_paid ?? invoiceData.transaction?.cash_paid ?? 0,
     transfer_paid:
       invoiceData.transfer_paid ?? invoiceData.transaction?.transfer_paid ?? 0,
+    card_paid:
+      invoiceData.card_paid ?? invoiceData.transaction?.card_paid ?? 0,
     transfer_banks:
       invoiceData.transfer_banks ||
       invoiceData.transaction?.transfer_banks ||
+      [],
+    card_accounts:
+      invoiceData.card_accounts ||
+      invoiceData.transaction?.card_accounts ||
       [],
     payment_breakdown:
       invoiceData.payment_breakdown ||
