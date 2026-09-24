@@ -1095,13 +1095,13 @@ export default function CreditSaleInvoice({
         font-family: "Source Sans 3", "Segoe UI", "Helvetica Neue", Arial, sans-serif !important;
       }
       .invoice-items-table th {
-        font-size: ${isA5 ? "11px" : "13px"} !important;
+        font-size: ${isA5 ? "13px" : "16px"} !important;
       }
       .invoice-items-table td {
-        font-size: ${isA5 ? "12px" : "13px"} !important;
+        font-size: ${isA5 ? "14px" : "16px"} !important;
       }
       .invoice-items-table td:nth-child(2) {
-        font-size: ${isA5 ? "12.5px" : "14px"} !important;
+        font-size: ${isA5 ? "14.5px" : "17px"} !important;
         font-weight: 600 !important;
       }
       .invoice-container {
@@ -1380,9 +1380,9 @@ export default function CreditSaleInvoice({
             ? `
         .invoice-a5 .invoice-page-half-fill { display: none; }
         .invoice-a5 .invoice-page-divider { display: none; }
-        .invoice-a5 .invoice-items-table th { padding: 4px 6px !important; font-size: 11px !important; }
-        .invoice-a5 .invoice-items-table td { padding: 4px 6px !important; font-size: 12px !important; }
-        .invoice-a5 .invoice-items-table td:nth-child(2) { font-size: 12.5px !important; }
+        .invoice-a5 .invoice-items-table th { padding: 4px 6px !important; font-size: 13px !important; }
+        .invoice-a5 .invoice-items-table td { padding: 4px 6px !important; font-size: 14px !important; }
+        .invoice-a5 .invoice-items-table td:nth-child(2) { font-size: 14.5px !important; }
         .invoice-a5 .a5-section { padding: 0 2px; }
         .invoice-items-table {
           font-family: "Source Sans 3", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -1399,13 +1399,13 @@ export default function CreditSaleInvoice({
             font-family: "Source Sans 3", "Segoe UI", "Helvetica Neue", Arial, sans-serif !important;
           }
           .invoice-items-table th {
-            font-size: 13px !important;
+            font-size: 15px !important;
           }
           .invoice-items-table td {
-            font-size: 13px !important;
+            font-size: 15px !important;
           }
           .invoice-items-table td:nth-child(2) {
-            font-size: 14px !important;
+            font-size: 16px !important;
             font-weight: 600 !important;
           }
         }
@@ -1578,12 +1578,12 @@ export default function CreditSaleInvoice({
                   className={`bg-blue-50 border border-blue-200 ${isA5 ? "p-0.5 px-1" : "p-1"}`}
                 >
                   <h6
-                    className={`font-semibold text-blue-800 uppercase tracking-wide ${isA5 ? "text-[10px] mb-0" : "text-xs mb-"}`}
+                    className={`font-semibold text-blue-800 uppercase tracking-wide ${isA5 ? "text-xs mb-0" : "text-sm mb-"}`}
                   >
                     Bill To
                   </h6>
                   <p
-                    className={`${isA5 ? "text-[10px] leading-snug" : "text-xs leading-relaxed"} text-gray-700`}
+                    className={`${isA5 ? "text-xs leading-snug" : "text-sm leading-relaxed"} text-gray-700`}
                   >
                     <span className="font-semibold text-gray-600">
                       Account Name:
@@ -1622,27 +1622,27 @@ export default function CreditSaleInvoice({
                   <thead>
                     <tr className="bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white">
                       <th
-                        className={`border-r border-[var(--aa-accent)] text-center font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
+                        className={`border-r border-[var(--aa-accent)] text-center font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-xs" : "px-2.5 py-2 text-base"}`}
                       >
                         #
                       </th>
                       <th
-                        className={`border-r border-[var(--aa-accent)] text-left font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
+                        className={`border-r border-[var(--aa-accent)] text-left font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-xs" : "px-2.5 py-2 text-base"}`}
                       >
                         Description/Size
                       </th>
                       <th
-                        className={`border-r border-[var(--aa-accent)] text-center font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
+                        className={`border-r border-[var(--aa-accent)] text-center font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-xs" : "px-2.5 py-2 text-base"}`}
                       >
                         Quantity
                       </th>
                       <th
-                        className={`border-r border-[var(--aa-accent)] text-right font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
+                        className={`border-r border-[var(--aa-accent)] text-right font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-xs" : "px-2.5 py-2 text-base"}`}
                       >
                         Unit Price(₦)
                       </th>
                       <th
-                        className={`text-right font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
+                        className={`text-right font-semibold tracking-wide ${isA5 ? "px-1.5 py-1 text-xs" : "px-2.5 py-2 text-base"}`}
                       >
                         Amount(₦)
                       </th>
@@ -1699,12 +1699,12 @@ export default function CreditSaleInvoice({
                           }
                         >
                           <td
-                            className={`border-r border-t border-gray-200 text-center font-semibold text-gray-600 ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
+                            className={`border-r border-t border-gray-200 text-center font-semibold text-gray-600 ${isA5 ? "px-1.5 py-1 text-xs" : "px-2.5 py-2 text-base"}`}
                           >
                             {index + 1}
                           </td>
                           <td
-                            className={`border-r border-t border-gray-200 ${isA5 ? "px-1.5 py-1 text-[12px]" : "px-2.5 py-2 text-[15px]"}`}
+                            className={`border-r border-t border-gray-200 ${isA5 ? "px-1.5 py-1 text-sm" : "px-2.5 py-2 text-[17px]"}`}
                           >
                             <span className="font-semibold leading-snug text-gray-900">
                               {itemName}
@@ -1712,17 +1712,17 @@ export default function CreditSaleInvoice({
                             </span>
                           </td>
                           <td
-                            className={`border-r border-t border-gray-200 text-center tabular-nums text-gray-800 ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
+                            className={`border-r border-t border-gray-200 text-center tabular-nums text-gray-800 ${isA5 ? "px-1.5 py-1 text-xs" : "px-2.5 py-2 text-base"}`}
                           >
                             {formatNumber(item.quantity_sold)}
                           </td>
                           <td
-                            className={`border-r border-t border-gray-200 text-right tabular-nums text-gray-800 ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
+                            className={`border-r border-t border-gray-200 text-right tabular-nums text-gray-800 ${isA5 ? "px-1.5 py-1 text-xs" : "px-2.5 py-2 text-base"}`}
                           >
                             {formatNumber(displayUnitPrice)}
                           </td>
                           <td
-                            className={`border-t border-gray-200 text-right tabular-nums font-semibold text-gray-900 ${isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"}`}
+                            className={`border-t border-gray-200 text-right tabular-nums font-semibold text-gray-900 ${isA5 ? "px-1.5 py-1 text-xs" : "px-2.5 py-2 text-base"}`}
                           >
                             {formatNumber(displayAmount)}
                           </td>
@@ -1731,7 +1731,7 @@ export default function CreditSaleInvoice({
                     })}
                     <tr className="bg-blue-50 border-t-2 border-blue-200">
                       <td colSpan="2"></td>
-                      <td className="border-r border-t border-gray-300 px-2 py-1.5 text-center  text-xs font-semibold text-gray-700">
+                      <td className="border-r border-t border-gray-300 px-2 py-1.5 text-center text-sm font-semibold text-gray-700">
                         <h6>
                           {" "}
                           {formatNumber(
@@ -1742,12 +1742,12 @@ export default function CreditSaleInvoice({
                           )}
                         </h6>
                       </td>
-                      <td className="border-r border-t border-gray-300 px-2 py-1.5 text-right text-xs font-semibold text-gray-900">
+                      <td className="border-r border-t border-gray-300 px-2 py-1.5 text-right text-sm font-semibold text-gray-900">
                         <div className="font-semibold text-gray-700">
                           SUBTOTAL:
                         </div>
                       </td>
-                      <td className="border-t border-gray-300 px-2 py-1.5 text-right text-xs">
+                      <td className="border-t border-gray-300 px-2 py-1.5 text-right text-sm">
                         <div className="font-bold text-gray-900">
                           {formatNumber(
                             customerCopyEnabled
@@ -1761,11 +1761,11 @@ export default function CreditSaleInvoice({
                       <tr className="bg-red-50">
                         <td
                           colSpan="4"
-                          className="border-r border-t border-gray-200 px-2 py-1 text-right text-xs font-semibold text-gray-700"
+                          className="border-r border-t border-gray-200 px-2 py-1 text-right text-sm font-semibold text-gray-700"
                         >
                           {propDiscount.discount_name || "Discount"} :
                         </td>
-                        <td className="border-t border-gray-200 px-2 py-1 text-right text-xs font-semibold text-red-600">
+                        <td className="border-t border-gray-200 px-2 py-1 text-right text-sm font-semibold text-red-600">
                           -
                           {formatNumber(
                             customerCopyEnabled
@@ -1873,13 +1873,13 @@ export default function CreditSaleInvoice({
                           <tr key={index} className="bg-gray-50">
                             <td
                               colSpan="4"
-                              className="border-r border-t border-gray-200 px-2 py-1 text-right text-xs font-semibold text-gray-700"
+                              className="border-r border-t border-gray-200 px-2 py-1 text-right text-sm font-semibold text-gray-700"
                             >
                               {tax.description} ({tax.rate}%{" "}
                               {isTaxInclusive ? "Inclusive" : "Exclusive"}
                               ):
                             </td>
-                            <td className="border-t border-gray-200 px-2 py-1 text-right text-xs font-semibold text-gray-900">
+                            <td className="border-t border-gray-200 px-2 py-1 text-right text-sm font-semibold text-gray-900">
                               {formatNumber(
                                 taxAmount ||
                                   (customerCopyEnabled
@@ -1894,11 +1894,11 @@ export default function CreditSaleInvoice({
                       <tr className="bg-gray-100">
                         <td
                           colSpan="4"
-                          className="border-r border-t border-gray-300 px-2 py-1.5 text-right text-xs font-semibold text-gray-600"
+                          className="border-r border-t border-gray-300 px-2 py-1.5 text-right text-sm font-semibold text-gray-600"
                         >
                           Original Total:
                         </td>
-                        <td className="border-t border-gray-300 px-2 py-1.5 text-right text-xs font-semibold text-gray-700">
+                        <td className="border-t border-gray-300 px-2 py-1.5 text-right text-sm font-semibold text-gray-700">
                           ₦{formatNumber(totalAmount)}
                         </td>
                       </tr>
@@ -1906,12 +1906,12 @@ export default function CreditSaleInvoice({
                     <tr className="bg-gradient-to-r from-green-600 to-green-700 text-white border-t-2 border-green-800">
                       <td
                         colSpan="4"
-                        className={`border-r border-green-500 text-right font-bold ${isA5 ? "px-1 py-1 text-xs" : "px-2 py-2 text-sm"}`}
+                        className={`border-r border-green-500 text-right font-bold ${isA5 ? "px-1 py-1 text-sm" : "px-2 py-2 text-base"}`}
                       >
                         GRAND TOTAL:
                       </td>
                       <td
-                        className={`text-right font-bold ${isA5 ? "px-1 py-1 text-xs" : "px-2 py-2 text-sm"}`}
+                        className={`text-right font-bold ${isA5 ? "px-1 py-1 text-sm" : "px-2 py-2 text-base"}`}
                       >
                         ₦
                         {formatNumber(
@@ -2010,12 +2010,12 @@ export default function CreditSaleInvoice({
                       className={`bg-blue-50 border border-blue-200 ${isA5 ? "p-0.5 px-1" : "p-1"}`}
                     >
                       <h6
-                        className={`font-semibold text-blue-800 uppercase tracking-wide ${isA5 ? "text-xs mb-0" : "text-sm mb-"}`}
+                        className={`font-semibold text-blue-800 uppercase tracking-wide ${isA5 ? "text-sm mb-0" : "text-base mb-"}`}
                       >
                         How this invoice is paid
                       </h6>
                       <p
-                        className={`${isA5 ? "text-xs leading-snug" : "text-sm leading-relaxed"} text-gray-700`}
+                        className={`${isA5 ? "text-sm leading-snug" : "text-base leading-relaxed"} text-gray-700`}
                       >
                         {fields.map((field, idx) => (
                           <span key={`${field.label}-${idx}`}>
@@ -2052,13 +2052,13 @@ export default function CreditSaleInvoice({
                 >
                   <h3
                     className={`font-bold text-gray-800 border-b border-gray-300 pb-1 ${
-                      isA5 ? "text-[10px] mb-1" : "text-xs mb-2"
+                      isA5 ? "text-xs mb-1" : "text-sm mb-2"
                     }`}
                   >
                     Invoice Details
                   </h3>
                   <p
-                    className={`${isA5 ? "text-[10px]" : "text-xs"} mb-1 text-gray-700`}
+                    className={`${isA5 ? "text-xs" : "text-sm"} mb-1 text-gray-700`}
                   >
                     <span className="font-semibold">Invoice No.:</span>{" "}
                     <span className="text-gray-900">{invoiceReference}</span>
@@ -2079,7 +2079,7 @@ export default function CreditSaleInvoice({
                     </div>
                   ) : null}
                   <p
-                    className={`${isA5 ? "text-[10px]" : "text-xs"} mb-1 text-gray-700`}
+                    className={`${isA5 ? "text-xs" : "text-sm"} mb-1 text-gray-700`}
                   >
                     <span className="font-semibold">
                       {isGoodsIssueNote
@@ -2091,7 +2091,7 @@ export default function CreditSaleInvoice({
                     </span>
                   </p>
                   <p
-                    className={`${isA5 ? "text-[10px]" : "text-xs"} mb-1 text-gray-700`}
+                    className={`${isA5 ? "text-xs" : "text-sm"} mb-1 text-gray-700`}
                   >
                     <span className="font-semibold">Customer:</span>{" "}
                     <span className="text-gray-900">
@@ -2107,13 +2107,13 @@ export default function CreditSaleInvoice({
                 >
                   <h6
                     className={`font-bold text-gray-800 border-b border-blue-300 pb-1 ${
-                      isA5 ? "text-[10px] mb-1" : "text-xs mb-2"
+                      isA5 ? "text-xs mb-1" : "text-sm mb-2"
                     }`}
                   >
                     Prepared Details
                   </h6>
                   <p
-                    className={`${isA5 ? "text-[10px]" : "text-xs"} mb-1.5 text-gray-700`}
+                    className={`${isA5 ? "text-xs" : "text-sm"} mb-1.5 text-gray-700`}
                   >
                     <span className="font-semibold">Prepared By:</span>{" "}
                     {preparedByName}
@@ -2126,7 +2126,7 @@ export default function CreditSaleInvoice({
                         alt="Prepared by signature"
                         className={`${isA5 ? "h-8" : "h-10"} object-contain`}
                       />
-                      <span className="text-[0.65rem] text-gray-500 uppercase tracking-wide">
+                      <span className="text-xs text-gray-500 uppercase tracking-wide">
                         Signature
                       </span>
                     </div>
@@ -2135,12 +2135,12 @@ export default function CreditSaleInvoice({
                       <div
                         className={`${isA5 ? "h-8" : "h-10"} w-full border-b border-blue-300`}
                       />
-                      <span className="text-[0.65rem] text-gray-500 uppercase tracking-wide">
+                      <span className="text-xs text-gray-500 uppercase tracking-wide">
                         Signature
                       </span>
                     </div>
                   )}
-                  <p className="mt-1 text-xs font-bold text-center text-blue-800 py-1 bg-blue-100 rounded">
+                  <p className="mt-1 text-sm font-bold text-center text-blue-800 py-1 bg-blue-100 rounded">
                     FOR {business?.business_name || "COMPANY"}
                   </p>
                 </div>
@@ -2153,14 +2153,14 @@ export default function CreditSaleInvoice({
                 >
                   {showImportantNote ? (
                     <p
-                      className={`${isA5 ? "text-[9px] leading-snug" : "text-[11px] leading-snug"} text-center italic text-slate-600`}
+                      className={`${isA5 ? "text-[11px] leading-snug" : "text-sm leading-snug"} text-center italic text-slate-600`}
                     >
                       {importantNoteText}
                     </p>
                   ) : null}
                   {showPoweredBy ? (
                     <p
-                      className={`${isA5 ? "text-[8px] leading-snug mt-0.5" : "text-[9px] leading-snug mt-1"} text-center text-slate-400`}
+                      className={`${isA5 ? "text-[10px] leading-snug mt-0.5" : "text-xs leading-snug mt-1"} text-center text-slate-400`}
                     >
                       {poweredByText}
                     </p>
@@ -2179,7 +2179,7 @@ export default function CreditSaleInvoice({
                 <div className="w-full border-t-2 border-dashed border-gray-400"></div>
               </div>
               <div className="relative flex justify-center">
-                <span className="bg-white px-0 text-xs font-semibold text-gray-500 uppercase tracking-wide"></span>
+                <span className="bg-white px-0 text-sm font-semibold text-gray-500 uppercase tracking-wide"></span>
               </div>
             </div>
           ) : null}
@@ -2208,10 +2208,10 @@ export default function CreditSaleInvoice({
 
               <div className="grid gap-1 mb-1">
                 <div className="bg-blue-50 border border-blue-200 p-1 pl-3">
-                  <p className="text-xs font-semibold text-blue-800 mb-1 uppercase tracking-wide">
+                  <p className="text-sm font-semibold text-blue-800 mb-1 uppercase tracking-wide">
                     Bill To
                   </p>
-                  <p className="text-xs text-gray-700 leading-relaxed">
+                  <p className="text-sm text-gray-700 leading-relaxed">
                     <span className="font-semibold text-gray-600">
                       Account Name:
                     </span>{" "}
@@ -2237,7 +2237,7 @@ export default function CreditSaleInvoice({
                   </p>
                 </div>
                 <div className="border border-slate-200 bg-slate-50 p-1 pl-3">
-                  <p className="text-xs text-gray-700 leading-relaxed">
+                  <p className="text-sm text-gray-700 leading-relaxed">
                     <span className="font-semibold text-gray-600">
                       Warehouse:
                     </span>{" "}
@@ -2249,16 +2249,16 @@ export default function CreditSaleInvoice({
                 <table className="w-full border-collapse border border-gray-300  overflow-hidden shadow-sm">
                   <thead>
                     <tr className="bg-gradient-to-r from-green-600 to-green-700 text-white">
-                      <th className="border-r border-green-500 px-2 py-1.5 text-center text-xs font-semibold">
+                      <th className="border-r border-green-500 px-2 py-1.5 text-center text-sm font-semibold">
                         #
                       </th>
-                      <th className="border-r border-green-500 px-2 py-1.5 text-left text-xs font-semibold">
+                      <th className="border-r border-green-500 px-2 py-1.5 text-left text-sm font-semibold">
                         DESCRIPTION
                       </th>
-                      {/* <th className="border-r border-green-500 px-2 py-1.5 text-center text-xs font-semibold">
+                      {/* <th className="border-r border-green-500 px-2 py-1.5 text-center text-sm font-semibold">
                     SIZES
                   </th> */}
-                      <th className="px-2 py-1.5 text-center text-xs font-semibold">
+                      <th className="px-2 py-1.5 text-center text-sm font-semibold">
                         Quantity
                       </th>
                     </tr>
@@ -2269,18 +2269,18 @@ export default function CreditSaleInvoice({
                         key={item.id ?? item.entry_id ?? index}
                         className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
                       >
-                        <td className="border-r border-t border-gray-200 px-2 py-1.5 text-center text-xs font-semibold text-gray-600">
+                        <td className="border-r border-t border-gray-200 px-2 py-1.5 text-center text-sm font-semibold text-gray-600">
                           {index + 1}
                         </td>
-                        <td className="border-r border-t border-gray-200 px-2 py-1.5 text-xs text-gray-800">
+                        <td className="border-r border-t border-gray-200 px-2 py-1.5 text-sm text-gray-800">
                           {item.item_name || item.description || "—"}
                           {(item.warehouse_name || item.warehouse) && (
-                            <span className="ml-2 text-xs text-slate-500">
+                            <span className="ml-2 text-sm text-slate-500">
                               · {item.warehouse_name || item.warehouse}
                             </span>
                           )}
                         </td>
-                        <td className="border-t border-gray-200 px-2 py-1.5 text-center text-xs text-gray-700">
+                        <td className="border-t border-gray-200 px-2 py-1.5 text-center text-sm text-gray-700">
                           {formatNumber(getItemQuantity(item))}
                         </td>
                       </tr>
@@ -2288,11 +2288,11 @@ export default function CreditSaleInvoice({
                     <tr className="bg-gradient-to-r from-blue-50 to-blue-100 border-t-2 border-blue-200">
                       <td
                         colSpan="2"
-                        className="border-r border-t border-gray-300 px-2 py-1.5 text-right text-xs font-bold text-gray-800"
+                        className="border-r border-t border-gray-300 px-2 py-1.5 text-right text-sm font-bold text-gray-800"
                       >
                         Total:
                       </td>
-                      <td className="border-t border-gray-300 px-2 py-1.5 text-center text-xs font-bold text-gray-900">
+                      <td className="border-t border-gray-300 px-2 py-1.5 text-center text-sm font-bold text-gray-900">
                         {formatNumber(totalCylinders)}
                       </td>
                     </tr>
@@ -2313,25 +2313,25 @@ export default function CreditSaleInvoice({
                     className={`bg-gray-50 border border-gray-200 ${isA5 ? "p-1" : "p-1.5"}`}
                   >
                     <h3
-                      className={`font-bold text-gray-800 border-b border-gray-300 pb-1 ${isA5 ? "text-[10px] mb-1" : "text-xs mb-2"}`}
+                      className={`font-bold text-gray-800 border-b border-gray-300 pb-1 ${isA5 ? "text-xs mb-1" : "text-sm mb-2"}`}
                     >
                       Delivery Information
                     </h3>
-                    <p className="flex items-end gap-1 text-xs mb-1 text-gray-700">
+                    <p className="flex items-end gap-1 text-sm mb-1 text-gray-700">
                       <span className="font-semibold shrink-0">
                         Vehicle No:
                       </span>
                       <span className="flex-1 border-b border-gray-700 min-h-[1rem]" />
                     </p>
                     <div className="mt-3 p-2 bg-blue-50 border border-blue-200 ">
-                      <h6 className="font-semibold text-xs text-blue-900 mb-1">
+                      <h6 className="font-semibold text-sm text-blue-900 mb-1">
                         DELIVERED BY STORES OFFICER:
                       </h6>
-                      <h6 className="italic text-xs text-blue-700">
+                      <h6 className="italic text-sm text-blue-700">
                         Received the above items in good condition
                       </h6>
                       <div className="mt-2 border-t border-blue-300 pt-2">
-                        <p className="flex items-end gap-1 text-xs text-gray-600">
+                        <p className="flex items-end gap-1 text-sm text-gray-600">
                           <span className="shrink-0">Signature:</span>
                           <span className="flex-1 border-b border-gray-500 min-h-[1rem]" />
                         </p>
@@ -2344,37 +2344,37 @@ export default function CreditSaleInvoice({
                     isGoodsIssueNote ? "col-span-2" : ""
                   }`}
                 >
-                  <h3 className="text-xs font-bold text-gray-800 mb-2 border-b border-green-300 pb-1">
+                  <h3 className="text-sm font-bold text-gray-800 mb-2 border-b border-green-300 pb-1">
                     {isGoodsIssueNote
                       ? "Approval Details"
                       : "Driver & Authorization"}
                   </h3>
                   {!isGoodsIssueNote ? (
-                    <p className="flex items-end gap-1 text-xs mb-1 text-gray-700 min-w-0">
+                    <p className="flex items-end gap-1 text-sm mb-1 text-gray-700 min-w-0">
                       <span className="font-semibold shrink-0">
                         Driver&apos;s Name:
                       </span>
                       <span className="flex-1 border-b border-gray-700 min-h-[1rem] min-w-0" />
                     </p>
                   ) : (
-                    <p className="text-xs mb-2 text-gray-700">
+                    <p className="text-sm mb-2 text-gray-700">
                       <span className="font-semibold">Prepared:</span>{" "}
                       <span className="text-gray-900">{preparedByName}</span>
                     </p>
                   )}
                   <div className="mt-3 p-2 bg-white border border-gray-300 ">
-                    <p className="font-semibold text-xs text-gray-900 mb-2">
+                    <p className="font-semibold text-sm text-gray-900 mb-2">
                       {isGoodsIssueNote ? "SIGNATURE:" : "RECEIVED BY:"}
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <p className="text-xs text-gray-600 mb-1">
+                        <p className="text-sm text-gray-600 mb-1">
                           {isGoodsIssueNote ? "Sign:" : "Name:"}
                         </p>
                         <div className="border-b border-gray-400 h-5"></div>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-600 mb-1">
+                        <p className="text-sm text-gray-600 mb-1">
                           {isGoodsIssueNote ? "Date:" : "Signature:"}
                         </p>
                         <div className="border-b border-gray-400 h-5"></div>
@@ -2388,12 +2388,12 @@ export default function CreditSaleInvoice({
               {isGoodsIssueNote && (showImportantNote || showPoweredBy) ? (
                 <div className="shrink-0 mt-auto px-1 py-1.5 border-t border-dashed border-gray-300">
                   {showImportantNote ? (
-                    <p className="text-center italic text-xs text-gray-700 leading-snug">
+                    <p className="text-center italic text-sm text-gray-700 leading-snug">
                       {importantNoteText}
                     </p>
                   ) : null}
                   {showPoweredBy ? (
-                    <p className="text-center text-[9px] text-gray-500 leading-snug mt-1">
+                    <p className="text-center text-xs text-gray-500 leading-snug mt-1">
                       {poweredByText}
                     </p>
                   ) : null}

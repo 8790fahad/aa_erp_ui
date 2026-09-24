@@ -149,7 +149,7 @@ export default function BusinessDocumentHeader({
                   className={`italic ${muted} ${
                     compact
                       ? "text-[11px] leading-snug mt-0.5 line-clamp-2"
-                      : "text-base mt-1"
+                      : "text-[17px] mt-1"
                   }`}
                 >
                   {c.description}
@@ -158,7 +158,7 @@ export default function BusinessDocumentHeader({
               {c.address ? (
                 <p
                   className={`${muted} ${
-                    compact ? "text-[11px] leading-snug mt-0.5" : "text-base mt-1"
+                    compact ? "text-[11px] leading-snug mt-0.5" : "text-[17px] mt-1"
                   }`}
                 >
                   {c.address}
@@ -167,7 +167,7 @@ export default function BusinessDocumentHeader({
               {telLine ? (
                 <p
                   className={`${muted} ${
-                    compact ? "text-[10px] leading-snug mt-0.5" : "text-[15px] mt-1"
+                    compact ? "text-[10px] leading-snug mt-0.5" : "text-[17px] mt-1"
                   }`}
                 >
                   {telLine}
@@ -176,7 +176,7 @@ export default function BusinessDocumentHeader({
               {faxEmailLine ? (
                 <p
                   className={`${muted} ${
-                    compact ? "text-[10px] leading-snug" : "text-[15px]"
+                    compact ? "text-[10px] leading-snug" : "text-[17px]"
                   }`}
                 >
                   {faxEmailLine}
