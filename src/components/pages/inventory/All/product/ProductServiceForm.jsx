@@ -2916,37 +2916,82 @@ const ProductServiceForm = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Default Supplier
                       </label>
-                      <div className="flex gap-2">
-                        <Controller
-                          name="settings.supplierId"
-                          control={control}
-                          render={({ field }) => (
-                            <select
-                              value={field.value}
-                              onChange={field.onChange}
-                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--aa-accent)] focus:border-transparent bg-white"
-                            >
-                              <option value="">Select supplier</option>
-                              {suppliers?.map((supplier) => (
-                                <option key={supplier.id} value={supplier.id}>
-                                  {supplier.name}
-                                </option>
-                              )) || []}
-                            </select>
-                          )}
-                        />
-                        <Dialog
-                          open={newSupplierDialog}
-                          onOpenChange={setNewSupplierDialog}
-                        >
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Add New Supplier</DialogTitle>
-                            </DialogHeader>
-                            <NewSupplierForm onSubmit={addNewSupplier} />
-                          </DialogContent>
-                        </Dialog>
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <Controller
+                            name="settings.supplierId"
+                            control={control}
+                            render={({ field }) => {
+                          const none = { value: "", label: "No" };
+                          const options = [
+                            none,
+                            ...(suppliers || []).map((supplier) => ({
+                              value: String(supplier.id || ""),
+                              label: supplier.name
+                                ? `${supplier.name} (${supplier.id})`
+                                : String(supplier.id || ""),
+                            })),
+                          ];
+                          const current = String(field.value || "");
+                          const selected =
+                            options.find((opt) => opt.value === current) || none;
+                              return (
+                                <Select
+                                  inputId="default-supplier"
+                                  isClearable
+                                  isSearchable
+                                  isDisabled={isViewMode}
+                                  options={options}
+                                  value={selected}
+                                  onChange={(opt) =>
+                                    field.onChange(opt?.value || "")
+                                  }
+                                  placeholder="No"
+                                  noOptionsMessage={() =>
+                                    "No suppliers yet. Add a vendor first."
+                                  }
+                                  styles={customSelectStyles}
+                                  menuPortalTarget={
+                                    typeof document !== "undefined"
+                                      ? document.body
+                                      : null
+                                  }
+                                  menuPosition="fixed"
+                                />
+                              );
+                            }}
+                          />
+                        </div>
+                        {!isViewMode ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-10 shrink-0"
+                            onClick={() => setNewSupplierDialog(true)}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Add
+                          </Button>
+                        ) : null}
                       </div>
+                      <Dialog
+                        open={newSupplierDialog}
+                        onOpenChange={setNewSupplierDialog}
+                      >
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Add New Supplier</DialogTitle>
+                          </DialogHeader>
+                          <NewSupplierForm onSubmit={addNewSupplier} />
+                        </DialogContent>
+                      </Dialog>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Set the vendor this item is bought from. Turn on
+                        Filter products by default supplier under Admin →
+                        Inventory Valuation to limit bills and goods received
+                        to that vendor’s products.
+                      </p>
                     </div>
 
                     <div>

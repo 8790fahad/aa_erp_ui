@@ -81,19 +81,12 @@ export default function BusinessDocumentHeader({
 
   return (
     <div
-      className={`border-2 p-[3px] mb-1.5 ${
+      className={`${
         inColor
-          ? "border-[var(--aa-navy,#1a2d5e)]"
-          : "border-black doc-header-bw"
-      }`}
+          ? "bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white border-[var(--aa-navy,#1a2d5e)] print:bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))]"
+          : "bg-white text-black border-black print:bg-white doc-header-bw"
+      } ${pad} border-2 overflow-hidden mb-1.5 ${className}`}
     >
-      <div
-        className={`${
-          inColor
-            ? "bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white border-[var(--aa-accent,#e8a317)] print:bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))]"
-            : "bg-white text-black border-black print:bg-white"
-        } ${pad} border-2 overflow-hidden ${className}`}
-      >
         <div
           className={`flex flex-row items-stretch justify-between ${
             compact ? "gap-1.5" : "gap-2.5"
@@ -128,8 +121,10 @@ export default function BusinessDocumentHeader({
                 }`}
               >
                 <h1
-                  className={`font-bold uppercase tracking-wide leading-[1.05] ${
-                    compact ? "text-base" : "text-2xl sm:text-[1.7rem]"
+                  className={`min-w-0 font-bold uppercase leading-tight ${
+                    compact
+                      ? "text-base tracking-wide"
+                      : "text-2xl sm:text-[1.75rem] tracking-normal"
                   }`}
                 >
                   {c.name}
@@ -149,7 +144,7 @@ export default function BusinessDocumentHeader({
                   className={`italic ${muted} ${
                     compact
                       ? "text-[11px] leading-snug mt-0.5 line-clamp-2"
-                      : "text-[17px] mt-1"
+                      : "text-[18px] mt-1"
                   }`}
                 >
                   {c.description}
@@ -158,7 +153,7 @@ export default function BusinessDocumentHeader({
               {c.address ? (
                 <p
                   className={`${muted} ${
-                    compact ? "text-[11px] leading-snug mt-0.5" : "text-[17px] mt-1"
+                    compact ? "text-[11px] leading-snug mt-0.5" : "text-[18px] mt-1"
                   }`}
                 >
                   {c.address}
@@ -167,7 +162,7 @@ export default function BusinessDocumentHeader({
               {telLine ? (
                 <p
                   className={`${muted} ${
-                    compact ? "text-[10px] leading-snug mt-0.5" : "text-[17px] mt-1"
+                    compact ? "text-[10px] leading-snug mt-0.5" : "text-[18px] mt-1"
                   }`}
                 >
                   {telLine}
@@ -176,7 +171,7 @@ export default function BusinessDocumentHeader({
               {faxEmailLine ? (
                 <p
                   className={`${muted} ${
-                    compact ? "text-[10px] leading-snug" : "text-[17px]"
+                    compact ? "text-[10px] leading-snug" : "text-[18px]"
                   }`}
                 >
                   {faxEmailLine}
@@ -189,7 +184,7 @@ export default function BusinessDocumentHeader({
             className={`flex flex-col items-stretch shrink-0 ${
               compact
                 ? "w-[22%] min-w-[4.75rem] max-w-[6rem] gap-0.5"
-                : "w-[7rem] sm:w-[7.75rem] gap-0.5"
+                : "w-[8.25rem] sm:w-[8.75rem] gap-0.5"
             }`}
           >
             <div
@@ -242,7 +237,6 @@ export default function BusinessDocumentHeader({
             </p>
           </div>
         </div>
-      </div>
     </div>
   );
 }

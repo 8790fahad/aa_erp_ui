@@ -185,6 +185,21 @@ export default function ProductSupplierBill() {
   const isCashPayment = form.payment_type === "cash";
   const isSplitPayment = isCashTransferSplitMode(form.mode_of_payment);
 
+  const supplierScopedProducts = useMemo(() => {
+    const list = Array.isArray(productList) ? productList : [];
+    if (!activeBusiness?.filter_products_by_default_supplier) return list;
+    const supplierNo = String(form.supplier_number || "").trim().toLowerCase();
+    if (!supplierNo) return list;
+    return list.filter(
+      (product) =>
+        String(product.supplier_id || "").trim().toLowerCase() === supplierNo,
+    );
+  }, [
+    productList,
+    form.supplier_number,
+    activeBusiness?.filter_products_by_default_supplier,
+  ]);
+
   // Editing state (legacy top-form edit; table is inline)
   const [editingItem, setEditingItem] = useState(null);
   const [extraEmptyRows, setExtraEmptyRows] = useState(0);
@@ -1714,12 +1729,16 @@ export default function ProductSupplierBill() {
               Item Table
             </p>
             <span className="text-xs text-slate-500">
-              VAT:{" "}
-              {activeBusiness?.vat_policy === "vat_inclusive"
-                ? "Inclusive"
-                : activeBusiness?.vat_policy === "vat_exclusive"
-                  ? "Exclusive"
-                  : "All"}
+              {activeBusiness?.filter_products_by_default_supplier &&
+              form.supplier_number
+                ? "Products for this supplier only"
+                : `VAT: ${
+                    activeBusiness?.vat_policy === "vat_inclusive"
+                      ? "Inclusive"
+                      : activeBusiness?.vat_policy === "vat_exclusive"
+                        ? "Exclusive"
+                        : "All"
+                  }`}
             </span>
           </div>
 
@@ -1771,17 +1790,18 @@ export default function ProductSupplierBill() {
                                 item,
                                 productList,
                               );
+                              const source = supplierScopedProducts;
                               if (
                                 match &&
-                                !productList.some(
+                                !source.some(
                                   (p) =>
                                     String(p.sku || "").trim() ===
                                     String(match.sku || "").trim(),
                                 )
                               ) {
-                                return [match, ...productList];
+                                return [match, ...source];
                               }
-                              return productList;
+                              return source;
                             })()}
                             placeholder="Type or click to select a product"
                             onChange={(selected) => {
@@ -2099,7 +2119,7 @@ export default function ProductSupplierBill() {
                             labelKey={(product) =>
                               `${product.name || ""} - ${product.sku || ""}`
                             }
-                            options={productList}
+                            options={supplierScopedProducts}
                             placeholder="Type or click to select a product"
                             onChange={(selected) => {
                               if (selected && selected.length > 0) {

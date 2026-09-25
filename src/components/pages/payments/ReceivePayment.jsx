@@ -1620,6 +1620,38 @@ export default function ReceivePayment() {
   const suggestedPortion = isSplit
     ? Number(Math.max(0, remainingDue - depositCover).toFixed(2))
     : remainingDue;
+  /** Modes still unpaid on a Cash/Transfer/POS mix — last open mode must clear the balance. */
+  const openCollectModes = (() => {
+    if (!isSplit || !selected) return [];
+    const modes = rowPaymentModes(selected);
+    const sp = splitProgress || {};
+    const open = [];
+    if (
+      modes.includes("cash") &&
+      !(sp.cash_done || Number(sp.cash) > 0.05)
+    ) {
+      open.push("cash");
+    }
+    if (
+      (modes.includes("transfer") || modes.includes("bank")) &&
+      !(sp.transfer_done || Number(sp.transfer) > 0.05)
+    ) {
+      open.push("transfer");
+    }
+    if (
+      modes.includes("card") &&
+      !(sp.card_done || Number(sp.card) > 0.05)
+    ) {
+      open.push("card");
+    }
+    return open;
+  })();
+  const isLastCollectMode =
+    isSplit &&
+    openCollectModes.length === 1 &&
+    openCollectModes[0] === collectionSide;
+  const lastCollectTarget =
+    suggestedPortion > 0.05 ? suggestedPortion : remainingDue;
   const unpaidBeforeCredit = isSplit
     ? Number(
         (
@@ -4293,16 +4325,18 @@ export default function ReceivePayment() {
         );
         return;
       }
-      // Transfer (and POS) side must be paid in full — no partial confirm.
-      if (collectionSide === "transfer" || collectionSide === "card") {
-        const target =
-          suggestedPortion > 0.05 ? suggestedPortion : remainingDue;
-        if (Math.abs(total - target) > 0.05) {
-          toast.error(
-            `Transfer must equal the full amount ₦${formatNumber1(target)} to confirm (entered ₦${formatNumber1(total)})`,
-          );
-          return;
-        }
+      // Last unpaid mode on Cash + Transfer + POS: must clear the full remainder.
+      if (isLastCollectMode && Math.abs(total - lastCollectTarget) > 0.05) {
+        const sideLabel =
+          collectionSide === "card"
+            ? "POS"
+            : collectionSide === "transfer"
+              ? "Transfer"
+              : "Cash";
+        toast.error(
+          `Last payment (${sideLabel}) must equal the remaining ₦${formatNumber1(lastCollectTarget)} (entered ₦${formatNumber1(total)})`,
+        );
+        return;
       }
     } else if (Math.abs(total - amountDue) > 0.05) {
       toast.error(
@@ -4376,8 +4410,8 @@ export default function ReceivePayment() {
           if (lastPay) {
             removeCollectedInvoice(target.sale_code);
           }
-          setSearch("");
-          setActiveTab("pending");
+          setSearch(lastPay ? String(target.sale_code || "") : "");
+          setActiveTab(lastPay ? "history" : "pending");
           closeCollect();
           fetchDashboard();
           if (lastPay && target?.sale_code) {
@@ -4428,14 +4462,124 @@ export default function ReceivePayment() {
     transferBanksReady &&
     transferPayTotal > 0.05 &&
     Math.abs(transferPayTotal - transferTargetAmount) <= 0.05;
+  const transferPortionReady =
+    transferBanksReady &&
+    transferPayTotal > 0.05 &&
+    transferPayTotal <= transferTargetAmount + 0.05;
+  const requireFullTransfer =
+    (isTransferOnly && !isSplit) ||
+    (isLastCollectMode && showTransferFields);
+  const cashEntered = parseFormattedAmount(cashAmount);
+  const cardEntered = parseFormattedAmount(transferAmount);
+  const lastModeAmountReady = (() => {
+    if (!isLastCollectMode) return true;
+    if (showTransferFields) return transferPaidInFull;
+    if (showCardFields) {
+      return (
+        Boolean(bankAccounts.bankAccount?.id) &&
+        cardEntered > 0.05 &&
+        Math.abs(cardEntered - lastCollectTarget) <= 0.05
+      );
+    }
+    if (showCashFields) {
+      return (
+        cashEntered > 0.05 &&
+        Math.abs(cashEntered - lastCollectTarget) <= 0.05
+      );
+    }
+    return true;
+  })();
   const canConfirmCollectPayment =
     !submitting &&
     Boolean(selected) &&
-    (!isTransferOnly || transferPaidInFull);
+    lastModeAmountReady &&
+    (isSplit && showTransferFields
+      ? requireFullTransfer
+        ? transferPaidInFull
+        : transferPortionReady
+      : !requireFullTransfer || transferPaidInFull);
 
   const splitHintTotal =
     parseFormattedAmount(cashAmount) +
     (showTransferFields ? transferLegsTotal : parseFormattedAmount(transferAmount));
+
+  const hubInvoicePreview = useMemo(() => {
+    if (!hubInvoiceData) return null;
+    if (hubAction !== "collect") return hubInvoiceData;
+
+    const draftCash = showCashFields ? parseFormattedAmount(cashAmount) : 0;
+    const draftCard = showCardFields ? parseFormattedAmount(transferAmount) : 0;
+    const accounts = bankAccounts.accountList || [];
+    const accountById = new Map(accounts.map((b) => [String(b.id), b]));
+    const draftTransferLines = showTransferFields
+      ? (transferLegs || [])
+          .map((leg) => {
+            const amount = parseFormattedAmount(leg.amount);
+            if (amount <= 0.005) return null;
+            const bank = accountById.get(String(leg.bankId || "")) || null;
+            return {
+              mode: "transfer",
+              amount,
+              bank_name: bank ? bankPayThroughLabel(bank) : null,
+              account_number: bank?.account_number || null,
+            };
+          })
+          .filter(Boolean)
+      : [];
+    const draftTransfer = draftTransferLines.reduce(
+      (sum, line) => sum + line.amount,
+      0,
+    );
+    if (draftCash <= 0.005 && draftTransfer <= 0.005 && draftCard <= 0.005) {
+      return hubInvoiceData;
+    }
+
+    const baseBreakdown = Array.isArray(hubInvoiceData.payment_breakdown)
+      ? hubInvoiceData.payment_breakdown
+      : [];
+    const extra = [];
+    if (draftCash > 0.005) extra.push({ mode: "cash", amount: draftCash });
+    extra.push(...draftTransferLines);
+    if (draftCard > 0.005) {
+      const bank = bankAccounts.bankAccount;
+      extra.push({
+        mode: "card",
+        amount: draftCard,
+        bank_name: bank ? bankPayThroughLabel(bank) : null,
+        account_number: bank?.account_number || null,
+      });
+    }
+    const nextCash = Number(hubInvoiceData.cash_paid || 0) + draftCash;
+    const nextTransfer =
+      Number(hubInvoiceData.transfer_paid || 0) + draftTransfer;
+    const nextCard = Number(hubInvoiceData.card_paid || 0) + draftCard;
+    const payment_breakdown = [...baseBreakdown, ...extra];
+    return {
+      ...hubInvoiceData,
+      cash_paid: nextCash,
+      transfer_paid: nextTransfer,
+      card_paid: nextCard,
+      payment_breakdown,
+      transaction: {
+        ...(hubInvoiceData.transaction || {}),
+        cash_paid: nextCash,
+        transfer_paid: nextTransfer,
+        card_paid: nextCard,
+        payment_breakdown,
+      },
+    };
+  }, [
+    hubInvoiceData,
+    hubAction,
+    showCashFields,
+    showTransferFields,
+    showCardFields,
+    cashAmount,
+    transferAmount,
+    transferLegs,
+    bankAccounts.accountList,
+    bankAccounts.bankAccount,
+  ]);
 
   const fillAllRemaining = (side) => {
     const amt =
@@ -5437,7 +5581,7 @@ export default function ReceivePayment() {
                 </div>
               ) : hubInvoiceData ? (
                 <CreditSaleInvoiceImproved
-                  invoiceData={hubInvoiceData}
+                  invoiceData={hubInvoicePreview || hubInvoiceData}
                   business={hubInvoiceData.business || activeBusiness}
                   customer={hubInvoiceData.customer}
                   date={hubInvoiceData.date}
@@ -5605,6 +5749,8 @@ export default function ReceivePayment() {
                             : methodTab === "transfer"
                               ? "Collect any transfer amount. Remaining balance can stay on credit or other modes."
                               : "Collect any portion in this mode. Any unpaid balance can be Credit — confirm it on the Credit tab."
+                          : isLastCollectMode
+                            ? `Last payment — enter the full remaining ₦${formatNumber1(lastCollectTarget)} in this mode to finish the invoice.`
                           : "Collect any amount in this mode — including the full remaining balance as cash, transfer, or POS if needed. Unused modes stay open until the invoice is fully paid."}
                       </p>
                       {depositCover > 0.05 ? (
@@ -5957,8 +6103,11 @@ export default function ReceivePayment() {
                                     transferTargetAmount - transferPayTotal,
                                   ),
                                 )}
-                                {" "}
-                                · Pay full amount to confirm
+                                {requireFullTransfer
+                                  ? isLastCollectMode
+                                    ? " · Last payment — pay full remaining to confirm"
+                                    : " · Pay full amount to confirm"
+                                  : ""}
                               </span>
                             ) : transferPayTotal - transferTargetAmount >
                               0.05 ? (
@@ -5977,7 +6126,10 @@ export default function ReceivePayment() {
                             ) : (
                               <span className="text-amber-700">
                                 {" "}
-                                · Select bank(s) and pay full amount to confirm
+                                ·{" "}
+                                {requireFullTransfer
+                                  ? "Select bank(s) and pay full amount to confirm"
+                                  : "Select a bank and enter an amount to confirm"}
                               </span>
                             )}
                           </p>
@@ -6228,7 +6380,9 @@ export default function ReceivePayment() {
                           onClick={confirmPayment}
                           disabled={!canConfirmCollectPayment}
                           title={
-                            isTransferOnly && !transferPaidInFull
+                            isLastCollectMode && !lastModeAmountReady
+                              ? `Last payment must equal the remaining ₦${formatNumber1(lastCollectTarget)}`
+                              : requireFullTransfer && !transferPaidInFull
                               ? `Enter the full transfer amount ₦${formatNumber1(transferTargetAmount)} across bank(s) to confirm`
                               : undefined
                           }

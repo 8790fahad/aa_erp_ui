@@ -22,6 +22,7 @@ import {
   ChevronDown,
   FileDown,
   FileSpreadsheet,
+  FileText,
   Loader2,
   X,
 } from "lucide-react";
@@ -264,8 +265,8 @@ export default function CreditorsReport() {
               onChange={(e) => setAsAtDate(e.target.value)}
             />
             <p className="text-[11px] text-gray-600 mt-1.5 leading-snug">
-              Customers and suppliers with a net credit (CR) ledger balance.
-              Debit balances appear on the Receivable report.
+              Amounts still owed after supplier payments. Cash paid ahead of bills
+              is on the Advance Report. Debit balances appear on the Receivable report.
             </p>
           </div>
           <div className="md:col-span-1 flex flex-wrap justify-end gap-2">
@@ -350,6 +351,9 @@ export default function CreditorsReport() {
                 <th className="text-right text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
                   Balance
                 </th>
+                <th className="text-right text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide w-28">
+                  Statement
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -399,6 +403,29 @@ export default function CreditorsReport() {
                       {getBalanceType(row.balance)}
                     </span>
                   </td>
+                  <td className="px-3 py-2 text-right">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1 text-[var(--aa-accent)]"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!row.partyId || row.partyId === "-") return;
+                        const params = new URLSearchParams({
+                          supplier_no: String(row.partyId),
+                          as_at: asAtDate || "",
+                        });
+                        if (row.partyName) params.set("name", row.partyName);
+                        navigate(
+                          `/app/payments/pay-bills/balance-statement?${params.toString()}`,
+                        );
+                      }}
+                    >
+                      <FileText className="h-4 w-4" />
+                      Balance
+                    </Button>
+                  </td>
                 </tr>
               ))}
               {!!rows.length && (
@@ -414,12 +441,13 @@ export default function CreditorsReport() {
                       {getBalanceType(totalBalance)}
                     </span>
                   </td>
+                  <td />
                 </tr>
               )}
               {!rows.length && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-3 py-8 text-center text-sm text-gray-500"
                   >
                     No creditor rows found for the selected filters.

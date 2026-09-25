@@ -47,7 +47,7 @@ export const ACCOUNTING_REPORT_SECTIONS = [
       {
         title: "Debtors report (Accounts Receivable)",
         description:
-          "Customers and suppliers with debit (DR) balances",
+          "Receivable balances, plus customer credit summary (outstanding approved invoices)",
         path: `${BASE}/receivable-ledger`,
         dateMode: "range",
       },
@@ -151,7 +151,7 @@ export const ACCOUNTING_REPORT_SECTIONS = [
       {
         title: "Deposit Report",
         description:
-          "Deposit summary balances and deposit payment history with receipt print",
+          "Customer deposit balances as at a date, with statement print and deposit history",
         path: `${BASE}/deposit-report`,
         dateMode: "asOf",
       },

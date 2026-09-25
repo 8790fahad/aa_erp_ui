@@ -501,6 +501,7 @@ export default function PurchaseRequisitionList() {
             unit_of_measure: item.unit_of_measure,
             cost_price: item.cost_price,
             selling_price: item.selling_price,
+            supplier_id: item.supplier_id || "",
           }));
           setFormItems(formattedItems);
         }
@@ -913,6 +914,20 @@ export default function PurchaseRequisitionList() {
     if (!newExpense.item) return [];
     return formItems.filter((item) => item.name === newExpense.item);
   }, [newExpense.item, formItems]);
+
+  const productOptions = useMemo(() => {
+    if (!activeBusiness?.filter_products_by_default_supplier) return formItems;
+    const supplierNo = String(form.supplier_code || "").trim().toLowerCase();
+    if (!supplierNo) return formItems;
+    return formItems.filter(
+      (item) =>
+        String(item.supplier_id || "").trim().toLowerCase() === supplierNo,
+    );
+  }, [
+    formItems,
+    form.supplier_code,
+    activeBusiness?.filter_products_by_default_supplier,
+  ]);
 
   const runDateFilter = () => {
     appliedDatesRef.current = { from: fromDate, to: toDate };
@@ -1754,7 +1769,7 @@ export default function PurchaseRequisitionList() {
                           <TypeaheadCustom
                             id="po-product-typeahead"
                             _ref={productDescriptionRef}
-                            options={formItems}
+                            options={productOptions}
                             placeholder="Search and select product..."
                             labelKey={productLabelKey}
                             onChange={(selectedItems) => {
@@ -1778,6 +1793,12 @@ export default function PurchaseRequisitionList() {
                             fixed={true}
                             flip={true}
                           />
+                          {activeBusiness?.filter_products_by_default_supplier &&
+                          form.supplier_code ? (
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              Showing products for this supplier only.
+                            </p>
+                          ) : null}
                         </td>
                         <td className="min-w-[8.5rem] w-36 px-3 py-3 align-top text-right">
                           <input

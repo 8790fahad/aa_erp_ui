@@ -18,6 +18,44 @@ import { toast } from "sonner";
 import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 
+const toNumber = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const formatNairaDrCr = (value) => {
+  const amount = toNumber(value);
+  const formatted = `₦${formatNumber1(Math.abs(amount))}`;
+  if (amount > 0) return `${formatted} DR`;
+  if (amount < 0) return `${formatted} CR`;
+  return formatted;
+};
+
+const renderNairaDrCr = (value) => {
+  const amount = toNumber(value);
+  const formatted = `₦${formatNumber1(Math.abs(amount))}`;
+
+  if (amount > 0) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className="text-rose-600">{formatted}</span>
+        <span className="text-xs font-semibold text-rose-600">dr</span>
+      </span>
+    );
+  }
+
+  if (amount < 0) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className="text-emerald-600">{formatted}</span>
+        <span className="text-xs font-semibold text-emerald-600">cr</span>
+      </span>
+    );
+  }
+
+  return <span>{formatted}</span>;
+};
+
 const PayableLedger = () => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const navigate = useNavigate();
@@ -349,7 +387,7 @@ const PayableLedger = () => {
     begBalRow.getCell(3).style = { ...dataStyle, font: { bold: true } };
     begBalRow.getCell(4).value = "";
     begBalRow.getCell(5).value = "";
-    begBalRow.getCell(6).value = balanceForward;
+    begBalRow.getCell(6).value = formatNairaDrCr(balanceForward);
     begBalRow.getCell(6).style = {
       ...numberStyle,
       font: { bold: true },
@@ -372,7 +410,7 @@ const PayableLedger = () => {
         transaction.debit > 0 ? transaction.debit : "";
       transRow.getCell(5).value =
         transaction.credit > 0 ? transaction.credit : "";
-      transRow.getCell(6).value = transaction.balance || 0;
+      transRow.getCell(6).value = formatNairaDrCr(transaction.balance || 0);
 
       transRow.getCell(1).style = dataStyle;
       transRow.getCell(2).style = dataStyle;
@@ -396,7 +434,7 @@ const PayableLedger = () => {
       ledgerData.totals.totalDebit > 0 ? ledgerData.totals.totalDebit : "";
     totalRow.getCell(5).value =
       ledgerData.totals.totalCredit > 0 ? ledgerData.totals.totalCredit : "";
-    totalRow.getCell(6).value = ledgerData.finalBalance;
+    totalRow.getCell(6).value = formatNairaDrCr(ledgerData.finalBalance);
 
     totalRow.getCell(4).style = { ...numberStyle, font: { bold: true } };
     totalRow.getCell(5).style = { ...numberStyle, font: { bold: true } };
@@ -532,6 +570,27 @@ const PayableLedger = () => {
                 className="px-4 py-2 border border-gray-300 rounded bg-white"
               />
               <button
+                type="button"
+                className="px-4 py-2 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-50"
+                disabled={!selectedSupplier}
+                onClick={() => {
+                  const supplierNo =
+                    selectedSupplier?.supplier_number || selectedSupplier?.id;
+                  if (!supplierNo) return;
+                  const params = new URLSearchParams({
+                    supplier_no: String(supplierNo),
+                    as_at: toDate || "",
+                  });
+                  const name = selectedSupplier?.name || "";
+                  if (name) params.set("name", name);
+                  navigate(
+                    `/app/payments/pay-bills/balance-statement?${params.toString()}`,
+                  );
+                }}
+              >
+                Balance statement
+              </button>
+              <button
                 className="px-4 py-2 border border-gray-300 rounded bg-white hover:bg-gray-50"
                 onClick={handleRunReport}
                 disabled={loading || !selectedSupplier}
@@ -647,14 +706,8 @@ const PayableLedger = () => {
                           <span className="font-semibold text-gray-600">
                             Balance:
                           </span>{" "}
-                          <span
-                            className={`font-bold ml-1 ${
-                              parseFloat(ledgerData?.finalBalance || 0) < 0
-                                ? "text-red-600"
-                                : "text-gray-900"
-                            }`}
-                          >
-                            {formatCurrency(ledgerData?.finalBalance || 0)}
+                          <span className="font-bold ml-1">
+                            {renderNairaDrCr(ledgerData?.finalBalance || 0)}
                           </span>
                         </div>
                       </div>
@@ -707,16 +760,8 @@ const PayableLedger = () => {
                           <td className="px-2 py-1 text-sm text-right text-gray-600 border-r border-gray-200">
                             -
                           </td>
-                          <td
-                            className={`px-2 py-1 text-sm text-right font-medium bg-gray-50 ${
-                              (ledgerData.openingBalance ||
-                                ledgerData.balanceForward ||
-                                0) >= 0
-                                ? "text-green-600"
-                                : "text-red-600"
-                            }`}
-                          >
-                            {formatCurrency(
+                          <td className="px-2 py-1 text-sm text-right font-medium bg-gray-50">
+                            {renderNairaDrCr(
                               ledgerData.balanceForward ||
                                 ledgerData.openingBalance ||
                                 0,
@@ -753,14 +798,8 @@ const PayableLedger = () => {
                                   ? formatCurrency(transaction.credit)
                                   : "-"}
                               </td>
-                              <td
-                                className={`px-2 py-1 text-sm text-right font-medium bg-gray-50 ${
-                                  balance >= 0
-                                    ? "text-green-600"
-                                    : "text-red-600"
-                                }`}
-                              >
-                                {formatCurrency(balance)}
+                              <td className="px-2 py-1 text-sm text-right font-medium bg-gray-50">
+                                {renderNairaDrCr(balance)}
                               </td>
                             </tr>
                           );
@@ -784,14 +823,8 @@ const PayableLedger = () => {
                               ? formatCurrency(ledgerData.totals.totalCredit)
                               : 0}
                           </td>
-                          <td
-                            className={`px-2 py-1 text-sm text-right font-semibold bg-gray-200 ${
-                              ledgerData.finalBalance >= 0
-                                ? "text-green-600"
-                                : "text-red-600"
-                            }`}
-                          >
-                            {formatCurrency(ledgerData.finalBalance)}
+                          <td className="px-2 py-1 text-sm text-right font-semibold bg-gray-200">
+                            {renderNairaDrCr(ledgerData.finalBalance)}
                           </td>
                         </tr>
                       </tbody>

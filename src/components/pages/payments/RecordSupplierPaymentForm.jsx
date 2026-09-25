@@ -712,8 +712,8 @@ export default function RecordSupplierPaymentForm({
                   {embedded ? "Pay Bill" : "New Payment"}
                 </h1>
                 <p className="text-xs text-slate-500">
-                  Apply this payment to unpaid bills. Excess is kept as vendor
-                  advance.
+                  Apply this payment to unpaid bills. Paying more than the bills
+                  keeps the excess as vendor advance — same as Make Advance.
                 </p>
               </div>
             </div>

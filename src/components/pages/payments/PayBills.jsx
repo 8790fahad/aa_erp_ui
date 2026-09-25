@@ -1077,7 +1077,7 @@ export default function PayBills() {
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Unpaid Bills</h1>
+          <h1 className="text-3xl font-bold">Payable</h1>
           <p className="text-muted-foreground">
             Manage and pay your outstanding bills
           </p>

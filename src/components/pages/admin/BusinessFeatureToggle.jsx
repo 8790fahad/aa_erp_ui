@@ -7,6 +7,9 @@ import { toast } from "sonner";
 import { _postApi } from "@/redux/actions/api";
 import { UPDATE_BUSINESS_SETTINGS } from "@/redux/actions/actionTypes";
 
+const flagOn = (value) =>
+  value === true || value === 1 || value === "1" || value === "true";
+
 /**
  * Reusable settings card with an enable/disable switch stored on `business`.
  */
@@ -24,7 +27,7 @@ export default function BusinessFeatureToggle({
   const dispatch = useDispatch();
   const activeBusiness = useSelector((state) => state.auth.activeBusiness) || {};
   const user = useSelector((state) => state.auth.user) || {};
-  const currentValue = !!activeBusiness?.[field];
+  const currentValue = flagOn(activeBusiness?.[field]);
   const [isEditing, setIsEditing] = useState(false);
   const [isEnabled, setIsEnabled] = useState(currentValue);
   const [loading, setLoading] = useState(false);

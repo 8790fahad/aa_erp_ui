@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import moment from "moment";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ChevronDown, FileDown, FileSpreadsheet, Loader2, X } from "lucide-react";
+import { ChevronDown, FileDown, FileSpreadsheet, Loader2, Printer, X } from "lucide-react";
 import ExcelJS from "exceljs";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
@@ -56,11 +56,17 @@ const renderNairaDrCr = (value) => {
 const DebtorsReport = () => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const facilityId = activeBusiness?.id;
 
+  const [activeTab, setActiveTab] = useState(() =>
+    searchParams.get("tab") === "credit" ? "credit" : "receivable",
+  );
   const [asAtDate, setAsAtDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
+  const [creditLoading, setCreditLoading] = useState(false);
+  const [creditRows, setCreditRows] = useState([]);
   const [pdfExporting, setPdfExporting] = useState(false);
   const reportExportRef = React.useRef(null);
   /** Avoid auto-fetching again when only the date input changes; still fetch per facility on load. */
@@ -105,12 +111,76 @@ const DebtorsReport = () => {
     );
   }, [facilityId, asAtDate]);
 
+  const fetchCredit = useCallback(() => {
+    if (!facilityId || !asAtDate) {
+      toast.error("Select report date");
+      return;
+    }
+    setCreditLoading(true);
+    _postApi(
+      "/account/customer-credits-report",
+      { facilityId, asAtDate },
+      (response) => {
+        setCreditLoading(false);
+        if (!response?.success) {
+          toast.error(response?.message || "Unable to load credit summary");
+          setCreditRows([]);
+          return;
+        }
+        const raw = Array.isArray(response?.data?.rows) ? response.data.rows : [];
+        setCreditRows(
+          raw
+            .map((item) => ({
+              partyId: item.party_id,
+              partyName: item.party_name || item.party_id,
+              balance: toNumber(item.balance),
+              invoiceCount: toNumber(item.invoice_count),
+            }))
+            .sort((a, b) => b.balance - a.balance),
+        );
+      },
+      () => {
+        setCreditLoading(false);
+        toast.error("Unable to load credit summary");
+        setCreditRows([]);
+      },
+    );
+  }, [facilityId, asAtDate]);
+
   useEffect(() => {
     if (!facilityId || !asAtDate) return;
-    if (autoFetchedFacilityIdRef.current === facilityId) return;
-    autoFetchedFacilityIdRef.current = facilityId;
-    fetchReport();
-  }, [facilityId, asAtDate, fetchReport]);
+    const key = `${facilityId}-${activeTab}`;
+    if (autoFetchedFacilityIdRef.current === key) return;
+    autoFetchedFacilityIdRef.current = key;
+    if (activeTab === "credit") fetchCredit();
+    else fetchReport();
+  }, [facilityId, asAtDate, activeTab, fetchReport, fetchCredit]);
+
+  const creditTotal = useMemo(
+    () => creditRows.reduce((sum, r) => sum + toNumber(r.balance), 0),
+    [creditRows],
+  );
+
+  const selectTab = (tab) => {
+    setActiveTab(tab);
+    const next = new URLSearchParams(searchParams);
+    if (tab === "credit") next.set("tab", "credit");
+    else next.delete("tab");
+    setSearchParams(next, { replace: true });
+  };
+
+  const printCreditStatement = (row) => {
+    const customerNo = row?.partyId;
+    if (!customerNo) return;
+    const params = new URLSearchParams({
+      customer_no: customerNo,
+      as_at: asAtDate,
+    });
+    if (row?.partyName) params.set("name", row.partyName);
+    navigate(
+      `/app/payments/receive-payment/balance-statement?${params.toString()}`,
+    );
+  };
 
   const rows = useMemo(() => {
     const rawRows = reportData?.rows || [];
@@ -143,13 +213,17 @@ const DebtorsReport = () => {
   );
 
   const handleExportExcel = useCallback(async () => {
-    if (!rows.length) {
-      toast.error("No debtor rows to export");
+    const exportingCredit = activeTab === "credit";
+    const exportRows = exportingCredit ? creditRows : rows;
+    if (!exportRows.length) {
+      toast.error(exportingCredit ? "No credit rows to export" : "No debtor rows to export");
       return;
     }
     try {
       const workbook = new ExcelJS.Workbook();
-      const ws = workbook.addWorksheet("Debtors Report");
+      const ws = workbook.addWorksheet(
+        exportingCredit ? "Credit Summary" : "Debtors Report",
+      );
       ws.columns = [{ width: 10 }, { width: 32 }, { width: 20 }, { width: 18 }];
       let r = 1;
       ws.mergeCells(r, 1, r, 4);
@@ -159,7 +233,9 @@ const DebtorsReport = () => {
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
       ws.mergeCells(r, 1, r, 4);
-      ws.getCell(r, 1).value = "DEBTORS REPORT RECEIVABLE REPORT";
+      ws.getCell(r, 1).value = exportingCredit
+        ? "CUSTOMER CREDIT SUMMARY"
+        : "DEBTORS REPORT RECEIVABLE REPORT";
       ws.getCell(r, 1).font = { bold: true, size: 12 };
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
@@ -168,7 +244,9 @@ const DebtorsReport = () => {
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r += 2;
 
-      const headers = ["ID", "PARTY ID", "PARTY NAME", "TYPE", "Balance"];
+      const headers = exportingCredit
+        ? ["#", "CUSTOMER ID", "CUSTOMER NAME", "Credit Balance"]
+        : ["ID", "PARTY ID", "PARTY NAME", "TYPE", "Balance"];
       headers.forEach((h, i) => {
         const c = ws.getCell(r, i + 1);
         c.value = h;
@@ -177,19 +255,33 @@ const DebtorsReport = () => {
       });
       r++;
 
-      rows.forEach((row, idx) => {
-        ws.getCell(r, 1).value = idx + 1;
-        ws.getCell(r, 2).value = row.partyId;
-        ws.getCell(r, 3).value = row.partyName;
-        ws.getCell(r, 4).value =
-          row.partyType === "supplier" ? "Supplier" : "Customer";
-        ws.getCell(r, 5).value = formatNairaDrCr(row.balance);
-        r++;
-      });
-      ws.getCell(r, 1).value = "Total";
-      ws.getCell(r, 1).font = { bold: true };
-      ws.getCell(r, 5).value = formatNairaDrCr(totalBalance);
-      ws.getCell(r, 5).font = { bold: true };
+      if (exportingCredit) {
+        exportRows.forEach((row, idx) => {
+          ws.getCell(r, 1).value = idx + 1;
+          ws.getCell(r, 2).value = row.partyId;
+          ws.getCell(r, 3).value = row.partyName;
+          ws.getCell(r, 4).value = toNumber(row.balance);
+          r++;
+        });
+        ws.getCell(r, 1).value = "Total";
+        ws.getCell(r, 1).font = { bold: true };
+        ws.getCell(r, 4).value = creditTotal;
+        ws.getCell(r, 4).font = { bold: true };
+      } else {
+        exportRows.forEach((row, idx) => {
+          ws.getCell(r, 1).value = idx + 1;
+          ws.getCell(r, 2).value = row.partyId;
+          ws.getCell(r, 3).value = row.partyName;
+          ws.getCell(r, 4).value =
+            row.partyType === "supplier" ? "Supplier" : "Customer";
+          ws.getCell(r, 5).value = formatNairaDrCr(row.balance);
+          r++;
+        });
+        ws.getCell(r, 1).value = "Total";
+        ws.getCell(r, 1).font = { bold: true };
+        ws.getCell(r, 5).value = formatNairaDrCr(totalBalance);
+        ws.getCell(r, 5).font = { bold: true };
+      }
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
@@ -198,7 +290,7 @@ const DebtorsReport = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `debtors-report-${asAtDate}.xlsx`;
+      a.download = `${activeTab === "credit" ? "credit-summary" : "debtors-report"}-${asAtDate}.xlsx`;
       a.click();
       window.URL.revokeObjectURL(url);
       toast.success("Excel downloaded");
@@ -206,7 +298,7 @@ const DebtorsReport = () => {
       console.error(e);
       toast.error("Could not export Excel");
     }
-  }, [rows, totalBalance, activeBusiness, asAtDate]);
+  }, [rows, totalBalance, creditRows, creditTotal, activeTab, activeBusiness, asAtDate]);
 
   const handleExportPdf = useCallback(async () => {
     const el = reportExportRef.current;
@@ -233,7 +325,9 @@ const DebtorsReport = () => {
         pdf.addImage(imgData, "PNG", 0, -y, pageWidth, imgHeight);
         y += pageHeight;
       }
-      pdf.save(`debtors-report-${asAtDate}.pdf`);
+      pdf.save(
+        `${activeTab === "credit" ? "credit-summary" : "debtors-report"}-${asAtDate}.pdf`,
+      );
       toast.success("PDF downloaded");
     } catch (e) {
       console.error(e);
@@ -241,10 +335,37 @@ const DebtorsReport = () => {
     } finally {
       setPdfExporting(false);
     }
-  }, [asAtDate]);
+  }, [asAtDate, activeTab]);
+
+  const busy = activeTab === "credit" ? creditLoading : loading;
+  const hasRows = activeTab === "credit" ? creditRows.length > 0 : rows.length > 0;
 
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap gap-2 px-1">
+        <button
+          type="button"
+          onClick={() => selectTab("receivable")}
+          className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${
+            activeTab === "receivable"
+              ? "bg-[var(--aa-navy)] text-white"
+              : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          Receivable
+        </button>
+        <button
+          type="button"
+          onClick={() => selectTab("credit")}
+          className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${
+            activeTab === "credit"
+              ? "bg-[var(--aa-navy)] text-white"
+              : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          Credit Summary
+        </button>
+      </div>
       <div className="bg-gray-100 rounded-lg px-2 py-2">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
           <div className="md:col-span-1">
@@ -256,8 +377,9 @@ const DebtorsReport = () => {
               onChange={(e) => setAsAtDate(e.target.value)}
             />
             <p className="text-[11px] text-gray-600 mt-1.5 leading-snug">
-              Customers and suppliers with a net debit (DR) ledger balance.
-              Credit balances appear on the Payables report.
+              {activeTab === "credit"
+                ? "Customers with an outstanding credit balance from approved invoices."
+                : "Customers and suppliers with a net debit (DR) ledger balance. Credit balances appear on the Payables report."}
             </p>
           </div>
           <div className="md:col-span-1 flex flex-wrap justify-end gap-2">
@@ -269,12 +391,15 @@ const DebtorsReport = () => {
               <X className="h-4 w-4" />
               Close
             </Button>
-            <Button onClick={fetchReport} disabled={loading}>
-              {loading ? "Loading..." : "Run Report"}
+            <Button
+              onClick={() => (activeTab === "credit" ? fetchCredit() : fetchReport())}
+              disabled={busy}
+            >
+              {busy ? "Loading..." : "Run Report"}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="border-gray-300" disabled={!rows.length || loading}>
+                <Button variant="outline" className="border-gray-300" disabled={!hasRows || busy}>
                   Export
                   <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />
                 </Button>
@@ -282,7 +407,7 @@ const DebtorsReport = () => {
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuItem
                   className="cursor-pointer"
-                  disabled={!rows.length || loading}
+                  disabled={!hasRows || busy}
                   onClick={() => handleExportExcel()}
                 >
                   <FileSpreadsheet className="h-4 w-4 shrink-0" />
@@ -290,7 +415,7 @@ const DebtorsReport = () => {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="cursor-pointer"
-                  disabled={!rows.length || loading || pdfExporting}
+                  disabled={!hasRows || busy || pdfExporting}
                   onClick={() => handleExportPdf()}
                 >
                   {pdfExporting ? (
@@ -309,13 +434,121 @@ const DebtorsReport = () => {
       <div className="bg-white border rounded-md overflow-hidden" ref={reportExportRef}>
         <BusinessDocumentHeader
           business={activeBusiness}
-          title="Receivable Report"
+          title={activeTab === "credit" ? "Credit Summary" : "Receivable Report"}
           numberLabel={`As at: ${moment(asAtDate).format("DD/MM/YYYY")}`}
           date={new Date()}
           dateFormat="dddd, DD MMMM YYYY hh:mm A [GMT]Z"
           className="mb-0"
         />
 
+        {activeTab === "credit" ? (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-slate-500">
+                  <th className="text-left text-[11px] font-semibold px-4 py-2.5 uppercase tracking-wide w-16">
+                    #
+                  </th>
+                  <th className="text-left text-[11px] font-semibold px-4 py-2.5 uppercase tracking-wide">
+                    Customer ID
+                  </th>
+                  <th className="text-left text-[11px] font-semibold px-4 py-2.5 uppercase tracking-wide">
+                    Customer Name
+                  </th>
+                  <th className="text-right text-[11px] font-semibold px-4 py-2.5 uppercase tracking-wide">
+                    Credit Balance (₦)
+                  </th>
+                  <th className="text-center text-[11px] font-semibold px-4 py-2.5 uppercase tracking-wide">
+                    Action
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {creditLoading ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-500">
+                      Loading…
+                    </td>
+                  </tr>
+                ) : creditRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-500">
+                      No customers with an outstanding credit balance for this date.
+                    </td>
+                  </tr>
+                ) : (
+                  <>
+                    {creditRows.map((row, idx) => (
+                      <tr key={row.partyId} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="px-4 py-3 text-sm text-slate-500">{idx + 1}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <button
+                            type="button"
+                            className="font-mono text-xs text-[var(--aa-accent)] hover:underline"
+                            onClick={() => {
+                              const params = new URLSearchParams({
+                                customerNo: String(row.partyId),
+                                customerName: String(row.partyName || ""),
+                              });
+                              if (asAtDate) params.set("asAt", asAtDate);
+                              navigate(
+                                `/app/reports/accounting-reports/receivable-ledger-aging?${params.toString()}`,
+                              );
+                            }}
+                          >
+                            {row.partyId}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium">
+                          <button
+                            type="button"
+                            className="text-left text-[var(--aa-accent)] hover:underline"
+                            onClick={() => {
+                              const params = new URLSearchParams({
+                                customerNo: String(row.partyId),
+                                customerName: String(row.partyName || ""),
+                              });
+                              if (asAtDate) params.set("asAt", asAtDate);
+                              navigate(
+                                `/app/reports/accounting-reports/receivable-ledger-aging?${params.toString()}`,
+                              );
+                            }}
+                          >
+                            {row.partyName}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
+                          {formatNumber1(row.balance)}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1.5 text-[var(--aa-accent)]"
+                            onClick={() => printCreditStatement(row)}
+                          >
+                            <Printer className="h-4 w-4" />
+                            Print
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold">
+                      <td className="px-4 py-3 text-sm" colSpan={3}>
+                        Total
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right tabular-nums">
+                        {formatNumber1(creditTotal)}
+                      </td>
+                      <td />
+                    </tr>
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
@@ -405,6 +638,7 @@ const DebtorsReport = () => {
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );

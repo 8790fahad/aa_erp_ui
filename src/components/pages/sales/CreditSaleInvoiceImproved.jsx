@@ -1050,14 +1050,6 @@ export default function CreditSaleInvoice({
   );
 
   const paymentModeLabel = (() => {
-    const used = [];
-    if (cashPaid > 0.05) used.push("Cash");
-    if (transferPaid > 0.05) used.push("Transfer");
-    if (cardPaid > 0.05) used.push("POS");
-    if (creditAmount > 0.05) used.push("Credit");
-    if (depositPaid > 0.05) used.push("Apply Deposit");
-    if (used.length) return used.join(" + ");
-
     const order = [
       ["cash", "Cash"],
       ["transfer", "Transfer"],
@@ -1071,6 +1063,14 @@ export default function CreditSaleInvoice({
       )
       .map(([, label]) => label);
     if (fromModes.length) return fromModes.join(" + ");
+
+    const used = [];
+    if (cashPaid > 0.05) used.push("Cash");
+    if (transferPaid > 0.05) used.push("Transfer");
+    if (cardPaid > 0.05) used.push("POS");
+    if (creditAmount > 0.05) used.push("Credit");
+    if (depositPaid > 0.05) used.push("Apply Deposit");
+    if (used.length) return used.join(" + ");
     return formatPaymentMode(modeOfPayment);
   })();
   const handleReactToPrint = useReactToPrint({
@@ -1942,7 +1942,7 @@ export default function CreditSaleInvoice({
                 const fields = [
                   { label: "Mode", value: paymentModeLabel },
                 ];
-                if (cashPaid > 0.05) {
+                if (cashPaid > 0.05 || hasCashMode) {
                   fields.push({
                     label: "Cash received",
                     value: `₦${formatNumber(cashPaid)}`,
@@ -1957,7 +1957,7 @@ export default function CreditSaleInvoice({
                       }`,
                     });
                   });
-                } else if (transferPaid > 0.05) {
+                } else if (transferPaid > 0.05 || hasTransferMode) {
                   fields.push({
                     label: "Transfer received",
                     value: `₦${formatNumber(transferPaid)}${
@@ -1977,7 +1977,7 @@ export default function CreditSaleInvoice({
                       }`,
                     });
                   });
-                } else if (cardPaid > 0.05) {
+                } else if (cardPaid > 0.05 || hasCardMode) {
                   fields.push({
                     label: "POS received",
                     value: `₦${formatNumber(cardPaid)}${
@@ -2010,25 +2010,23 @@ export default function CreditSaleInvoice({
                       className={`bg-blue-50 border border-blue-200 ${isA5 ? "p-0.5 px-1" : "p-1"}`}
                     >
                       <h6
-                        className={`font-semibold text-blue-800 uppercase tracking-wide ${isA5 ? "text-sm mb-0" : "text-base mb-"}`}
+                        className={`block font-semibold text-blue-800 uppercase tracking-wide text-left ${isA5 ? "text-sm mb-0.5" : "text-sm mb-1"}`}
                       >
                         How this invoice is paid
                       </h6>
-                      <p
-                        className={`${isA5 ? "text-sm leading-snug" : "text-base leading-relaxed"} text-gray-700`}
-                      >
+                      <div className="space-y-0.5 text-left">
                         {fields.map((field, idx) => (
-                          <span key={`${field.label}-${idx}`}>
-                            {idx > 0 ? (
-                              <span className="text-gray-400 mx-1">|</span>
-                            ) : null}
+                          <p
+                            key={`${field.label}-${idx}`}
+                            className="text-sm leading-snug text-gray-700"
+                          >
                             <span className="font-semibold text-gray-600">
                               {field.label}:
                             </span>{" "}
                             <span className="text-gray-900">{field.value}</span>
-                          </span>
+                          </p>
                         ))}
-                      </p>
+                      </div>
                     </div>
                   </div>
                 );

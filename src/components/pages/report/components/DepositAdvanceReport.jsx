@@ -54,7 +54,7 @@ const VARIANTS = {
     partyLabel: "Customer",
     balanceLabel: "Deposit Balance (₦)",
     helpText:
-      "Customers with a prepaid / deposit balance not yet applied to an invoice.",
+      "Customer deposit balances as at this date. Print a statement from any row.",
     exportName: "deposit-report",
   },
   advance: {
@@ -64,7 +64,8 @@ const VARIANTS = {
     documentTitle: "Supplier Advances Report",
     partyLabel: "Supplier",
     balanceLabel: "Advance Balance (₦)",
-    helpText: "Suppliers we have paid in advance, not yet used on a purchase.",
+    helpText:
+      "Supplier advances, including cash paid beyond open bills and not yet used on a purchase.",
     exportName: "advance-report",
   },
 };
@@ -280,6 +281,14 @@ export default function DepositAdvanceReport({ variant = "deposit" } = {}) {
 
   const printReceipt = useCallback(
     (item) => {
+      if (item?.direction === "applied" && item?.invoice_ref) {
+        navigate(
+          `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
+            item.invoice_ref,
+          )}&doc=invoice`,
+        );
+        return;
+      }
       navigate(
         `/app/customers/view-receipt/print?invoice_ref=${encodeURIComponent(
           item.receipt_no,
@@ -287,6 +296,21 @@ export default function DepositAdvanceReport({ variant = "deposit" } = {}) {
       );
     },
     [navigate],
+  );
+
+  const printStatement = useCallback(
+    (row) => {
+      if (!row?.partyId) return;
+      const params = new URLSearchParams({
+        customer_no: row.partyId,
+        as_at: asAtDate,
+      });
+      if (row.partyName) params.set("name", row.partyName);
+      navigate(
+        `/app/payments/receive-payment/balance-statement?${params.toString()}`,
+      );
+    },
+    [navigate, asAtDate],
   );
 
   const handleExportExcel = useCallback(async () => {
@@ -684,6 +708,11 @@ export default function DepositAdvanceReport({ variant = "deposit" } = {}) {
                   <th className="text-right text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide">
                     {cfg.balanceLabel}
                   </th>
+                  {isDeposit ? (
+                    <th className="text-center text-xs font-semibold px-3 py-2.5 border-b border-slate-500 uppercase tracking-wide w-28">
+                      Action
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -708,6 +737,23 @@ export default function DepositAdvanceReport({ variant = "deposit" } = {}) {
                     <td className="px-3 py-2 text-sm text-right font-semibold tabular-nums">
                       ₦{formatNumber1(row.balance)}
                     </td>
+                    {isDeposit ? (
+                      <td className="px-3 py-2 text-center">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1.5 text-[var(--aa-accent)]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            printStatement(row);
+                          }}
+                        >
+                          <Printer className="h-4 w-4" />
+                          Print
+                        </Button>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
                 {!!rows.length && (
@@ -718,12 +764,13 @@ export default function DepositAdvanceReport({ variant = "deposit" } = {}) {
                     <td className="px-3 py-2 text-sm text-right tabular-nums">
                       ₦{formatNumber1(totalBalance)}
                     </td>
+                    {isDeposit ? <td /> : null}
                   </tr>
                 )}
                 {!rows.length && (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={isDeposit ? 5 : 4}
                       className="px-3 py-8 text-center text-sm text-gray-500"
                     >
                       {loading

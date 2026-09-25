@@ -50,10 +50,10 @@ function staffDisplayName(user) {
 /**
  * Pay Bills — payment history list, matching Bill / app list layout.
  *
- * Actions (all supplier payment flows live here):
- * - New Payment → pay unpaid vendor bills
- * - Make Deposit → record a supplier prepaid deposit
- * - Apply Deposit → apply existing supplier deposit to bills
+ * Actions:
+ * - New Payment → pay unpaid vendor bills (excess becomes vendor advance)
+ * - Make Advance → record a supplier prepaid advance
+ * Apply Advance / unpaid payables live under Purchase → Advance and Payable.
  */
 export default function PaymentsMade() {
   const navigate = useNavigate();
@@ -138,10 +138,15 @@ export default function PaymentsMade() {
     );
   }, [canSeeAll, facilityId]);
 
-  // Deep-link: /pay-bills?action=deposit&supplierNo=…
+  // Deep-link: /pay-bills?action=deposit|advance&supplierNo=…
   useEffect(() => {
     const action = String(searchParams.get("action") || "").toLowerCase();
-    if (action === "deposit" || action === "make-deposit") {
+    if (
+      action === "deposit" ||
+      action === "make-deposit" ||
+      action === "advance" ||
+      action === "make-advance"
+    ) {
       const supplierNo = searchParams.get("supplierNo") || "";
       const supplierName = searchParams.get("supplierName") || "";
       setDepositSupplier(
@@ -161,7 +166,11 @@ export default function PaymentsMade() {
       setSearchParams(next, { replace: true });
       return;
     }
-    if (action === "apply-deposit" || action === "apply") {
+    if (
+      action === "apply-deposit" ||
+      action === "apply" ||
+      action === "apply-advance"
+    ) {
       setApplyDepositOpen(true);
       const next = new URLSearchParams(searchParams);
       next.delete("action");
@@ -355,15 +364,64 @@ export default function PaymentsMade() {
   ];
 
   return (
-    <div className="p-2">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Pay Bills</h1>
-          <p className="text-muted-foreground">
-            Supplier payment hub: New Payment for unpaid bills, Make Deposit for
-            prepaid vendor funds, Apply Deposit to bills. Customer collections
-            are under Sales → Verification Points.
-          </p>
+    <div className="space-y-5 p-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+            <HandCoins className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Pay Bills</h1>
+            <p className="text-sm text-muted-foreground">
+              New Payment pays unpaid bills (any excess is kept as vendor
+              advance). Apply Deposit puts an existing advance onto unpaid
+              bills. Advance balances are on the{" "}
+              <button
+                type="button"
+                className="font-medium text-[var(--aa-accent)] hover:underline"
+                onClick={() =>
+                  navigate("/app/reports/accounting-reports/advance-report")
+                }
+              >
+                Advance Report
+              </button>
+              , and unpaid bills are on the{" "}
+              <button
+                type="button"
+                className="font-medium text-[var(--aa-accent)] hover:underline"
+                onClick={() =>
+                  navigate("/app/reports/accounting-reports/creditors-report")
+                }
+              >
+                Payables Report
+              </button>
+              .
+              {filteredRows.length > 0 && (
+                <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                  {filteredRows.length} total
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={() => setApplyDepositOpen(true)}
+          >
+            Apply Deposit
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            className="flex h-9 items-center gap-2 bg-[var(--aa-navy)] shadow-none hover:bg-[var(--aa-navy-hover)]"
+            onClick={() => navigate("/app/payments/pay-bills/new")}
+          >
+            <HandCoins className="h-4 w-4" />
+            New Payment
+          </Button>
         </div>
       </div>
 
@@ -405,34 +463,6 @@ export default function PaymentsMade() {
                 ))}
               </select>
             ) : null}
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9"
-              onClick={() => {
-                setDepositSupplier(null);
-                setMakeDepositOpen(true);
-              }}
-            >
-              Make Deposit
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9"
-              onClick={() => setApplyDepositOpen(true)}
-            >
-              Apply Deposit
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
-              className="flex h-9 items-center gap-2 bg-[var(--aa-navy)] shadow-none hover:bg-[var(--aa-navy-hover)]"
-              onClick={() => navigate("/app/payments/pay-bills/new")}
-            >
-              <HandCoins className="h-4 w-4" />
-              New Payment
-            </Button>
         </div>
       </div>
 
@@ -546,9 +576,9 @@ export default function PaymentsMade() {
           className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-xl md:!max-w-2xl lg:!max-w-3xl [&>button]:hidden"
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>Apply Deposit</SheetTitle>
+            <SheetTitle>Apply Advance</SheetTitle>
             <SheetDescription>
-              Move deposit to goods in transit and apply to unpaid bills
+              Move advance to goods in transit and apply to unpaid bills
             </SheetDescription>
           </SheetHeader>
           {applyDepositOpen ? (

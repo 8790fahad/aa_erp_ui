@@ -117,7 +117,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
     "UOM Category",
     "Taxable",
     "Status",
-    "Supplier ID",
+    "Default Supplier",
     "Notes",
   ];
 
@@ -163,6 +163,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
           "Taxable",
           "Status",
           "Unit of Measurement",
+          "Default Supplier",
           "Tags",
           "Notes",
         ];
@@ -179,6 +180,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
           "Inventory Account",
           "Unit of Measurement",
           "Taxable",
+          "Default Supplier",
         ];
       case PRODUCT_TYPES.WIP:
         return [
@@ -426,17 +428,32 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
       }
     });
 
+    const aliases = {
+      "default supplier": ["supplier id", "default supplier id"],
+    };
+    const matchesExpected = (fileCol, expectedCol) =>
+      fileCol === expectedCol ||
+      (aliases[expectedCol] || []).includes(fileCol);
+
     // Check for missing required columns
     normalizedExpectedColumns.forEach((expectedCol, index) => {
-      if (!normalizedFileColumns.includes(expectedCol)) {
-        missingColumns.push(expectedColumns[index]); // Use original column name
+      if (
+        !normalizedFileColumns.some((fileCol) =>
+          matchesExpected(fileCol, expectedCol),
+        )
+      ) {
+        missingColumns.push(expectedColumns[index]);
       }
     });
 
     // Check for extra columns (columns not in expected list)
     normalizedFileColumns.forEach((fileCol, index) => {
-      if (!normalizedExpectedColumns.includes(fileCol)) {
-        extraColumns.push(cleanedFileColumns[index]); // Use original column name
+      if (
+        !normalizedExpectedColumns.some((expectedCol) =>
+          matchesExpected(fileCol, expectedCol),
+        )
+      ) {
+        extraColumns.push(cleanedFileColumns[index]);
       }
     });
 
@@ -781,7 +798,8 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
           "";
         mapped.taxable = item["Taxable"] ? normalizeTaxableStatus(item["Taxable"], "Taxable") : "";
         mapped.status = item["Status"] || "Active";
-        mapped.supplier_id = item["Supplier ID"] || "";
+        mapped.supplier_id =
+          item["Default Supplier"] || item["Supplier ID"] || "";
         mapped.tags = "";
         mapped.notes = item["Notes"] || "";
         mapped.daily_sales_limit = salesLimits.daily_sales_limit;
@@ -809,6 +827,8 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
         mapped.cogs_account = item["Expense Account"] || "";
         mapped.taxable = item["Taxable"] ? normalizeTaxableStatus(item["Taxable"], "Taxable") : "";
         mapped.status = item["Status"] || "Active";
+        mapped.supplier_id =
+          item["Default Supplier"] || item["Supplier ID"] || "";
         mapped.unit_of_measure = item["Unit of Measurement"] || "";
         mapped.tags = item["Tags"] || "";
         mapped.notes = item["Notes"] || "";
@@ -831,6 +851,8 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
         mapped.unit_of_measure = item["Unit of Measurement"] || "";
         mapped.unit = item["Unit of Measurement"] || ""; // Backend expects unit
         mapped.taxable = item["Taxable"] ? normalizeTaxableStatus(item["Taxable"], "Taxable") : "";
+        mapped.supplier_id =
+          item["Default Supplier"] || item["Supplier ID"] || "";
       } else if (selectedProductType === PRODUCT_TYPES.WIP) {
         mapped.sku = item.sku || "";
         mapped.item_name = item["Product Name"] || "";
@@ -991,6 +1013,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
         user_id: userId,
         as_of_date: asOfDate,
         taxable: product.taxable || "",
+        supplier_id: product.supplier_id || "",
       };
     });
 
@@ -1382,6 +1405,7 @@ const ProductsUpload = ({ open, onClose, getInventory, onUploadSuccess }) => {
         unit: product.unit_of_measure || "",
         tags: product.tags || "",
         notes: product.notes || "",
+        supplier_id: product.supplier_id || "",
         daily_sales_limit: product.daily_sales_limit ?? null,
         weekly_sales_limit: product.weekly_sales_limit ?? null,
         monthly_sales_limit: product.monthly_sales_limit ?? null,

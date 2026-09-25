@@ -618,10 +618,10 @@ export default function ApplySupplierDeposit({
             <Wallet className="h-5 w-5 shrink-0 text-white/90" />
             <div className="min-w-0">
               <h2 className="text-base font-semibold leading-tight">
-                Apply Deposit
+                Apply Advance
               </h2>
               <p className="text-xs text-white/70 truncate">
-                Deposit → Goods in transit → Unpaid bills
+                Advance → Goods in transit → Unpaid bills
               </p>
             </div>
           </div>
@@ -719,7 +719,7 @@ export default function ApplySupplierDeposit({
                       className="text-[11px] font-medium uppercase tracking-wide"
                       style={{ color: APP_BLUE }}
                     >
-                      Available deposit
+                      Available advance
                     </p>
                     <p
                       className="mt-0.5 text-lg font-bold tabular-nums"
@@ -741,7 +741,7 @@ export default function ApplySupplierDeposit({
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
                     <ArrowRightLeft className="h-4 w-4" style={{ color: APP_BLUE }} />
-                    Move deposit → goods in transit
+                    Move advance → goods in transit
                   </div>
                   <div className="flex flex-wrap items-end gap-2">
                     <div className="min-w-[8rem] flex-1">
@@ -914,7 +914,7 @@ export default function ApplySupplierDeposit({
                       : undefined
                   }
                 >
-                  Apply deposit ({formatNumber1(availableDeposit)})
+                  Apply advance ({formatNumber1(availableDeposit)})
                 </button>
                 <button
                   type="button"
@@ -948,7 +948,7 @@ export default function ApplySupplierDeposit({
               <div className="rounded-lg border-2 border-dashed border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500">
                 {applySource === "goods_in_transit"
                   ? "No goods in transit. Move deposit to GIT first."
-                  : "No available deposit. Record one under New Payment (pay more than the bill) first."}
+                  : "No available advance. Record one under New Payment (pay more than the bill) or Make Advance first."}
               </div>
             ) : bills.length === 0 ? (
               <div className="rounded-lg border-2 border-dashed border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500">
@@ -1051,7 +1051,7 @@ export default function ApplySupplierDeposit({
                   ? "Applying…"
                   : applySource === "goods_in_transit"
                     ? "Apply GIT to Bills"
-                    : "Apply Deposit to Bills"}
+                    : "Apply Advance to Bills"}
               </button>
               <span className="text-xs text-slate-500">
                 Remaining{" "}

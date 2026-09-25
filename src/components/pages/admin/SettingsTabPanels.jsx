@@ -9,6 +9,7 @@ import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
 import CustomButton from "@/common/Custom/CustomButton";
 import PayableSettings from "./PayableSettings";
 import TripleSelectSettings from "./TripleSelectSettings";
+import BusinessFeatureToggle from "./BusinessFeatureToggle";
 import InventoryValMethod from "./InventoryValMethod";
 import CostingMethodSelector from "./CostingMethodSelector";
 import DepreciationMethodSelector from "./DepreciationMethodSelector";
@@ -1725,6 +1726,19 @@ export default function SettingsTabPanels({
               <InventoryValMethod
                 code={activeBusiness.inv_ev_m}
                 title="Inventory Valuation"
+              />
+            </Col>
+            <Col md={12}>
+              <BusinessFeatureToggle
+                title="Filter products by default supplier"
+                description="On a bill or goods received, the product list shows only items whose default supplier is the vendor you selected."
+                icon="🏷️"
+                field="filter_products_by_default_supplier"
+                endpointPath="update-filter-products-by-default-supplier"
+                enabledLabel="Yes"
+                disabledLabel="No"
+                enabledHelp="Bills and goods received only list products for the selected supplier."
+                disabledHelp="Bills and goods received list every product, regardless of default supplier."
               />
             </Col>
           </Row>

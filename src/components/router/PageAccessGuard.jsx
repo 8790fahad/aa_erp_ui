@@ -47,6 +47,8 @@ const RELATED_PAGE_PRIVILEGES = {
   ],
   "/app/sales/edit-invoice": ["Edit Invoice", "Edit", "Change"],
   "/app/payments/pay-bills": ["Pay Bill", "Pay Bills"],
+  "/app/payments/pay-bills/unpaid": ["Pay Bill", "Pay Bills"],
+  "/app/payments/apply-deposit": ["Pay Bill", "Pay Bills", "Make Deposit"],
   "/app/payments/receive-payment": [
     "Received Payment",
     "Receive Payment",
