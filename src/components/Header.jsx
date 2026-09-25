@@ -89,6 +89,17 @@ const QUICK_CREATE = [
     privileges: ["Bill", "Billing Expense"],
   },
   {
+    label: "Received Payment",
+    href: "/app/payments/receive-payment/new",
+    icon: Wallet,
+    privileges: [
+      "Received Payment",
+      "Receive Payment",
+      "Make Deposit",
+      "Customer Deposit",
+    ],
+  },
+  {
     label: "Verification Points",
     href: "/app/payments/verification-points",
     icon: Wallet,

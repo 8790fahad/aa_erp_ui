@@ -121,6 +121,11 @@ export default function ReceivedFunds() {
     functionalities.includes(DEPOSIT_HISTORY_PRIVILEGE) ||
     parentPaymentAccess;
 
+  const canMakeDeposit =
+    elevated ||
+    functionalities.includes(MAKE_DEPOSIT_PRIVILEGE) ||
+    parentPaymentAccess;
+
   const canApplyDeposit =
     elevated ||
     functionalities.includes(APPLY_DEPOSIT_PRIVILEGE) ||
@@ -191,6 +196,7 @@ export default function ReceivedFunds() {
 
   const refreshActive = () => fetchHistory();
 
+  const goNewPayment = () => navigate("/app/payments/receive-payment/new");
   const goApplyDeposit = () => navigate("/app/payments/apply-advance");
 
   const openCustomerLedger = (customerNo, customerName) => {
@@ -432,11 +438,29 @@ export default function ReceivedFunds() {
             </p>
           </div>
         </div>
-        {canApplyDeposit ? (
-          <CustomButton className="!mb-0" onClick={goApplyDeposit}>
-            Apply Deposit
-          </CustomButton>
-        ) : null}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {canApplyDeposit ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={goApplyDeposit}
+            >
+              Apply Deposit
+            </Button>
+          ) : null}
+          {canMakeDeposit ? (
+            <Button
+              variant="default"
+              size="sm"
+              className="flex h-9 items-center gap-2 bg-[var(--aa-navy)] shadow-none hover:bg-[var(--aa-navy-hover)]"
+              onClick={goNewPayment}
+            >
+              <Banknote className="h-4 w-4" />
+              New Payment
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
@@ -505,10 +529,24 @@ export default function ReceivedFunds() {
                   ? "Try a different search term."
                   : "Make a customer deposit, or apply a deposit to an invoice — both appear here."}
               </p>
-              {!search && canApplyDeposit && (
-                <CustomButton className="!mb-0 mt-4" onClick={goApplyDeposit}>
-                  Apply Deposit
-                </CustomButton>
+              {!search && (canMakeDeposit || canApplyDeposit) && (
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  {canApplyDeposit ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9"
+                      onClick={goApplyDeposit}
+                    >
+                      Apply Deposit
+                    </Button>
+                  ) : null}
+                  {canMakeDeposit ? (
+                    <CustomButton className="!mb-0" onClick={goNewPayment}>
+                      New Payment
+                    </CustomButton>
+                  ) : null}
+                </div>
               )}
             </div>
           ) : (
