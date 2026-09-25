@@ -199,20 +199,6 @@ export default function ReceivedFunds() {
   const goNewPayment = () => navigate("/app/payments/receive-payment/new");
   const goApplyDeposit = () => navigate("/app/payments/apply-advance");
 
-  const openCustomerLedger = (customerNo, customerName) => {
-    const id = String(customerNo || "").trim();
-    if (!id) return;
-    const params = new URLSearchParams({ customerNo: id });
-    if (customerName) params.set("customerName", String(customerName));
-    navigate(
-      `/app/reports/accounting-reports/receivable-ledger-aging?${params.toString()}`,
-    );
-  };
-
-  const openCustomer = (customerNo, customerName) => {
-    openCustomerLedger(customerNo, customerName);
-  };
-
   const printReceipt = (item) => {
     if (item?.direction === "applied" && item?.invoice_ref) {
       navigate(
@@ -267,24 +253,10 @@ export default function ReceivedFunds() {
         custom: true,
         component: (item) => (
           <div>
-            <button
-              type="button"
-              className="text-sm font-medium text-[var(--aa-accent)] hover:underline"
-              onClick={() =>
-                openCustomer(item.customer_no, item.customer_name)
-              }
-            >
+            <div className="text-sm font-medium text-gray-900">
               {item.customer_name || "-"}
-            </button>
-            <button
-              type="button"
-              className="block text-xs text-gray-500 hover:text-[var(--aa-accent)] hover:underline"
-              onClick={() =>
-                openCustomer(item.customer_no, item.customer_name)
-              }
-            >
-              {item.customer_no || ""}
-            </button>
+            </div>
+            <div className="text-xs text-gray-500">{item.customer_no || ""}</div>
           </div>
         ),
       },
@@ -422,9 +394,7 @@ export default function ReceivedFunds() {
                 type="button"
                 className="font-medium text-[var(--aa-accent)] hover:underline"
                 onClick={() =>
-                  navigate(
-                    "/app/reports/accounting-reports/receivable-ledger?tab=credit",
-                  )
+                  navigate("/app/reports/accounting-reports/receivable-ledger")
                 }
               >
                 Receivable Report

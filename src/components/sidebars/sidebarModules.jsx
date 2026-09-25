@@ -508,7 +508,6 @@ export const modules = [
         ],
         subFunctionalities: [
           { title: "Deposit Summary" },
-          { title: "Credit Summary" },
           { title: "Deposit History" },
           { title: "Make Deposit" },
         ],
