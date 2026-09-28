@@ -1,36 +1,45 @@
 /**
- * Normalize Nigerian phone numbers to MSISDN form: 234XXXXXXXXXX
- * Accepts 080…, 801…, 234…, +234…, 00234…
+ * Normalize Nigerian phone numbers to MSISDN form: 234 + 9 or 10 digits.
+ * Accepts 080…, 801…, 234…, +234…, 00234…, including 9-digit national numbers
+ * such as 801234567, 0801234567, and +234801234567.
  */
 export function normalizeNigerianPhone(phone) {
   let digits = String(phone || "").replace(/\D/g, "");
   if (!digits) return "";
   if (digits.startsWith("00")) digits = digits.slice(2);
-  if (digits.startsWith("0") && digits.length === 11) {
+  // 0801234567 (10) or 08012345678 (11)
+  if (digits.startsWith("0") && (digits.length === 10 || digits.length === 11)) {
     digits = `234${digits.slice(1)}`;
-  } else if (digits.startsWith("2340") && digits.length === 14) {
+  } else if (
+    digits.startsWith("2340") &&
+    (digits.length === 13 || digits.length === 14)
+  ) {
     digits = `234${digits.slice(4)}`;
-  } else if (!digits.startsWith("234") && digits.length === 10) {
+  } else if (
+    !digits.startsWith("234") &&
+    (digits.length === 9 || digits.length === 10)
+  ) {
+    // 801234567 (9) or 8012345678 (10)
     digits = `234${digits}`;
   }
   return digits;
 }
 
-/** Valid Nigerian mobile MSISDN: 234 + 10 digits starting with 7/8/9 */
+/** Valid Nigerian mobile: 234 + 9 or 10 digits starting with 7/8/9 */
 export function isValidNigerianPhone(phone) {
   const normalized = normalizeNigerianPhone(phone);
-  return /^234[789]\d{9}$/.test(normalized);
+  return /^234[789]\d{8,9}$/.test(normalized);
 }
 
 /** Digits for the +234-prefixed input (national part, max 11 with leading 0). */
 export function toNationalPhoneInput(phone) {
   const normalized = normalizeNigerianPhone(phone);
-  if (/^234\d{10}$/.test(normalized)) return normalized.slice(3);
+  if (/^234\d{9,10}$/.test(normalized)) return normalized.slice(3);
   const digits = String(phone || "").replace(/\D/g, "");
-  if (digits.startsWith("2340") && digits.length >= 14) {
+  if (digits.startsWith("2340") && digits.length >= 13) {
     return digits.slice(4, 14);
   }
-  if (digits.startsWith("234") && digits.length >= 13) {
+  if (digits.startsWith("234") && digits.length >= 12) {
     return digits.slice(3, 13);
   }
   if (digits.startsWith("0")) return digits.slice(0, 11);
@@ -41,8 +50,8 @@ export function toNationalPhoneInput(phone) {
 export function sanitizePhoneInput(value) {
   return String(value || "")
     .replace(/\D/g, "")
-    .slice(0, 13);
+    .slice(0, 14);
 }
 
 export const NIGERIAN_PHONE_HINT =
-  "Enter a valid Nigerian phone number (e.g. 8012345678)";
+  "Enter a valid Nigerian phone number (e.g. 801234567, 0801234567, or +234801234567)";

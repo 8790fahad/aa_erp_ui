@@ -35,6 +35,22 @@ import {
   NIGERIAN_PHONE_HINT,
 } from "@/lib/nigerianPhone";
 
+function getCustomerImportIssues(customer) {
+  const issues = [];
+  if (!customer.fullname || String(customer.fullname).trim() === "") {
+    issues.push("Missing name");
+  }
+  if (!isValidNigerianPhone(customer.phone)) {
+    const digits = String(customer.phone ?? "").replace(/\D/g, "");
+    issues.push(
+      digits
+        ? `Invalid phone (${digits.length} digits)`
+        : "Missing phone",
+    );
+  }
+  return issues;
+}
+
 const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const { user } = useSelector((state) => state.auth);
@@ -539,10 +555,7 @@ const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
       // Step 2: Validate data — fullname + valid Nigerian phone required
       setUploadProgress(40);
       const validCustomers = customers.filter(
-        (customer) =>
-          customer.fullname &&
-          customer.fullname.trim() !== "" &&
-          isValidNigerianPhone(customer.phone),
+        (customer) => getCustomerImportIssues(customer).length === 0,
       );
 
       const invalidCount = customers.length - validCustomers.length;
@@ -571,10 +584,7 @@ const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
         validCustomers: validCustomers.length,
         invalidCustomers: invalidCount,
         invalidRows: customers.filter(
-          (customer) =>
-            !customer.fullname ||
-            customer.fullname.trim() === "" ||
-            !isValidNigerianPhone(customer.phone),
+          (customer) => getCustomerImportIssues(customer).length > 0,
         ),
         phoneHint: NIGERIAN_PHONE_HINT,
       });
@@ -672,7 +682,7 @@ const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
             errors:
               previewData.invalidCustomers > 0
                 ? [
-                    `${previewData.invalidCustomers} customers were skipped due to missing required fields`,
+                    `${previewData.invalidCustomers} customers were skipped because the name or phone number is missing or invalid`,
                   ]
                 : [],
           });
@@ -835,7 +845,8 @@ const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
                         {previewData.invalidCustomers > 0 && (
                           <span className="block mt-1 text-orange-600">
                             {previewData.invalidCustomers} row(s) will be
-                            skipped due to missing required fields.
+                            skipped. Each row needs a name and a valid Nigerian
+                            phone ({NIGERIAN_PHONE_HINT}).
                           </span>
                         )}
                       </AlertDescription>
@@ -1089,12 +1100,10 @@ const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
                               {previewData.invalidRows
                                 .slice(0, 5)
                                 .map((customer, index) => {
-                                  const issues = [];
-                                  if (
-                                    !customer.fullname ||
-                                    customer.fullname.trim() === ""
-                                  )
-                                    issues.push("Missing name");
+                                  const issues = getCustomerImportIssues(customer);
+                                  const phoneInvalid = issues.some((issue) =>
+                                    issue.toLowerCase().includes("phone"),
+                                  );
                                   return (
                                     <TableRow key={index}>
                                       <TableCell className="font-medium">
@@ -1114,7 +1123,7 @@ const CustomersUpload = ({ open, onClose, onUploadSuccess }) => {
                                       </TableCell>
                                       <TableCell
                                         className={
-                                          !customer.phone ? "text-red-600" : ""
+                                          phoneInvalid ? "text-red-600" : ""
                                         }
                                       >
                                         {customer.phone || "-"}
