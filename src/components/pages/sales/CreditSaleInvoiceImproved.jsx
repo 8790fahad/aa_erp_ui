@@ -1766,12 +1766,11 @@ export default function CreditSaleInvoice({
                           {propDiscount.discount_name || "Discount"} :
                         </td>
                         <td className="border-t border-gray-200 px-2 py-1 text-right text-sm font-semibold text-red-600">
-                          -
-                          {formatNumber(
+                          {`(${formatNumber(
                             customerCopyEnabled
                               ? customerCopyDiscountAmount
                               : discountAmount,
-                          )}
+                          )})`}
                         </td>
                       </tr>
                     )}

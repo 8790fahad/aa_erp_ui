@@ -928,7 +928,7 @@ function InvoicePreviewComponent({
                       </strong>
                     </td>
                     <td className="text-right text-danger">
-                      -₦{formatNumber1(discount.amount)}
+                      (₦{formatNumber1(discount.amount)})
                     </td>
                   </tr>
                 )}
@@ -6580,7 +6580,7 @@ function MakeSale() {
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-slate-600">Discount</span>
                         <span className="tabular-nums text-slate-700">
-                          −{formatNumber1(discountAmount)}
+                          ({formatNumber1(discountAmount)})
                         </span>
                       </div>
                     )}
@@ -7047,7 +7047,7 @@ function MakeSale() {
                       {selectedDiscount.discount_name} :
                     </span>
                     <span className="font-semibold text-red-600">
-                      -₦{formatNumber1(discountAmount)}
+                      (₦{formatNumber1(discountAmount)})
                     </span>
                   </div>
                 )}
@@ -7067,10 +7067,9 @@ function MakeSale() {
                           </div>
                           {discountAmount > 0 && (
                             <div>
-                              Less Discount: -₦
-                              {formatNumber1(
+                              {`Less Discount: (₦${formatNumber1(
                                 taxableSubtotal - taxableAfterDiscount,
-                              )}
+                              )})`}
                             </div>
                           )}
                           <div className="font-medium text-blue-700">
