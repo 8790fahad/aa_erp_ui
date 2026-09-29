@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { Search, CalendarRange } from "lucide-react";
+import { Search } from "lucide-react";
 import { _fetchApi } from "@/redux/actions/api";
 import { ACCOUNTING_REPORT_SECTIONS } from "../utils/accountingReportCatalog";
 import {
@@ -14,7 +14,6 @@ import ReportHubSection, {
 } from "./ReportHubSection";
 import { useReportPermissions } from "../hooks/useReportPermissions";
 import useFinancialYear from "@/hooks/useFinancialYear";
-import { getFinancialYearByStartYear } from "@/utils/financialYear";
 import {
   Landmark,
   Users,
@@ -77,9 +76,8 @@ const AccountingReports = () => {
   const { canViewReportEntry } = useReportPermissions();
   const navigate = useNavigate();
   const facilityId = activeBusiness?.id || user?.facilityId || "";
-  const { startMonth, current, options } = useFinancialYear();
+  const { current } = useFinancialYear();
 
-  const [selectedFyStartYear, setSelectedFyStartYear] = useState(null);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [asOfDate, setAsOfDate] = useState("");
@@ -87,29 +85,11 @@ const AccountingReports = () => {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    setSelectedFyStartYear(current.startYear);
-    setFromDate(current.fromDate);
-    setToDate(
-      current.toDate > new Date().toISOString().slice(0, 10)
-        ? new Date().toISOString().slice(0, 10)
-        : current.toDate,
-    );
-    setAsOfDate(current.asOfDate);
-  }, [current.startYear, current.fromDate, current.toDate, current.asOfDate]);
-
-  const selectedFy = useMemo(() => {
-    if (selectedFyStartYear == null) return current;
-    return getFinancialYearByStartYear(startMonth, selectedFyStartYear);
-  }, [selectedFyStartYear, startMonth, current]);
-
-  const applyFinancialYear = (startYear) => {
-    const fy = getFinancialYearByStartYear(startMonth, startYear);
     const today = new Date().toISOString().slice(0, 10);
-    setSelectedFyStartYear(fy.startYear);
-    setFromDate(fy.fromDate);
-    setToDate(fy.toDate > today ? today : fy.toDate);
-    setAsOfDate(fy.asOfDate);
-  };
+    setFromDate(current.fromDate);
+    setToDate(current.toDate > today ? today : current.toDate);
+    setAsOfDate(current.asOfDate);
+  }, [current.fromDate, current.toDate, current.asOfDate]);
 
   useEffect(() => {
     if (!facilityId) return;
@@ -206,8 +186,8 @@ const AccountingReports = () => {
 
   const navState = (mode) => {
     const base = {
-      financialYearLabel: selectedFy.label,
-      financialYearStartYear: selectedFy.startYear,
+      financialYearLabel: current.label,
+      financialYearStartYear: current.startYear,
     };
     if (mode === "range") return { ...base, fromDate, toDate };
     if (mode === "asOf") return { ...base, asOfDate, fromDate, toDate };
@@ -238,8 +218,8 @@ const AccountingReports = () => {
           Accounting Reports
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-slate-600">
-          Choose a financial year below — reports open with those dates. Change
-          the year start month under Admin → Settings → Financial Year.
+          Reports open on the current financial year. Change the year start
+          month under Admin → Settings → Financial Year.
         </p>
 
         <div className="relative mt-4 max-w-md">
@@ -256,71 +236,6 @@ const AccountingReports = () => {
             aria-label="Find a report"
           />
         </div>
-      </div>
-
-      <div className="rounded-xl border border-sky-200/80 bg-gradient-to-br from-sky-50/80 via-white to-white p-5 shadow-sm">
-        <div className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-900">
-          <CalendarRange className="h-5 w-5 text-sky-700" />
-          Financial year
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <div className="md:col-span-1">
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Select year
-            </label>
-            <select
-              value={selectedFyStartYear ?? current.startYear}
-              onChange={(e) =>
-                applyFinancialYear(parseInt(e.target.value, 10))
-              }
-              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent,#2c7be5)] focus:ring-1 focus:ring-[var(--aa-accent,#2c7be5)]"
-            >
-              {options.map((fy) => (
-                <option key={fy.startYear} value={fy.startYear}>
-                  FY {fy.label}
-                  {fy.startYear === current.startYear ? " (current)" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              From
-            </label>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent,#2c7be5)] focus:ring-1 focus:ring-[var(--aa-accent,#2c7be5)]"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              To
-            </label>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent,#2c7be5)] focus:ring-1 focus:ring-[var(--aa-accent,#2c7be5)]"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              As of (balance reports)
-            </label>
-            <input
-              type="date"
-              value={asOfDate}
-              onChange={(e) => setAsOfDate(e.target.value)}
-              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent,#2c7be5)] focus:ring-1 focus:ring-[var(--aa-accent,#2c7be5)]"
-            />
-          </div>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">
-          FY {selectedFy.label}: {selectedFy.fromDate} → {selectedFy.toDate}.
-          Opening a report carries these dates automatically.
-        </p>
       </div>
 
       {filteredSections.length === 0 ? (

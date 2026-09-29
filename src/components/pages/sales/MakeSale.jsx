@@ -257,14 +257,24 @@ function getItemGrossAmount(item) {
   return gross > 0 ? gross : fromAmount;
 }
 
-/** Line discount in NGN from the row's % or fixed value. */
+function lineQuantity(item) {
+  const qty = parseFloat(item?.quantity_sold ?? item?.quantity ?? 0) || 0;
+  return qty > 0 ? qty : 0;
+}
+
+function lineUnitPrice(item) {
+  return parseFloat(item?.selling_price ?? item?.price ?? 0) || 0;
+}
+
+/** Line discount in NGN. Fixed is per unit: quantity × the amount entered. */
 function computeItemLineDiscount(item) {
   if (!item || item.proBono) return 0;
   const gross = getItemGrossAmount(item);
   const raw = parseDiscountNumber(item.line_discount_value);
   if (raw <= 0 || gross <= 0) return 0;
   if (item.line_discount_mode === "flat") {
-    return Math.min(gross, raw);
+    const qty = lineQuantity(item) || 1;
+    return Math.min(gross, raw * qty);
   }
   return Math.min(gross, (gross * Math.min(raw, 100)) / 100);
 }
@@ -2477,7 +2487,7 @@ function MakeSale() {
         selectedItem.location_name ||
         getItemBranchLocation(selectedItem) ||
         null,
-      line_discount_mode: "%",
+      line_discount_mode: catalogPercentForLines(selectedDiscount) ? "%" : "flat",
       line_discount_value: catalogPercentForLines(selectedDiscount),
     };
 
@@ -2530,10 +2540,10 @@ function MakeSale() {
               updates.proBono !== undefined ? updates.proBono : item.proBono,
           };
           if (next.line_discount_mode === "flat") {
-            const gross = getItemGrossAmount(next);
+            const unit = lineUnitPrice(next);
             const raw = parseDiscountNumber(next.line_discount_value);
-            if (raw > gross + 0.0001) {
-              next.line_discount_value = gross > 0 ? String(gross) : "";
+            if (unit > 0 && raw > unit + 0.0001) {
+              next.line_discount_value = String(unit);
             }
           }
           return next;
@@ -4280,7 +4290,7 @@ function MakeSale() {
         taxable: product.taxable || "Taxable",
         line_tax_id: defaultLineTaxId,
         proBono: false, // Default to false
-        line_discount_mode: "%",
+        line_discount_mode: catalogPercentForLines(selectedDiscount) ? "%" : "flat",
         line_discount_value: catalogPercentForLines(selectedDiscount),
         sales_stopped: isSalesStopped(product),
         sales_limit_period: limitPeriod ?? product.sales_limit_period ?? null,
@@ -6094,7 +6104,7 @@ function MakeSale() {
                                     inputMode="decimal"
                                     autoComplete="off"
                                     placeholder="0"
-                                    title="Line discount — percentage or fixed NGN"
+                                    title="Fixed discount is per unit (quantity × amount). Percentage is of the line."
                                     value={item.line_discount_value ?? ""}
                                     onChange={(e) => {
                                       const mode =
@@ -6105,8 +6115,12 @@ function MakeSale() {
                                         capDiscountInputValue(
                                           e.target.value,
                                           mode,
-                                          getItemGrossAmount(item),
-                                          "the line amount",
+                                          mode === "flat"
+                                            ? lineUnitPrice(item)
+                                            : getItemGrossAmount(item),
+                                          mode === "flat"
+                                            ? "the selling price"
+                                            : "the line amount",
                                         );
                                       updateCartItem(item.id, {
                                         line_discount_value: next,
@@ -6128,8 +6142,12 @@ function MakeSale() {
                                         capDiscountInputValue(
                                           item.line_discount_value,
                                           nextMode,
-                                          getItemGrossAmount(item),
-                                          "the line amount",
+                                          nextMode === "flat"
+                                            ? lineUnitPrice(item)
+                                            : getItemGrossAmount(item),
+                                          nextMode === "flat"
+                                            ? "the selling price"
+                                            : "the line amount",
                                         );
                                       updateCartItem(item.id, {
                                         line_discount_mode: nextMode,
@@ -6140,8 +6158,8 @@ function MakeSale() {
                                     className="rounded border border-slate-300 px-1 py-1.5 text-xs text-slate-600 outline-none focus:border-[var(--aa-accent)]"
                                     title="Percentage or fixed amount"
                                   >
-                                    <option value="%">%</option>
                                     <option value="NGN">NGN</option>
+                                    <option value="%">%</option>
                                   </select>
                                 </div>
                               )}
