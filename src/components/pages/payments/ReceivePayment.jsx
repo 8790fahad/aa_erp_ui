@@ -99,8 +99,25 @@ function TillSummaryCard({
   iconClass,
   amountClass,
   retire,
+  handed = 0,
+  toSafe = false,
   onOpen,
 }) {
+  const cleared = Number(handed) > 0.05 && Number(retire) <= 0.05;
+  const title = cleared
+    ? toSafe
+      ? `${modeLabel} moved to Safe`
+      : `${modeLabel} on History`
+    : `${modeLabel} to retire`;
+  const note = cleared
+    ? toSafe
+      ? `₦${formatNumber1(handed)} moved to Safe — nothing left in the till`
+      : `₦${formatNumber1(handed)} on History — nothing left to retire`
+    : Number(handed) > 0.05
+      ? toSafe
+        ? `₦${formatNumber1(handed)} already moved to Safe`
+        : `₦${formatNumber1(handed)} already on History`
+      : "Tap to open till";
   return (
     <button
       type="button"
@@ -110,19 +127,17 @@ function TillSummaryCard({
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
           <Icon className={`h-4 w-4 ${iconClass}`} />
-          {modeLabel} to retire
+          {title}
         </div>
         <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-[var(--aa-navy)]">
           Open till
           <ChevronRight className="h-3.5 w-3.5" />
         </span>
       </div>
-      <p className={`mt-2 text-2xl font-semibold tabular-nums ${amountClass}`}>
+      <p className={`mt-2 text-2xl font-semibold tabular-nums ${cleared ? "text-slate-400" : amountClass}`}>
         ₦{formatNumber1(retire)}
       </p>
-      <p className="mt-1 text-xs text-slate-500">
-        Tap to open till
-      </p>
+      <p className="mt-1 text-xs text-slate-500">{note}</p>
     </button>
   );
 }
@@ -216,6 +231,8 @@ function TillHubDialog({
   collect,
   collected,
   retire,
+  handed = 0,
+  toSafe = false,
   expenses,
   imprestTotal,
   payBillTotal,
@@ -274,6 +291,14 @@ function TillHubDialog({
             onDownload={() => onDownload?.("paybill")}
             downloading={downloadingKind === "paybill" || downloadingKind === "all"}
           />
+          {Number(handed) > 0.05 ? (
+            <TillLine
+              label={toSafe ? "Moved to Safe" : "On History"}
+              value={handed}
+              tone="minus"
+              prefix="− "
+            />
+          ) : null}
           <div className="mt-1 border-t border-slate-200 pt-1">
             <TillLine
               label={`${modeLabel} to retire`}
@@ -337,6 +362,7 @@ async function downloadTillExcel({
   collected,
   imprest,
   payBills,
+  handedToSafe = 0,
   retire,
 }) {
   const wb = new ExcelJS.Workbook();
@@ -425,6 +451,10 @@ async function downloadTillExcel({
       ["Collected", Number(collected?.total) || 0],
       ["Imprest", Number(imprest?.total) || 0],
       ["Pay Bill", Number(payBills?.total) || 0],
+      [
+        modeLabel === "Cash" ? "Moved to Safe" : "On History",
+        Number(handedToSafe) || 0,
+      ],
       [`${modeLabel} to retire`, Number(retire) || 0],
     ];
     summaryRows.forEach(([label, amount]) => {
@@ -2124,6 +2154,7 @@ export default function ReceivePayment() {
         expenses_today: Number(summary.expenses_cash_today) || 0,
         imprest_today: Number(summary.imprest_cash_today) || 0,
         pay_bills_today: Number(summary.pay_bills_cash_today) || 0,
+        handed_today: Number(summary.handed_cash_today) || 0,
         retire_today: Number(
           summary.retire_cash_today ??
             Math.max(
@@ -2154,6 +2185,7 @@ export default function ReceivePayment() {
         expenses_today: Number(summary.expenses_transfer_today) || 0,
         imprest_today: Number(summary.imprest_transfer_today) || 0,
         pay_bills_today: Number(summary.pay_bills_transfer_today) || 0,
+        handed_today: Number(summary.handed_transfer_today) || 0,
         retire_today: Number(
           summary.retire_transfer_today ??
             Math.max(
@@ -2187,6 +2219,7 @@ export default function ReceivePayment() {
         expenses_today: Number(summary.expenses_card_today) || 0,
         imprest_today: Number(summary.imprest_card_today) || 0,
         pay_bills_today: Number(summary.pay_bills_card_today) || 0,
+        handed_today: Number(summary.handed_card_today) || 0,
         retire_today: Number(
           summary.retire_card_today ??
             Math.max(
@@ -2404,6 +2437,7 @@ export default function ReceivePayment() {
               collected: res.results?.collected,
               imprest: res.results?.imprest,
               payBills: res.results?.pay_bills,
+              handedToSafe: res.results?.handed_to_safe,
               retire: res.results?.retire,
             });
             toast.success("Report downloaded");
@@ -5006,6 +5040,8 @@ export default function ReceivePayment() {
               iconClass="text-emerald-600"
               amountClass="text-emerald-700"
               retire={viewSummary.retire_today}
+              handed={viewSummary.handed_today}
+              toSafe
               onOpen={() => setTillHubOpen(true)}
             />
           ) : null}
@@ -5017,6 +5053,7 @@ export default function ReceivePayment() {
               iconClass="text-sky-600"
               amountClass="text-sky-700"
               retire={viewSummary.retire_today}
+              handed={viewSummary.handed_today}
               onOpen={() => setTillHubOpen(true)}
             />
           ) : null}
@@ -5028,6 +5065,7 @@ export default function ReceivePayment() {
               iconClass="text-indigo-600"
               amountClass="text-indigo-700"
               retire={viewSummary.retire_today}
+              handed={viewSummary.handed_today}
               onOpen={() => setTillHubOpen(true)}
             />
           ) : null}
@@ -7198,6 +7236,8 @@ export default function ReceivePayment() {
         collect={tillHub.collect}
         collected={tillHub.collected}
         retire={viewSummary.retire_today}
+        handed={viewSummary.handed_today}
+        toSafe={tillHub.modeLabel === "Cash"}
         expenses={viewSummary.expenses_today}
         imprestTotal={viewSummary.imprest_today || 0}
         payBillTotal={viewSummary.pay_bills_today || 0}

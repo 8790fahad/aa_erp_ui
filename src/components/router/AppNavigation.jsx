@@ -237,6 +237,7 @@ import CreditNote, {
 } from "../pages/payments/CreditNote";
 import CreditNotePreview from "../pages/payments/CreditNotePreview";
 import ApplyCustomerAdvance from "../pages/payments/ApplyCustomerAdvance";
+import ReverseCustomerDeposit from "../pages/payments/ReverseCustomerDeposit";
 import ApplySupplierDeposit from "../pages/payments/ApplySupplierDeposit";
 import ProductSupplierBill from "../pages/expenses/ProductSupplierBill";
 import CashExpenseSource from "../pages/expenses/CashExpenseSource";
@@ -627,6 +628,10 @@ const routeModules = {
       {
         path: "apply-advance",
         element: <ApplyCustomerAdvance />,
+      },
+      {
+        path: "reverse-deposit",
+        element: <ReverseCustomerDeposit />,
       },
       {
         path: "apply-deposit",

@@ -27,18 +27,87 @@ function formatReceiptPaymentMode(mode) {
   return labeled && labeled !== "—" ? labeled.toUpperCase() : "N/A";
 }
 
+function isDepositReversal(deposit) {
+  const ref = String(
+    deposit?.invoice_ref || deposit?.reference_number || deposit?.receiptNo || "",
+  ).trim();
+  if (/^RD[-_]/i.test(ref)) return true;
+  const description = String(deposit?.description || "").trim();
+  return /^reverse deposit\b/i.test(description);
+}
+
+function accountDisplayParts(info, chequeNumber) {
+  if (!info && !chequeNumber) return null;
+  const names = [info?.bank_name, info?.name]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  const uniqueNames = [];
+  for (const name of names) {
+    const lower = name.toLowerCase();
+    const covered = uniqueNames.some((existing) => {
+      const other = existing.toLowerCase();
+      return other === lower || other.includes(lower) || lower.includes(other);
+    });
+    if (!covered) uniqueNames.push(name);
+  }
+  const number = String(info?.account_number || "").trim();
+  const cashCode =
+    info?.kind === "cash" ? String(info?.code || "").trim() : "";
+  const codeValue = number || cashCode;
+  const codeLabel = /^coa/i.test(codeValue) || info?.kind === "cash" ? "Code" : "Account";
+  return {
+    title: uniqueNames.join(" "),
+    codeLabel,
+    codeValue,
+    chequeNumber: chequeNumber ? String(chequeNumber).trim() : "",
+  };
+}
+
+function AccountValue({ info, chequeNumber, fallback = "N/A" }) {
+  const parts = accountDisplayParts(info, chequeNumber);
+  if (!parts || (!parts.title && !parts.codeValue && !parts.chequeNumber)) {
+    return <p className="text-sm font-bold leading-tight">{fallback}</p>;
+  }
+  return (
+    <div className="min-w-0">
+      {parts.title ? (
+        <p className="text-sm font-bold leading-tight">{parts.title}</p>
+      ) : null}
+      {parts.codeValue ? (
+        <p className="mt-0.5 whitespace-nowrap text-[11px] font-semibold leading-tight">
+          {parts.codeLabel}: {parts.codeValue}
+        </p>
+      ) : null}
+      {parts.chequeNumber ? (
+        <p className="mt-0.5 text-[11px] font-semibold leading-tight">
+          Cheque: {parts.chequeNumber}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function formatDepositAccountLine(info, chequeNumber) {
   if (!info && !chequeNumber) return "N/A";
   const names = [info?.bank_name, info?.name]
     .map((v) => String(v || "").trim())
     .filter(Boolean);
-  const uniqueNames = [...new Set(names)];
+  const uniqueNames = [];
+  for (const name of names) {
+    const lower = name.toLowerCase();
+    const covered = uniqueNames.some((existing) => {
+      const other = existing.toLowerCase();
+      return other === lower || other.includes(lower) || lower.includes(other);
+    });
+    if (!covered) uniqueNames.push(name);
+  }
   const bits = [...uniqueNames];
   if (info?.kind === "cash" && info?.code) {
     bits.push(`Code: ${info.code}`);
   }
   if (info?.account_number) {
-    bits.push(`Account: ${info.account_number}`);
+    const number = String(info.account_number).trim();
+    bits.push(/^coa/i.test(number) ? `Code: ${number}` : `Account: ${number}`);
   }
   if (chequeNumber) {
     bits.push(`Cheque Number: ${chequeNumber}`);
@@ -157,6 +226,12 @@ const CustomerDepositReceiptHTML = ({
   const query = useQuery();
   const invoice_ref = query.get("invoice_ref");
   const isA5 = String(paperSize).toLowerCase() === "a5";
+  const reversal = isDepositReversal(depositData);
+  const receiptTitle = reversal ? "DEPOSIT\nREVERSAL" : "DEPOSIT RECEIPT";
+  const amountLabel = reversal ? "Amount reversed" : "Amount deposited";
+  const amountValue = Math.abs(
+    Number(depositData?.cost || depositData?.amount_paid || 0),
+  );
   const companyData = {
     receiptNumber:
       depositData?.invoice_ref ||
@@ -181,7 +256,7 @@ const CustomerDepositReceiptHTML = ({
         <BusinessDocumentHeader
           business={company}
           forcePrintInColor={printInColor}
-          title="DEPOSIT RECEIPT"
+          title={receiptTitle}
           numberLabel={`No: ${companyData.receiptNumber}`}
           date={companyData.depositDate}
           compact={isA5}
@@ -225,7 +300,7 @@ const CustomerDepositReceiptHTML = ({
                   </div>
                   <div className="flex items-center ml-4">
                     <span className="font-semibold text-gray-600">
-                      Balance:
+                      {reversal ? "Deposit balance:" : "Balance:"}
                     </span>{" "}
                     <span
                       className={`font-bold ml-1 ${
@@ -250,21 +325,21 @@ const CustomerDepositReceiptHTML = ({
           <h3 className="text-xs font-bold text-gray-800 mb-2 uppercase tracking-wide">
             Payment Details
           </h3>
-          <div className="bg-blue-50 border border-blue-200 p-3 rounded-md">
+          <div className={`border border-blue-200 bg-blue-50 ${isA5 ? "p-1.5" : "p-2"}`}>
             {Array.isArray(depositData?.payment_legs) &&
             depositData.payment_legs.length > 1 ? (
               <div className="space-y-2">
                 {depositData.payment_legs.map((leg, idx) => (
                   <div
                     key={`${leg.mode_of_payment || "leg"}-${idx}`}
-                    className="grid grid-cols-2 gap-4"
+                    className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-2"
                   >
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-600 mb-1 font-semibold">
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[11px] font-semibold text-gray-600">
                         Mode of Payment
                       </p>
-                      <div className="bg-white border border-blue-300 rounded px-2 py-1.5">
-                        <p className="text-sm font-bold text-blue-800">
+                      <div className="border border-gray-400 bg-white px-2 py-1.5">
+                        <p className="text-sm font-bold leading-tight text-gray-900">
                           {formatReceiptPaymentMode(leg.mode_of_payment)}
                           {leg.amount
                             ? ` · ₦${formatNumber1(leg.amount)}`
@@ -272,33 +347,33 @@ const CustomerDepositReceiptHTML = ({
                         </p>
                       </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-600 mb-1 font-semibold">
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[11px] font-semibold text-gray-600">
                         {String(leg.account_info?.kind || "").toLowerCase() ===
                         "cash"
                           ? "Cash Head"
                           : "Account / Bank"}
                       </p>
-                      <div className="bg-white border border-blue-300 rounded px-2 py-1.5">
-                        <p className="text-sm font-bold text-blue-800">
-                          {formatDepositAccountLine(
-                            leg.account_info,
-                            idx === 0 ? depositData?.cheque_number : null,
-                          )}
-                        </p>
+                      <div className="border border-gray-400 bg-white px-2 py-1.5 text-gray-900">
+                        <AccountValue
+                          info={leg.account_info}
+                          chequeNumber={
+                            idx === 0 ? depositData?.cheque_number : null
+                          }
+                        />
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-1 font-semibold">
+              <div className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] items-stretch gap-2">
+                <div className="flex min-w-0 flex-col">
+                  <p className="mb-1 text-[11px] font-semibold text-gray-600">
                     Mode of Payment
                   </p>
-                  <div className="bg-white border border-blue-300 rounded px-2 py-1.5">
-                    <p className="text-sm font-bold text-blue-800">
+                  <div className="flex flex-1 items-center border border-gray-400 bg-white px-2 py-1.5">
+                    <p className="text-sm font-bold leading-tight text-gray-900">
                       {formatReceiptPaymentMode(
                         depositData?.payment_method ||
                           depositData?.mode_of_payment,
@@ -306,23 +381,22 @@ const CustomerDepositReceiptHTML = ({
                     </p>
                   </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-1 font-semibold">
+                <div className="flex min-w-0 flex-col">
+                  <p className="mb-1 text-[11px] font-semibold text-gray-600">
                     {isCashAccountKind(depositData)
-                      ? "Cash Head"
-                      : "Account / Bank"}
+                      ? reversal
+                        ? "Paid from"
+                        : "Cash Head"
+                      : reversal
+                        ? "Paid from"
+                        : "Account / Bank"}
                   </p>
-                  <div className="bg-white border border-blue-300 rounded px-2 py-1.5">
-                    <p className="text-sm font-bold text-blue-800">
-                      {(() => {
-                        const line = formatDepositAccountLine(
-                          depositData?.account_info,
-                          depositData?.cheque_number,
-                        );
-                        if (line !== "N/A") return line;
-                        return depositData?.bank_name || "N/A";
-                      })()}
-                    </p>
+                  <div className="flex flex-1 items-center border border-gray-400 bg-white px-2 py-1.5 text-gray-900">
+                    <AccountValue
+                      info={depositData?.account_info}
+                      chequeNumber={depositData?.cheque_number}
+                      fallback={depositData?.bank_name || "N/A"}
+                    />
                   </div>
                 </div>
               </div>
@@ -331,18 +405,20 @@ const CustomerDepositReceiptHTML = ({
         </div>
         {/* Deposit Summary */}
 
-        <div className={isA5 ? "mb-0.5" : "mb-1"}>
+        <div className={isA5 ? "mb-0.5 mt-2" : "mb-1 mt-3"}>
           <h3
             className={`font-bold text-gray-800 uppercase tracking-wide ${
-              isA5 ? "text-[10px] mb-0.5" : "text-xs mb-1"
+              isA5 ? "text-[10px] mb-1" : "text-xs mb-1"
             }`}
           >
-            Deposit Summary
+            {reversal ? "Reversal summary" : "Deposit summary"}
           </h3>
           <div
-            className={`bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-md ${
-              isA5 ? "px-2 py-1" : "px-3 py-1.5"
-            }`}
+            className={`rounded-md border-2 ${
+              reversal
+                ? "border-rose-300 bg-rose-50"
+                : "border-green-300 bg-gradient-to-r from-green-50 to-emerald-50"
+            } ${isA5 ? "px-2 py-1" : "px-3 py-1.5"}`}
           >
             <div className="text-center">
               <p
@@ -350,46 +426,23 @@ const CustomerDepositReceiptHTML = ({
                   isA5 ? "text-[10px] mb-0" : "text-xs mb-0.5"
                 }`}
               >
-                Amount Deposited
+                {amountLabel}
               </p>
               <p
-                className={`font-bold text-green-700 ${
-                  isA5 ? "text-lg leading-tight" : "text-2xl leading-tight"
-                }`}
+                className={`font-bold ${
+                  reversal ? "text-rose-700" : "text-green-700"
+                } ${isA5 ? "text-lg leading-tight" : "text-2xl leading-tight"}`}
               >
-                ₦
-                {formatNumber1(
-                  depositData?.cost || depositData?.amount_paid || 0
-                )}
+                ₦{formatNumber1(amountValue)}
               </p>
               <p
-                className={`text-gray-700 italic border-t border-green-200 ${
+                className={`break-normal text-gray-700 italic ${
+                  reversal ? "border-rose-200" : "border-green-200"
+                } border-t ${
                   isA5 ? "text-[10px] pt-0.5 mt-0.5" : "text-xs pt-1 mt-1"
                 }`}
               >
-                {(() => {
-                  const amount = parseFloat(
-                    depositData?.cost || depositData?.amount_paid || 0
-                  );
-                  const amountStr = amount.toFixed(2);
-                  const parts = amountStr.split(".");
-                  const nairaPart = parts[0];
-                  const koboPart = parts[1];
-
-                  const nairaWords =
-                    toWordsconver(nairaPart)?.toUpperCase() || "";
-                  const koboWords =
-                    koboPart && koboPart !== "00" && koboPart !== "0"
-                      ? toWordsconver(koboPart)?.toUpperCase() || ""
-                      : null;
-
-                  return (
-                    <>
-                      {nairaWords} NAIRA
-                      {koboWords ? ` AND ${koboWords} KOBO` : ""} ONLY
-                    </>
-                  );
-                })()}
+                {amountInWords(amountValue)}
               </p>
             </div>
           </div>
@@ -474,7 +527,9 @@ const CustomerDepositReceiptHTML = ({
           <p
             className={`${isA5 ? "text-[9px] leading-snug" : "text-[11px] leading-snug"} text-center italic text-slate-600`}
           >
-            Thank you for doing business with us.
+            {reversal
+              ? "This receipt confirms a deposit paid back to the customer."
+              : "Thank you for doing business with us."}
           </p>
           <p
             className={`${isA5 ? "text-[8px] leading-snug mt-0.5" : "text-[9px] leading-snug mt-1"} text-center text-slate-400`}
@@ -492,7 +547,10 @@ function ThermalDepositReceipt({ depositData, company }) {
     depositData?.invoice_ref ||
     depositData?.reference_number ||
     "N/A";
-  const amount = Number(depositData?.cost || depositData?.amount_paid || 0);
+  const reversal = isDepositReversal(depositData);
+  const amount = Math.abs(
+    Number(depositData?.cost || depositData?.amount_paid || 0),
+  );
   const mode = formatReceiptPaymentMode(
     depositData?.payment_method || depositData?.mode_of_payment,
   );
@@ -540,7 +598,7 @@ function ThermalDepositReceipt({ depositData, company }) {
       <div className="rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden w-[80mm]">
         <div className="no-print border-b border-gray-100 bg-gray-50 px-3 py-1 text-center">
           <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
-            80mm · Deposit receipt
+            {reversal ? "80mm · Deposit reversal" : "80mm · Deposit receipt"}
           </span>
         </div>
         <div className="thermal-receipt-root thermal-receipt-preview">
@@ -556,7 +614,9 @@ function ThermalDepositReceipt({ depositData, company }) {
             </div>
           ) : null}
           <div className="tr-divider" />
-          <div className="tr-center tr-bold">DEPOSIT RECEIPT</div>
+          <div className="tr-center tr-bold">
+            {reversal ? "DEPOSIT REVERSAL" : "DEPOSIT RECEIPT"}
+          </div>
           <div>No: {receiptNo}</div>
           <div>
             Date:{" "}
@@ -582,7 +642,7 @@ function ThermalDepositReceipt({ depositData, company }) {
             </div>
           ) : null}
           <div className="tr-row tr-total">
-            <span>Amount</span>
+            <span>{reversal ? "Reversed" : "Amount"}</span>
             <span>₦{formatNumber1(amount)}</span>
           </div>
           <div className="tr-muted" style={{ marginTop: 4 }}>
@@ -693,7 +753,9 @@ const CustomerDepositReceiptPdf = () => {
 
   const handleReactToPrint = useReactToPrint({
     contentRef: receiptRef,
-    documentTitle: `Deposit-Receipt-${invoice_ref || "N/A"}`,
+    documentTitle: `${
+      isDepositReversal(depositData) ? "Deposit-Reversal" : "Deposit-Receipt"
+    }-${invoice_ref || "N/A"}`,
     pageStyle: `
       @page {
         size: ${isA5 ? "A5" : "A4"} portrait;

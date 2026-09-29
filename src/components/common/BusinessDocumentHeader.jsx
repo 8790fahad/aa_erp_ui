@@ -183,7 +183,7 @@ export default function BusinessDocumentHeader({
           <div
             className={`flex flex-col items-stretch shrink-0 ${
               compact
-                ? "w-[22%] min-w-[4.75rem] max-w-[6rem] gap-0.5"
+                ? "w-[24%] min-w-[5.25rem] max-w-[6.75rem] gap-0.5"
                 : "w-[8.25rem] sm:w-[8.75rem] gap-0.5"
             }`}
           >
@@ -193,7 +193,7 @@ export default function BusinessDocumentHeader({
               }`}
             >
               <p
-                className={`font-bold uppercase ${strong} leading-[1.1] text-balance ${
+                className={`font-bold uppercase whitespace-pre-line ${strong} leading-[1.15] ${
                   compact ? "text-[9px] tracking-wide" : "text-xs tracking-wide"
                 }`}
               >

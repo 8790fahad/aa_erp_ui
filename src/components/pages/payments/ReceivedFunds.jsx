@@ -27,6 +27,7 @@ import {
   hasFullAccess,
   isBusinessOwner,
 } from "@/lib/access";
+import ReverseCustomerDeposit from "@/components/pages/payments/ReverseCustomerDeposit";
 
 const DEPOSIT_SUMMARY_PRIVILEGE = "Deposit Summary";
 const CREDIT_SUMMARY_PRIVILEGE = "Credit Summary";
@@ -136,6 +137,7 @@ export default function ReceivedFunds() {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [reverseOpen, setReverseOpen] = useState(false);
 
   const fetchHistory = useCallback(() => {
     if (!facilityId) return;
@@ -245,6 +247,11 @@ export default function ReceivedFunds() {
                 → {item.invoice_ref}
               </button>
             ) : null}
+            {item.direction === "reversed" && item.link_id ? (
+              <div className="mt-0.5 text-[11px] text-slate-500">
+                of {item.link_id}
+              </div>
+            ) : null}
           </div>
         ),
       },
@@ -289,7 +296,12 @@ export default function ReceivedFunds() {
         title: "Amount",
         custom: true,
         component: (item) => (
-          <div className="text-right text-sm font-semibold text-gray-900">
+          <div
+            className={`text-right text-sm font-semibold ${
+              item.direction === "reversed" ? "text-rose-700" : "text-gray-900"
+            }`}
+          >
+            {item.direction === "reversed" ? "−" : ""}
             {formatNumber1(item.amount || 0)}
           </div>
         ),
@@ -299,15 +311,18 @@ export default function ReceivedFunds() {
         custom: true,
         component: (item) => {
           const applied = item.direction === "applied";
+          const reversed = item.direction === "reversed";
           return (
             <span
               className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                applied
-                  ? "border-sky-200 bg-sky-50 text-sky-800"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                reversed
+                  ? "border-rose-200 bg-rose-50 text-rose-800"
+                  : applied
+                    ? "border-sky-200 bg-sky-50 text-sky-800"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-800"
               }`}
             >
-              {applied ? "Deposit applied" : "Received"}
+              {reversed ? "Reversed" : applied ? "Deposit applied" : "Received"}
             </span>
           );
         },
@@ -378,7 +393,7 @@ export default function ReceivedFunds() {
               Received Payment
             </h1>
             <p className="text-sm text-muted-foreground">
-              Deposits received and deposits applied to invoices. Open a
+              Deposits received, applied to invoices, and reversed. Open a
               receipt or invoice from any row. Deposit balances are on the{" "}
               <button
                 type="button"
@@ -417,6 +432,16 @@ export default function ReceivedFunds() {
               onClick={goApplyDeposit}
             >
               Apply Deposit
+            </Button>
+          ) : null}
+          {canMakeDeposit ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={() => setReverseOpen(true)}
+            >
+              Reverse Deposit
             </Button>
           ) : null}
           {canMakeDeposit ? (
@@ -527,6 +552,12 @@ export default function ReceivedFunds() {
             />
           )}
       </div>
+
+      <ReverseCustomerDeposit
+        open={reverseOpen}
+        onOpenChange={setReverseOpen}
+        onSuccess={fetchHistory}
+      />
     </div>
   );
 }
