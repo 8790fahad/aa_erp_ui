@@ -5,6 +5,13 @@ import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -40,6 +47,22 @@ function formatReportDate(dateString) {
     month: "long",
     year: "numeric",
   });
+}
+
+function formatLayerType(type) {
+  const labels = {
+    purchase: "Purchase",
+    opening_balance: "Opening balance",
+    production: "Production",
+    adjustment: "Adjustment",
+    sales: "Sale return",
+  };
+  return labels[type] || type || "—";
+}
+
+function formatLayerDate(value) {
+  if (!value) return "—";
+  return moment(value).format("DD MMM YYYY");
 }
 
 function warehouseLabel(branch) {
@@ -85,6 +108,48 @@ export default function InventoryValuationReport() {
   const [error, setError] = useState("");
   const [pdfExporting, setPdfExporting] = useState(false);
   const reportExportRef = useRef(null);
+  const [layersOpen, setLayersOpen] = useState(false);
+  const [layersLoading, setLayersLoading] = useState(false);
+  const [layersError, setLayersError] = useState("");
+  const [layersData, setLayersData] = useState(null);
+
+  const openCostLayers = useCallback(
+    (sku, itemName) => {
+      if (!facilityId || !asOfDate || !sku) return;
+      setLayersOpen(true);
+      setLayersLoading(true);
+      setLayersError("");
+      setLayersData({
+        item: { name: itemName, sku },
+        layers: [],
+        byCost: [],
+        totals: null,
+        formula: null,
+      });
+      _postApi(
+        "/api/reports/inventory-valuation/cost-layers",
+        {
+          facilityId,
+          asOfDate,
+          sku,
+          ...(warehouseId ? { branchId: Number(warehouseId) } : {}),
+        },
+        (response) => {
+          setLayersLoading(false);
+          if (response.success && response.data) {
+            setLayersData(response.data);
+          } else {
+            setLayersError(response.message || "Failed to load cost layers");
+          }
+        },
+        () => {
+          setLayersLoading(false);
+          setLayersError("Could not load cost layers.");
+        },
+      );
+    },
+    [facilityId, asOfDate, warehouseId],
+  );
 
   const fetchReport = useCallback(() => {
     if (!facilityId || !asOfDate) {
@@ -599,7 +664,18 @@ export default function InventoryValuationReport() {
                           ) : null}
                           <td className="px-3 py-1.5 text-gray-600 border-r border-gray-100">{item.unit || "—"}</td>
                           <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">{formatCell(item.quantity)}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">{formatNaira(item.cost_per_unit)}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">
+                            <button
+                              type="button"
+                              className="tabular-nums text-blue-700 underline decoration-dotted underline-offset-2 hover:text-blue-900"
+                              title="View the receipts that make this unit cost"
+                              onClick={() =>
+                                openCostLayers(item.batch_no, item.product_name)
+                              }
+                            >
+                              {formatNaira(item.cost_per_unit)}
+                            </button>
+                          </td>
                           <td className="px-3 py-1.5 text-right tabular-nums font-semibold border-r border-gray-100">{formatNaira(item.total_value)}</td>
                         </tr>
                       ))}
@@ -629,6 +705,127 @@ export default function InventoryValuationReport() {
           )}
         </div>
       </div>
+
+      <Dialog open={layersOpen} onOpenChange={setLayersOpen}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>
+              {layersData?.item?.name
+                ? `Unit cost — ${layersData.item.name}`
+                : "Unit cost"}
+            </DialogTitle>
+            <DialogDescription>
+              {layersData?.item?.sku ? `SKU ${layersData.item.sku}` : "Average cost"}
+              {asOfDate ? ` · as of ${formatReportDate(asOfDate)}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[70vh] overflow-y-auto space-y-4">
+            {layersLoading && (
+              <div className="flex items-center gap-2 text-sm text-gray-600 py-8 justify-center">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading cost…
+              </div>
+            )}
+            {!layersLoading && layersError && (
+              <p className="text-sm text-red-700">{layersError}</p>
+            )}
+            {!layersLoading && !layersError && layersData && (
+              <>
+                <p className="text-sm text-gray-600">
+                  {layersData.formula?.expression ||
+                    "SUM(receipt qty × unit cost) ÷ SUM(receipt qty). Every quantity received up to this date is included."}
+                </p>
+                {(layersData.byCost || []).length > 0 && (
+                  <div className="border rounded">
+                    <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 bg-gray-50 border-b">
+                      Costs that accumulated
+                    </p>
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Type</th>
+                          <th className="px-3 py-2 text-right">Unit cost (₦)</th>
+                          <th className="px-3 py-2 text-right">Qty</th>
+                          <th className="px-3 py-2 text-right">Value (₦)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {layersData.byCost.map((row, idx) => (
+                          <tr key={`${row.type}-${row.cost_price}-${idx}`} className="border-b">
+                            <td className="px-3 py-1.5">{formatLayerType(row.type)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.cost_price)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.qty)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.value)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="border rounded">
+                  <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 bg-gray-50 border-b">
+                    Receipt lines
+                  </p>
+                  {(layersData.layers || []).length === 0 ? (
+                    <p className="px-3 py-6 text-sm text-gray-500 italic">
+                      No receipts as of this date. The unit cost is the product cost price.
+                    </p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Date</th>
+                          <th className="px-3 py-2 text-left">Type</th>
+                          <th className="px-3 py-2 text-left">Reference</th>
+                          <th className="px-3 py-2 text-right">Qty</th>
+                          <th className="px-3 py-2 text-right">Unit cost (₦)</th>
+                          <th className="px-3 py-2 text-right">Line value (₦)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {layersData.layers.map((row) => (
+                          <tr key={row.id} className="border-b">
+                            <td className="px-3 py-1.5">{formatLayerDate(row.txn_date)}</td>
+                            <td className="px-3 py-1.5">{formatLayerType(row.type)}</td>
+                            <td className="px-3 py-1.5 text-xs">{row.reference_number || "—"}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.qty_in)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.cost_price)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.line_value)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-50 border-t">
+                        <tr>
+                          <td colSpan={3} className="px-3 py-2 font-semibold text-right">
+                            Total receipts
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                            {formatCell(layersData.totals?.receiptQty)}
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                            {formatCell(layersData.totals?.avcoCost)}
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                            {formatCell(layersData.totals?.receiptValue)}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colSpan={5} className="px-3 py-2 text-right text-gray-600">
+                            Qty on hand × average cost
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                            {formatCell(layersData.totals?.stockQty)} × {formatCell(layersData.totals?.avcoCost)} = {formatCell(layersData.totals?.totalValue)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

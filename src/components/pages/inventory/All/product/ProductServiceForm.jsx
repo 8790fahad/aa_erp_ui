@@ -133,6 +133,20 @@ const customSelectStyles = {
   }),
 };
 
+function accountNatureOf(account) {
+  return String(
+    account?.accountNature || account?.account_nature || "",
+  ).toUpperCase();
+}
+
+function postingAccounts(accounts, nature) {
+  return (accounts || []).filter((account) => {
+    if (accountNatureOf(account) !== nature) return false;
+    if (Number(account.display) === 0) return false;
+    return true;
+  });
+}
+
 const ProductServiceForm = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId || "";
