@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,12 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { toast } from "sonner";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
+
+function purchaseBillPath(reference) {
+  const ref = String(reference || "").trim();
+  if (!/^PB-/i.test(ref)) return null;
+  return `/app/expenses/billing/product-supplier-bill-pdf?invoice_ref=${encodeURIComponent(ref)}&edit=1`;
+}
 
 function formatCell(value) {
   if (value === null || value === undefined || value === "") return "—";
@@ -787,7 +793,18 @@ export default function InventoryValuationReport() {
                           <tr key={row.id} className="border-b">
                             <td className="px-3 py-1.5">{formatLayerDate(row.txn_date)}</td>
                             <td className="px-3 py-1.5">{formatLayerType(row.type)}</td>
-                            <td className="px-3 py-1.5 text-xs">{row.reference_number || "—"}</td>
+                            <td className="px-3 py-1.5 text-xs">
+                              {purchaseBillPath(row.reference_number) ? (
+                                <Link
+                                  to={purchaseBillPath(row.reference_number)}
+                                  className="font-medium text-[var(--aa-navy)] underline"
+                                >
+                                  {row.reference_number}
+                                </Link>
+                              ) : (
+                                row.reference_number || "—"
+                              )}
+                            </td>
                             <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.qty_in)}</td>
                             <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.cost_price)}</td>
                             <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.line_value)}</td>

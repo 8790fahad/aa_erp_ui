@@ -1,7 +1,7 @@
 import useQuery from "@/hooks/useQuery";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useReactToPrint } from "react-to-print";
-import { _fetchApi } from "@/redux/actions/api";
+import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { useSelector } from "react-redux";
 import moment from "moment";
 import { formatNumber1 } from "@/components/router/utilities";
@@ -11,7 +11,14 @@ import { useNavigate } from "react-router-dom";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 import { isProductTaxable } from "@/utils/taxableStatus";
 
-const ProductSupplierBillHTML = ({ billData, company, invoiceRef }) => {
+const ProductSupplierBillHTML = ({
+  billData,
+  company,
+  invoiceRef,
+  editing = false,
+  draftCosts = {},
+  onCostChange,
+}) => {
   const formatDate = (date) => {
     if (!date) return "N/A";
     const momentDate = moment(date);
@@ -45,6 +52,13 @@ const ProductSupplierBillHTML = ({ billData, company, invoiceRef }) => {
     return `${daysDiff} days`;
   };
 
+  const lineCost = (item) => {
+    if (editing && item?.sku && draftCosts[item.sku] !== undefined && draftCosts[item.sku] !== "") {
+      return parseFloat(draftCosts[item.sku]) || 0;
+    }
+    return parseFloat(item?.cost) || 0;
+  };
+
   const items = billData?.items || [];
   const taxes = billData?.taxes || [];
   const vatPolicy =
@@ -58,7 +72,7 @@ const ProductSupplierBillHTML = ({ billData, company, invoiceRef }) => {
 
   const subtotal = items.reduce(
     (sum, item) =>
-      sum + (parseFloat(item.cost) || 0) * (parseFloat(item.quantity) || 0),
+      sum + lineCost(item) * (parseFloat(item.quantity) || 0),
     0
   );
 
@@ -240,7 +254,7 @@ const ProductSupplierBillHTML = ({ billData, company, invoiceRef }) => {
                 <>
                   {items.map((item, index) => {
                     const quantity = parseFloat(item.quantity) || 0;
-                    const cost = parseFloat(item.cost) || 0;
+                    const cost = lineCost(item);
                     const amount = quantity * cost;
                     return (
                       <tr
@@ -270,7 +284,20 @@ const ProductSupplierBillHTML = ({ billData, company, invoiceRef }) => {
                           {formatNumber1(quantity)}
                         </td>
                         <td className="border-r border-t border-gray-200 px-2 py-1.5 text-right text-xs text-gray-700">
-                          {formatNumber(cost)}
+                          {editing ? (
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={draftCosts[item.sku] ?? item.cost ?? ""}
+                              onChange={(event) =>
+                                onCostChange?.(item.sku, event.target.value)
+                              }
+                              className="w-28 rounded border border-gray-300 px-2 py-1 text-right text-xs"
+                            />
+                          ) : (
+                            formatNumber(cost)
+                          )}
                         </td>
                         <td className="border-t border-gray-200 px-2 py-1.5 text-right text-xs font-semibold text-gray-900">
                           {formatNumber(amount)}
@@ -419,36 +446,87 @@ const ProductSupplierBillPdf = () => {
   const { activeBusiness } = useSelector((state) => state.auth);
   const invoiceRef = useQuery().get("invoice_ref");
   const refNumber = useQuery().get("ref_number");
+  const openForEdit = useQuery().get("edit") === "1";
   const [billData, setBillData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [draftCosts, setDraftCosts] = useState({});
+  const [saving, setSaving] = useState(false);
   const pdfRef = useRef(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if ((invoiceRef || refNumber) && activeBusiness?.id) {
-      setLoading(true);
-      _fetchApi(
-        `/account/get-expense-bill?invoice_ref=${
-          invoiceRef || refNumber
-        }&facilityId=${activeBusiness.id}`,
-        (data) => {
-          setLoading(false);
-          if (data.success) {
-            setBillData(data.data);
-          } else {
-            toast.error(data.message || "Error fetching expense bill");
-          }
-        },
-        (err) => {
-          setLoading(false);
-          console.error("Error fetching expense bill:", err);
-          toast.error("Error fetching expense bill");
-        }
-      );
-    } else {
+  const loadBill = useCallback(() => {
+    if (!((invoiceRef || refNumber) && activeBusiness?.id)) {
       setLoading(false);
+      return;
     }
-  }, [invoiceRef, refNumber, activeBusiness?.id]);
+    setLoading(true);
+    _fetchApi(
+      `/account/get-expense-bill?invoice_ref=${
+        invoiceRef || refNumber
+      }&facilityId=${activeBusiness.id}`,
+      (data) => {
+        setLoading(false);
+        if (data.success) {
+          const next = data.data;
+          setBillData(next);
+          const costs = {};
+          (next?.items || []).forEach((item) => {
+            if (item?.sku) costs[item.sku] = item.cost ?? "";
+          });
+          setDraftCosts(costs);
+          if (openForEdit) setEditing(true);
+        } else {
+          toast.error(data.message || "Error fetching expense bill");
+        }
+      },
+      (err) => {
+        setLoading(false);
+        console.error("Error fetching expense bill:", err);
+        toast.error("Error fetching expense bill");
+      }
+    );
+  }, [invoiceRef, refNumber, activeBusiness?.id, openForEdit]);
+
+  useEffect(() => {
+    loadBill();
+  }, [loadBill]);
+
+  const handleSaveCosts = () => {
+    const lines = (billData?.items || [])
+      .filter((item) => item?.sku && item.sku !== "N/A")
+      .map((item) => ({
+        sku: item.sku,
+        cost: draftCosts[item.sku] ?? item.cost,
+      }));
+    if (!lines.length) {
+      toast.error("This bill has no product lines to update.");
+      return;
+    }
+    setSaving(true);
+    _postApi(
+      "/account/update-purchase-bill-costs",
+      { invoice_ref: invoiceRef || refNumber, lines },
+      (data) => {
+        setSaving(false);
+        if (data?.success) {
+          toast.success(
+            data.salesUpdated
+              ? `Cost updated. ${data.salesUpdated} sale${data.salesUpdated === 1 ? "" : "s"} costed at the old price were restated.`
+              : "Purchase bill cost updated."
+          );
+          setEditing(false);
+          loadBill();
+        } else {
+          toast.error(data?.message || "Could not update the bill cost");
+        }
+      },
+      (err) => {
+        setSaving(false);
+        toast.error(err?.message || "Could not update the bill cost");
+      }
+    );
+  };
 
   const handleReactToPrint = useReactToPrint({
     contentRef: pdfRef,
@@ -590,6 +668,40 @@ const ProductSupplierBillPdf = () => {
           <X size={14} /> Cancel
         </button>
         <div className="flex gap-2 ml-auto">
+          {editing ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  const costs = {};
+                  (billData?.items || []).forEach((item) => {
+                    if (item?.sku) costs[item.sku] = item.cost ?? "";
+                  });
+                  setDraftCosts(costs);
+                  setEditing(false);
+                }}
+                className="px-3 py-0.5 text-sm bg-white text-gray-700 border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Cancel edit
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleSaveCosts}
+                className="px-3 py-0.5 text-sm bg-[var(--aa-navy)] text-white rounded hover:bg-blue-700 disabled:opacity-60"
+              >
+                {saving ? "Saving…" : "Save costs"}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="px-3 py-0.5 text-sm bg-white text-[var(--aa-navy)] border border-[var(--aa-navy)] rounded hover:bg-gray-50"
+            >
+              Edit costs
+            </button>
+          )}
           <button
             onClick={handlePrint}
             className="px-3 py-0.5 text-sm bg-[var(--aa-navy)] text-white rounded flex items-center gap-1 hover:bg-blue-700 transition-colors"
@@ -598,12 +710,22 @@ const ProductSupplierBillPdf = () => {
           </button>
         </div>
       </div>
+      {editing ? (
+        <p className="max-w-5xl mx-auto mb-3 text-xs text-gray-600 no-print">
+          Changing a unit price updates this bill, the stock receipt, the purchase ledger, and sales that were costed at the old price.
+        </p>
+      ) : null}
 
       {/* Bill Container */}
       <ProductSupplierBillHTML
         billData={billData}
         company={activeBusiness}
         invoiceRef={pdfRef}
+        editing={editing}
+        draftCosts={draftCosts}
+        onCostChange={(sku, value) =>
+          setDraftCosts((current) => ({ ...current, [sku]: value }))
+        }
       />
     </div>
   );
