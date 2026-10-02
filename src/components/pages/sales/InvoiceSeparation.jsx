@@ -302,9 +302,9 @@ export default function InvoiceSeparation() {
     setSearchParams(next, { replace: true });
   };
 
-  const openBranchInvoice = (pack) => {
+  const openBranchInvoice = (pack, line) => {
     if (!activeBusiness?.id || !pack) return;
-    setPrintingId(pack.id);
+    setPrintingId(line?.id || pack.id);
     _postApi(
       "/api/v1/sale-workflows/fulfillment/print",
       {
@@ -324,7 +324,13 @@ export default function InvoiceSeparation() {
               pack.pack_code,
             )}&branch_name=${encodeURIComponent(
               pack.branch_name || `Warehouse ${pack.branch_id}`,
-            )}`,
+            )}${
+              line?.id
+                ? `&line_id=${encodeURIComponent(line.id)}&product_id=${encodeURIComponent(
+                    line.product_id || "",
+                  )}`
+                : ""
+            }`,
           );
         } else {
           toast.error(res.message || "Could not open branch invoice");
@@ -361,7 +367,7 @@ export default function InvoiceSeparation() {
       navigate(
         `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
           selected.sale_code,
-        )}&doc=gin&print_all=1&auto_print=1${thermalQs}`,
+        )}&doc=gin&print_all=1&per_product=1&auto_print=1${thermalQs}`,
       );
     };
 
@@ -444,6 +450,11 @@ export default function InvoiceSeparation() {
     ].includes(selected.status) ||
       parkedPaidModeSwitch);
 
+  const productPrints = packs.flatMap((pack) => {
+    const lines =
+      Array.isArray(pack.lines) && pack.lines.length ? pack.lines : [null];
+    return lines.map((line) => ({ pack, line }));
+  });
   const storeCountLabel =
     packs.length === 1
       ? "1 store copy"
@@ -472,9 +483,9 @@ export default function InvoiceSeparation() {
                 Invoice Separation
               </h1>
               <p className="text-gray-600 mt-1">
-                Print the {dispatchDocLabel} per store (Sales Invoice is printed
-                at Verification Points), then mark separated. Credit invoices
-                appear here only after approval at Verification Points.
+                Print one {dispatchDocLabel} for each product (Sales Invoice is
+                printed at Verification Points), then mark separated. Credit
+                invoices appear here only after approval at Verification Points.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -735,19 +746,21 @@ export default function InvoiceSeparation() {
                   <p className="text-xs text-violet-800 mb-3">
                     {needsCreditApproval && !isHistoryRecord
                       ? "Store copies appear only after credit is approved at Verification Points."
-                      : packs.length
-                        ? `One ${dispatchDocLabel} per store (${packs.length}). Sales Invoice is printed at Verification Points. Use Print all for ${
+                      : productPrints.length
+                        ? `One ${dispatchDocLabel} per product (${productPrints.length}). Sales Invoice is printed at Verification Points. Use Print all for ${
                             isThermalDispatch
-                              ? "a continuous 80mm thermal strip (cut marks between stores)"
+                              ? "a continuous 80mm thermal strip (cut marks between products)"
                               : String(activeBusiness?.default_receipt_type || "")
                                     .toLowerCase() === "a5"
-                                ? `one A5 ${dispatchDocLabel} per warehouse`
-                                : `one A4 ${dispatchDocLabel} per warehouse`
+                                ? `one A5 ${dispatchDocLabel} per product`
+                                : `one A4 ${dispatchDocLabel} per product`
                           }, then mark separated.`
-                        : "One evidence copy is created for each store involved in this invoice."}
+                        : "One evidence copy is created for each product on this invoice."}
                   </p>
 
-                  {!needsCreditApproval && packs.length > 1 && canSeparate ? (
+                  {!needsCreditApproval &&
+                  productPrints.length > 1 &&
+                  canSeparate ? (
                     <div className="mb-3">
                       <Button
                         type="button"
@@ -760,7 +773,7 @@ export default function InvoiceSeparation() {
                         <Printer className="w-3.5 h-3.5 mr-1" />
                         {printingAll
                           ? "Opening…"
-                          : `Print all ${packs.length} ${dispatchDocLabel}s`}
+                          : `Print all ${productPrints.length} ${dispatchDocLabel}s`}
                       </Button>
                     </div>
                   ) : null}
@@ -775,18 +788,21 @@ export default function InvoiceSeparation() {
                     </p>
                   ) : (
                     <ul className="space-y-4">
-                      {packs.map((pack, idx) => {
+                      {productPrints.map(({ pack, line }, idx) => {
                         const fMeta = getFulfillmentStatusMeta(pack.status);
-                        const lines = pack.lines || [];
+                        const printKey = line?.id || pack.id;
+                        const itemLabel = line
+                          ? line.item_name || line.product_id || "Item"
+                          : "All items";
                         return (
                           <li
-                            key={pack.id}
+                            key={`${pack.id}-${printKey}`}
                             className="rounded-md border border-violet-100 bg-white px-4 py-3"
                           >
                             <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
                               <div>
                                 <div className="font-medium text-gray-900 text-sm">
-                                  Copy {idx + 1} of {packs.length} ·{" "}
+                                  Copy {idx + 1} of {productPrints.length} ·{" "}
                                   {pack.branch_name ||
                                     `Store ${pack.branch_id}`}
                                 </div>
@@ -814,19 +830,16 @@ export default function InvoiceSeparation() {
                                 </tr>
                               </thead>
                               <tbody>
-                                {lines.map((line) => (
-                                  <tr
-                                    key={line.id}
-                                    className="border-b border-gray-50"
-                                  >
-                                    <td className="py-1.5 text-gray-800">
-                                      {line.item_name || line.product_id}
-                                    </td>
-                                    <td className="py-1.5 text-right text-gray-700">
-                                      {formatNumber1(Number(line.qty || 0))}
-                                    </td>
-                                  </tr>
-                                ))}
+                                <tr className="border-b border-gray-50">
+                                  <td className="py-1.5 text-gray-800">
+                                    {itemLabel}
+                                  </td>
+                                  <td className="py-1.5 text-right text-gray-700">
+                                    {line
+                                      ? formatNumber1(Number(line.qty || 0))
+                                      : "—"}
+                                  </td>
+                                </tr>
                               </tbody>
                             </table>
 
@@ -834,12 +847,12 @@ export default function InvoiceSeparation() {
                               type="button"
                               size="sm"
                               variant="outline"
-                              disabled={printingId === pack.id}
-                              onClick={() => openBranchInvoice(pack)}
+                              disabled={printingId === printKey}
+                              onClick={() => openBranchInvoice(pack, line)}
                               className="h-8"
                             >
                               <Printer className="w-3.5 h-3.5 mr-1" />
-                              {printingId === pack.id
+                              {printingId === printKey
                                 ? "Opening…"
                                 : isHistoryRecord
                                   ? `Reprint ${dispatchDocLabel}`

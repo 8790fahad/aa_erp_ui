@@ -30,6 +30,21 @@ function resolvePrintBusiness(invoiceBusiness, activeBusiness, facilityId) {
   return activeBusiness;
 }
 
+function filterPackLines(lines, lineId, productId) {
+  if (!Array.isArray(lines) || !lines.length) return lines || null;
+  if (lineId) {
+    const byId = lines.filter((line) => String(line.id) === String(lineId));
+    if (byId.length) return byId;
+  }
+  if (productId) {
+    const byProduct = lines.filter(
+      (line) => String(line.product_id || "") === String(productId),
+    );
+    if (byProduct.length) return byProduct.slice(0, 1);
+  }
+  return lines;
+}
+
 function buildBranchInvoiceView(
   invoiceData,
   branchIdFilter,
@@ -77,6 +92,7 @@ function buildBranchInvoiceView(
       return {
         description: line.item_name || line.product_id || "Item",
         link_id: line.product_id,
+        type: "sales",
         quantity: qty,
         qty,
         amount: 0,
@@ -348,6 +364,8 @@ function InvoicePreview() {
   const branchIdFilter = query.get("branch_id");
   const packCode = query.get("pack_code");
   const branchNameParam = query.get("branch_name");
+  const productIdFilter = query.get("product_id");
+  const lineIdFilter = query.get("line_id");
   const printAll = query.get("print_all") === "1" || query.get("print_all") === "true";
   const autoPrint = query.get("auto_print") === "1" || query.get("auto_print") === "true";
   const vatTestDivisor = Number(query.get("vat_test_divisor") || 0);
@@ -531,12 +549,17 @@ function InvoicePreview() {
   }, [uniqueSaleCodes.length, isLoading]);
 
   const resolvedInvoiceData = useMemo(() => {
+    const packLines = filterPackLines(
+      activePack?.lines,
+      lineIdFilter,
+      productIdFilter,
+    );
     const base = buildBranchInvoiceView(
       invoiceData,
       branchIdFilter,
       packCode,
       branchNameParam || activePack?.branch_name,
-      activePack?.lines || null,
+      packLines,
     );
     if (!base) return null;
     const printableBase =
@@ -555,22 +578,30 @@ function InvoicePreview() {
     packCode,
     branchNameParam,
     activePack,
+    lineIdFilter,
+    productIdFilter,
     isCollectionReceipt,
     vatTestDivisor,
   ]);
 
   const printAllCopies = useMemo(() => {
     if (!printAll || !invoiceData || !packs.length) return [];
-    return packs.map((pack) => ({
-      pack,
-      data: buildBranchInvoiceView(
-        invoiceData,
-        pack.branch_id,
-        pack.pack_code,
-        pack.branch_name || null,
-        pack.lines || null,
-      ),
-    }));
+    return packs.flatMap((pack) => {
+      const lines =
+        Array.isArray(pack.lines) && pack.lines.length ? pack.lines : [null];
+      return lines.map((line) => ({
+        pack,
+        line,
+        key: line?.id ? `${pack.id}-${line.id}` : String(pack.id),
+        data: buildBranchInvoiceView(
+          invoiceData,
+          pack.branch_id,
+          pack.pack_code,
+          pack.branch_name || null,
+          line ? [line] : pack.lines || null,
+        ),
+      }));
+    });
   }, [printAll, invoiceData, packs]);
 
   const batchCopies = useMemo(() => {
@@ -1121,10 +1152,10 @@ function InvoicePreview() {
                 : `branch cop${printAllCopies.length === 1 ? "y" : "ies"}`}{" "}
               for {saleCode} —{" "}
               {showThermalDeliveryOrder
-                ? "continuous 80mm roll with cut marks between stores"
+                ? "continuous 80mm roll with cut marks between products"
                 : isTerminalReceipt
-                  ? "continuous 80mm roll with cut marks between copies"
-                  : `one ${paperLabel} page per warehouse`}
+                  ? "continuous 80mm roll with cut marks between products"
+                  : `one ${paperLabel} page per product`}
             </span>
           </div>
           <div className="flex gap-2">
@@ -1144,15 +1175,17 @@ function InvoicePreview() {
           </div>
         ) : showThermalDeliveryOrder ? (
           <div className="print-all-thermal-list max-w-4xl mx-auto px-4 space-y-4">
-            {printAllCopies.map(({ pack, data }, idx) => {
+            {printAllCopies.map(({ pack, line, key, data }, idx) => {
               const branchLabel =
                 pack.branch_name || `Warehouse ${pack.branch_id}`;
+              const productLabel = line?.item_name || line?.product_id || "";
               const isLast = idx === printAllCopies.length - 1;
               return (
-                <div key={pack.id} className="branch-invoice-copy mb-4">
+                <div key={key || pack.id} className="branch-invoice-copy mb-4">
                   <div className="no-print mb-2 text-center">
                     <div className="text-sm font-medium text-violet-900">
-                      Copy {idx + 1} of {printAllCopies.length} · {branchLabel}{" "}
+                      Copy {idx + 1} of {printAllCopies.length} · {branchLabel}
+                      {productLabel ? ` · ${productLabel}` : ""}{" "}
                       · <span className="font-mono">{pack.pack_code}</span>
                     </div>
                   </div>
@@ -1161,7 +1194,7 @@ function InvoicePreview() {
                       <div className="rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden print-receipt-frame w-[80mm]">
                         <div className="no-print border-b border-gray-100 bg-gray-50 px-3 py-1 text-center">
                           <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            80mm · {dispatchDocLabel} · {branchLabel}
+                            80mm · {dispatchDocLabel} · {productLabel || branchLabel}
                           </span>
                         </div>
                         <div className="print-receipt-only bg-white">
@@ -1199,15 +1232,17 @@ function InvoicePreview() {
           </div>
         ) : isTerminalReceipt ? (
           <div className="print-all-thermal-list max-w-4xl mx-auto px-4 space-y-4">
-            {printAllCopies.map(({ pack, data }, idx) => {
+            {printAllCopies.map(({ pack, line, key, data }, idx) => {
               const branchLabel =
                 pack.branch_name || `Warehouse ${pack.branch_id}`;
+              const productLabel = line?.item_name || line?.product_id || "";
               const isLast = idx === printAllCopies.length - 1;
               return (
-                <div key={pack.id} className="branch-invoice-copy mb-4">
+                <div key={key || pack.id} className="branch-invoice-copy mb-4">
                   <div className="no-print mb-2 text-center">
                     <div className="text-sm font-medium text-violet-900">
-                      Copy {idx + 1} of {printAllCopies.length} · {branchLabel}{" "}
+                      Copy {idx + 1} of {printAllCopies.length} · {branchLabel}
+                      {productLabel ? ` · ${productLabel}` : ""}{" "}
                       · <span className="font-mono">{pack.pack_code}</span>
                     </div>
                   </div>
@@ -1242,14 +1277,16 @@ function InvoicePreview() {
             })}
           </div>
         ) : (
-          printAllCopies.map(({ pack, data }, idx) => {
+          printAllCopies.map(({ pack, line, key, data }, idx) => {
             const branchLabel =
               pack.branch_name || `Warehouse ${pack.branch_id}`;
+            const productLabel = line?.item_name || line?.product_id || "";
             return (
-              <div key={pack.id} className="branch-invoice-copy mb-8">
+              <div key={key || pack.id} className="branch-invoice-copy mb-8">
                 <div className="no-print max-w-4xl mx-auto px-4 mb-2 text-center">
                   <div className="text-sm font-medium text-violet-900">
-                    Copy {idx + 1} of {printAllCopies.length} · {branchLabel} ·{" "}
+                    Copy {idx + 1} of {printAllCopies.length} · {branchLabel}
+                    {productLabel ? ` · ${productLabel}` : ""} ·{" "}
                     <span className="font-mono">{pack.pack_code}</span>
                   </div>
                 </div>
@@ -1310,6 +1347,13 @@ function InvoicePreview() {
             {resolvedInvoiceData.branch_name
               ? ` · ${resolvedInvoiceData.branch_name}`
               : ""}
+            {lineIdFilter || productIdFilter
+              ? ` · ${
+                  resolvedInvoiceData.items?.[0]?.description ||
+                  resolvedInvoiceData.items?.[0]?.item_name ||
+                  "Product"
+                }`
+              : ""}
             {packCode ? ` · ${packCode}` : ""}
             <span
               className={`block text-xs mt-0.5 ${
@@ -1322,8 +1366,8 @@ function InvoicePreview() {
                   : `${paperLabel} collection slip — warehouse release + customer receive signatures.`
                 : isDispatchDoc
                   ? showThermalDeliveryOrder
-                    ? `Thermal (80mm) ${dispatchDocLabel} for this warehouse — print at Invoice Separation.`
-                    : `${paperLabel} ${dispatchDocLabel} for this warehouse — print at Invoice Separation.`
+                    ? `Thermal (80mm) ${dispatchDocLabel} for this product — print at Invoice Separation.`
+                    : `${paperLabel} ${dispatchDocLabel} for this product — print at Invoice Separation.`
                   : isTerminalReceipt
                     ? "Thermal (80mm) from system settings — one customer copy for this branch."
                     : `${paperLabel} / PDF from system settings — full invoice for this warehouse branch.`}
