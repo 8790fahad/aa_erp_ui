@@ -35,6 +35,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { _postApi, _fetchApi, _putApi } from "@/redux/actions/api";
+import { useProceedConfirm } from "@/components/common/ProceedConfirmDialog";
+import { confirmProceedGuards } from "@/utils/transactionGuards";
 import { useSelector } from "react-redux";
 import { toast } from "sonner";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
@@ -158,6 +160,8 @@ const ProductServiceForm = () => {
   const isViewMode = Boolean(id) && location.pathname.includes("/view/");
 
   const [loading, setLoading] = useState(false);
+  const { ask, dialog: proceedDialog } = useProceedConfirm();
+  const baselinePricesRef = useRef({ cost: null, selling: null });
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -599,6 +603,10 @@ const ProductServiceForm = () => {
           return;
         }
         const p = resp.data;
+        baselinePricesRef.current = {
+          cost: p.cost_price != null ? Number(p.cost_price) : null,
+          selling: p.selling_price != null ? Number(p.selling_price) : null,
+        };
         const stockBal =
           p.quantity_on_hand != null ? Number(p.quantity_on_hand) : null;
         setCurrentStockQty(
@@ -972,7 +980,7 @@ const ProductServiceForm = () => {
     return true;
   };
   // Form submission
-  const onSubmit = (data) => {
+  const onSubmit = async (data) => {
     console.log("=== FORM SUBMISSION ===");
     console.log("Form Data:", JSON.stringify(data, null, 2));
     console.log("Selected Revenue Account:", selectedRevenueAccount);
@@ -980,6 +988,31 @@ const ProductServiceForm = () => {
     console.log("======================");
     if (!onInputValidation(data)) {
       return;
+    }
+    if (isEditMode) {
+      const sellingPrice = data.sales?.price
+        ? parseFloat(parseNumberFromFormatted(data.sales.price)) || 0
+        : 0;
+      const costPrice = data.purchase?.costPrice
+        ? parseFloat(parseNumberFromFormatted(data.purchase.costPrice)) || 0
+        : 0;
+      const allowed = await confirmProceedGuards(ask, {
+        prices: [
+          {
+            label: data.name || "Product",
+            kind: "Cost price",
+            entered: costPrice,
+            baseline: baselinePricesRef.current.cost,
+          },
+          {
+            label: data.name || "Product",
+            kind: "Selling price",
+            entered: sellingPrice,
+            baseline: baselinePricesRef.current.selling,
+          },
+        ],
+      });
+      if (!allowed) return;
     }
     setLoading(true);
     setError("");
@@ -1279,6 +1312,7 @@ const ProductServiceForm = () => {
 
   return (
     <div className="">
+      {proceedDialog}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

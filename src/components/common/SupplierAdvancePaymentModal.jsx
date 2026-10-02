@@ -38,6 +38,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  checkSimilarPayment,
+  describeSimilarPayments,
+} from "@/utils/transactionGuards";
 
 function parseNumberFromFormatted(value) {
   if (value === "" || value === null || value === undefined) return "";
@@ -158,6 +162,7 @@ export default function SupplierAdvancePaymentModal({
   const [cashAmount, setCashAmount] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [similarLines, setSimilarLines] = useState([]);
   const [pendingPayload, setPendingPayload] = useState(null);
   const [narration, setNarration] = useState("");
   const [chequeNumber, setChequeNumber] = useState("");
@@ -478,7 +483,7 @@ export default function SupplierAdvancePaymentModal({
     return match ? [match] : [selectedSupplier];
   }, [selectedSupplier, resolvedSuppliersList]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const amt = parseFloat(parseNumberFromFormatted(amount));
     if (!activeBusiness?.id) {
@@ -615,6 +620,15 @@ export default function SupplierAdvancePaymentModal({
         : { ...basePayload, allocation_order: "fifo" };
 
     const advancePortion = Math.max(0, amt - sumAlloc);
+    const matches = await checkSimilarPayment({
+      facilityId: activeBusiness.id,
+      supplierNumber: supplierParty.supplier_number,
+      payeeName: supplierParty.supplier_name || supplierParty.name || "",
+      transactionDate: paymentDate,
+      amount: amt,
+      narration: description,
+    });
+    setSimilarLines(describeSimilarPayments(matches));
     setPendingPayload({
       payload,
       amt,
@@ -697,28 +711,38 @@ export default function SupplierAdvancePaymentModal({
           if (!openState && !submitting) {
             setConfirmOpen(false);
             setPendingPayload(null);
+            setSimilarLines([]);
           }
         }}
       >
         <AlertDialogContent className="z-[300] border border-slate-200 bg-white text-slate-900 shadow-2xl sm:rounded-xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-600">
-              {pendingPayload?.advancePortion > 0.02 ? (
-                <>
-                  ₦{formatNumber1(pendingPayload.advancePortion)} will be
-                  recorded as vendor advance
-                  {pendingPayload.amt - pendingPayload.advancePortion > 0.02
-                    ? ` (₦${formatNumber1(pendingPayload.amt - pendingPayload.advancePortion)} applied to bills)`
-                    : ""}
-                  . Continue?
-                </>
-              ) : (
-                <>
-                  Record payment of ₦{formatNumber1(pendingPayload?.amt || 0)}{" "}
-                  to this supplier. Continue?
-                </>
-              )}
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-slate-600">
+                {similarLines.length > 0 ? (
+                  <>
+                    <p>
+                      This supplier already has a transaction on the same date
+                      with the same amount or the same narration.
+                    </p>
+                    <ul className="list-disc space-y-1 pl-5">
+                      {similarLines.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+                <p>
+                  {pendingPayload?.advancePortion > 0.02
+                    ? `₦${formatNumber1(pendingPayload.advancePortion)} will be recorded as vendor advance${
+                        pendingPayload.amt - pendingPayload.advancePortion > 0.02
+                          ? ` (₦${formatNumber1(pendingPayload.amt - pendingPayload.advancePortion)} applied to bills)`
+                          : ""
+                      }. Continue?`
+                    : `Record payment of ₦${formatNumber1(pendingPayload?.amt || 0)} to this supplier. Continue?`}
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -25,6 +25,11 @@ import moment from "moment";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
+import { useProceedConfirm } from "@/components/common/ProceedConfirmDialog";
+import {
+  confirmProceedGuards,
+  productUnitCostMoves,
+} from "@/utils/transactionGuards";
 import { getSuppliers } from "@/redux/actions/suppliers";
 import { Typeahead } from "react-bootstrap-typeahead";
 import { toast } from "sonner";
@@ -167,6 +172,7 @@ export default function ProductSupplierBill() {
     order_id: "",
   });
 
+  const { ask, dialog: proceedDialog } = useProceedConfirm();
   const [items, setItems] = useState([]);
   const [currentItem, setCurrentItem] = useState(initialItemForm);
   const [loading, setLoading] = useState(false);
@@ -719,7 +725,7 @@ export default function ProductSupplierBill() {
   }, [loading, form.remark, form.supplier_number, items]);
 
   // Actual save function
-  const savePurchase = (
+  const savePurchase = async (
     usePrepayment = false,
     shouldPrintAfterSave = false,
   ) => {
@@ -820,6 +826,22 @@ export default function ProductSupplierBill() {
           return;
         }
       }
+    }
+
+    const allowed = await confirmProceedGuards(ask, {
+      payment: {
+        facilityId: activeBusiness._id || activeBusiness.id,
+        supplierNumber: form.supplier_number,
+        payeeName: form.supplier_name,
+        transactionDate: form.date,
+        amount: getTotalWithTax(),
+        narration: form.remark,
+      },
+      prices: productUnitCostMoves(items, productList),
+    });
+    if (!allowed) {
+      resetSaving();
+      return;
     }
 
     // Prepare purchase data with items - parse formatted values
@@ -1349,6 +1371,7 @@ export default function ProductSupplierBill() {
 
   return (
     <div className="relative min-h-screen bg-white">
+      {proceedDialog}
       {loading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="flex flex-col items-center rounded-lg bg-white p-8 shadow-2xl">

@@ -5,6 +5,10 @@ import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { useSelector } from "react-redux";
 import moment from "moment";
 import { formatNumber1 } from "@/components/router/utilities";
+import {
+  formatNumberWithCommas,
+  parseNumberFromFormatted,
+} from "@/utilities";
 import { Printer, X } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -54,7 +58,7 @@ const ProductSupplierBillHTML = ({
 
   const lineCost = (item) => {
     if (editing && item?.sku && draftCosts[item.sku] !== undefined && draftCosts[item.sku] !== "") {
-      return parseFloat(draftCosts[item.sku]) || 0;
+      return parseFloat(parseNumberFromFormatted(String(draftCosts[item.sku]))) || 0;
     }
     return parseFloat(item?.cost) || 0;
   };
@@ -286,14 +290,20 @@ const ProductSupplierBillHTML = ({
                         <td className="border-r border-t border-gray-200 px-2 py-1.5 text-right text-xs text-gray-700">
                           {editing ? (
                             <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={draftCosts[item.sku] ?? item.cost ?? ""}
+                              type="text"
+                              inputMode="decimal"
+                              value={formatNumberWithCommas(
+                                parseNumberFromFormatted(
+                                  String(draftCosts[item.sku] ?? item.cost ?? ""),
+                                ),
+                              )}
                               onChange={(event) =>
-                                onCostChange?.(item.sku, event.target.value)
+                                onCostChange?.(
+                                  item.sku,
+                                  formatNumberWithCommas(event.target.value),
+                                )
                               }
-                              className="w-28 rounded border border-gray-300 px-2 py-1 text-right text-xs"
+                              className="w-32 rounded border border-gray-300 px-2 py-1 text-right text-xs tabular-nums"
                             />
                           ) : (
                             formatNumber(cost)
@@ -472,7 +482,11 @@ const ProductSupplierBillPdf = () => {
           setBillData(next);
           const costs = {};
           (next?.items || []).forEach((item) => {
-            if (item?.sku) costs[item.sku] = item.cost ?? "";
+            if (item?.sku) {
+              costs[item.sku] = formatNumberWithCommas(
+                parseNumberFromFormatted(String(item.cost ?? "")),
+              );
+            }
           });
           setDraftCosts(costs);
           if (openForEdit) setEditing(true);
@@ -497,7 +511,12 @@ const ProductSupplierBillPdf = () => {
       .filter((item) => item?.sku && item.sku !== "N/A")
       .map((item) => ({
         sku: item.sku,
-        cost: draftCosts[item.sku] ?? item.cost,
+        cost:
+          parseFloat(
+            parseNumberFromFormatted(
+              String(draftCosts[item.sku] ?? item.cost ?? ""),
+            ),
+          ) || 0,
       }));
     if (!lines.length) {
       toast.error("This bill has no product lines to update.");
@@ -675,7 +694,11 @@ const ProductSupplierBillPdf = () => {
                 onClick={() => {
                   const costs = {};
                   (billData?.items || []).forEach((item) => {
-                    if (item?.sku) costs[item.sku] = item.cost ?? "";
+                    if (item?.sku) {
+                      costs[item.sku] = formatNumberWithCommas(
+                        parseNumberFromFormatted(String(item.cost ?? "")),
+                      );
+                    }
                   });
                   setDraftCosts(costs);
                   setEditing(false);

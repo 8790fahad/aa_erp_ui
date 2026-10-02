@@ -20,6 +20,11 @@ import moment from "moment";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
+import { useProceedConfirm } from "@/components/common/ProceedConfirmDialog";
+import {
+  confirmProceedGuards,
+  productUnitCostMoves,
+} from "@/utils/transactionGuards";
 import { getSuppliers } from "@/redux/actions/suppliers";
 import { Typeahead } from "react-bootstrap-typeahead";
 import { toast } from "sonner";
@@ -110,6 +115,7 @@ export default function ProductCashExpense() {
     order_id: "",
   });
 
+  const { ask, dialog: proceedDialog } = useProceedConfirm();
   const [items, setItems] = useState([]);
   const [currentItem, setCurrentItem] = useState(initialItemForm);
   const [loading, setLoading] = useState(false);
@@ -263,7 +269,7 @@ export default function ProductCashExpense() {
     return items.reduce((sum, item) => sum + parseFloat(item.total || 0), 0);
   };
 
-  const handleDirectPurchase = (printAfterSave = false) => {
+  const handleDirectPurchase = async (printAfterSave = false) => {
     if (!form.remark) {
       toast.error("Please input remark");
       return;
@@ -288,6 +294,19 @@ export default function ProductCashExpense() {
       toast.error("Please select mode of payment");
       return;
     }
+
+    const allowed = await confirmProceedGuards(ask, {
+      payment: {
+        facilityId: activeBusiness._id || activeBusiness.id,
+        supplierNumber: form.supplier_number,
+        payeeName: form.supplier_name,
+        transactionDate: form.date,
+        amount: calculateTotal(),
+        narration: form.remark,
+      },
+      prices: productUnitCostMoves(items, productList),
+    });
+    if (!allowed) return;
 
     // Prepare purchase data with items
     const purchaseData = items.map((item) => ({
@@ -608,6 +627,8 @@ export default function ProductCashExpense() {
   };
 
   return (
+    <>
+      {proceedDialog}
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-0">
       <div className="max-w-7xl mx-auto">
         {/* {JSON.stringify(bankAccount)} */}
@@ -1500,5 +1521,6 @@ export default function ProductCashExpense() {
         </DrawerContent>
       </Drawer>
     </div>
+    </>
   );
 }

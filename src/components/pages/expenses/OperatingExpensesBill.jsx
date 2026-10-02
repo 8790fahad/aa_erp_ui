@@ -21,6 +21,8 @@ import moment from "moment";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
+import { useProceedConfirm } from "@/components/common/ProceedConfirmDialog";
+import { confirmProceedGuards } from "@/utils/transactionGuards";
 import { getSuppliers } from "@/redux/actions/suppliers";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
@@ -102,6 +104,7 @@ export default function OperatingExpenses() {
     cheque_number: "",
   });
 
+  const { ask, dialog: proceedDialog } = useProceedConfirm();
   const [items, setItems] = useState([]);
   const [currentItem, setCurrentItem] = useState(initialItemForm);
   const [loading, setLoading] = useState(false);
@@ -526,7 +529,7 @@ export default function OperatingExpenses() {
   };
 
   // Actual save function
-  const savePurchase = (
+  const savePurchase = async (
     usePrepayment = false,
     shouldPrintAfterSave = false,
   ) => {
@@ -665,6 +668,22 @@ export default function OperatingExpenses() {
       }
     });
     const taxesArray = Array.from(taxTotals.values());
+
+    const allowed = await confirmProceedGuards(ask, {
+      payment: {
+        facilityId: activeBusiness.id || activeBusiness._id,
+        supplierNumber: form.supplier_number,
+        payeeName: form.supplier_name,
+        transactionDate: form.date,
+        amount: getTotal(),
+        narration: form.remark,
+      },
+    });
+    if (!allowed) {
+      setLoading(false);
+      isSavingRef.current = false;
+      return;
+    }
 
     // Prepare purchase data with items
     const purchaseData = items.map((item) => {
@@ -1155,6 +1174,7 @@ export default function OperatingExpenses() {
 
   return (
     <div className="relative min-h-screen bg-white">
+      {proceedDialog}
       {loading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="flex flex-col items-center rounded-lg bg-white p-8 shadow-2xl">

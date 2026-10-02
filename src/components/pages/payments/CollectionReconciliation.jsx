@@ -483,14 +483,21 @@ export default function CollectionReconciliation() {
 
   const parseReceived = (row) => {
     const draft = drafts[row.cashier_user_id] || {};
+    const readAmount = (raw, expected) => {
+      if (raw == null || String(raw).trim() === "") {
+        return (Number(expected) || 0) <= 0.05 ? 0 : NaN;
+      }
+      const n = parseFloat(parseNumberFromFormatted(raw));
+      return Number.isFinite(n) ? n : NaN;
+    };
     const received_cash = showCash
-      ? parseFloat(parseNumberFromFormatted(draft.received_cash))
+      ? readAmount(draft.received_cash, row.expected_cash)
       : Number(row.received_cash ?? row.expected_cash) || 0;
     const received_card = showCard
-      ? parseFloat(parseNumberFromFormatted(draft.received_card))
+      ? readAmount(draft.received_card, row.expected_card)
       : Number(row.received_card ?? row.expected_card) || 0;
     const received_transfer = showTransfer
-      ? parseFloat(parseNumberFromFormatted(draft.received_transfer))
+      ? readAmount(draft.received_transfer, row.expected_transfer)
       : Number(row.received_transfer ?? row.expected_transfer) || 0;
     return { draft, received_cash, received_card, received_transfer };
   };
@@ -594,6 +601,8 @@ export default function CollectionReconciliation() {
       safe: settingSafe || prefs.safe || "",
       shortageAccount: settingShortage || prefs.shortage || "",
       note: parsed.draft.note || "",
+      credit_total: Number(row.credit_pending ?? row.credit_total) || 0,
+      deposit_total: Number(row.deposit_pending ?? row.deposit_total) || 0,
     });
   };
 
@@ -859,7 +868,7 @@ export default function CollectionReconciliation() {
             <p className="mt-1 text-sm text-slate-600">
               {pageView === "discount"
                 ? "Approve invoice discounts here. After approval the invoice goes to Verification Points for cash, transfer, POS, or credit."
-                : "Supervisor confirms each cashier's hand-in for the day. Cash is moved from the till to Safe. If cash is short, pick an account to post the shortage. Credit and Apply Deposit are day totals (not till cash)."}
+                : "Supervisor confirms each cashier's hand-in for the day. Cash is moved from the till to Safe. If cash is short, pick an account to post the shortage. Credit and Apply Deposit are day totals (not till cash) and are saved on History when you confirm."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1046,6 +1055,7 @@ export default function CollectionReconciliation() {
               <table className="w-full min-w-[1100px] text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
+                    <th className="px-3 py-2.5 font-semibold">Action</th>
                     <th className="px-3 py-2.5 font-semibold">Cashier</th>
                     {showCash ? (
                       <th className="px-3 py-2.5 font-semibold text-right">
@@ -1087,7 +1097,6 @@ export default function CollectionReconciliation() {
                       Variance
                     </th>
                     <th className="px-3 py-2.5 font-semibold">Status</th>
-                    <th className="px-3 py-2.5 font-semibold">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1124,6 +1133,35 @@ export default function CollectionReconciliation() {
                     return (
                       <Fragment key={row.cashier_user_id}>
                         <tr className="border-b border-slate-100 align-middle">
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            {locked ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                {row.confirmed_by_name || "Confirmed"}
+                              </span>
+                            ) : (Number(row.expected_total) || 0) > 0.05 ||
+                              (Number(row.credit_pending) || 0) > 0.05 ||
+                              (Number(row.deposit_pending) || 0) > 0.05 ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-8"
+                                disabled={confirmingId === row.cashier_user_id}
+                                onClick={() => startConfirm(row)}
+                              >
+                                {confirmingId === row.cashier_user_id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : showCash &&
+                                  (Number(row.expected_cash) || 0) > 0.05 ? (
+                                  "Move cash to Safe"
+                                ) : (
+                                  "Save to History"
+                                )}
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
+                          </td>
                           <td className="px-3 py-2.5">
                             <button
                               type="button"
@@ -1248,33 +1286,6 @@ export default function CollectionReconciliation() {
                           </td>
                           <td className="px-3 py-2.5">
                             <StatusPill status={row.status} />
-                          </td>
-                          <td className="px-3 py-2.5">
-                            {locked ? (
-                              <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                                {row.confirmed_by_name || "Confirmed"}
-                              </span>
-                            ) : (Number(row.expected_total) || 0) > 0.05 ? (
-                              <Button
-                                type="button"
-                                size="sm"
-                                className="h-8"
-                                disabled={confirmingId === row.cashier_user_id}
-                                onClick={() => startConfirm(row)}
-                              >
-                                {confirmingId === row.cashier_user_id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : showCash &&
-                                  (Number(row.expected_cash) || 0) > 0.05 ? (
-                                  "Move cash to Safe"
-                                ) : (
-                                  "Save to History"
-                                )}
-                              </Button>
-                            ) : (
-                              <span className="text-xs text-slate-400">—</span>
-                            )}
                           </td>
                         </tr>
                         {expanded ? (
@@ -1469,6 +1480,12 @@ export default function CollectionReconciliation() {
                         Transfer
                       </th>
                       <th className="px-3 py-2.5 font-semibold text-right">
+                        Credit
+                      </th>
+                      <th className="px-3 py-2.5 font-semibold text-right">
+                        Apply Deposit
+                      </th>
+                      <th className="px-3 py-2.5 font-semibold text-right">
                         To Safe
                       </th>
                       <th className="px-3 py-2.5 font-semibold text-right">
@@ -1500,6 +1517,12 @@ export default function CollectionReconciliation() {
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums">
                           ₦{formatNumber1(row.received_transfer || 0)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">
+                          ₦{formatNumber1(row.credit_total || 0)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">
+                          ₦{formatNumber1(row.deposit_total || 0)}
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums">
                           ₦{formatNumber1(row.cash_to_safe_amount || 0)}
@@ -1546,8 +1569,8 @@ export default function CollectionReconciliation() {
                 {cashDialog?.row?.cashier_name || "Cashier"}
                 {date ? ` · ${moment(date).format("DD MMM YYYY")}` : ""}.{" "}
                 {cashDialog?.needsCash
-                  ? "Only cash is moved to Safe. POS and transfer are recorded on History."
-                  : "There is no cash to move to Safe. This hand-in is saved on History."}
+                  ? "Only cash is moved to Safe. POS, transfer, credit, and apply deposit are recorded on History."
+                  : "There is no cash to move to Safe. Credit and Apply Deposit are saved on History."}
               </DialogDescription>
             </DialogHeader>
             {cashDialog ? (
@@ -1571,6 +1594,20 @@ export default function CollectionReconciliation() {
                       destination: "History",
                       expected: cashDialog.expected_transfer,
                       received: cashDialog.received_transfer,
+                    },
+                    (Number(cashDialog.credit_total) || 0) > 0.05 && {
+                      label: "Credit",
+                      destination: "History",
+                      expected: cashDialog.credit_total,
+                      received: cashDialog.credit_total,
+                      dayTotal: true,
+                    },
+                    (Number(cashDialog.deposit_total) || 0) > 0.05 && {
+                      label: "Apply Deposit",
+                      destination: "History",
+                      expected: cashDialog.deposit_total,
+                      received: cashDialog.deposit_total,
+                      dayTotal: true,
                     },
                   ]
                     .filter(Boolean)
@@ -1610,9 +1647,11 @@ export default function CollectionReconciliation() {
                               matched ? "text-emerald-700" : "text-amber-700"
                             }`}
                           >
-                            {matched
-                              ? "Matches the till"
-                              : `Till ₦${formatNumber1(item.expected)} · variance ₦${formatNumber1(variance)}`}
+                            {item.dayTotal
+                              ? "Day total, saved on History"
+                              : matched
+                                ? "Matches the till"
+                                : `Till ₦${formatNumber1(item.expected)} · variance ₦${formatNumber1(variance)}`}
                           </p>
                         </div>
                       );
@@ -1620,8 +1659,8 @@ export default function CollectionReconciliation() {
                 </div>
                 <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
                   {cashDialog.needsCash
-                    ? "Only the cash amount is moved to Safe. POS and transfer are not moved to Safe; they are saved on History."
-                    : "This hand-in is saved on History. Nothing is moved to Safe."}
+                    ? "Only the cash amount is moved to Safe. POS, transfer, credit, and apply deposit are saved on History."
+                    : "Credit and Apply Deposit are saved on History. Nothing is moved to Safe."}
                 </p>
 
                 {cashDialog.needsCash ? (

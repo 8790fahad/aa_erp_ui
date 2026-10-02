@@ -40,6 +40,10 @@ import {
 } from "@/utils/cloudinaryDocuments";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  checkSimilarPayment,
+  describeSimilarPayments,
+} from "@/utils/transactionGuards";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -155,6 +159,7 @@ export default function RecordSupplierPaymentForm({
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [similarLines, setSimilarLines] = useState([]);
   const [pendingSave, setPendingSave] = useState(null);
   const [errors, setErrors] = useState({});
   const isSubmittingRef = useRef(false);
@@ -480,7 +485,7 @@ export default function RecordSupplierPaymentForm({
     return Object.keys(next).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (isSubmittingRef.current || saving) return;
     if (!validate()) {
       toast.error("Please fix the form errors before saving");
@@ -582,6 +587,16 @@ export default function RecordSupplierPaymentForm({
       ).toFixed(2),
     );
 
+    const matches = await checkSimilarPayment({
+      facilityId,
+      supplierNumber: selectedSupplier.supplier_number,
+      payeeName:
+        selectedSupplier.supplier_name || selectedSupplier.name || "",
+      transactionDate: paymentDate,
+      amount: amountPaidNum,
+      narration,
+    });
+    setSimilarLines(describeSimilarPayments(matches));
     setPendingSave({ payload, advancePortion, amountPaidNum });
     setConfirmOpen(true);
   };
@@ -663,24 +678,34 @@ export default function RecordSupplierPaymentForm({
           if (!open && !saving) {
             setConfirmOpen(false);
             setPendingSave(null);
+            setSimilarLines([]);
           }
         }}
       >
         <AlertDialogContent className="z-[200] border border-slate-200 bg-white text-slate-900 shadow-2xl sm:rounded-xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-600">
-              {pendingSave?.advancePortion > 0.02 ? (
-                <>
-                  Excess {currency} {formatNumber1(pendingSave.advancePortion)}{" "}
-                  will be kept as vendor advance / credit. Continue?
-                </>
-              ) : (
-                <>
-                  Record payment of {currency}{" "}
-                  {formatNumber1(pendingSave?.amountPaidNum || 0)}. Continue?
-                </>
-              )}
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-slate-600">
+                {similarLines.length > 0 ? (
+                  <>
+                    <p>
+                      This supplier already has a transaction on the same date
+                      with the same amount or the same narration.
+                    </p>
+                    <ul className="list-disc space-y-1 pl-5">
+                      {similarLines.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+                <p>
+                  {pendingSave?.advancePortion > 0.02
+                    ? `Excess ${currency} ${formatNumber1(pendingSave.advancePortion)} will be kept as vendor advance / credit. Continue?`
+                    : `Record payment of ${currency} ${formatNumber1(pendingSave?.amountPaidNum || 0)}. Continue?`}
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

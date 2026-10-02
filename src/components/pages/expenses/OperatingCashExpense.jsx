@@ -28,6 +28,8 @@ import moment from "moment";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
+import { useProceedConfirm } from "@/components/common/ProceedConfirmDialog";
+import { confirmProceedGuards } from "@/utils/transactionGuards";
 import { getSuppliers } from "@/redux/actions/suppliers";
 import { Typeahead } from "react-bootstrap-typeahead";
 import { toast } from "sonner";
@@ -82,6 +84,7 @@ export default function OperatingCashExpenses() {
     cheque_number: "",
   });
 
+  const { ask, dialog: proceedDialog } = useProceedConfirm();
   const [items, setItems] = useState([]);
   const [currentItem, setCurrentItem] = useState(initialItemForm);
   const [loading, setLoading] = useState(false);
@@ -237,7 +240,7 @@ export default function OperatingCashExpenses() {
     }, 0);
   };
 
-  const handleDirectPurchase = () => {
+  const handleDirectPurchase = async () => {
     if (!form.remark) {
       toast.error("Please input remark");
       return;
@@ -271,6 +274,18 @@ export default function OperatingCashExpenses() {
       toast.error("Payable code is not set");
       return;
     }
+
+    const allowed = await confirmProceedGuards(ask, {
+      payment: {
+        facilityId: activeBusiness._id || activeBusiness.id,
+        supplierNumber: form.supplier_number,
+        payeeName: form.supplier_name,
+        transactionDate: form.date,
+        amount: calculateTotal(),
+        narration: form.remark,
+      },
+    });
+    if (!allowed) return;
 
     const purchaseData = items.map((item) => {
       const qty =
@@ -593,6 +608,8 @@ export default function OperatingCashExpenses() {
   };
 
   return (
+    <>
+      {proceedDialog}
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-0">
       <div className="max-w-7xl mx-auto">
         {/* Main Form Card */}
@@ -1550,5 +1567,6 @@ export default function OperatingCashExpenses() {
         </DrawerContent>
       </Drawer>
     </div>
+    </>
   );
 }

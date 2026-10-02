@@ -792,6 +792,17 @@ export default function CreditSaleInvoice({
     (sum, item) => sum + getItemQuantity(item),
     0,
   );
+  const dispatchLineAmount = (item) => {
+    const qty = getItemQuantity(item);
+    const price = Number(
+      item?.selling_price ?? item?.unit_price ?? item?.price ?? 0,
+    );
+    return qty * (Number.isFinite(price) ? price : 0);
+  };
+  const dispatchSubtotal = deliveryOrderItems.reduce(
+    (sum, item) => sum + dispatchLineAmount(item),
+    0,
+  );
 
   const formatNumber = (num) => {
     const n = Number(num);
@@ -2184,9 +2195,11 @@ export default function CreditSaleInvoice({
           {/* Delivery Order Section */}
           {showDeliveryOrder ? (
             <section
-              className={`invoice-page-half flex flex-col min-h-0 bg-gradient-to-b from-gray-50 to-white ${
-                isA5 ? "a5-section" : "flex-1"
-              }`}
+              className={`invoice-page-half flex flex-col min-h-0 ${
+                printInColor
+                  ? "bg-gradient-to-b from-gray-50 to-white"
+                  : "bg-white"
+              } ${isA5 ? "a5-section" : "flex-1"}`}
             >
               <BusinessDocumentHeader
                 business={business}
@@ -2203,6 +2216,229 @@ export default function CreditSaleInvoice({
                 compact={isA5}
               />
 
+              {!printInColor ? (
+                <>
+                  <div className="grid gap-1 mb-1">
+                    <div className="border border-black bg-white p-1 pl-3">
+                      <p className="text-sm font-semibold text-black mb-1 uppercase tracking-wide">
+                        Bill To
+                      </p>
+                      <p className="text-sm text-black leading-relaxed">
+                        <span className="font-semibold">Account Name:</span>{" "}
+                        {customer.customer_name}{" "}
+                        <span className="mx-1">|</span>
+                        <span className="font-semibold">Account No:</span>{" "}
+                        {customer.customerNo}
+                        {customer.address ? (
+                          <>
+                            <span className="mx-1">|</span>
+                            <span className="font-semibold">Address:</span>{" "}
+                            {customer.address}
+                          </>
+                        ) : null}
+                        <span className="mx-1">|</span>
+                        <span className="font-semibold">Warehouse:</span>{" "}
+                        {warehouseLabel}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mb-1">
+                    <table className="invoice-items-table w-full border-collapse border border-black">
+                      <thead>
+                        <tr className="bg-white text-black">
+                          <th className="border border-black px-2 py-1.5 text-center text-sm font-semibold">
+                            #
+                          </th>
+                          <th className="border border-black px-2 py-1.5 text-left text-sm font-semibold">
+                            Description/Size
+                          </th>
+                          <th className="border border-black px-2 py-1.5 text-center text-sm font-semibold">
+                            Quantity
+                          </th>
+                          <th className="border border-black px-2 py-1.5 text-right text-sm font-semibold">
+                            Unit Price(₦)
+                          </th>
+                          <th className="border border-black px-2 py-1.5 text-right text-sm font-semibold">
+                            Amount(₦)
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white">
+                        {deliveryOrderItems.map((item, index) => {
+                          const qty = getItemQuantity(item);
+                          const amount = dispatchLineAmount(item);
+                          const unitPrice = qty > 0 ? amount / qty : 0;
+                          const itemUom = String(
+                            item.unit_of_measure ||
+                              item.uom_category ||
+                              item.uom ||
+                              item.unit_measure ||
+                              "",
+                          ).trim();
+                          const itemName =
+                            item.item_name || item.description || "—";
+                          return (
+                            <tr key={item.id ?? item.entry_id ?? index}>
+                              <td className="border border-black px-2 py-1.5 text-center text-sm">
+                                {index + 1}
+                              </td>
+                              <td className="border border-black px-2 py-1.5 text-sm font-semibold">
+                                {itemName}
+                                {itemUom ? ` (${itemUom})` : ""}
+                              </td>
+                              <td className="border border-black px-2 py-1.5 text-center text-sm">
+                                {formatNumber(qty)}
+                              </td>
+                              <td className="border border-black px-2 py-1.5 text-right text-sm">
+                                {formatNumber(unitPrice)}
+                              </td>
+                              <td className="border border-black px-2 py-1.5 text-right text-sm">
+                                {formatNumber(amount)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        <tr>
+                          <td
+                            colSpan="3"
+                            className="border border-black px-2 py-1.5 text-center text-sm font-bold"
+                          >
+                            {formatNumber(totalCylinders)}
+                          </td>
+                          <td className="border border-black px-2 py-1.5 text-right text-sm font-bold">
+                            SUBTOTAL:
+                          </td>
+                          <td className="border border-black px-2 py-1.5 text-right text-sm font-bold">
+                            {formatNumber(dispatchSubtotal)}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td
+                            colSpan="4"
+                            className="border border-black px-2 py-1.5 text-right text-sm font-bold"
+                          >
+                            GRAND TOTAL:
+                          </td>
+                          <td className="border border-black px-2 py-1.5 text-right text-sm font-bold">
+                            ₦{formatNumber(dispatchSubtotal)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mb-1 border border-black bg-white p-1 pl-3">
+                    <p className="text-sm font-semibold uppercase tracking-wide">
+                      How this invoice is paid
+                    </p>
+                    <p className="text-sm">
+                      <span className="font-semibold">Mode:</span>{" "}
+                      {paymentModeLabel}
+                    </p>
+                    {cashPaid > 0.05 || hasCashMode ? (
+                      <p className="text-sm">
+                        <span className="font-semibold">Cash received:</span> ₦
+                        {formatNumber(cashPaid)}
+                      </p>
+                    ) : null}
+                    {transferPaid > 0.05 || hasTransferMode ? (
+                      <p className="text-sm">
+                        <span className="font-semibold">
+                          Transfer received:
+                        </span>{" "}
+                        ₦{formatNumber(transferPaid)}
+                      </p>
+                    ) : null}
+                    {cardPaid > 0.05 || hasCardMode ? (
+                      <p className="text-sm">
+                        <span className="font-semibold">POS received:</span> ₦
+                        {formatNumber(cardPaid)}
+                      </p>
+                    ) : null}
+                    {depositPaid > 0.05 ? (
+                      <p className="text-sm">
+                        <span className="font-semibold">Deposit applied:</span>{" "}
+                        ₦{formatNumber(depositPaid)}
+                      </p>
+                    ) : null}
+                    {creditAmount > 0.05 || hasCreditMode ? (
+                      <p className="text-sm">
+                        <span className="font-semibold">On credit:</span> ₦
+                        {formatNumber(creditAmount)}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 shrink-0 mb-1">
+                    <div className="border border-black bg-white p-2">
+                      <h3 className="text-sm font-bold border-b border-black pb-1 mb-2">
+                        Invoice Details
+                      </h3>
+                      <p className="text-sm mb-1">
+                        <span className="font-semibold">Invoice No.:</span>{" "}
+                        {invoiceReference}
+                      </p>
+                      {invoiceReference ? (
+                        <div className="mb-2 flex justify-center overflow-hidden">
+                          <Barcode
+                            value={String(invoiceReference)}
+                            width={1.1}
+                            height={32}
+                            displayValue={false}
+                            margin={0}
+                            background="#ffffff"
+                            lineColor="#000000"
+                          />
+                        </div>
+                      ) : null}
+                      <p className="text-sm mb-1">
+                        <span className="font-semibold">
+                          {isGoodsIssueNote
+                            ? "Goods Issue Note No:"
+                            : "Delivery Order No:"}
+                        </span>{" "}
+                        {dispatchDocPrefix}-{invoiceReference}
+                      </p>
+                      <p className="text-sm mb-1">
+                        <span className="font-semibold">Customer:</span>{" "}
+                        {customer?.customer_name || "—"}
+                      </p>
+                    </div>
+                    <div className="border border-black bg-white p-1.5">
+                      <h6 className="text-sm font-bold border-b border-black pb-1 mb-2">
+                        Prepared Details
+                      </h6>
+                      <p className="text-sm mb-1.5">
+                        <span className="font-semibold">Prepared By:</span>{" "}
+                        {preparedByName}
+                        {preparedById ? ` (${preparedById})` : ""}
+                      </p>
+                      {preparedBySignature ? (
+                        <div className="flex flex-col items-center gap-1 my-1">
+                          <img
+                            src={preparedBySignature}
+                            alt="Prepared by signature"
+                            className="h-10 object-contain grayscale"
+                          />
+                          <span className="text-xs uppercase tracking-wide">
+                            Signature
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-1 my-1">
+                          <div className="h-10 w-full border-b border-black" />
+                          <span className="text-xs uppercase tracking-wide">
+                            Signature
+                          </span>
+                        </div>
+                      )}
+                      <p className="mt-1 text-sm font-bold text-center py-1 border border-black">
+                        FOR {business?.business_name || "COMPANY"}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+              {printInColor ? (
+              <>
               <div className="grid gap-1 mb-1">
                 <div className="bg-blue-50 border border-blue-200 p-1 pl-3">
                   <p className="text-sm font-semibold text-blue-800 mb-1 uppercase tracking-wide">
@@ -2380,17 +2616,32 @@ export default function CreditSaleInvoice({
                   </div>
                 </div>
               </div>
+              </>
+              ) : null}
 
               {/* Closing note — same as sales invoice */}
-              {isGoodsIssueNote && (showImportantNote || showPoweredBy) ? (
-                <div className="shrink-0 mt-auto px-1 py-1.5 border-t border-dashed border-gray-300">
+              {(isGoodsIssueNote || !printInColor) &&
+              (showImportantNote || showPoweredBy) ? (
+                <div
+                  className={`shrink-0 mt-auto px-1 py-1.5 border-t border-dashed ${
+                    printInColor ? "border-gray-300" : "border-black"
+                  }`}
+                >
                   {showImportantNote ? (
-                    <p className="text-center italic text-sm text-gray-700 leading-snug">
+                    <p
+                      className={`text-center italic text-sm leading-snug ${
+                        printInColor ? "text-gray-700" : "text-black"
+                      }`}
+                    >
                       {importantNoteText}
                     </p>
                   ) : null}
                   {showPoweredBy ? (
-                    <p className="text-center text-xs text-gray-500 leading-snug mt-1">
+                    <p
+                      className={`text-center text-xs leading-snug mt-1 ${
+                        printInColor ? "text-gray-500" : "text-black"
+                      }`}
+                    >
                       {poweredByText}
                     </p>
                   ) : null}

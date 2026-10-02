@@ -35,10 +35,12 @@ export default function InvoiceList() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [invoices, setInvoices] = useState([]);
+  const [creators, setCreators] = useState([]);
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(false);
   const searchFromUrl = searchParams.get("search") || "";
   const branchFromUrl = searchParams.get("branchId") || "";
+  const createdByFromUrl = searchParams.get("createdBy") || "";
   const statusFromUrl = searchParams.get("status") || "";
   // Default to today's date when URL has no date params.
   const fromDateFromUrl = searchParams.get("fromDate") || todayDate();
@@ -96,6 +98,7 @@ export default function InvoiceList() {
     });
     if (searchFromUrl.trim()) params.set("search", searchFromUrl.trim());
     if (branchFromUrl) params.set("branchId", branchFromUrl);
+    if (createdByFromUrl) params.set("createdBy", createdByFromUrl);
 
     _fetchApi(
       `/api/v1/transactions/get-all-transactions-data?${params.toString()}`,
@@ -103,9 +106,11 @@ export default function InvoiceList() {
         setLoading(false);
         if (response.success) {
           setInvoices(response.results || response.data || []);
+          setCreators(Array.isArray(response.creators) ? response.creators : []);
         } else {
           toast.error(response.message || "Failed to fetch invoices");
           setInvoices([]);
+          setCreators([]);
         }
       },
       (error) => {
@@ -113,12 +118,14 @@ export default function InvoiceList() {
         console.error("Error fetching invoices:", error);
         toast.error("Error fetching invoices");
         setInvoices([]);
+        setCreators([]);
       },
     );
   }, [
     activeBusiness?.id,
     searchFromUrl,
     branchFromUrl,
+    createdByFromUrl,
     fromDateFromUrl,
     toDateFromUrl,
     pageFromUrl,
@@ -139,6 +146,21 @@ export default function InvoiceList() {
       () => {},
     );
   }, [activeBusiness?.id]);
+
+  const userOptions = useMemo(() => {
+    const byId = new Map();
+    for (const person of creators) {
+      const id = String(person?.id || "").trim();
+      if (!id || byId.has(id)) continue;
+      byId.set(id, {
+        id,
+        name: person.name || id,
+      });
+    }
+    return [...byId.values()].sort((a, b) =>
+      String(a.name || a.id).localeCompare(String(b.name || b.id)),
+    );
+  }, [creators]);
 
   const displayInvoices = useMemo(() => {
     // Keep only real sale invoices (INV-123). Hide CN-*, OP-*, INV-OB-*, etc.
@@ -206,6 +228,17 @@ export default function InvoiceList() {
   const selectedBranchOptions = branchOptions.filter((o) =>
     selectedBranchIds.includes(o.value),
   );
+
+  const handleCreatedByChange = (value) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) {
+      next.set("createdBy", value);
+    } else {
+      next.delete("createdBy");
+    }
+    next.set("page", "1");
+    setSearchParams(next, { replace: true });
+  };
 
   const handleBranchChange = (opts) => {
     const next = new URLSearchParams(searchParams);
@@ -320,7 +353,7 @@ export default function InvoiceList() {
           </div>
 
           <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <div className="relative min-w-[12rem] flex-1">
+            <div className="relative min-w-[12rem] max-w-md flex-1">
               <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -331,6 +364,24 @@ export default function InvoiceList() {
                 disabled={loading}
               />
             </div>
+            <select
+              value={createdByFromUrl}
+              onChange={(e) => handleCreatedByChange(e.target.value)}
+              title="Created by"
+              aria-label="Created by"
+              className="h-8 w-52 shrink-0 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20"
+            >
+              <option value="">All creators</option>
+              {userOptions.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name || person.id}
+                </option>
+              ))}
+              {createdByFromUrl &&
+              !userOptions.some((person) => person.id === createdByFromUrl) ? (
+                <option value={createdByFromUrl}>{createdByFromUrl}</option>
+              ) : null}
+            </select>
             <div className="flex flex-wrap items-center gap-1.5">
               <input
                 type="date"
@@ -417,8 +468,12 @@ export default function InvoiceList() {
                 No invoices found
               </h3>
               <p className="mb-3 text-sm text-slate-500">
-                {searchFromUrl || statusFromUrl || fromDateFromUrl || toDateFromUrl
-                  ? "Try adjusting your search, dates, or status filter"
+                {searchFromUrl ||
+                statusFromUrl ||
+                createdByFromUrl ||
+                fromDateFromUrl ||
+                toDateFromUrl
+                  ? "Try adjusting your search, dates, user, or status filter"
                   : "Create your first invoice to get started"}
               </p>
               {!searchFromUrl && !statusFromUrl && !fromDateFromUrl && !toDateFromUrl && (
