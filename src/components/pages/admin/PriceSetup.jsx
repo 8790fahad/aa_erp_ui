@@ -53,6 +53,10 @@ function formatAmountInput(value) {
   return formatNumberWithCommas(numericValue);
 }
 
+function isPriceChangeBlocked(value) {
+  return value === false || value === 0 || value === "0" || value === "false";
+}
+
 function calcSellingFromMarkup(cost, markup, mode) {
   const c = parseFloat(cost) || 0;
   const m = parseFloat(markup) || 0;
@@ -65,7 +69,8 @@ function calcSellingFromMarkup(cost, markup, mode) {
  */
 export default function PriceSetup({ embedded = false }) {
   const dispatch = useDispatch();
-  const { activeBusiness = {} } = useSelector((state) => state.auth);
+  const { activeBusiness = {}, user } = useSelector((state) => state.auth);
+  const settingsUserId = user?.id || activeBusiness?.business_admin;
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -77,6 +82,7 @@ export default function PriceSetup({ embedded = false }) {
   );
   const [priceSetupPurchaseLoading, setPriceSetupPurchaseLoading] =
     useState(false);
+  const [invoicePriceLoading, setInvoicePriceLoading] = useState(false);
   const [calcProduct, setCalcProduct] = useState(null);
   const [calcMode, setCalcMode] = useState("percentage");
   const [calcMarkup, setCalcMarkup] = useState("");
@@ -299,11 +305,14 @@ export default function PriceSetup({ embedded = false }) {
   };
 
   const togglePriceSetupOnSupplierBill = () => {
-    if (!activeBusiness?.id || !activeBusiness?.business_admin) return;
+    if (!activeBusiness?.id || !settingsUserId) {
+      toast.error("Sign in again, then change this setting.");
+      return;
+    }
     const next = !activeBusiness.price_setup_resalable_on_purchase;
     setPriceSetupPurchaseLoading(true);
     _postApi(
-      `/account/update-price-setup-resalable-purchase/${next}/${activeBusiness.id}/${activeBusiness.business_admin}`,
+      `/account/update-price-setup-resalable-purchase/${next}/${activeBusiness.id}/${settingsUserId}`,
       {},
       (resp) => {
         setPriceSetupPurchaseLoading(false);
@@ -328,15 +337,56 @@ export default function PriceSetup({ embedded = false }) {
     );
   };
 
+  const toggleInvoiceSellingPrice = () => {
+    if (!activeBusiness?.id || !settingsUserId) {
+      toast.error("Sign in again, then change this setting.");
+      return;
+    }
+    const currentlyAllowed = !isPriceChangeBlocked(
+      activeBusiness.allow_invoice_selling_price,
+    );
+    const next = !currentlyAllowed;
+    setInvoicePriceLoading(true);
+    _postApi(
+      `/account/update-allow-invoice-selling-price/${next}/${activeBusiness.id}/${settingsUserId}`,
+      {},
+      (resp) => {
+        setInvoicePriceLoading(false);
+        if (resp?.success && resp.results) {
+          toast.success(
+            next
+              ? "Selling price can be changed on an invoice."
+              : "Selling price on an invoice is locked to the product price.",
+          );
+          dispatch({
+            type: UPDATE_BUSINESS_SETTINGS,
+            payload: { business: resp.results },
+          });
+        } else {
+          toast.error(resp?.message || "Could not update setting");
+        }
+      },
+      () => {
+        setInvoicePriceLoading(false);
+        toast.error("Network error");
+      },
+    );
+  };
+
   const enabled = !!activeBusiness.price_setup_resalable_on_purchase;
+  const invoicePriceAllowed = !isPriceChangeBlocked(
+    activeBusiness.allow_invoice_selling_price,
+  );
 
   const content = (
     <div id="price-setup" className="space-y-4">
       <div>
-        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-          <Tag className="h-5 w-5 text-[var(--aa-navy)]" />
-          Price Set-up
-        </h1>
+        {!embedded ? (
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
+            <Tag className="h-5 w-5 text-[var(--aa-navy)]" />
+            Price Set-up
+          </h1>
+        ) : null}
         <p className="mt-0.5 text-xs text-slate-500">
           Cost from inventory valuation (stock movements). Set selling price for
           Finished Good, By-Product &amp; Resalable products.
@@ -351,6 +401,47 @@ export default function PriceSetup({ embedded = false }) {
           <span className="font-mono text-[11px] text-slate-400">
             {valuationMethod}
           </span>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-[var(--aa-navy)]/15 bg-slate-50 px-4 py-3">
+        <div className="min-w-[220px] flex-1">
+          <div className="text-sm font-semibold text-slate-800">
+            Allow selling price change on invoice
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+            This is for the sales invoice only. When allowed, the selling
+            price can be typed on Create Invoice. When not allowed, the
+            invoice keeps the product selling price.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-600">
+            {invoicePriceAllowed ? "Allowed" : "Not allowed"}
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={invoicePriceAllowed}
+            disabled={invoicePriceLoading}
+            onClick={toggleInvoiceSellingPrice}
+            className={`relative inline-flex h-7 w-[3.25rem] shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--aa-navy)]/30 disabled:opacity-60 ${
+              invoicePriceAllowed ? "bg-[var(--aa-navy)]" : "bg-slate-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                invoicePriceAllowed ? "translate-x-[1.55rem]" : "translate-x-1"
+              }`}
+            />
+            <span className="sr-only">
+              {invoicePriceLoading
+                ? "Saving"
+                : invoicePriceAllowed
+                  ? "Do not allow selling price changes on the invoice"
+                  : "Allow selling price changes on the invoice"}
+            </span>
+          </button>
         </div>
       </div>
 

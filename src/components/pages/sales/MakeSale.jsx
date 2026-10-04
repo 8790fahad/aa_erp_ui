@@ -1043,6 +1043,9 @@ function MakeSale() {
   const vatPolicy = activeBusiness?.vat_policy || "vat_exclusive";
   const allowSalesWithoutStock =
     activeBusiness?.allow_sales_without_stock || false;
+  const allowInvoiceSellingPrice = ![false, 0, "0", "false"].includes(
+    activeBusiness?.allow_invoice_selling_price,
+  );
   const userFunctionalities = useMemo(
     () => getUserFunctionalities(user_id, activeBusiness),
     [user_id, activeBusiness],
@@ -4589,6 +4592,7 @@ function MakeSale() {
   const CARD_PRICE_STEP = 1;
   const adjustCardSellingPrice = useCallback(
     (item, stepDelta) => {
+      if (!allowInvoiceSellingPrice) return;
       const base =
         selectedProduct?.id === item.id
           ? parseFloat(selectedProduct.price) || 0
@@ -4619,7 +4623,7 @@ function MakeSale() {
         );
       }
     },
-    [activeTab, selectedProduct],
+    [activeTab, allowInvoiceSellingPrice, selectedProduct],
   );
 
   // Toggle Pro-bono status for a cart item
@@ -5438,7 +5442,10 @@ function MakeSale() {
                                   <button
                                     type="button"
                                     aria-label="Decrease price"
-                                    disabled={cardSellPrice <= 0}
+                                    disabled={
+                                      !allowInvoiceSellingPrice ||
+                                      cardSellPrice <= 0
+                                    }
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       adjustCardSellingPrice(
@@ -5456,6 +5463,12 @@ function MakeSale() {
                                     type="text"
                                     inputMode="decimal"
                                     autoComplete="off"
+                                    readOnly={!allowInvoiceSellingPrice}
+                                    title={
+                                      allowInvoiceSellingPrice
+                                        ? undefined
+                                        : "Selling price changes are turned off in Price Set-up"
+                                    }
                                     placeholder="0.00"
                                     value={
                                       selectedProduct?.id === item.id
@@ -5479,6 +5492,7 @@ function MakeSale() {
                                           : ""
                                     }
                                     onChange={(e) => {
+                                      if (!allowInvoiceSellingPrice) return;
                                       const withoutCommas =
                                         e.target.value.replace(/,/g, "");
                                       const sanitizedValue =
@@ -5531,6 +5545,7 @@ function MakeSale() {
                                   <button
                                     type="button"
                                     aria-label="Increase price"
+                                    disabled={!allowInvoiceSellingPrice}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       adjustCardSellingPrice(
@@ -5578,7 +5593,10 @@ function MakeSale() {
                                   <button
                                     type="button"
                                     aria-label="Decrease price"
-                                    disabled={cardSellPrice <= 0}
+                                    disabled={
+                                      !allowInvoiceSellingPrice ||
+                                      cardSellPrice <= 0
+                                    }
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       adjustCardSellingPrice(
@@ -5596,6 +5614,12 @@ function MakeSale() {
                                     type="text"
                                     inputMode="decimal"
                                     autoComplete="off"
+                                    readOnly={!allowInvoiceSellingPrice}
+                                    title={
+                                      allowInvoiceSellingPrice
+                                        ? undefined
+                                        : "Selling price changes are turned off in Price Set-up"
+                                    }
                                     placeholder="0.00"
                                     value={
                                       selectedProduct?.id === item.id
@@ -5619,6 +5643,7 @@ function MakeSale() {
                                           : ""
                                     }
                                     onChange={(e) => {
+                                      if (!allowInvoiceSellingPrice) return;
                                       const withoutCommas =
                                         e.target.value.replace(/,/g, "");
                                       const sanitizedValue =
@@ -5671,6 +5696,7 @@ function MakeSale() {
                                   <button
                                     type="button"
                                     aria-label="Increase price"
+                                    disabled={!allowInvoiceSellingPrice}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       adjustCardSellingPrice(
@@ -6047,6 +6073,12 @@ function MakeSale() {
                                     type="text"
                                     inputMode="decimal"
                                     autoComplete="off"
+                                    readOnly={!allowInvoiceSellingPrice}
+                                    title={
+                                      allowInvoiceSellingPrice
+                                        ? undefined
+                                        : "Selling price changes are turned off in Price Set-up"
+                                    }
                                     placeholder={
                                       money.unit <= 0 ? "Enter rate" : "0.00"
                                     }
@@ -6056,6 +6088,7 @@ function MakeSale() {
                                       ),
                                     )}
                                     onChange={(e) => {
+                                      if (!allowInvoiceSellingPrice) return;
                                       const withoutCommas =
                                         e.target.value.replace(/,/g, "");
                                       const sanitized =
@@ -6083,7 +6116,11 @@ function MakeSale() {
                                         });
                                       }
                                     }}
-                                    className={`ml-auto w-28 rounded border border-slate-300 bg-white px-2 py-1.5 text-right text-sm ${
+                                    className={`ml-auto w-28 rounded border border-slate-300 px-2 py-1.5 text-right text-sm ${
+                                      allowInvoiceSellingPrice
+                                        ? "bg-white"
+                                        : "cursor-not-allowed bg-slate-100 text-slate-600"
+                                    } ${
                                       money.unit <= 0
                                         ? "ring-2 ring-amber-400 ring-offset-0"
                                         : ""
