@@ -65,6 +65,12 @@ import { getFinancialYearForDate } from "@/utils/financialYear";
 const JOURNAL_QTY_INPUT_CLASS =
   "h-9 rounded-md border border-slate-200 bg-white px-3 text-center text-sm tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20 disabled:bg-slate-50 disabled:text-slate-400";
 
+function openingCostText(value) {
+  const cost = Number(value);
+  if (!Number.isFinite(cost) || cost <= 0) return "";
+  return formatNumberWithCommas(String(cost));
+}
+
 function formatJournalQtyInput(value) {
   const withoutCommas = String(value ?? "").replace(/,/g, "");
   const sanitized = filterJournalAmountInput(withoutCommas);
@@ -445,6 +451,7 @@ export default function ProductList() {
     branchId: "",
     quantity: "",
     cost: "",
+    productCost: "",
     date: "",
     expiry: "",
   });
@@ -1493,15 +1500,24 @@ export default function ProductList() {
             return prev;
           }
           if (!row) {
-            return { ...prev, quantity: "", cost: "", expiry: "" };
+            return {
+              ...prev,
+              quantity: "",
+              cost: prev.productCost || "",
+              expiry: "",
+            };
           }
           const received = row.receive_date
             ? String(row.receive_date).slice(0, 10)
             : prev.date;
+          const storedCost = Number(row.cost_price);
           return {
             ...prev,
             quantity: formatNumberWithCommas(String(row.quantity ?? "")),
-            cost: formatNumberWithCommas(String(row.cost_price ?? "")),
+            cost:
+              storedCost > 0
+                ? formatNumberWithCommas(String(row.cost_price))
+                : prev.productCost || "",
             date: received || prev.date,
             expiry: row.expiry_date ? String(row.expiry_date).slice(0, 10) : "",
           };
@@ -1522,6 +1538,7 @@ export default function ProductList() {
       return;
     }
     const today = new Date().toISOString().slice(0, 10);
+    const productCost = openingCostText(item.cost_price);
     setOpeningWarehouses([]);
     setOpeningModal({
       open: true,
@@ -1530,7 +1547,8 @@ export default function ProductList() {
       sku: item.sku || "",
       branchId: "",
       quantity: "",
-      cost: "",
+      cost: productCost,
+      productCost,
       date: today,
       expiry: "",
     });
