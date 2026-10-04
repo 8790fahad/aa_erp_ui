@@ -174,12 +174,24 @@ function lineItemKey(row) {
     .toLowerCase();
 }
 
+function emptyGoodsLine() {
+  return {
+    item: "",
+    quantity: "",
+    uom: "",
+    category: "",
+    unit: "",
+    expiry_date: "",
+  };
+}
+
 function isDraftDirty(row) {
   if (!row) return false;
   return Boolean(
     String(row.item || "").trim() ||
       String(row.quantity || "").replace(/,/g, "").trim() ||
-      String(row.uom || "").trim(),
+      String(row.uom || "").trim() ||
+      String(row.expiry_date || "").trim(),
   );
 }
 
@@ -235,13 +247,7 @@ export default function PurchaseRequisitionList() {
   const [categories, setCategories] = useState([]);
   const [allMeasures, setAllMeasures] = useState([]);
   const [expenses, setExpenses] = useState([]);
-  const [newExpense, setNewExpense] = useState({
-    item: "",
-    quantity: "",
-    uom: "",
-    category: "",
-    unit: "",
-  });
+  const [newExpense, setNewExpense] = useState(emptyGoodsLine);
 
   // Refs for focus management
   const productDescriptionRef = useRef(null);
@@ -443,13 +449,7 @@ export default function PurchaseRequisitionList() {
       account_code: "",
     });
     setExpenses([]);
-    setNewExpense({
-      item: "",
-      quantity: "",
-      uom: "",
-      category: "",
-      unit: "",
-    });
+    setNewExpense(emptyGoodsLine());
     setErrors({ reason: "", supplier: "", branch: "", order_id: "" });
     formSubmittedRef.current = false;
     setAttachments([]);
@@ -688,13 +688,7 @@ export default function PurchaseRequisitionList() {
         quantity: displayFormattedAmount(newExpense.quantity) || "1",
       },
     ]);
-    setNewExpense({
-      item: "",
-      quantity: "",
-      uom: "",
-      category: "",
-      unit: "",
-    });
+    setNewExpense(emptyGoodsLine());
 
     setTimeout(() => {
       if (productDescriptionRef.current) {
@@ -893,13 +887,7 @@ export default function PurchaseRequisitionList() {
 
       formSubmittedRef.current = true;
       setAttachments([]);
-      setNewExpense({
-        item: "",
-        quantity: "",
-        uom: "",
-        category: "",
-        unit: "",
-      });
+      setNewExpense(emptyGoodsLine());
       setIsFormModalOpen(false);
       getPR();
     } catch (error) {
@@ -1367,6 +1355,7 @@ export default function PurchaseRequisitionList() {
                         <th className="text-center">S/N</th>
                         <th className="text-center">Item Name</th>
                         <th className="text-center">Quantity </th>
+                        <th className="text-center">Expiry</th>
                         {/* <th className="text-center">Unit Category</th> */}
                         <th className="text-center">Unit of Measure</th>
                         {/* <th className="text-center">Unit Cost (₦)</th>
@@ -1381,6 +1370,11 @@ export default function PurchaseRequisitionList() {
                           <td>{item?.item_name}</td>
                           <td className="text-center">
                             {formatNumber1(item?.quantity)}
+                          </td>
+                          <td className="text-center">
+                            {item?.expiry_date
+                              ? String(item.expiry_date).slice(0, 10)
+                              : "—"}
                           </td>
                           {/* <td className="text-center">{item?.unit_category}</td> */}
                           <td className="text-center">{item?.unit_measure}</td>
@@ -1691,6 +1685,9 @@ export default function PurchaseRequisitionList() {
                         <th className="min-w-[8.5rem] w-36 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
                           Quantity
                         </th>
+                        <th className="min-w-[9rem] w-40 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
+                          Expiry
+                        </th>
                         <th className="min-w-[7.5rem] w-36 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
                           UoM
                         </th>
@@ -1726,6 +1723,19 @@ export default function PurchaseRequisitionList() {
                                 })
                               }
                               className={poQtyInputClass}
+                            />
+                          </td>
+                          <td className="min-w-[9rem] w-40 px-2 py-3 align-top">
+                            <input
+                              type="date"
+                              value={expense.expiry_date || ""}
+                              onChange={(e) =>
+                                updateExpenseField(index, {
+                                  expiry_date: e.target.value,
+                                })
+                              }
+                              className="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                              title="Expiry date"
                             />
                           </td>
                           <td className="px-2 py-3 align-top">
@@ -1825,6 +1835,20 @@ export default function PurchaseRequisitionList() {
                               })
                             }
                             className={poQtyInputClass}
+                          />
+                        </td>
+                        <td className="min-w-[9rem] w-40 px-2 py-3 align-top">
+                          <input
+                            type="date"
+                            value={newExpense.expiry_date || ""}
+                            onChange={(e) =>
+                              setNewExpense((prev) => ({
+                                ...prev,
+                                expiry_date: e.target.value,
+                              }))
+                            }
+                            className="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                            title="Expiry date"
                           />
                         </td>
                         <td className="px-2 py-3 align-top">

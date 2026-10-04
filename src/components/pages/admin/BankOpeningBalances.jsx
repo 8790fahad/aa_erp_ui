@@ -20,6 +20,8 @@ import { validateOpeningBalanceFields } from "@/lib/openingBalanceDate";
 export default function BankOpeningBalances({
   embedded = false,
   nested = false,
+  openBankId = null,
+  onOpenConsumed,
 }) {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const currentUser = useSelector((state) => state.auth.user);
@@ -71,14 +73,38 @@ export default function BankOpeningBalances({
     getBankDirectory();
   }, [getBanks, getBankDirectory]);
 
+  const hasOpeningBalanceEquity = Boolean(
+    String(activeBusiness?.opening_balance_equity || "").trim(),
+  );
+
+  useEffect(() => {
+    if (openBankId == null || openBankId === "") return;
+    const bank = banks.find((row) => String(row.id) === String(openBankId));
+    if (!bank) return;
+    if (!hasOpeningBalanceEquity) {
+      toast.error(
+        "Set Opening Balance Equity under Default accounts before posting opening balances.",
+      );
+      onOpenConsumed?.();
+      return;
+    }
+    setSelected(bank);
+    setOpeningBalance(
+      bank.opening_balance != null &&
+        bank.opening_balance !== "" &&
+        Number(bank.opening_balance) !== 0
+        ? formatNumberWithCommas(String(bank.opening_balance))
+        : "",
+    );
+    setOpeningBalanceDate(bank.opening_balance_date || "");
+    setModalOpen(true);
+    onOpenConsumed?.();
+  }, [openBankId, banks, hasOpeningBalanceEquity, onOpenConsumed]);
+
   const bankNameFor = (bank) => {
     const dir = bankList.find((b) => b.bank_code === bank.bank_code);
     return dir?.bank_name || bank.bank_name || bank.account_name || "—";
   };
-
-  const hasOpeningBalanceEquity = Boolean(
-    String(activeBusiness?.opening_balance_equity || "").trim(),
-  );
 
   const openEdit = (bank) => {
     if (!hasOpeningBalanceEquity) {

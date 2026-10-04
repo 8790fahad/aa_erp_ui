@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Select from "react-select";
@@ -130,6 +130,26 @@ const GOODS_TRANSFER_TABS = [
     label: "Pending Approvals",
     privilege: "Pending Approvals",
   },
+  {
+    value: "expired",
+    label: "Expired",
+    privilege: "Expired Goods",
+    // Anyone who can open Goods can see the alert, even if the newer
+    // privilege was never ticked on their user.
+    aliases: ["Goods", "Goods List"],
+  },
+  {
+    value: "expiring",
+    label: "About to Expire",
+    privilege: "About to Expire",
+    aliases: ["Goods", "Goods List"],
+  },
+  {
+    value: "reorder",
+    label: "Reorder Alert",
+    privilege: "Reorder Level Alert",
+    aliases: ["Goods", "Goods List"],
+  },
 ];
 
 const WRITE_OFF_PRIVILEGE = "Write-off (Scrap/Loss)";
@@ -196,6 +216,10 @@ export default function GoodsTransfer() {
   const [goodsListItems, setGoodsListItems] = useState([]);
   const [goodsListSearch, setGoodsListSearch] = useState("");
   const [loadingGoodsList, setLoadingGoodsList] = useState(false);
+  const [alertItems, setAlertItems] = useState([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
+  const [alertBranchId, setAlertBranchId] = useState("all");
+  const alertRequestRef = useRef(0);
 
   // Write-off (Scrap/Loss) from Goods tab
   const [writeOffItem, setWriteOffItem] = useState(null);
@@ -377,6 +401,42 @@ export default function GoodsTransfer() {
       },
     );
   }, [activeBusiness?.id, goodsListBranchId]);
+
+  const fetchAlerts = useCallback(() => {
+    const kind =
+      activeTab === "expired"
+        ? "expired"
+        : activeTab === "expiring"
+          ? "soon"
+          : activeTab === "reorder"
+            ? "reorder"
+            : "";
+    if (!activeBusiness?.id || !kind) {
+      if (!kind) return;
+      setAlertItems([]);
+      return;
+    }
+    const requestId = ++alertRequestRef.current;
+    setLoadingAlerts(true);
+    const branchQuery =
+      alertBranchId && alertBranchId !== "all"
+        ? `&branchId=${encodeURIComponent(alertBranchId)}`
+        : "";
+    _fetchApi(
+      `/inventory/stock-alerts?facilityId=${activeBusiness.id}&kind=${kind}${branchQuery}`,
+      (resp) => {
+        if (requestId !== alertRequestRef.current) return;
+        setLoadingAlerts(false);
+        setAlertItems(resp?.success ? resp.results || [] : []);
+      },
+      () => {
+        if (requestId !== alertRequestRef.current) return;
+        setLoadingAlerts(false);
+        setAlertItems([]);
+        toast.error("Could not load this alert");
+      },
+    );
+  }, [activeBusiness?.id, activeTab, alertBranchId]);
 
   const fetchAccounts = useCallback(() => {
     if (!activeBusiness?.id) return;
@@ -600,7 +660,8 @@ export default function GoodsTransfer() {
     if (activeTab === "pending") fetchPending();
     if (activeTab === "history") fetchHistory();
     if (activeTab === "goods-list") fetchGoodsList();
-  }, [activeTab, fetchPending, fetchHistory, fetchGoodsList]);
+    if (["expired", "expiring", "reorder"].includes(activeTab)) fetchAlerts();
+  }, [activeTab, fetchPending, fetchHistory, fetchGoodsList, fetchAlerts]);
 
   // Initialise approve-qty inputs (default = min(requested, available)).
   useEffect(() => {
@@ -1029,7 +1090,7 @@ export default function GoodsTransfer() {
           onValueChange={handleSubTabChange}
           className="w-full"
         >
-          <TabsList className="mb-4 h-auto w-full justify-start gap-1 rounded-none border-b border-slate-200 bg-transparent p-0">
+          <TabsList className="mb-4 flex h-auto w-full flex-wrap justify-start gap-1 rounded-none border-b border-slate-200 bg-transparent p-0">
             {visibleTabs.map((tab) => (
               <TabsTrigger
                 key={tab.value}
@@ -1042,6 +1103,15 @@ export default function GoodsTransfer() {
                 )}
                 {tab.value === "history" && <History className="h-3.5 w-3.5" />}
                 {tab.value === "pending" && <Clock className="h-3.5 w-3.5" />}
+                {tab.value === "expired" && (
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                )}
+                {tab.value === "expiring" && (
+                  <AlertCircle className="h-3.5 w-3.5" />
+                )}
+                {tab.value === "reorder" && (
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                )}
                 {tab.label}
                 {tab.value === "pending" && ` (${pendingTransfers.length})`}
               </TabsTrigger>
@@ -1410,6 +1480,141 @@ export default function GoodsTransfer() {
                 </div>
               </div>
             </TabsContent>
+          )}
+
+          {["expired", "expiring", "reorder"].map((value) =>
+            canViewTab(
+              GOODS_TRANSFER_TABS.find((tab) => tab.value === value)?.privilege,
+            ) ? (
+              <TabsContent key={value} value={value} className="mt-0">
+                <div className={sectionCardClass}>
+                  <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold tracking-tight text-slate-900">
+                        {value === "expired"
+                          ? "Expired goods"
+                          : value === "expiring"
+                            ? "About to expire"
+                            : "Reorder level alert"}
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {value === "expired"
+                          ? "Stock whose expiry date has passed"
+                          : value === "expiring"
+                            ? "Stock that expires within 30 days"
+                            : "Stock at or below the product reorder level"}
+                      </p>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Warehouse</label>
+                      <select
+                        value={alertBranchId}
+                        onChange={(e) => setAlertBranchId(e.target.value)}
+                        className={`${fieldClass} min-w-[180px]`}
+                      >
+                        <option value="all">All warehouses</option>
+                        {goodsListBranchOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  {loadingAlerts ? (
+                    <p className="py-8 text-center text-sm text-slate-500">
+                      Loading
+                    </p>
+                  ) : alertItems.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-slate-500">
+                      {alertBranchId === "all"
+                        ? "Nothing to show."
+                        : "Nothing to show for this warehouse."}
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+                            <th className="px-3 py-2">Goods</th>
+                            <th className="px-3 py-2">SKU</th>
+                            <th className="px-3 py-2">Warehouse</th>
+                            <th className="px-3 py-2">Item type</th>
+                            {value === "reorder" ? (
+                              <>
+                                <th className="px-3 py-2 text-right">Balance</th>
+                                <th className="px-3 py-2 text-right">
+                                  Reorder level
+                                </th>
+                              </>
+                            ) : (
+                              <>
+                                <th className="px-3 py-2">Expiry</th>
+                                <th className="px-3 py-2 text-right">Days</th>
+                                <th className="px-3 py-2 text-right">Balance</th>
+                              </>
+                            )}
+                            <th className="px-3 py-2">UOM</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {alertItems.map((row, index) => (
+                            <tr
+                              key={`${row.sku}-${row.expiry_date || ""}-${row.branch_id || index}`}
+                              className="border-b border-slate-100"
+                            >
+                              <td className="px-3 py-2 font-medium text-slate-900">
+                                {row.item_name}
+                              </td>
+                              <td className="px-3 py-2 font-mono text-xs">
+                                {row.sku}
+                              </td>
+                              <td className="px-3 py-2">
+                                {row.warehouse || "—"}
+                              </td>
+                              <td className="px-3 py-2">{row.item_type}</td>
+                              {value === "reorder" ? (
+                                <>
+                                  <td className="px-3 py-2 text-right tabular-nums">
+                                    {formatNumber1(row.balance)}
+                                  </td>
+                                  <td className="px-3 py-2 text-right tabular-nums">
+                                    {formatNumber1(row.reorder_level)}
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="px-3 py-2">
+                                    {row.expiry_date
+                                      ? String(row.expiry_date).slice(0, 10)
+                                      : "—"}
+                                  </td>
+                                  <td
+                                    className={`px-3 py-2 text-right tabular-nums ${
+                                      Number(row.days_left) < 0
+                                        ? "text-red-600"
+                                        : "text-amber-700"
+                                    }`}
+                                  >
+                                    {row.days_left}
+                                  </td>
+                                  <td className="px-3 py-2 text-right tabular-nums">
+                                    {formatNumber1(row.balance)}
+                                  </td>
+                                </>
+                              )}
+                              <td className="px-3 py-2">
+                                {row.unit_of_measure || "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            ) : null
           )}
 
           {/* ====== GOODS LIST ====== */}

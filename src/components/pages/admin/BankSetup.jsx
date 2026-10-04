@@ -66,6 +66,7 @@ const BankSetup = ({ embedded = false }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [setupTab, setSetupTab] = useState("accounts"); // accounts | opening-balances
+  const [openingTargetId, setOpeningTargetId] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [editingBank, setEditingBank] = useState(null);
   const [selectedBank, setSelectedBank] = useState(null);
@@ -149,12 +150,23 @@ const BankSetup = ({ embedded = false }) => {
   };
 
   const handleSubmit = () => {
+    const headCode = String(formData.head || "").trim();
+    const headDigits = headCode.replace(/\D/g, "");
+    if (!headCode) {
+      toast.error("Please select an Account Head");
+      return;
+    }
+    if (headDigits.length <= 1) {
+      toast.error("Account Head must be more than one digit");
+      return;
+    }
     if (!formData.bank_code) {
       toast.error("Please select a bank");
       return;
     }
-    if (!formData.account_number) {
-      toast.error("Please enter account number");
+    const accountDigits = String(formData.account_number || "").replace(/\D/g, "");
+    if (accountDigits.length <= 1) {
+      toast.error("Account number must be more than one digit");
       return;
     }
     if (!formData.account_name) {
@@ -594,9 +606,17 @@ const BankSetup = ({ embedded = false }) => {
                 <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-32">
+            <DropdownMenuContent align="end" className="w-44">
               <DropdownMenuItem onClick={() => handleEdit(item)}>
                 Edit Account
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setOpeningTargetId(item.id);
+                  setSetupTab("opening-balances");
+                }}
+              >
+                Opening balance
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => handleShowDelete(item)}>
@@ -670,7 +690,12 @@ const BankSetup = ({ embedded = false }) => {
             </div>
 
             {setupTab === "opening-balances" ? (
-              <BankOpeningBalances embedded nested />
+              <BankOpeningBalances
+                embedded
+                nested
+                openBankId={openingTargetId}
+                onOpenConsumed={() => setOpeningTargetId(null)}
+              />
             ) : (
               <>
             <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -770,7 +795,7 @@ const BankSetup = ({ embedded = false }) => {
                   {/* {JSON.stringify(formData)} */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Account Head
+                      Account Head <span className="text-red-500">*</span>
                     </label>
                     <ReactSelect
                       inputId="account-head-select"
@@ -781,7 +806,7 @@ const BankSetup = ({ embedded = false }) => {
                           const code = String(
                             acc.head ?? acc.code ?? acc.head_code ?? "",
                           ).trim();
-                          if (!code) return null;
+                          if (!code || code.replace(/\D/g, "").length <= 1) return null;
                           const name = String(
                             acc.description || acc.name || acc.accName || "",
                           ).trim();
@@ -842,6 +867,9 @@ const BankSetup = ({ embedded = false }) => {
                       }}
                       menuPortalTarget={document.body}
                     />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Select an account head. The code must be more than one digit.
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1015,6 +1043,9 @@ const BankSetup = ({ embedded = false }) => {
                         }}
                         placeholder="0000000000"
                       />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Enter more than one digit.
+                      </p>
                     </div>
                   </div>
                   <div>

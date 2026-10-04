@@ -33,7 +33,7 @@ export default function BranchMgm() {
     if (!activeBusiness?.id) return;
     setLoading(true);
     _fetchApi(
-      `/account/get/branches?facilityId=${activeBusiness.id}`,
+      `/account/get/branches?facilityId=${activeBusiness.id}&includeAll=1`,
       (res) => {
         setLoading(false);
         if (res.success) {

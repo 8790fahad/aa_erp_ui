@@ -124,7 +124,7 @@ const StaffManagementDashboard = () => {
     if (!activeBusiness?.id) return;
     setBranchesLoading(true);
     _fetchApi(
-      `/account/get/branches?facilityId=${activeBusiness.id}`,
+      `/account/get/branches?facilityId=${activeBusiness.id}&includeAll=1`,
       (res) => {
         setBranchesLoading(false);
         if (res.success) {

@@ -1557,12 +1557,6 @@ export default function ProductList() {
       (res) => {
         const rows = Array.isArray(res?.results) ? res.results : [];
         setOpeningWarehouses(rows);
-        const branchId = rows[0] ? String(rows[0].id) : "";
-        setOpeningModal((prev) => {
-          if (!prev.open || prev.productId !== item.id) return prev;
-          return { ...prev, branchId };
-        });
-        if (branchId) loadOpeningForStore(item.id, branchId);
       },
       () => setOpeningWarehouses([]),
     );
@@ -2263,7 +2257,7 @@ export default function ProductList() {
             </div>
           </div>
           <label className="mb-3 block text-sm font-medium text-gray-700">
-            Store / Warehouse / Branch
+            Store / Warehouse / Branch <span className="text-red-500">*</span>
             <AntSelect
               className="mt-1 w-full"
               showSearch

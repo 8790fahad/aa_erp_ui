@@ -112,12 +112,19 @@ function findProductForLine(item, productList = []) {
   return null;
 }
 
+function billExpiryDate(value) {
+  if (!value) return "";
+  const day = String(value).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && day > "2000-01-01" ? day : "";
+}
+
 const initialItemForm = {
   item_name: "",
   sku: "",
   quantity: "",
   cost: "",
   total: 0,
+  expiry_date: "",
 };
 
 export default function ProductSupplierBill() {
@@ -851,6 +858,7 @@ export default function ProductSupplierBill() {
       cost: getItemCost(item),
       qty: getItemQty(item),
       quantity: getItemQty(item),
+      expiry_date: billExpiryDate(item.expiry_date || item.expiryDate),
     }));
 
     // Aggregate per-line taxes for API (Make Sale–style line tax)
@@ -1252,6 +1260,7 @@ export default function ProductSupplierBill() {
         po_no: requisition.po_no || orderId || null,
         pr_no: requisition.pr_no || "",
         from_po: true,
+        expiry_date: billExpiryDate(item.expiry_date || item.expiryDate),
       };
     });
 
@@ -1775,6 +1784,9 @@ export default function ProductSupplierBill() {
                   <th className="min-w-[8.5rem] w-36 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
                     Quantity
                   </th>
+                  <th className="min-w-[9rem] w-40 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
+                    Expiry
+                  </th>
                   <th className="min-w-[10rem] w-44 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
                     Unit Cost
                   </th>
@@ -2000,6 +2012,22 @@ export default function ProductSupplierBill() {
                                 ? "cursor-not-allowed bg-slate-50 text-slate-600"
                                 : "bg-white"
                             }`}
+                          />
+                        </td>
+                        <td className="min-w-[9rem] w-40 px-3 py-3 align-top">
+                          <input
+                            type="date"
+                            value={billExpiryDate(item.expiry_date)}
+                            title="From the purchase order or goods received note when one was recorded"
+                            onChange={(e) => {
+                              const expiry_date = e.target.value;
+                              setItems((prev) =>
+                                prev.map((i) =>
+                                  i._id === item._id ? { ...i, expiry_date } : i,
+                                ),
+                              );
+                            }}
+                            className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                           />
                         </td>
                         <td className="min-w-[10rem] w-44 px-3 py-3 text-right align-top">
@@ -2612,6 +2640,13 @@ export default function ProductSupplierBill() {
                                             {requisitionOrderId(requisition)
                                               ? ` · Order ID ${requisitionOrderId(requisition)}`
                                               : ""}
+                                          </p>
+                                          <p className="text-xs text-slate-600">
+                                            Expiry{" "}
+                                            <span className="font-medium text-slate-800">
+                                              {billExpiryDate(item.expiry_date) ||
+                                                "—"}
+                                            </span>
                                           </p>
                                         </div>
                                         <div className="ml-3 shrink-0 text-right text-sm font-medium tabular-nums text-slate-700">

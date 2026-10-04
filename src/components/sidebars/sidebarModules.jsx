@@ -89,6 +89,9 @@ export const modules = [
           "New Goods Transfer",
           "Transfer History",
           "Pending Approvals",
+          "Expired Goods",
+          "About to Expire",
+          "Reorder Level Alert",
         ],
         subFunctionalities: [
           { title: "Goods" },
@@ -96,6 +99,9 @@ export const modules = [
           { title: "Transfer History" },
           { title: "Pending Approvals" },
           { title: "Write-off (Scrap/Loss)" },
+          { title: "Expired Goods" },
+          { title: "About to Expire" },
+          { title: "Reorder Level Alert" },
         ],
       },
       {
