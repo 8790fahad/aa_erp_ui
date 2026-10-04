@@ -22,12 +22,10 @@ import SaleWorkflowSearchBar from "./SaleWorkflowSearchBar";
 export default function WarehouseRequests() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const [loading, setLoading] = useState(false);
-  const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [collecting, setCollecting] = useState(null);
   const [rows, setRows] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [branchFilter, setBranchFilter] = useState("all");
-  const [invoiceItems, setInvoiceItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [listTab, setListTab] = useState("pending");
   /** List stays hidden until staff search / scan an invoice. */
@@ -230,98 +228,20 @@ export default function WarehouseRequests() {
     }
   }, []);
 
-  /** Load this branch's invoice lines — collect qty comes from the invoice. */
-  useEffect(() => {
-    if (!activeBusiness?.id || !selected?.sale_code) {
-      setInvoiceItems([]);
-      return;
-    }
-    setInvoiceLoading(true);
-    _fetchApi(
-      `/api/v1/transactions/get-sale?sale_code=${encodeURIComponent(
-        selected.sale_code,
-      )}&facility_id=${activeBusiness.id}`,
-      (res) => {
-        setInvoiceLoading(false);
-        if (!res.success || !res.data) {
-          setInvoiceItems([]);
-          return;
-        }
-        const bid = parseInt(selected.branch_id, 10);
-        const items = (res.data.items || []).filter((it) => {
-          const itemBid = parseInt(it.branch_id ?? it.branchId, 10);
-          return Number.isFinite(bid) && itemBid === bid;
-        });
-        setInvoiceItems(items);
-      },
-      () => {
-        setInvoiceLoading(false);
-        setInvoiceItems([]);
-      },
-    );
-  }, [activeBusiness?.id, selected?.sale_code, selected?.branch_id, selected?.id]);
-
-  /** Merge invoice lines with pack collect status (match by product). */
+  /** This branch pack already has the invoice lines. No second sale fetch. */
   const invoiceCollectRows = useMemo(() => {
     const packLines = selected?.lines || [];
-    const used = new Set();
-
-    const matchPackLine = (item) => {
-      const sku = String(item.item_code || item.product_id || item.sku || "");
-      const name = String(item.item_name || item.name || item.description || "")
-        .trim()
-        .toLowerCase();
-      let found = packLines.find(
-        (l) => !used.has(l.id) && String(l.product_id || "") === sku,
-      );
-      if (!found && name) {
-        found = packLines.find(
-          (l) =>
-            !used.has(l.id) &&
-            String(l.item_name || "")
-              .trim()
-              .toLowerCase() === name,
-        );
-      }
-      if (found) used.add(found.id);
-      return found || null;
-    };
-
-    if (invoiceItems.length > 0) {
-      return invoiceItems.map((item, idx) => {
-        const packLine = matchPackLine(item);
-        const invoiceQty = Number(
-          item.quantity_sold ?? item.quantity ?? item.qty ?? 0,
-        );
-        const collected = Number(packLine?.qty_collected || 0);
-        return {
-          key: `inv-${idx}-${item.id || item.item_code || idx}`,
-          item_name: item.item_name || item.name || item.description || "Item",
-          product_id: item.item_code || item.product_id || item.sku || "",
-          invoice_qty: invoiceQty,
-          amount: Number(item.amount || 0),
-          pack_line_id: packLine?.id || null,
-          qty_collected: collected,
-          done: packLine
-            ? collected >= Number(packLine.qty || invoiceQty)
-            : false,
-        };
-      });
-    }
-
-    // Fallback to pack lines if invoice items missing branch meta
     return packLines.map((line) => ({
       key: `pack-${line.id}`,
-      item_name: line.item_name || line.product_id,
+      item_name: line.item_name || line.product_id || "Item",
       product_id: line.product_id || "",
       invoice_qty: Number(line.qty || 0),
       amount: null,
       pack_line_id: line.id,
       qty_collected: Number(line.qty_collected || 0),
-      done:
-        Number(line.qty_collected || 0) >= Number(line.qty || 0),
+      done: Number(line.qty_collected || 0) >= Number(line.qty || 0),
     }));
-  }, [invoiceItems, selected?.lines]);
+  }, [selected?.lines]);
 
   const remainingCollectRows = useMemo(
     () => invoiceCollectRows.filter((row) => !row.done),
@@ -615,7 +535,7 @@ export default function WarehouseRequests() {
                   Items on this invoice
                 </div>
 
-                {invoiceLoading ? (
+                {loading && !selected?.lines ? (
                   <Skeleton className="h-24 w-full" />
                 ) : (
                   <div className="overflow-x-auto rounded-md border border-orange-100">
