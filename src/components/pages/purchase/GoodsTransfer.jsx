@@ -134,25 +134,28 @@ const GOODS_TRANSFER_TABS = [
     value: "expired",
     label: "Expired",
     privilege: "Expired Goods",
-    // Anyone who can open Goods can see the alert, even if the newer
-    // privilege was never ticked on their user.
-    aliases: ["Goods", "Goods List"],
   },
   {
     value: "expiring",
     label: "About to Expire",
     privilege: "About to Expire",
-    aliases: ["Goods", "Goods List"],
   },
   {
     value: "reorder",
     label: "Reorder Alert",
     privilege: "Reorder Level Alert",
-    aliases: ["Goods", "Goods List"],
   },
 ];
 
 const WRITE_OFF_PRIVILEGE = "Write-off (Scrap/Loss)";
+
+// These stay hidden when their own switch is off, including on the
+// business-owner login. The other Goods tabs stay open for the owner.
+const STRICT_TAB_PRIVILEGES = new Set([
+  "Expired Goods",
+  "About to Expire",
+  "Reorder Level Alert",
+]);
 
 const parseNumberFromFormatted = (value) => {
   if (!value || value === "") return "";
@@ -260,8 +263,9 @@ export default function GoodsTransfer() {
   const canViewTab = useCallback(
     (tabPrivilege) => {
       if (
-        isBusinessOwner(user, activeBusiness) ||
-        hasFullAccess(functionalities)
+        !STRICT_TAB_PRIVILEGES.has(tabPrivilege) &&
+        (isBusinessOwner(user, activeBusiness) ||
+          hasFullAccess(functionalities))
       ) {
         return true;
       }
