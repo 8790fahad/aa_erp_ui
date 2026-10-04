@@ -112,6 +112,7 @@ export default function CustomerTable() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [openingCustomer, setOpeningCustomer] = useState(null);
+  const [openingKind, setOpeningKind] = useState("receivable");
   const [openingAmount, setOpeningAmount] = useState("");
   const [openingDate, setOpeningDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
@@ -256,13 +257,14 @@ export default function CustomerTable() {
     setShowModal(true);
   };
 
-  const openOpeningBalance = (item) => {
+  const openOpeningBalance = (item, kind = "receivable") => {
     if (!activeBusiness?.opening_balance_equity) {
       toast.error(
         "Set the Opening Balance Equity account in Admin settings before recording an opening balance.",
       );
       return;
     }
+    setOpeningKind(kind === "deposit" ? "deposit" : "receivable");
     setOpeningCustomer(item);
     setOpeningAmount("");
     setOpeningDate(new Date().toISOString().slice(0, 10));
@@ -301,7 +303,9 @@ export default function CustomerTable() {
       {
         facilityId: activeBusiness.id,
         customerNo: openingCustomer.customerNo,
-        opening_balance: amount,
+        opening_balance:
+          openingKind === "deposit" ? Math.abs(amount) : amount,
+        kind: openingKind,
         obdate: openingDate,
         opening_balance_equity: activeBusiness.opening_balance_equity,
         created_by: user?.id,
@@ -313,7 +317,11 @@ export default function CustomerTable() {
           return;
         }
         toast.success(
-          `Opening balance saved for ${openingCustomer.fullname || openingCustomer.customerNo}`,
+          `${
+            openingKind === "deposit"
+              ? "Deposit opening balance"
+              : "Opening balance"
+          } saved for ${openingCustomer.fullname || openingCustomer.customerNo}`,
         );
         setOpeningCustomer(null);
         getList();
@@ -711,14 +719,19 @@ export default function CustomerTable() {
                                 <span className="sr-only">Open menu</span>
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuContent align="end" className="w-56">
                               <DropdownMenuItem onClick={() => openCustomer(item)}>
                                 Edit
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => openOpeningBalance(item)}
+                                onClick={() => openOpeningBalance(item, "receivable")}
                               >
                                 Opening balance
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => openOpeningBalance(item, "deposit")}
+                              >
+                                Deposit opening balance
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -781,7 +794,11 @@ export default function CustomerTable() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Opening balance</DialogTitle>
+            <DialogTitle>
+              {openingKind === "deposit"
+                ? "Deposit opening balance"
+                : "Opening balance"}
+            </DialogTitle>
             <DialogDescription>
               {openingCustomer?.fullname || openingCustomer?.customerNo}
             </DialogDescription>
@@ -793,7 +810,8 @@ export default function CustomerTable() {
                 value={openingAmount}
                 onChange={(e) => {
                   const raw = e.target.value;
-                  const negative = raw.trim().startsWith("-");
+                  const negative =
+                    openingKind !== "deposit" && raw.trim().startsWith("-");
                   const formatted = formatNumberWithCommas(raw.replace(/-/g, ""));
                   setOpeningAmount(
                     negative ? (formatted ? `-${formatted}` : "-") : formatted,
@@ -811,6 +829,17 @@ export default function CustomerTable() {
                   : typed > 0
                     ? 1
                     : -1;
+              if (openingKind === "deposit") {
+                return (
+                  <div className="rounded-[10px] border border-[#e6e8f2] bg-[#f4f5fa] px-3 py-2.5 text-xs leading-relaxed text-[#3d4260]">
+                    <span className="font-semibold">Deposit opening balance</span>{" "}
+                    is money you already hold for this customer. Enter a positive
+                    amount, for example 10,000. Opening Balance Equity is debited
+                    and customer deposits are credited. This does not change the
+                    receivable opening balance.
+                  </div>
+                );
+              }
               return (
                 <div className="grid gap-2 rounded-[10px] border border-[#e6e8f2] bg-[#f4f5fa] px-3 py-2.5 text-xs leading-relaxed text-[#3d4260]">
                   <p className={sign === 1 ? "font-semibold text-[#151a33]" : ""}>
@@ -821,8 +850,7 @@ export default function CustomerTable() {
                   <p className={sign === -1 ? "font-semibold text-[#151a33]" : ""}>
                     <span className="font-semibold">Negative number</span> (for
                     example -10,000): you already hold this customer’s money.
-                    Opening Balance Equity is debited and customer deposits are
-                    credited.
+                    Use Deposit opening balance for that.
                   </p>
                 </div>
               );

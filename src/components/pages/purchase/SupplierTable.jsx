@@ -4,7 +4,21 @@ import { FaPlus } from "react-icons/fa";
 import { useNavigate, useLocation } from "react-router-dom";
 import CustomButton from "@/common/Custom/CustomButton";
 import { getSuppliers } from "@/redux/actions/suppliers";
-import { _fetchApi } from "@/redux/actions/api";
+import { _fetchApi, _postApi } from "@/redux/actions/api";
+import { toast } from "sonner";
+import {
+  formatNumberWithCommas,
+  parseNumberFromFormatted,
+} from "@/utilities";
+import { getFinancialYearForDate } from "@/utils/financialYear";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import {
   MoreVerticalIcon,
@@ -68,6 +82,13 @@ export default function SupplierTable() {
 
   // Selected data states
   const [selectedSupplier, setSelectedSupplier] = useState(null);
+  const [openingSupplier, setOpeningSupplier] = useState(null);
+  const [openingKind, setOpeningKind] = useState("payable");
+  const [openingAmount, setOpeningAmount] = useState("");
+  const [openingDate, setOpeningDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [savingOpening, setSavingOpening] = useState(false);
 
   // Mode states
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -123,6 +144,82 @@ export default function SupplierTable() {
       )
     );
   }, [dispatch, activeBusiness?.id]);
+
+  const openingDateBounds = useMemo(() => {
+    const fy = getFinancialYearForDate(activeBusiness);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const maxDate = `${tomorrow.getFullYear()}-${String(
+      tomorrow.getMonth() + 1,
+    ).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+    return { minDate: fy.fromDate, maxDate };
+  }, [activeBusiness]);
+
+  const openOpeningBalance = (item, kind = "payable") => {
+    if (!activeBusiness?.opening_balance_equity) {
+      toast.error(
+        "Set the Opening Balance Equity account in Admin settings before recording an opening balance.",
+      );
+      return;
+    }
+    setOpeningKind(kind === "advance" ? "advance" : "payable");
+    setOpeningSupplier(item);
+    setOpeningAmount("");
+    setOpeningDate(new Date().toISOString().slice(0, 10));
+  };
+
+  const saveOpeningBalance = () => {
+    if (!openingSupplier || !activeBusiness?.id) return;
+    const amount = parseFloat(parseNumberFromFormatted(openingAmount));
+    if (!Number.isFinite(amount) || Math.abs(amount) < 0.005) {
+      toast.error("Enter an opening balance amount");
+      return;
+    }
+    if (
+      !openingDate ||
+      openingDate < openingDateBounds.minDate ||
+      openingDate > openingDateBounds.maxDate
+    ) {
+      toast.error(
+        `As of date must be from ${openingDateBounds.minDate} through ${openingDateBounds.maxDate}.`,
+      );
+      return;
+    }
+    setSavingOpening(true);
+    _postApi(
+      "/api/v1/supplier-opening-balance",
+      {
+        facilityId: activeBusiness.id,
+        supplier_number: openingSupplier.supplier_number,
+        opening_balance:
+          openingKind === "advance" ? Math.abs(amount) : amount,
+        kind: openingKind,
+        obdate: openingDate,
+        opening_balance_equity: activeBusiness.opening_balance_equity,
+        created_by: user?.id,
+      },
+      (res) => {
+        setSavingOpening(false);
+        if (!res?.success) {
+          toast.error(res?.message || "Could not save opening balance");
+          return;
+        }
+        toast.success(
+          `${
+            openingKind === "advance"
+              ? "Advance opening balance"
+              : "Opening balance"
+          } saved for ${openingSupplier.supplier_name || openingSupplier.supplier_number}`,
+        );
+        setOpeningSupplier(null);
+        getSupplierList();
+      },
+      (err) => {
+        setSavingOpening(false);
+        toast.error(err?.message || "Could not save opening balance");
+      },
+    );
+  };
 
   // Helper to keep URL in sync with current state
   const syncUrl = useCallback(
@@ -350,7 +447,7 @@ export default function SupplierTable() {
                 <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem
                 onClick={() => {
                   setSelectedSupplier(item);
@@ -358,6 +455,12 @@ export default function SupplierTable() {
                 }}
               >
                 Edit Payee
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openOpeningBalance(item, "payable")}>
+                Opening balance
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openOpeningBalance(item, "advance")}>
+                Advance opening balance
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => goMakeDeposit(item)}>
                 Make Deposit
@@ -649,6 +752,110 @@ export default function SupplierTable() {
           )}
         </div>
       </div>
+
+      <Dialog
+        open={Boolean(openingSupplier)}
+        onOpenChange={(open) => {
+          if (!open && !savingOpening) setOpeningSupplier(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {openingKind === "advance"
+                ? "Advance opening balance"
+                : "Opening balance"}
+            </DialogTitle>
+            <DialogDescription>
+              {openingSupplier?.supplier_name || openingSupplier?.supplier_number}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-sm font-medium text-[#151a33]">
+              Amount (₦)
+              <input
+                value={openingAmount}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const negative =
+                    openingKind !== "advance" && raw.trim().startsWith("-");
+                  const formatted = formatNumberWithCommas(raw.replace(/-/g, ""));
+                  setOpeningAmount(
+                    negative ? (formatted ? `-${formatted}` : "-") : formatted,
+                  );
+                }}
+                placeholder="0.00"
+                className="rounded-[10px] border border-[#e6e8f2] bg-[#f4f5fa] px-3 py-2 text-sm font-medium outline-none focus:border-[#4d6bff] focus:bg-white"
+              />
+            </label>
+            {(() => {
+              const typed = parseFloat(parseNumberFromFormatted(openingAmount));
+              const sign =
+                !Number.isFinite(typed) || Math.abs(typed) < 0.005
+                  ? 0
+                  : typed > 0
+                    ? 1
+                    : -1;
+              if (openingKind === "advance") {
+                return (
+                  <div className="rounded-[10px] border border-[#e6e8f2] bg-[#f4f5fa] px-3 py-2.5 text-xs leading-relaxed text-[#3d4260]">
+                    <span className="font-semibold">Advance opening balance</span>{" "}
+                    is money you already paid this supplier. Enter a positive
+                    amount, for example 10,000. The supplier advance account is
+                    debited and Opening Balance Equity is credited. This does
+                    not change the payable opening balance.
+                  </div>
+                );
+              }
+              return (
+                <div className="grid gap-2 rounded-[10px] border border-[#e6e8f2] bg-[#f4f5fa] px-3 py-2.5 text-xs leading-relaxed text-[#3d4260]">
+                  <p className={sign === 1 ? "font-semibold text-[#151a33]" : ""}>
+                    <span className="font-semibold">Positive number</span> (for
+                    example 10,000): you owe this supplier. Accounts payable is
+                    credited and Opening Balance Equity is debited.
+                  </p>
+                  <p className={sign === -1 ? "font-semibold text-[#151a33]" : ""}>
+                    <span className="font-semibold">Negative number</span> (for
+                    example -10,000): you already paid this supplier. Use
+                    Advance opening balance for that.
+                  </p>
+                </div>
+              );
+            })()}
+            <label className="grid gap-1 text-sm font-medium text-[#151a33]">
+              As of
+              <input
+                type="date"
+                value={openingDate}
+                min={openingDateBounds.minDate}
+                max={openingDateBounds.maxDate}
+                onChange={(e) => setOpeningDate(e.target.value)}
+                className="rounded-[10px] border border-[#e6e8f2] bg-[#f4f5fa] px-3 py-2 text-sm font-medium outline-none focus:border-[#4d6bff] focus:bg-white"
+              />
+              <span className="text-xs font-normal text-[#6a6f8f]">
+                From the start of the financial year ({openingDateBounds.minDate}) through tomorrow ({openingDateBounds.maxDate}).
+              </span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={savingOpening}
+              onClick={() => setOpeningSupplier(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={savingOpening}
+              onClick={saveOpeningBalance}
+            >
+              {savingOpening ? "Saving…" : "Save opening balance"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
