@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { Fragment, useState, useEffect, useCallback, useRef } from "react";
 import { useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -178,6 +178,16 @@ export default function InventoryValuationReport() {
         setLoading(false);
         if (response.success && response.data) {
           setData(response.data);
+          const stocked = Array.isArray(response.data.stockedWarehouses)
+            ? response.data.stockedWarehouses
+            : [];
+          setWarehouses(
+            stocked
+              .filter((b) => b?.id != null && String(b.branch_name || "").trim())
+              .sort((a, b) =>
+                warehouseLabel(a).localeCompare(warehouseLabel(b)),
+              ),
+          );
         } else {
           setError(response.message || "Failed to load inventory report");
         }
@@ -192,23 +202,6 @@ export default function InventoryValuationReport() {
   useEffect(() => {
     if (!facilityId) return;
     let cancelled = false;
-    _fetchApi(
-      `/account/get/branches?facilityId=${encodeURIComponent(facilityId)}`,
-      (res) => {
-        if (cancelled) return;
-        const rows = Array.isArray(res?.results) ? res.results : [];
-        setWarehouses(
-          rows
-            .filter((b) => b?.id != null)
-            .sort((a, b) =>
-              warehouseLabel(a).localeCompare(warehouseLabel(b)),
-            ),
-        );
-      },
-      () => {
-        if (!cancelled) setWarehouses([]);
-      },
-    );
     _fetchApi(
       `/api/products?facilityId=${encodeURIComponent(facilityId)}`,
       (res) => {
@@ -258,13 +251,9 @@ export default function InventoryValuationReport() {
     };
   }, [facilityId]);
 
-  // Only auto-fetch once on mount if we have the required data
-  const hasFetchedOnMount = useRef(false);
   useEffect(() => {
-    if (facilityId && asOfDate && !hasFetchedOnMount.current) {
-      hasFetchedOnMount.current = true;
-      fetchReport();
-    }
+    if (!facilityId || !asOfDate) return;
+    fetchReport();
   }, [facilityId, asOfDate, fetchReport]);
 
   // ── Excel export ──────────────────────────────────────────────────────────
@@ -282,58 +271,79 @@ export default function InventoryValuationReport() {
       // ── Finished Goods sheet ──
       const wsFG = wb.addWorksheet("Finished Goods");
       wsFG.columns = [
-        { width: 32 }, { width: 16 }, { width: 14 }, { width: 14 },
-        { width: 16 }, { width: 20 }, { width: 14 },
+        { width: 24 }, { width: 32 }, { width: 14 }, { width: 16 },
+        { width: 16 }, { width: 18 }, { width: 18 }, { width: 16 },
       ];
       let r = 1;
-      wsFG.mergeCells(r, 1, r, 7);
+      wsFG.mergeCells(r, 1, r, 8);
       wsFG.getCell(r, 1).value = businessName;
       wsFG.getCell(r, 1).font = { bold: true, size: 14 };
       wsFG.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
-      wsFG.mergeCells(r, 1, r, 7);
-      wsFG.getCell(r, 1).value = "INVENTORY VALUATION REPORT — FINISHED GOODS";
+      wsFG.mergeCells(r, 1, r, 8);
+      wsFG.getCell(r, 1).value = "INVENTORY REPORT";
       wsFG.getCell(r, 1).font = { bold: true, size: 12 };
       wsFG.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
-      wsFG.mergeCells(r, 1, r, 7);
+      wsFG.mergeCells(r, 1, r, 8);
       wsFG.getCell(r, 1).value = `As of ${moment(asOfDate).format("DD MMMM YYYY")}  |  Method: ${valuationMethod}`;
       wsFG.getCell(r, 1).alignment = { horizontal: "center" };
       r += 2;
 
-      const fgHeaders = ["Product Name", "Batch No.", "Qty", "Cost/Unit (₦)", "Total Value (₦)", "Warehouse", "Status"];
+      const fgHeaders = ["Store", "Product Name", "Qty", "Cost Price", "Selling Price", "Cost Amount", "Selling Amount", "Last Update"];
       fgHeaders.forEach((h, i) => {
         const c = wsFG.getCell(r, i + 1);
         c.value = h;
         c.font = { bold: true, color: { argb: "FFFFFFFF" } };
         c.fill = sectionFill;
         c.border = borderThin;
-        c.alignment = i >= 2 ? { horizontal: "right" } : { horizontal: "left" };
+        c.alignment = i >= 2 && i <= 6 ? { horizontal: "right" } : { horizontal: "left" };
       });
       r++;
 
-      const fgItems = data.finishedGoods?.items || [];
+      const fgItems = (data.finishedGoods?.items || []).filter((item) => {
+        if (!(parseFloat(item.quantity) > 0)) return false;
+        if (warehouseId && String(item.branch_id) !== String(warehouseId)) {
+          return false;
+        }
+        return true;
+      });
+      let previousStore = "";
       for (const item of fgItems) {
-        wsFG.getCell(r, 1).value = item.product_name || "";
-        wsFG.getCell(r, 2).value = item.batch_no || "";
+        const store = item.warehouse_name || item.warehouse_location || "";
+        wsFG.getCell(r, 1).value = store !== previousStore ? store : "";
+        previousStore = store;
+        wsFG.getCell(r, 2).value = item.product_name || "";
         wsFG.getCell(r, 3).value = Number(item.quantity) || 0;
         wsFG.getCell(r, 4).value = Number(item.cost_per_unit) || 0;
-        wsFG.getCell(r, 5).value = Number(item.total_value) || 0;
-        wsFG.getCell(r, 6).value = item.warehouse_location || "";
-        wsFG.getCell(r, 7).value = item.status || "";
-        [4, 5].forEach((col) => { wsFG.getCell(r, col).numFmt = "#,##0.00"; });
-        [3, 4, 5].forEach((col) => { wsFG.getCell(r, col).alignment = { horizontal: "right" }; });
-        for (let col = 1; col <= 7; col++) wsFG.getCell(r, col).border = borderThin;
+        wsFG.getCell(r, 5).value = Number(item.selling_price) || 0;
+        wsFG.getCell(r, 6).value = Number(item.total_value) || 0;
+        wsFG.getCell(r, 7).value = Number(item.selling_amount) || 0;
+        wsFG.getCell(r, 8).value = item.last_update
+          ? moment(item.last_update).format("D MMM YYYY")
+          : "";
+        [4, 5, 6, 7].forEach((col) => { wsFG.getCell(r, col).numFmt = "#,##0.00"; });
+        [3, 4, 5, 6, 7].forEach((col) => { wsFG.getCell(r, col).alignment = { horizontal: "right" }; });
+        for (let col = 1; col <= 8; col++) wsFG.getCell(r, col).border = borderThin;
         r++;
       }
       r++;
-      wsFG.getCell(r, 4).value = "TOTAL";
-      wsFG.getCell(r, 4).font = { bold: true };
-      wsFG.getCell(r, 5).value = Number(data.finishedGoods?.totalValue) || 0;
+      wsFG.getCell(r, 5).value = "TOTAL";
       wsFG.getCell(r, 5).font = { bold: true };
-      wsFG.getCell(r, 5).numFmt = "#,##0.00";
-      wsFG.getCell(r, 5).alignment = { horizontal: "right" };
-      [4, 5].forEach((col) => { wsFG.getCell(r, col).border = borderThin; wsFG.getCell(r, col).fill = headerFill; });
+      wsFG.getCell(r, 6).value = fgItems.reduce(
+        (sum, item) => sum + (Number(item.total_value) || 0),
+        0,
+      );
+      wsFG.getCell(r, 7).value = fgItems.reduce(
+        (sum, item) => sum + (Number(item.selling_amount) || 0),
+        0,
+      );
+      [6, 7].forEach((col) => {
+        wsFG.getCell(r, col).font = { bold: true };
+        wsFG.getCell(r, col).numFmt = "#,##0.00";
+        wsFG.getCell(r, col).alignment = { horizontal: "right" };
+      });
+      [5, 6, 7].forEach((col) => { wsFG.getCell(r, col).border = borderThin; wsFG.getCell(r, col).fill = headerFill; });
 
       // ── Summary sheet ──
       const wsSummary = wb.addWorksheet("Summary");
@@ -392,7 +402,7 @@ export default function InventoryValuationReport() {
       console.error(e);
       toast.error("Could not export Excel");
     }
-  }, [data, businessName, asOfDate, valuationMethod]);
+  }, [data, businessName, asOfDate, valuationMethod, warehouseId]);
 
   // ── PDF export ────────────────────────────────────────────────────────────
   const handleExportPdf = useCallback(async () => {
@@ -424,13 +434,33 @@ export default function InventoryValuationReport() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   // Filter out zero-qty items before rendering
-  const fgItems = (data?.finishedGoods?.items || []).filter(
-    (item) => parseFloat(item.quantity) > 0
-  );
+  const fgItems = (data?.finishedGoods?.items || []).filter((item) => {
+    if (!(parseFloat(item.quantity) > 0)) return false;
+    if (warehouseId && String(item.branch_id) !== String(warehouseId)) {
+      return false;
+    }
+    return true;
+  });
   const visibleTotal = fgItems.reduce(
     (sum, item) => sum + (parseFloat(item.total_value) || 0),
     0,
   );
+  const sellingTotal = fgItems.reduce(
+    (sum, item) => sum + (parseFloat(item.selling_amount) || 0),
+    0,
+  );
+  const storeName = (item) =>
+    item.warehouse_name || item.warehouse_location || "—";
+  const storeGroups = fgItems.reduce((groups, item) => {
+    const name = storeName(item);
+    const last = groups[groups.length - 1];
+    if (!last || last.store !== name) {
+      groups.push({ store: name, items: [item] });
+    } else {
+      last.items.push(item);
+    }
+    return groups;
+  }, []);
   const selectedWarehouse = warehouses.find(
     (b) => String(b.id) === String(warehouseId),
   );
@@ -444,7 +474,6 @@ export default function InventoryValuationReport() {
   ]
     .filter(Boolean)
     .join(" · ");
-  const showWarehouseCol = Boolean(warehouseId);
 
   return (
     <>
@@ -604,7 +633,7 @@ export default function InventoryValuationReport() {
               {/* ── Blue header band ── */}
               <BusinessDocumentHeader
                 business={business}
-                title="INVENTORY VALUATION REPORT"
+                title="INVENTORY REPORT"
                 numberLabel={`As of ${formatReportDate(asOfDate)}`}
                 extraLine={`Method: ${valuationMethod}${
                   filterExtra ? ` · ${filterExtra}` : ""
@@ -635,22 +664,15 @@ export default function InventoryValuationReport() {
               <div className="bg-white border border-gray-300 rounded-sm overflow-hidden shadow-sm mb-4">
                 <div className="bg-gray-600 px-3 py-2">
                   <h2 className="text-sm font-bold text-white uppercase tracking-wide">
-                    Finished Goods / Resalable — {fgItems.length} items
-                      {data.finishedGoods?.itemCount != null &&
-                      data.finishedGoods.itemCount !== fgItems.length
-                        ? ` (${data.finishedGoods.itemCount} total)`
-                        : ""}
+                    Inventory Report — {fgItems.length} items
                   </h2>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm border-collapse">
                     <thead className="bg-gray-100 border-b-2 border-gray-300">
                       <tr>
-                        {(showWarehouseCol
-                          ? ["Product Name", "SKU / Batch", "Warehouse", "Unit", "Qty", "Cost/Unit (₦)", "Total Value (₦)"]
-                          : ["Product Name", "SKU / Batch", "Unit", "Qty", "Cost/Unit (₦)", "Total Value (₦)"]
-                        ).map((h, i, cols) => (
-                          <th key={h} className={`px-3 py-2 text-xs font-bold text-gray-700 uppercase border-r border-gray-200 ${i >= cols.length - 3 ? "text-right" : "text-left"}`}>
+                        {["Store", "Product Name", "Qty", "Cost Price", "Selling Price", "Cost Amount", "Selling Amount", "Last Update"].map((h, i) => (
+                          <th key={h} className={`px-3 py-2 text-xs font-bold text-gray-700 uppercase border-r border-gray-200 ${i >= 2 && i <= 6 ? "text-right" : "text-left"}`}>
                             {h}
                           </th>
                         ))}
@@ -658,40 +680,51 @@ export default function InventoryValuationReport() {
                     </thead>
                     <tbody>
                       {fgItems.length === 0 ? (
-                        <tr><td colSpan={showWarehouseCol ? 7 : 6} className="px-3 py-6 text-center text-gray-400 text-sm">No goods found</td></tr>
-                      ) : fgItems.map((item, idx) => (
-                        <tr key={item.id ?? idx} className="border-b border-gray-100 hover:bg-gray-50/80">
-                          <td className="px-3 py-1.5 text-gray-900 border-r border-gray-100">{item.product_name}</td>
-                          <td className="px-3 py-1.5 text-gray-600 text-xs border-r border-gray-100">{item.batch_no || "—"}</td>
-                          {showWarehouseCol ? (
-                            <td className="px-3 py-1.5 text-gray-600 border-r border-gray-100">
-                              {item.warehouse_location || warehouseLabel(selectedWarehouse) || "—"}
+                        <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400 text-sm">No goods found</td></tr>
+                      ) : storeGroups.map((group) => (
+                        <Fragment key={group.store}>
+                        {group.items.map((item, idx) => (
+                          <tr key={`${group.store}-${item.batch_no}-${item.branch_id ?? idx}`} className="border-b border-gray-100 hover:bg-gray-50/80">
+                            {idx === 0 ? (
+                              <td rowSpan={group.items.length} className="px-3 py-1.5 align-top font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
+                                {group.store}
+                              </td>
+                            ) : null}
+                            <td className="px-3 py-1.5 text-gray-900 border-r border-gray-100">{item.product_name}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">{formatCell(item.quantity)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">
+                              <button
+                                type="button"
+                                className="tabular-nums text-blue-700 underline decoration-dotted underline-offset-2 hover:text-blue-900"
+                                title="View the receipts that make this unit cost"
+                                onClick={() =>
+                                  openCostLayers(item.batch_no, item.product_name)
+                                }
+                              >
+                                {formatNaira(item.cost_per_unit)}
+                              </button>
                             </td>
-                          ) : null}
-                          <td className="px-3 py-1.5 text-gray-600 border-r border-gray-100">{item.unit || "—"}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">{formatCell(item.quantity)}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">
-                            <button
-                              type="button"
-                              className="tabular-nums text-blue-700 underline decoration-dotted underline-offset-2 hover:text-blue-900"
-                              title="View the receipts that make this unit cost"
-                              onClick={() =>
-                                openCostLayers(item.batch_no, item.product_name)
-                              }
-                            >
-                              {formatNaira(item.cost_per_unit)}
-                            </button>
-                          </td>
-                          <td className="px-3 py-1.5 text-right tabular-nums font-semibold border-r border-gray-100">{formatNaira(item.total_value)}</td>
-                        </tr>
+                            <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">{formatNaira(item.selling_price)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-100">{formatNaira(item.total_value)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums font-semibold border-r border-gray-100">{formatNaira(item.selling_amount)}</td>
+                            <td className="px-3 py-1.5 text-gray-600 border-r border-gray-100">
+                              {item.last_update ? moment(item.last_update).format("D MMM YYYY") : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                        </Fragment>
                       ))}
                     </tbody>
                     <tfoot className="bg-gray-50 border-t-2 border-gray-400">
                       <tr>
-                        <td colSpan={showWarehouseCol ? 6 : 5} className="px-3 py-2 font-bold text-gray-900 text-right border-r border-gray-200">Total Goods</td>
+                        <td colSpan={5} className="px-3 py-2 font-bold text-gray-900 text-right border-r border-gray-200">Total</td>
                         <td className="px-3 py-2 text-right font-bold tabular-nums text-gray-900 border-r border-gray-200">
                           {formatNaira(visibleTotal)}
                         </td>
+                        <td className="px-3 py-2 text-right font-bold tabular-nums text-gray-900 border-r border-gray-200">
+                          {formatNaira(sellingTotal)}
+                        </td>
+                        <td className="border-r border-gray-200" />
                       </tr>
                     </tfoot>
                   </table>
