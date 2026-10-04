@@ -23,9 +23,24 @@ import {
 } from "lucide-react";
 import CustomersUpload from "./components/CustomersUpload";
 import CustomerRegistartion from "./CustomerRegistration";
-import { _fetchApi } from "@/redux/actions/api";
+import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
+import {
+  formatNumberWithCommas,
+  parseNumberFromFormatted,
+} from "@/utilities";
 import { customerKindLabel, isWalkInCustomer, isUnlimitedCreditLimit } from "@/utils/customerKind";
+import { getFinancialYearForDate } from "@/utils/financialYear";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const AVATAR_BG = [
   "linear-gradient(155deg,#4d6bff,#141c56)",
@@ -96,6 +111,12 @@ export default function CustomerTable() {
   const [customerList, setCustomerList] = useState([]);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [openingCustomer, setOpeningCustomer] = useState(null);
+  const [openingAmount, setOpeningAmount] = useState("");
+  const [openingDate, setOpeningDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [savingOpening, setSavingOpening] = useState(false);
 
   const getList = useCallback(() => {
     if (!activeBusiness?.id) return;
@@ -233,6 +254,75 @@ export default function CustomerTable() {
   const openCustomer = (item) => {
     setSelectedCustomer(item);
     setShowModal(true);
+  };
+
+  const openOpeningBalance = (item) => {
+    if (!activeBusiness?.opening_balance_equity) {
+      toast.error(
+        "Set the Opening Balance Equity account in Admin settings before recording an opening balance.",
+      );
+      return;
+    }
+    setOpeningCustomer(item);
+    setOpeningAmount("");
+    setOpeningDate(new Date().toISOString().slice(0, 10));
+  };
+
+  const openingDateBounds = useMemo(() => {
+    const fy = getFinancialYearForDate(activeBusiness);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const maxDate = `${tomorrow.getFullYear()}-${String(
+      tomorrow.getMonth() + 1,
+    ).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+    return { minDate: fy.fromDate, maxDate };
+  }, [activeBusiness]);
+
+  const saveOpeningBalance = () => {
+    if (!openingCustomer || !activeBusiness?.id) return;
+    const amount = parseFloat(parseNumberFromFormatted(openingAmount));
+    if (!Number.isFinite(amount) || Math.abs(amount) < 0.005) {
+      toast.error("Enter an opening balance amount");
+      return;
+    }
+    if (
+      !openingDate ||
+      openingDate < openingDateBounds.minDate ||
+      openingDate > openingDateBounds.maxDate
+    ) {
+      toast.error(
+        `As of date must be from ${openingDateBounds.minDate} through ${openingDateBounds.maxDate}.`,
+      );
+      return;
+    }
+    setSavingOpening(true);
+    _postApi(
+      "/api/v1/customer-opening-balance",
+      {
+        facilityId: activeBusiness.id,
+        customerNo: openingCustomer.customerNo,
+        opening_balance: amount,
+        obdate: openingDate,
+        opening_balance_equity: activeBusiness.opening_balance_equity,
+        created_by: user?.id,
+      },
+      (res) => {
+        setSavingOpening(false);
+        if (!res?.success) {
+          toast.error(res?.message || "Could not save opening balance");
+          return;
+        }
+        toast.success(
+          `Opening balance saved for ${openingCustomer.fullname || openingCustomer.customerNo}`,
+        );
+        setOpeningCustomer(null);
+        getList();
+      },
+      (err) => {
+        setSavingOpening(false);
+        toast.error(err?.message || "Could not save opening balance");
+      },
+    );
   };
 
   const totalCustomers = customerList.length;
@@ -621,9 +711,14 @@ export default function CustomerTable() {
                                 <span className="sr-only">Open menu</span>
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuContent align="end" className="w-48">
                               <DropdownMenuItem onClick={() => openCustomer(item)}>
                                 Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => openOpeningBalance(item)}
+                              >
+                                Opening balance
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -677,6 +772,95 @@ export default function CustomerTable() {
           </div>
         </div>
       </div>
+
+      <Dialog
+        open={Boolean(openingCustomer)}
+        onOpenChange={(open) => {
+          if (!open && !savingOpening) setOpeningCustomer(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Opening balance</DialogTitle>
+            <DialogDescription>
+              {openingCustomer?.fullname || openingCustomer?.customerNo}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-sm font-medium text-[#151a33]">
+              Amount (₦)
+              <input
+                value={openingAmount}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const negative = raw.trim().startsWith("-");
+                  const formatted = formatNumberWithCommas(raw.replace(/-/g, ""));
+                  setOpeningAmount(
+                    negative ? (formatted ? `-${formatted}` : "-") : formatted,
+                  );
+                }}
+                placeholder="0.00"
+                className="rounded-[10px] border border-[#e6e8f2] bg-[#f4f5fa] px-3 py-2 text-sm font-medium outline-none focus:border-[#4d6bff] focus:bg-white"
+              />
+            </label>
+            {(() => {
+              const typed = parseFloat(parseNumberFromFormatted(openingAmount));
+              const sign =
+                !Number.isFinite(typed) || Math.abs(typed) < 0.005
+                  ? 0
+                  : typed > 0
+                    ? 1
+                    : -1;
+              return (
+                <div className="grid gap-2 rounded-[10px] border border-[#e6e8f2] bg-[#f4f5fa] px-3 py-2.5 text-xs leading-relaxed text-[#3d4260]">
+                  <p className={sign === 1 ? "font-semibold text-[#151a33]" : ""}>
+                    <span className="font-semibold">Positive number</span> (for
+                    example 10,000): this customer owes you. Receivables are
+                    debited and Opening Balance Equity is credited.
+                  </p>
+                  <p className={sign === -1 ? "font-semibold text-[#151a33]" : ""}>
+                    <span className="font-semibold">Negative number</span> (for
+                    example -10,000): you already hold this customer’s money.
+                    Opening Balance Equity is debited and customer deposits are
+                    credited.
+                  </p>
+                </div>
+              );
+            })()}
+            <label className="grid gap-1 text-sm font-medium text-[#151a33]">
+              As of
+              <input
+                type="date"
+                value={openingDate}
+                min={openingDateBounds.minDate}
+                max={openingDateBounds.maxDate}
+                onChange={(e) => setOpeningDate(e.target.value)}
+                className="rounded-[10px] border border-[#e6e8f2] bg-[#f4f5fa] px-3 py-2 text-sm font-medium outline-none focus:border-[#4d6bff] focus:bg-white"
+              />
+              <span className="text-xs font-normal text-[#6a6f8f]">
+                From the start of the financial year ({openingDateBounds.minDate}) through tomorrow ({openingDateBounds.maxDate}).
+              </span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={savingOpening}
+              onClick={() => setOpeningCustomer(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={savingOpening}
+              onClick={saveOpeningBalance}
+            >
+              {savingOpening ? "Saving…" : "Save opening balance"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
