@@ -74,9 +74,16 @@ export function login({ email, password }, cb = (f) => f, error = (f) => f) {
 
       const data = await response.json();
 
-      if (data.success === false) {
-        error(data.message, data);
-        dispatch({ type: ERROR, payload: data.error });
+      const hasBusiness = Array.isArray(data?.business)
+        ? data.business.length > 0
+        : Boolean(data?.business);
+
+      if (data.success === false || !hasBusiness) {
+        const msg =
+          data.message ||
+          "Unable to sign in. The business profile could not be loaded.";
+        error(msg, data);
+        dispatch({ type: ERROR, payload: data.error || msg });
       } else {
         localStorage.setItem("@@__token", data.token);
         dispatch({ type: LOGIN, payload: data });
@@ -137,6 +144,17 @@ export function initUser(navigate = null, callback = (f) => f) {
           // Network / empty response — keep token, do not force logout
           console.warn("[initUser] verify-token returned no success payload");
           callback();
+          return;
+        }
+
+        const hasBusiness = Array.isArray(data?.business)
+          ? data.business.length > 0
+          : Boolean(data?.business);
+        if (!hasBusiness) {
+          callback();
+          localStorage.removeItem("@@__token");
+          if (navigate) navigate("/login");
+          dispatch({ type: LOGOUT });
           return;
         }
 
