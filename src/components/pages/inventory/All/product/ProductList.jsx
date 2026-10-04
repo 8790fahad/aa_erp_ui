@@ -53,12 +53,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiURL, _fetchApi } from "@/redux/actions/api";
+import { apiURL, _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import {
   formatNumberWithCommas,
   filterJournalAmountInput,
+  parseNumberFromFormatted,
 } from "@/utilities";
+import { getFinancialYearForDate } from "@/utils/financialYear";
 
 const JOURNAL_QTY_INPUT_CLASS =
   "h-9 rounded-md border border-slate-200 bg-white px-3 text-center text-sm tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20 disabled:bg-slate-50 disabled:text-slate-400";
@@ -379,7 +381,7 @@ function SortTh({ label, column, sortKey, sortDir, onSort, align = "left" }) {
 }
 
 export default function ProductList() {
-  const activeBusiness = useSelector((state) => state.auth.activeBusiness);
+  const { activeBusiness, user } = useSelector((state) => state.auth);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const pageFromUrl = Math.max(
@@ -435,8 +437,31 @@ export default function ProductList() {
   const [savingSalesTarget, setSavingSalesTarget] = useState(false);
   const [stopSalesModal, setStopSalesModal] = useState(EMPTY_STOP_SALES_MODAL);
   const [savingStopSales, setSavingStopSales] = useState(false);
+  const [openingModal, setOpeningModal] = useState({
+    open: false,
+    productId: null,
+    productName: "",
+    sku: "",
+    branchId: "",
+    quantity: "",
+    cost: "",
+    date: "",
+    expiry: "",
+  });
+  const [savingOpening, setSavingOpening] = useState(false);
+  const [openingWarehouses, setOpeningWarehouses] = useState([]);
   const [togglingStopKey, setTogglingStopKey] = useState(null);
   const [branches, setBranches] = useState([]);
+
+  const openingDateBounds = useMemo(() => {
+    const fy = getFinancialYearForDate(activeBusiness);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const maxDate = `${tomorrow.getFullYear()}-${String(
+      tomorrow.getMonth() + 1,
+    ).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+    return { minDate: fy.fromDate, maxDate };
+  }, [activeBusiness]);
 
   const handlePageChange = useCallback(
     (page) => {
@@ -1453,6 +1478,143 @@ export default function ProductList() {
     return filteredData.slice(startIdx, startIdx + pageSizeFromUrl);
   }, [filteredData, pageFromUrl, pageSizeFromUrl]);
 
+  const loadOpeningForStore = (productId, branchId) => {
+    if (!activeBusiness?.id || productId == null || productId === "" || !branchId) return;
+    _fetchApi(
+      `/api/products/opening-balance?facilityId=${activeBusiness.id}&productId=${productId}&branchId=${branchId}`,
+      (resp) => {
+        const row = resp?.data;
+        setOpeningModal((prev) => {
+          if (
+            !prev.open ||
+            prev.productId !== productId ||
+            String(prev.branchId) !== String(branchId)
+          ) {
+            return prev;
+          }
+          if (!row) {
+            return { ...prev, quantity: "", cost: "", expiry: "" };
+          }
+          const received = row.receive_date
+            ? String(row.receive_date).slice(0, 10)
+            : prev.date;
+          return {
+            ...prev,
+            quantity: formatNumberWithCommas(String(row.quantity ?? "")),
+            cost: formatNumberWithCommas(String(row.cost_price ?? "")),
+            date: received || prev.date,
+            expiry: row.expiry_date ? String(row.expiry_date).slice(0, 10) : "",
+          };
+        });
+      },
+    );
+  };
+
+  const openOpeningBalance = (item) => {
+    if (!isGoodsItemType(item.item_type)) {
+      toast.error("Opening stock is only for goods.");
+      return;
+    }
+    if (!activeBusiness?.opening_balance_equity) {
+      toast.error(
+        "Set the Opening Balance Equity account in Admin settings before recording an opening balance.",
+      );
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    setOpeningWarehouses([]);
+    setOpeningModal({
+      open: true,
+      productId: item.id,
+      productName: item.name || item.item_name || "",
+      sku: item.sku || "",
+      branchId: "",
+      quantity: "",
+      cost: "",
+      date: today,
+      expiry: "",
+    });
+    _fetchApi(
+      `/account/get/branches?facilityId=${activeBusiness.id}`,
+      (res) => {
+        const rows = Array.isArray(res?.results) ? res.results : [];
+        setOpeningWarehouses(rows);
+        const branchId = rows[0] ? String(rows[0].id) : "";
+        setOpeningModal((prev) => {
+          if (!prev.open || prev.productId !== item.id) return prev;
+          return { ...prev, branchId };
+        });
+        if (branchId) loadOpeningForStore(item.id, branchId);
+      },
+      () => setOpeningWarehouses([]),
+    );
+  };
+
+  const saveOpeningBalance = () => {
+    if (
+      (openingModal.productId == null || openingModal.productId === "") &&
+      !openingModal.sku
+    ) {
+      return;
+    }
+    if (!activeBusiness?.id) return;
+    const quantity = parseFloat(parseNumberFromFormatted(openingModal.quantity));
+    const cost = parseFloat(parseNumberFromFormatted(openingModal.cost));
+    if (!openingModal.branchId) {
+      toast.error("Select a store, warehouse, or branch");
+      return;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      toast.error("Enter a quantity greater than zero");
+      return;
+    }
+    if (!Number.isFinite(cost) || cost <= 0) {
+      toast.error("Enter a unit cost greater than zero");
+      return;
+    }
+    if (
+      !openingModal.date ||
+      openingModal.date < openingDateBounds.minDate ||
+      openingModal.date > openingDateBounds.maxDate
+    ) {
+      toast.error(
+        `As of date must be from ${openingDateBounds.minDate} through ${openingDateBounds.maxDate}.`,
+      );
+      return;
+    }
+    setSavingOpening(true);
+    _postApi(
+      "/api/products/opening-balance",
+      {
+        facilityId: activeBusiness.id,
+        productId: openingModal.productId,
+        sku: openingModal.sku,
+        branchId: openingModal.branchId,
+        quantity,
+        cost_price: cost,
+        obdate: openingModal.date,
+        expiry_date: openingModal.expiry || null,
+        opening_balance_equity: activeBusiness.opening_balance_equity,
+        created_by: user?.id,
+      },
+      (resp) => {
+        setSavingOpening(false);
+        if (!resp?.success) {
+          toast.error(resp?.message || "Could not save opening balance");
+          return;
+        }
+        toast.success(
+          `Opening balance saved for ${openingModal.productName || openingModal.sku}`,
+        );
+        setOpeningModal((prev) => ({ ...prev, open: false }));
+      },
+      (err) => {
+        setSavingOpening(false);
+        toast.error(err?.message || "Could not save opening balance");
+      },
+    );
+  };
+
   const renderRowActions = (item) => (
     <div className="flex items-center justify-end gap-0.5">
       <Button
@@ -1514,6 +1676,15 @@ export default function ProductList() {
             <FileText className="h-4 w-4" />
             Add Description
           </DropdownMenuItem>
+          {isGoodsItemType(item.item_type) ? (
+            <DropdownMenuItem
+              onClick={() => openOpeningBalance(item)}
+              className="flex items-center gap-2"
+            >
+              <Package className="h-4 w-4" />
+              Opening balance
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => openStopSalesModal(item)}
@@ -2032,6 +2203,141 @@ export default function ProductList() {
               })
             )}
           </div>
+        </Modal>
+
+        <Modal
+          title={
+            <div className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-[var(--aa-navy)]" />
+              <span>Opening balance</span>
+            </div>
+          }
+          open={openingModal.open}
+          onCancel={() => {
+            if (savingOpening) return;
+            setOpeningModal((prev) => ({ ...prev, open: false }));
+          }}
+          onOk={saveOpeningBalance}
+          okText={savingOpening ? "Saving…" : "Save opening balance"}
+          cancelText="Cancel"
+          confirmLoading={savingOpening}
+          centered
+        >
+          <p className="mb-3 text-sm text-gray-600">
+            {openingModal.productName}
+            {openingModal.sku ? ` (${openingModal.sku})` : ""}
+          </p>
+          <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-600">
+            Enter the quantity you already hold in the selected store,
+            warehouse, or branch and its unit cost. Quantity times cost is
+            debited to the product inventory account and credited to Opening
+            Balance Equity. Saving again replaces the opening balance for this
+            product in that location.
+          </div>
+          <div className="mb-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Opening Balance Equity
+            </span>
+            <div className="mt-0.5 font-semibold text-slate-900">
+              {activeBusiness?.opening_balance_equity
+                ? String(activeBusiness.opening_balance_equity)
+                : "Not set"}
+            </div>
+          </div>
+          <label className="mb-3 block text-sm font-medium text-gray-700">
+            Store / Warehouse / Branch
+            <AntSelect
+              className="mt-1 w-full"
+              showSearch
+              placeholder={
+                openingWarehouses.length
+                  ? "Select store, warehouse, or branch"
+                  : "Loading branches…"
+              }
+              optionFilterProp="label"
+              getPopupContainer={(node) => node.parentElement}
+              value={openingModal.branchId || undefined}
+              notFoundContent="No stores, warehouses, or branches found"
+              options={openingWarehouses.map((b) => {
+                const name = b.branch_name || b.storeName || `Branch ${b.id}`;
+                const kind = String(b.store_type || "").trim();
+                return {
+                  value: String(b.id),
+                  label: kind ? `${name} (${kind})` : name,
+                };
+              })}
+              onChange={(value) => {
+                setOpeningModal((prev) => ({ ...prev, branchId: value }));
+                loadOpeningForStore(openingModal.productId, value);
+              }}
+            />
+          </label>
+          <div className="mb-3 grid grid-cols-2 gap-3">
+            <label className="block text-sm font-medium text-gray-700">
+              Quantity
+              <Input
+                value={openingModal.quantity}
+                onChange={(e) =>
+                  setOpeningModal((prev) => ({
+                    ...prev,
+                    quantity: formatNumberWithCommas(e.target.value),
+                  }))
+                }
+                placeholder="0"
+                size="large"
+                className="mt-1"
+              />
+            </label>
+            <label className="block text-sm font-medium text-gray-700">
+              Unit cost (₦)
+              <Input
+                value={openingModal.cost}
+                onChange={(e) =>
+                  setOpeningModal((prev) => ({
+                    ...prev,
+                    cost: formatNumberWithCommas(e.target.value),
+                  }))
+                }
+                placeholder="0.00"
+                size="large"
+                className="mt-1"
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-sm font-medium text-gray-700">
+              As of
+              <input
+                type="date"
+                value={openingModal.date}
+                min={openingDateBounds.minDate}
+                max={openingDateBounds.maxDate}
+                onChange={(e) =>
+                  setOpeningModal((prev) => ({ ...prev, date: e.target.value }))
+                }
+                className="mt-1 h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
+              />
+            </label>
+            <label className="block text-sm font-medium text-gray-700">
+              Expiry
+              <input
+                type="date"
+                value={openingModal.expiry}
+                onChange={(e) =>
+                  setOpeningModal((prev) => ({
+                    ...prev,
+                    expiry: e.target.value,
+                  }))
+                }
+                className="mt-1 h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
+              />
+            </label>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            As of date is from the start of the financial year (
+            {openingDateBounds.minDate}) through tomorrow (
+            {openingDateBounds.maxDate}). Expiry is optional.
+          </p>
         </Modal>
 
         {/* Delete Confirmation Modal */}
