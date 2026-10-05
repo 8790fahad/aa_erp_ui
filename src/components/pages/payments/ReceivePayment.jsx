@@ -77,6 +77,7 @@ import {
 import CreditSaleInvoiceImproved from "@/components/pages/sales/CreditSaleInvoiceImproved";
 import CreateImprestDrawer from "@/components/common/CreateImprestDrawer";
 import RecordSupplierPaymentForm from "@/components/pages/payments/RecordSupplierPaymentForm";
+import CashFlowForm from "@/components/pages/account/CashFlowForm";
 
 const cashPayThroughLabel = (option) =>
   `${option?.description || option?.head || ""} (${option?.head || ""})`.trim();
@@ -101,7 +102,10 @@ function TillSummaryCard({
   retire,
   handed = 0,
   toSafe = false,
+  transferredOut = null,
   onOpen,
+  onBankTransfer,
+  canBankTransfer = false,
 }) {
   const cleared = Number(handed) > 0.05 && Number(retire) <= 0.05;
   const title = cleared
@@ -118,27 +122,56 @@ function TillSummaryCard({
         ? `₦${formatNumber1(handed)} already moved to Safe`
         : `₦${formatNumber1(handed)} already on History`
       : "Tap to open till";
+  const showTransferOut = transferredOut != null;
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-shadow hover:border-[var(--aa-accent)] hover:shadow-md"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-          <Icon className={`h-4 w-4 ${iconClass}`} />
-          {title}
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:border-[var(--aa-accent)] hover:shadow-md">
+      <button type="button" onClick={onOpen} className="w-full text-left">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+            <Icon className={`h-4 w-4 ${iconClass}`} />
+            {title}
+          </div>
+          <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-[var(--aa-navy)]">
+            Open till
+            <ChevronRight className="h-3.5 w-3.5" />
+          </span>
         </div>
-        <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-[var(--aa-navy)]">
-          Open till
-          <ChevronRight className="h-3.5 w-3.5" />
-        </span>
-      </div>
-      <p className={`mt-2 text-2xl font-semibold tabular-nums ${cleared ? "text-slate-400" : amountClass}`}>
-        ₦{formatNumber1(retire)}
-      </p>
-      <p className="mt-1 text-xs text-slate-500">{note}</p>
-    </button>
+        <p
+          className={`mt-2 text-2xl font-semibold tabular-nums ${cleared ? "text-slate-400" : amountClass}`}
+        >
+          ₦{formatNumber1(retire)}
+        </p>
+        {showTransferOut ? (
+          <p className="mt-1 text-xs text-slate-500">
+            Cash transferred out: ₦{formatNumber1(transferredOut)}
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-slate-500">{note}</p>
+        )}
+      </button>
+      {onBankTransfer ? (
+        <button
+          type="button"
+          disabled={!canBankTransfer}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (canBankTransfer) onBankTransfer();
+          }}
+          className={`mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium ${
+            canBankTransfer
+              ? "border-slate-200 bg-slate-50 text-slate-800 hover:border-[var(--aa-accent)] hover:bg-white"
+              : "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400"
+          }`}
+        >
+          {canBankTransfer ? (
+            <ArrowRightLeft className="h-4 w-4" />
+          ) : (
+            <Lock className="h-3.5 w-3.5" />
+          )}
+          Inter-bank transfer
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -236,11 +269,14 @@ function TillHubDialog({
   expenses,
   imprestTotal,
   payBillTotal,
+  cashTransferOutTotal = 0,
   pendingCount,
   canImprest,
   canPayBill,
+  canBankTransfer = false,
   onImprest,
   onPayBill,
+  onBankTransfer,
   onViewCollected,
   onDownload,
   downloadingKind = null,
@@ -250,6 +286,7 @@ function TillHubDialog({
     Number(expenses) - Number(collected) > 0.005
       ? Number(expenses) - Number(collected)
       : 0;
+  const showCashTransfer = modeLabel === "Cash";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -257,7 +294,9 @@ function TillHubDialog({
         <DialogHeader className="text-left">
           <DialogTitle>{modeLabel} till</DialogTitle>
           <DialogDescription>
-            Collections minus Imprest and Pay Bill.
+            {showCashTransfer
+              ? "Collections minus Imprest, Pay Bill, and cash transferred to bank."
+              : "Collections minus Imprest and Pay Bill."}
           </DialogDescription>
         </DialogHeader>
 
@@ -291,6 +330,18 @@ function TillHubDialog({
             onDownload={() => onDownload?.("paybill")}
             downloading={downloadingKind === "paybill" || downloadingKind === "all"}
           />
+          {showCashTransfer ? (
+            <TillLine
+              label="Cash transferred out"
+              value={cashTransferOutTotal}
+              tone="minus"
+              prefix="− "
+              onDownload={() => onDownload?.("cash_transfer")}
+              downloading={
+                downloadingKind === "cash_transfer" || downloadingKind === "all"
+              }
+            />
+          ) : null}
           {Number(handed) > 0.05 ? (
             <TillLine
               label={toSafe ? "Moved to Safe" : "On History"}
@@ -301,7 +352,7 @@ function TillHubDialog({
           ) : null}
           <div className="mt-1 border-t border-slate-200 pt-1">
             <TillLine
-              label={`${modeLabel} to retire`}
+              label={`Total ${modeLabel.toLowerCase()} to retire`}
               value={retire}
               tone="total"
             />
@@ -314,7 +365,11 @@ function TillHubDialog({
           ) : null}
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div
+          className={`grid gap-2 ${
+            showCashTransfer ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2"
+          }`}
+        >
           <TillSpendButton
             title="Imprest"
             icon={Receipt}
@@ -327,6 +382,14 @@ function TillHubDialog({
             allowed={canPayBill}
             onClick={onPayBill}
           />
+          {showCashTransfer ? (
+            <TillSpendButton
+              title="Inter-bank transfer"
+              icon={ArrowRightLeft}
+              allowed={canBankTransfer}
+              onClick={onBankTransfer}
+            />
+          ) : null}
         </div>
         <button
           type="button"
@@ -362,6 +425,7 @@ async function downloadTillExcel({
   collected,
   imprest,
   payBills,
+  cashTransfersOut,
   handedToSafe = 0,
   retire,
 }) {
@@ -438,6 +502,18 @@ async function downloadTillExcel({
       payBills?.total,
     );
   }
+  if (
+    modeLabel === "Cash" &&
+    (section === "all" || section === "cash_transfer")
+  ) {
+    addSheet(
+      "Cash transferred out",
+      columns,
+      cashTransfersOut?.lines,
+      "Transferred out total",
+      cashTransfersOut?.total,
+    );
+  }
   if (section === "all") {
     const ws = wb.addWorksheet("Summary");
     ws.addRow([`${modeLabel} till summary`]);
@@ -451,12 +527,20 @@ async function downloadTillExcel({
       ["Collected", Number(collected?.total) || 0],
       ["Imprest", Number(imprest?.total) || 0],
       ["Pay Bill", Number(payBills?.total) || 0],
+    ];
+    if (modeLabel === "Cash") {
+      summaryRows.push([
+        "Cash transferred out",
+        Number(cashTransfersOut?.total) || 0,
+      ]);
+    }
+    summaryRows.push(
       [
         modeLabel === "Cash" ? "Moved to Safe" : "On History",
         Number(handedToSafe) || 0,
       ],
-      [`${modeLabel} to retire`, Number(retire) || 0],
-    ];
+      [`Total ${modeLabel.toLowerCase()} to retire`, Number(retire) || 0],
+    );
     summaryRows.forEach(([label, amount]) => {
       const row = ws.addRow([label, amount]);
       row.getCell(2).numFmt = "#,##0.00";
@@ -480,7 +564,9 @@ async function downloadTillExcel({
       ? "report"
       : section === "paybill"
         ? "pay-bill"
-        : section;
+        : section === "cash_transfer"
+          ? "cash-transfer"
+          : section;
   a.download = `${slug}-till-${part}-${fromDate}-to-${toDate}.xlsx`;
   a.click();
   window.URL.revokeObjectURL(url);
@@ -541,6 +627,8 @@ const SWITCH_PAYMENT_MODE_PRIVILEGE = "Switch Payment Mode";
 const RECONCILIATION_PRIVILEGE = "Collection Reconciliation";
 const IMPREST_PRIVILEGE = "Imprest";
 const PAY_BILL_PRIVILEGE = "Pay Bill";
+const CASH_TRANSFER_PRIVILEGE = "Cash Flow Entries";
+const FUNDS_TRANSFER_PRIVILEGE = "Funds Tranfer";
 const EDIT_INVOICE_PRIVILEGE = "Edit Invoice";
 
 function parseFunctionalities(raw) {
@@ -1536,6 +1624,7 @@ export default function ReceivePayment() {
   const [tillHubOpen, setTillHubOpen] = useState(false);
   const [tillDownloadKind, setTillDownloadKind] = useState(null);
   const [payBillOpen, setPayBillOpen] = useState(false);
+  const [bankTransferOpen, setBankTransferOpen] = useState(false);
   const [expenseList, setExpenseList] = useState([]);
   const [summary, setSummary] = useState({
     pending_cash: 0,
@@ -2181,6 +2270,8 @@ export default function ReceivePayment() {
         expenses_today: Number(summary.expenses_cash_today) || 0,
         imprest_today: Number(summary.imprest_cash_today) || 0,
         pay_bills_today: Number(summary.pay_bills_cash_today) || 0,
+        cash_transfers_out_today:
+          Number(summary.cash_transfers_out_today) || 0,
         handed_today: Number(summary.handed_cash_today) || 0,
         retire_today: Number(
           summary.retire_cash_today ??
@@ -2464,6 +2555,7 @@ export default function ReceivePayment() {
               collected: res.results?.collected,
               imprest: res.results?.imprest,
               payBills: res.results?.pay_bills,
+              cashTransfersOut: res.results?.cash_transfers_out,
               handedToSafe: res.results?.handed_to_safe,
               retire: res.results?.retire,
             });
@@ -4788,6 +4880,12 @@ export default function ReceivePayment() {
   const canReconcileCollections = canUseHeaderAction(RECONCILIATION_PRIVILEGE);
   const canImprest = canUseHeaderAction(IMPREST_PRIVILEGE);
   const canPayBill = canUseHeaderAction(PAY_BILL_PRIVILEGE);
+  // Cash collectors get inter-bank transfer from the cash till.
+  const canBankTransfer =
+    methodTab === "cash" ||
+    canUseHeaderAction(CASH_TRANSFER_PRIVILEGE) ||
+    canUseHeaderAction(FUNDS_TRANSFER_PRIVILEGE) ||
+    canViewCollectionTab("Cash Collection");
 
   if (
     !visibleMethodTabs.length &&
@@ -5078,8 +5176,11 @@ export default function ReceivePayment() {
               amountClass="text-emerald-700"
               retire={viewSummary.retire_today}
               handed={viewSummary.handed_today}
+              transferredOut={viewSummary.cash_transfers_out_today || 0}
               toSafe
               onOpen={() => setTillHubOpen(true)}
+              canBankTransfer={canBankTransfer}
+              onBankTransfer={() => setBankTransferOpen(true)}
             />
           ) : null}
 
@@ -7321,9 +7422,11 @@ export default function ReceivePayment() {
         expenses={viewSummary.expenses_today}
         imprestTotal={viewSummary.imprest_today || 0}
         payBillTotal={viewSummary.pay_bills_today || 0}
+        cashTransferOutTotal={viewSummary.cash_transfers_out_today || 0}
         pendingCount={viewSummary.pending_count || 0}
         canImprest={canImprest}
         canPayBill={canPayBill}
+        canBankTransfer={canBankTransfer}
         onImprest={() => {
           setTillHubOpen(false);
           setImprestOpen(true);
@@ -7331,6 +7434,10 @@ export default function ReceivePayment() {
         onPayBill={() => {
           setTillHubOpen(false);
           setPayBillOpen(true);
+        }}
+        onBankTransfer={() => {
+          setTillHubOpen(false);
+          setBankTransferOpen(true);
         }}
         onViewCollected={() => {
           setTillHubOpen(false);
@@ -7371,6 +7478,17 @@ export default function ReceivePayment() {
             : "cash"
         }
         skipReceiptNavigate
+        onSuccess={fetchDashboard}
+      />
+      <CashFlowForm
+        showModal={bankTransferOpen}
+        closeModal={() => setBankTransferOpen(false)}
+        tillMode
+        lockFrom
+        defaultFromCode={activeBusiness?.recon_cash_account_code || ""}
+        defaultRemarks="Till: Cash Exchange"
+        title="Inter-bank transfer"
+        description="Move cash from the till to a bank account. Amount reduces total cash to retire."
         onSuccess={fetchDashboard}
       />
 

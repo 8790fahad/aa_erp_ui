@@ -539,6 +539,12 @@ export default function GoodsTransfer() {
           null,
         quantity: qty,
         notes: writeOffNotes,
+        expiry_date:
+          writeOffItem.expiry_date &&
+          writeOffItem.expiry_date !== "1111-11-11" &&
+          writeOffItem.expiry_date !== "0000-00-00"
+            ? writeOffItem.expiry_date
+            : null,
         account_head_code: selectedAccountOption.head,
         account_head_name: selectedAccountOption.description,
         inserted_by: activeBusiness?.user_name || user?.name || "",
