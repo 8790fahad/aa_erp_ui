@@ -960,6 +960,20 @@ function rowPaymentModeBreakdown(row) {
     else if (id === "deposit" || id === "apply_credit") amount = depositAmt;
     else if (id === "credit") {
       amount = creditKnown;
+      if (
+        amount <= 0.05 &&
+        (Boolean(sp.credit_pending_collection) ||
+          Boolean(row.credit_awaiting_collection))
+      ) {
+        // Remainder not known until cash/transfer/card is collected
+        return {
+          id,
+          label: MODE_LABELS[id] || id,
+          amount: 0,
+          collected: false,
+          pendingRemainder: true,
+        };
+      }
     }
     if (ordered.length === 1 && amount <= 0.05) amount = due;
     const collected =
@@ -988,14 +1002,18 @@ function PaymentModeBreakdown({ row, className = "" }) {
           <span className="text-slate-500">{item.label}:</span>{" "}
           <span
             className={
-              item.amount > 0.05
-                ? item.collected
-                  ? "font-medium text-emerald-700"
-                  : "font-medium text-slate-800"
-                : "font-medium text-amber-700"
+              item.pendingRemainder
+                ? "font-medium text-amber-700"
+                : item.amount > 0.05
+                  ? item.collected
+                    ? "font-medium text-emerald-700"
+                    : "font-medium text-slate-800"
+                  : "font-medium text-amber-700"
             }
           >
-            ₦{formatNumber1(item.amount)}
+            {item.pendingRemainder
+              ? "Remainder after collect"
+              : `₦${formatNumber1(item.amount)}`}
           </span>
         </div>
       ))}
@@ -5310,6 +5328,13 @@ export default function ReceivePayment() {
                               <div className="mt-1 text-[11px] font-semibold text-red-600">
                                 Exceeds remaining credit
                               </div>
+                          ) : methodTab === "credit" &&
+                            (row.credit_awaiting_collection ||
+                              row.split_progress?.credit_pending_collection) ? (
+                              <div className="mt-1 text-[11px] text-amber-800">
+                                Collect transfer/cash first — credit is the
+                                remainder
+                              </div>
                           ) : null}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
@@ -5383,6 +5408,20 @@ export default function ReceivePayment() {
                                 </button>
                               )}
                             </div>
+                          ) : methodTab === "credit" &&
+                            isCreditAvailabilityRow(row) &&
+                            (row.credit_awaiting_collection ||
+                              row.split_progress?.credit_pending_collection) ? (
+                            <button
+                              type="button"
+                              disabled={submitting}
+                              title="Collect transfer/cash first; credit is the unpaid remainder"
+                              onClick={() => openHub(row, "collect")}
+                              className="inline-flex items-center gap-1.5 rounded-md bg-[var(--aa-navy)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              Collect first
+                            </button>
                           ) : methodTab === "credit" &&
                             isCreditAvailabilityRow(row) ? (
                             <button
