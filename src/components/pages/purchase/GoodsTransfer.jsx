@@ -72,9 +72,17 @@ const normalizeReadyForSalesItem = (item) => {
   const rawTotal = parseFloat(item.total);
   const total = Number.isFinite(rawTotal) ? rawTotal : balance + pending;
   const productId = item.product_id || item.sku || item.item_code || "";
+  const expiry_date =
+    item.expiry_date &&
+    item.expiry_date !== "1111-11-11" &&
+    item.expiry_date !== "0000-00-00"
+      ? String(item.expiry_date).slice(0, 10)
+      : null;
   return {
     ...item,
-    id: item.id || productId,
+    id:
+      item.id ||
+      `${productId}-${expiry_date || "NULL"}-${item.branch_id || item.branchId || 0}`,
     name: item.item_name || item.name || "",
     item_name: item.item_name || item.name || "",
     product_id: productId,
@@ -84,6 +92,7 @@ const normalizeReadyForSalesItem = (item) => {
     balance,
     pending_to_collect: pending,
     total,
+    expiry_date,
     branch_name: item.branch_name || "for sales",
     branch_id: item.branch_id ?? item.branchId ?? null,
     branchId: item.branchId ?? item.branch_id ?? null,
@@ -789,7 +798,14 @@ export default function GoodsTransfer() {
       product.sku || product.item_code || product.product_id || "N/A";
     const uom = product.unit_of_measure || product.uom || "Pcs";
     const avail = parseFloat(product.qty ?? product.balance) || 0;
-    return `${name} (${code}) — ${formatNumber1(avail)} ${uom} available`;
+    const expiry =
+      product.expiry_date &&
+      product.expiry_date !== "1111-11-11" &&
+      product.expiry_date !== "0000-00-00"
+        ? String(product.expiry_date).slice(0, 10)
+        : null;
+    const expiryPart = expiry ? ` · Exp ${expiry}` : "";
+    return `${name} (${code})${expiryPart} — ${formatNumber1(avail)} ${uom} available`;
   };
 
   const filteredStock = stockItems.filter(
