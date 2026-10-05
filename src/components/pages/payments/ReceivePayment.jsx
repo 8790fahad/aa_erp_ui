@@ -1692,6 +1692,13 @@ export default function ReceivePayment() {
     ) {
       open.push("card");
     }
+    if (
+      (modes.includes("credit") ||
+        normalizePaymentMode(selected?.payment_type) === "credit_split") &&
+      !collectionSideDone(selected, "credit")
+    ) {
+      open.push("credit");
+    }
     return open;
   })();
   const isLastCollectMode =
@@ -1703,7 +1710,9 @@ export default function ReceivePayment() {
   const unpaidBeforeCredit = isSplit
     ? Number(
         (
-          amountDue - (Number(splitProgress?.collected_total) || 0)
+          amountDue -
+          (Number(splitProgress?.collected_total) || 0) -
+          (Number(splitProgress?.credit_allocated) || 0)
         ).toFixed(2),
       )
     : amountDue;
@@ -4176,6 +4185,16 @@ export default function ReceivePayment() {
       );
       return;
     }
+    if (
+      !selected.credit_unlimited &&
+      Number(selected.credit_available) >= 0 &&
+      creditToSend > Number(selected.credit_available) + 0.05
+    ) {
+      toast.error(
+        `Credit exceeds available limit (₦${formatNumber1(selected.credit_available)} available)`,
+      );
+      return;
+    }
     const collected = Number(splitProgress?.collected_total) || 0;
     const target = resolveTreatingInvoice();
     if (!target?.sale_code) {
@@ -5329,24 +5348,52 @@ export default function ReceivePayment() {
                                 Exceeds remaining credit
                               </div>
                           ) : methodTab === "credit" &&
-                            (row.credit_awaiting_collection ||
-                              row.split_progress?.credit_pending_collection) ? (
+                            normalizePaymentMode(row.payment_type) ===
+                              "credit_split" ? (
                               <div className="mt-1 text-[11px] text-amber-800">
-                                Collect transfer/cash first — credit is the
-                                remainder
+                                Confirm part on credit; collect the rest on Cash
+                                or Transfer
                               </div>
                           ) : null}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
                           ₦{formatNumber1(row.invoice_amount ?? row.amount)}
-                          {Math.abs(
-                            Number(row.invoice_amount ?? row.amount) -
-                              Number(row.amount),
-                          ) > 0.05 ? (
-                            <div className="mt-0.5 text-[11px] font-medium text-amber-800">
-                              Due now ₦{formatNumber1(row.amount)}
-                            </div>
-                          ) : null}
+                          {(() => {
+                            const sp = row?.split_progress || {};
+                            const open = Math.max(
+                              0,
+                              Number(
+                                (
+                                  Number(row.amount) -
+                                  (Number(sp.collected_total) || 0) -
+                                  (Number(sp.credit_allocated) || 0)
+                                ).toFixed(2),
+                              ),
+                            );
+                            const showOpen =
+                              open + 0.05 <
+                              Number(row.invoice_amount ?? row.amount);
+                            if (showOpen) {
+                              return (
+                                <div className="mt-0.5 text-[11px] font-medium text-amber-800">
+                                  Open ₦{formatNumber1(open)}
+                                </div>
+                              );
+                            }
+                            if (
+                              Math.abs(
+                                Number(row.invoice_amount ?? row.amount) -
+                                  Number(row.amount),
+                              ) > 0.05
+                            ) {
+                              return (
+                                <div className="mt-0.5 text-[11px] font-medium text-amber-800">
+                                  Due now ₦{formatNumber1(row.amount)}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                           {Number(row.discount_amount) > 0 ? (
                             <div className="mt-0.5 text-[11px] font-medium text-orange-700">
                               Discount −₦{formatNumber1(row.discount_amount)}
@@ -5408,20 +5455,6 @@ export default function ReceivePayment() {
                                 </button>
                               )}
                             </div>
-                          ) : methodTab === "credit" &&
-                            isCreditAvailabilityRow(row) &&
-                            (row.credit_awaiting_collection ||
-                              row.split_progress?.credit_pending_collection) ? (
-                            <button
-                              type="button"
-                              disabled={submitting}
-                              title="Collect transfer/cash first; credit is the unpaid remainder"
-                              onClick={() => openHub(row, "collect")}
-                              className="inline-flex items-center gap-1.5 rounded-md bg-[var(--aa-navy)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                              Collect first
-                            </button>
                           ) : methodTab === "credit" &&
                             isCreditAvailabilityRow(row) ? (
                             <button
@@ -5822,10 +5855,10 @@ export default function ReceivePayment() {
                       <p>
                         {normalizePaymentMode(paymentType) === "credit_split"
                           ? methodTab === "cash"
-                            ? "Collect any cash amount. Remaining balance can stay on credit or other modes."
+                            ? "Enter any cash amount. The rest can go on transfer or credit (Credit tab)."
                             : methodTab === "transfer"
-                              ? "Collect any transfer amount. Remaining balance can stay on credit or other modes."
-                              : "Collect any portion in this mode. Any unpaid balance can be Credit — confirm it on the Credit tab."
+                              ? "Enter any transfer amount. The rest can go on credit (Credit tab) or more cash."
+                              : "Enter a credit amount on the Credit tab first, or collect cash/transfer here — any mix is allowed."
                           : isLastCollectMode
                             ? `Last payment — enter the full remaining ₦${formatNumber1(lastCollectTarget)} in this mode to finish the invoice.`
                           : "Collect any amount in this mode — including the full remaining balance as cash, transfer, or POS if needed. Unused modes stay open until the invoice is fully paid."}
@@ -5862,11 +5895,11 @@ export default function ReceivePayment() {
                         <p>
                           Credit:{" "}
                           <span className="font-semibold tabular-nums text-amber-800">
-                            ₦
-                            {formatNumber1(
-                              Number(splitProgress?.credit) > 0
-                                ? splitProgress.credit
-                                : unpaidBeforeCredit,
+                            {Number(splitProgress?.credit_allocated) > 0.05 ||
+                            Number(splitProgress?.credit) > 0.05 ? (
+                              <>₦{formatNumber1(Number(splitProgress?.credit) || 0)}</>
+                            ) : (
+                              <>Set on Credit tab (any amount up to due)</>
                             )}
                           </span>
                         </p>
@@ -5888,7 +5921,8 @@ export default function ReceivePayment() {
                   ) : null}
                   {hubAction === "credit" &&
                   isCreditSplitHub &&
-                  awaitingCollection ? (
+                  String(selected?.status || "").toLowerCase() ===
+                    "awaiting_cashier_confirm" ? (
                     <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
                       <div className="flex items-center justify-between gap-2">
                         <label
@@ -6434,7 +6468,8 @@ export default function ReceivePayment() {
                     <>
                       {methodTab === "credit" &&
                       isCreditSplitHub &&
-                      remainingDue > 0.05 ? (
+                      remainingDue > 0.05 &&
+                      splitHintTotal <= 0.05 ? (
                         <button
                           type="button"
                           onClick={sendCreditRemainder}
@@ -6482,20 +6517,24 @@ export default function ReceivePayment() {
                       disabled={
                         submitting ||
                         !selected ||
-                        selected.credit_over_limit ||
                         (isCreditSplitHub &&
-                          awaitingCollection &&
-                          parseFormattedAmount(creditAmount) <= 0.05)
+                        String(selected?.status || "").toLowerCase() ===
+                          "awaiting_cashier_confirm"
+                          ? parseFormattedAmount(creditAmount) <= 0.05
+                          : selected.credit_over_limit)
                       }
                       title={
-                        selected?.credit_over_limit
+                        selected?.credit_over_limit &&
+                        String(selected?.status || "").toLowerCase() !==
+                          "awaiting_cashier_confirm"
                           ? "Invoice exceeds this customer's remaining credit"
                           : undefined
                       }
                       onClick={() => {
                         if (
                           isCreditSplitHub &&
-                          awaitingCollection
+                          String(selected?.status || "").toLowerCase() ===
+                            "awaiting_cashier_confirm"
                         ) {
                           sendCreditRemainder();
                           return;
@@ -6509,11 +6548,13 @@ export default function ReceivePayment() {
                       ) : (
                         <CheckCircle2 className="h-4 w-4" />
                       )}
-                      {isCreditSplitHub && awaitingCollection
+                      {isCreditSplitHub &&
+                      String(selected?.status || "").toLowerCase() ===
+                        "awaiting_cashier_confirm"
                         ? `Confirm ₦${formatNumber1(
                             parseFormattedAmount(creditAmount) ||
                               unpaidBeforeCredit,
-                          )} as Credit`
+                          )} on Credit`
                         : `Approve Credit${
                             selected?.amount > 0
                               ? ` · ₦${formatNumber1(selected.amount)}`
