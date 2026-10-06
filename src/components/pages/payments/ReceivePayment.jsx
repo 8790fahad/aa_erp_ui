@@ -2111,9 +2111,13 @@ export default function ReceivePayment() {
     }
     const due = Number(
       isSplit
-        ? suggestedPortion > 0.05
-          ? suggestedPortion
-          : remainingDue
+        ? isLastCollectMode
+          ? lastCollectTarget > 0.05
+            ? lastCollectTarget
+            : remainingDue
+          : suggestedPortion > 0.05
+            ? suggestedPortion
+            : remainingDue
         : remainingDue,
     );
     const defaultBank =
@@ -2122,9 +2126,10 @@ export default function ReceivePayment() {
       {
         key: `leg-${selected.sale_code || "1"}`,
         bankId: defaultBank?.id != null ? String(defaultBank.id) : "",
-        // Pure transfer: prefill full due. Cash+Transfer side: leave blank to enter portion.
+        // Pure transfer / last remaining mode (e.g. after deposit): prefill full due.
+        // Mid-split portions stay blank so the cashier enters their share.
         amount:
-          isSplit || due <= 0.05
+          (isSplit && !isLastCollectMode) || due <= 0.05
             ? ""
             : formatNumberWithCommas(String(due)),
       },
@@ -2135,9 +2140,11 @@ export default function ReceivePayment() {
     collectOpen,
     hubAction,
     selected?.sale_code,
+    selected?.amount,
     showTransferFields,
     showCardFields,
     isSplit,
+    isLastCollectMode,
     methodTab,
   ]);
 
@@ -3689,29 +3696,59 @@ export default function ReceivePayment() {
       }
 
       if (action === "collect") {
-        // Mixed modes: leave amount blank so any portion can be entered.
-        // Single-mode invoices still pre-fill the full amount due.
-        if (rowCollectsAsSplit(snapshot)) {
+        // Mixed modes: leave amount blank so any portion can be entered —
+        // except when only one collect side remains (e.g. after deposit applied),
+        // then pre-fill the full leftover so Confirm is ready.
+        const due = Number(snapshot.amount) || 0;
+        const sp = snapshot.split_progress || {};
+        const collected = Number(sp.collected_total) || 0;
+        const creditAlloc = Number(sp.credit_allocated) || 0;
+        const leftover = Math.max(
+          0,
+          Number((due - collected - creditAlloc).toFixed(2)),
+        );
+        const fill = leftover > 0.05 ? leftover : due;
+        const modes = rowPaymentModes(snapshot);
+        const openModes = [];
+        if (
+          modes.includes("cash") &&
+          !(sp.cash_done || Number(sp.cash) > 0.05)
+        ) {
+          openModes.push("cash");
+        }
+        if (
+          (modes.includes("transfer") || modes.includes("bank")) &&
+          !(sp.transfer_done || Number(sp.transfer) > 0.05)
+        ) {
+          openModes.push("transfer");
+        }
+        if (
+          modes.includes("card") &&
+          !(sp.card_done || Number(sp.card) > 0.05)
+        ) {
+          openModes.push("card");
+        }
+        const lastSide =
+          openModes.length === 1 ? openModes[0] : null;
+        const isLastOnly = Boolean(lastSide) && rowCollectsAsSplit(snapshot);
+
+        if (rowCollectsAsSplit(snapshot) && !isLastOnly) {
           setCashAmount("");
           setTransferAmount("");
         } else {
-          const due = Number(snapshot.amount) || 0;
-          const collected = Number(snapshot.split_progress?.collected_total) || 0;
-          const creditAlloc = Number(snapshot.split_progress?.credit_allocated) || 0;
-          const leftover = Math.max(
-            0,
-            Number((due - collected - creditAlloc).toFixed(2)),
-          );
-          const fill = leftover > 0.05 ? leftover : due;
-          if (pt === "cash" || methodTab === "cash") {
+          const side =
+            lastSide ||
+            (pt === "card" || methodTab === "card"
+              ? "card"
+              : pt === "transfer" ||
+                  pt === "bank" ||
+                  methodTab === "transfer"
+                ? "transfer"
+                : "cash");
+          if (side === "cash") {
             setCashAmount(fill > 0 ? formatNumberWithCommas(String(fill)) : "");
             setTransferAmount("");
-          } else if (
-            pt === "transfer" ||
-            pt === "bank" ||
-            methodTab === "transfer" ||
-            methodTab === "card"
-          ) {
+          } else if (side === "transfer" || side === "card") {
             setCashAmount("");
             setTransferAmount(
               fill > 0 ? formatNumberWithCommas(String(fill)) : "",
@@ -4863,13 +4900,9 @@ export default function ReceivePayment() {
           : collectionSide === "transfer"
             ? "Transfer"
             : "Cash";
-      return amtLabel
-        ? `Confirm ${amtLabel} ${side} · ${selected?.sale_code || ""}`
-        : `Confirm ${side} · ${selected?.sale_code || ""}`;
+      return amtLabel ? `Confirm ${amtLabel} ${side}` : `Confirm ${side}`;
     }
-    return amtLabel
-      ? `Confirm ${amtLabel} · ${selected?.sale_code || ""}`
-      : `Confirm Payment · ${selected?.sale_code || ""}`;
+    return amtLabel ? `Confirm ${amtLabel}` : "Confirm Payment";
   })();
 
   const summaryGridCols =
@@ -6508,12 +6541,12 @@ export default function ReceivePayment() {
               </div>
 
               <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-5">
-                <div className="flex flex-wrap justify-end gap-2">
+                <div className="flex flex-nowrap items-center justify-end gap-2">
                   <button
                     type="button"
                     onClick={closeHub}
                     disabled={submitting}
-                    className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                    className="shrink-0 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
                   >
                     Close
                   </button>
