@@ -89,6 +89,9 @@ function paymentModesHint(modes) {
   if (set.has("credit")) {
     parts.push("remainder goes to Credit approval (credit limit applies)");
   }
+  if (set.has("deposit") && set.has("credit")) {
+    parts.push("if the invoice is more than deposit plus credit, collect cash at Verification Points");
+  }
   if (!parts.length) return "Select at least one payment method.";
   return parts.join(". ") + ".";
 }
@@ -128,11 +131,7 @@ function invoiceCoverageError({
   const prepaidLabel = "deposit";
 
   if (hasCredit && usePrepaid) {
-    if (unlimitedCredit) return null;
-    const cap = creditLeft + prepaidPool;
-    if (invoiceTotal > cap + 0.009) {
-      return `Invoice ${fmt(invoiceTotal)} exceeds credit available (${fmt(creditLeft)}) plus ${prepaidLabel} (${fmt(prepaidPool)}).`;
-    }
+    // Invoice may exceed deposit + credit; leftover is collected as cash at VP.
     return null;
   }
   if (hasCredit) {
@@ -2787,6 +2786,33 @@ function MakeSale() {
         // Advance is applied manually (Pay Bills / Apply Advance) — never auto here.
         const prepaymentAmount = 0;
 
+        const paymentModesToSave = (() => {
+          const modes = [...selectedPaymentModes];
+          if (
+            hasCreditMode &&
+            hasDepositMode &&
+            !hasCashMode &&
+            !hasTransferMode &&
+            !hasCardMode
+          ) {
+            const prepaid = Math.max(0, Number(depositBalance) || 0);
+            const unlimited = isUnlimitedCreditLimit(creditLimitDisplay, {
+              walkIn: isWalkIn,
+            });
+            const parsedLimit =
+              parseCreditLimitValue(creditLimitDisplay, { walkIn: isWalkIn }) ??
+              0;
+            const creditLeft = unlimited
+              ? Infinity
+              : Math.max(0, parsedLimit - (Number(creditOutstanding) || 0));
+            const cap = prepaid + (Number.isFinite(creditLeft) ? creditLeft : 0);
+            if (totalWithTax > cap + 0.009 && !modes.includes("cash")) {
+              modes.push("cash");
+            }
+          }
+          return modes;
+        })();
+
         const transactionId = UUIDV4();
         const transactionEntry = {
           id: transactionId,
@@ -2848,7 +2874,7 @@ function MakeSale() {
           total_amount: totalWithTax,
           amountPaid: prepaymentAmount, // Apply prepayment if available
           modeOfPayment,
-          payment_modes: selectedPaymentModes,
+          payment_modes: paymentModesToSave,
           discount: totalDiscount,
           txn_type: saleType === "paid" ? "Cash Sale" : "Credit Sale",
           reference: transactionId,
