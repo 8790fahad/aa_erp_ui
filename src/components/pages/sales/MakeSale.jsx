@@ -3369,11 +3369,8 @@ function MakeSale() {
     setCustomerCopyEnabled(false);
     setCustomerCopyPrices({});
 
-    toast.success("Sale completed! Ready for next transaction.");
-
-    // Navigate to sales list or overview
-    navigate("/app/sales/pending-sales");
-  }, [invoiceData, navigate]);
+    toast.success("Sale completed. Open Verification Points when you are ready.");
+  }, [invoiceData]);
 
   const handleCancelPreview = useCallback(() => {
     // Since transaction is already saved, clear and go to pending sales
@@ -3391,10 +3388,7 @@ function MakeSale() {
     setCustomPrices({});
     setCustomerCopyEnabled(false);
     setCustomerCopyPrices({});
-
-    toast.info("Sale saved. Redirecting to pending sales...");
-    navigate("/app/sales/pending-sales");
-  }, [navigate]);
+  }, []);
 
   const handleCancelPDFPreview = useCallback(() => {
     setShowPDFPreview(false);

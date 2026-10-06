@@ -752,7 +752,6 @@ function InvoicePreview() {
       navigate(-1);
       return;
     }
-    toast.info("Sale saved. Redirecting to pending sales...");
     navigate(-1);
   };
 

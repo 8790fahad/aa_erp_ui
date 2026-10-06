@@ -1574,9 +1574,11 @@ export default function ReceivePayment() {
 
   const [methodTab, setMethodTab] = useState(() => {
     const q = String(searchParams.get("tab") || "").toLowerCase();
-    if (q === "apply_credit") return "deposit";
-    if (q === "deposit" || q === "credit") return q;
-    if (q === "credit_approval") return "credit";
+    if (q === "apply_credit" || q === "deposit") return "deposit";
+    if (q === "credit" || q === "credit_approval") return "credit";
+    if (q === "transfer") return "transfer";
+    if (q === "card" || q === "pos") return "card";
+    if (q === "cash") return "cash";
     if (String(location.pathname || "").includes("credit-approval"))
       return "credit";
     return "cash";
@@ -1589,28 +1591,8 @@ export default function ReceivePayment() {
       navigate("/app/payments/collection-reconciliation?tab=discount", {
         replace: true,
       });
-      return;
     }
-    if (
-      canDiscountCollection &&
-      !visibleMethodTabs.length &&
-      !canEditInvoice &&
-      !functionalities.includes(RECONCILIATION_PRIVILEGE) &&
-      !hasFullCollectionAccess
-    ) {
-      navigate("/app/payments/collection-reconciliation?tab=discount", {
-        replace: true,
-      });
-    }
-  }, [
-    searchParams,
-    navigate,
-    canDiscountCollection,
-    visibleMethodTabs.length,
-    canEditInvoice,
-    functionalities,
-    hasFullCollectionAccess,
-  ]);
+  }, [searchParams, navigate]);
   const [loading, setLoading] = useState(false);
   const [dashboardReady, setDashboardReady] = useState(false);
   const todayYmd = moment().format("YYYY-MM-DD");
@@ -1847,13 +1829,6 @@ export default function ReceivePayment() {
     activeBusiness?.id,
     "bank",
   );
-
-  useEffect(() => {
-    const allowed = visibleMethodTabs.map((t) => t.id);
-    if (!allowed.includes(methodTab)) {
-      setMethodTab(allowed[0] || "cash");
-    }
-  }, [visibleMethodTabs, methodTab]);
 
   const removeCollectedInvoice = useCallback((saleCode) => {
     const code = String(saleCode || "").trim();
@@ -3600,17 +3575,11 @@ export default function ReceivePayment() {
 
       fetchDashboard();
       if (remaining <= 0.05) {
-        toast.success("Last payment (deposit) recorded — opening invoice to print");
+        toast.success("Last payment (deposit) recorded");
         removeCollectedInvoice(saleCode);
         setSearch("");
-        setActiveTab("pending");
         setDepositConfirmRow(null);
         setHubOpen(false);
-        navigate(
-          `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-            saleCode,
-          )}&doc=invoice`,
-        );
         return;
       }
 
@@ -3619,23 +3588,12 @@ export default function ReceivePayment() {
       if (modes.includes("cash")) leftoverParts.push("Cash");
       if (modes.includes("transfer")) leftoverParts.push("Transfer");
       if (modes.includes("card")) leftoverParts.push("POS");
-      const nextTab = modes.includes("cash")
-        ? "cash"
-        : modes.includes("transfer")
-          ? "transfer"
-          : modes.includes("card")
-            ? "card"
-            : modes.includes("credit")
-              ? "credit"
-              : "cash";
       toast.success(
-        `Deposit ₦${formatNumber1(depAmt)} confirmed. Leftover ₦${formatNumber1(remaining)} — collect on ${leftoverParts.join(" / ") || "Cash"}.`,
+        `Deposit ₦${formatNumber1(depAmt)} confirmed. Leftover ₦${formatNumber1(remaining)} is on ${leftoverParts.join(" / ") || "Cash"}. Stay here until you open that tab.`,
       );
       setSearch("");
-      setActiveTab("pending");
       setDepositConfirmRow(null);
       setHubOpen(false);
-      setMethodTab(nextTab);
     } catch (err) {
       handleAlreadyProcessedError(
         err || { message: "Could not apply deposit" },
@@ -3652,7 +3610,6 @@ export default function ReceivePayment() {
     depositAmount,
     fetchDashboard,
     removeCollectedInvoice,
-    navigate,
   ]);
 
   const openHub = useCallback(
@@ -3822,7 +3779,6 @@ export default function ReceivePayment() {
       if (!code) return;
 
       setSearch(code);
-      setActiveTab("pending");
 
       const needle = code.toLowerCase();
       const pendingMatch =
@@ -3838,58 +3794,14 @@ export default function ReceivePayment() {
       if (pendingMatch) {
         const pt = String(pendingMatch.payment_type || "").toLowerCase();
         if (pt === "apply_credit" || pt === "apply credit") {
-          setMethodTab("deposit");
           openHub(pendingMatch, "deposit");
           if (fromScan) toast.success(`Scanned ${pendingMatch.sale_code}`);
           return;
         }
         if (pt === "deposit" || depositPending.includes(pendingMatch)) {
-          setMethodTab("deposit");
           openHub(pendingMatch, "deposit");
           if (fromScan) toast.success(`Scanned ${pendingMatch.sale_code}`);
           return;
-        }
-        if (pt === "credit" || creditPending.includes(pendingMatch)) {
-          setMethodTab("credit");
-        } else if (pt === "transfer" || pt === "bank") {
-          if (canViewCollectionTab("Transfer Collection")) {
-            setMethodTab("transfer");
-          }
-        } else if (pt === "card") {
-          if (canViewCollectionTab("Card Collection")) {
-            setMethodTab("card");
-          }
-        } else if (pt === "cash") {
-          if (canViewCollectionTab("Cash Collection")) {
-            setMethodTab("cash");
-          }
-        } else if (isSplitPaymentType(pt)) {
-          // Prefer a side this user can collect via privileges
-          if (
-            canViewCollectionTab("Transfer Collection") &&
-            !canViewCollectionTab("Cash Collection") &&
-            !canViewCollectionTab("Card Collection")
-          ) {
-            setMethodTab("transfer");
-          } else if (
-            canViewCollectionTab("Card Collection") &&
-            !canViewCollectionTab("Cash Collection") &&
-            !canViewCollectionTab("Transfer Collection")
-          ) {
-            setMethodTab("card");
-          } else if (canViewCollectionTab("Cash Collection")) {
-            setMethodTab("cash");
-          } else if (canViewCollectionTab("Transfer Collection")) {
-            setMethodTab("transfer");
-          } else if (canViewCollectionTab("Card Collection")) {
-            setMethodTab("card");
-          } else if (
-            methodTab !== "cash" &&
-            methodTab !== "transfer" &&
-            methodTab !== "card"
-          ) {
-            setMethodTab("cash");
-          }
         }
         if (
           pt === "credit" ||
@@ -3911,7 +3823,6 @@ export default function ReceivePayment() {
         (r) => String(r.sale_code || "").toLowerCase() === needle,
       );
       if (historyMatch) {
-        setActiveTab("history");
         toast.error(
           alreadyProcessedInvoiceMessage({
             saleCode: historyMatch.sale_code,
@@ -3944,41 +3855,19 @@ export default function ReceivePayment() {
           const processedMsg = alreadyProcessedFromApi(res, live);
           if (processedMsg) {
             toast.error(processedMsg);
-            setActiveTab("history");
             openHub(live, "view", { skipLiveCheck: true });
             return;
           }
           const pt = String(live.payment_type || "").toLowerCase();
-          if (pt === "apply_credit" || pt === "apply credit") {
-            setMethodTab("deposit");
-            openHub(live, "deposit", { skipLiveCheck: true });
-            if (fromScan) toast.success(`Scanned ${live.sale_code}`);
-            return;
-          }
-          if (pt === "deposit") {
-            setMethodTab("deposit");
+          if (pt === "apply_credit" || pt === "apply credit" || pt === "deposit") {
             openHub(live, "deposit", { skipLiveCheck: true });
             if (fromScan) toast.success(`Scanned ${live.sale_code}`);
             return;
           }
           if (pt === "credit" || live.status === "awaiting_credit_approval") {
-            setMethodTab("credit");
             openHub(live, "credit", { skipLiveCheck: true });
             if (fromScan) toast.success(`Scanned ${live.sale_code}`);
             return;
-          }
-          if (pt === "transfer" || pt === "bank") {
-            if (canViewCollectionTab("Transfer Collection")) {
-              setMethodTab("transfer");
-            }
-          } else if (pt === "card") {
-            if (canViewCollectionTab("Card Collection")) {
-              setMethodTab("card");
-            }
-          } else if (pt === "cash") {
-            if (canViewCollectionTab("Cash Collection")) {
-              setMethodTab("cash");
-            }
           }
           openHub(live, "collect", { skipLiveCheck: true });
           if (fromScan) toast.success(`Scanned ${live.sale_code}`);
@@ -4004,29 +3893,6 @@ export default function ReceivePayment() {
   useEffect(() => {
     const code = String(searchParams.get("sale_code") || "").trim();
     if (!code || !dashboardReady || loading) return;
-
-    const tab = String(searchParams.get("tab") || "").toLowerCase();
-    if (tab === "credit_approval" && canViewCollectionTab("Credit Collection")) {
-      setMethodTab("credit");
-    } else if (tab === "credit" && canViewCollectionTab("Credit Collection")) {
-      setMethodTab("credit");
-    } else if (
-      tab === "transfer" &&
-      canViewCollectionTab("Transfer Collection")
-    ) {
-      setMethodTab("transfer");
-    } else if (
-      (tab === "card" || tab === "pos") &&
-      canViewCollectionTab("Card Collection")
-    ) {
-      setMethodTab("card");
-    } else if (tab === "cash" && canViewCollectionTab("Cash Collection")) {
-      setMethodTab("cash");
-    } else if (tab === "deposit") {
-      setMethodTab("deposit");
-    } else if (tab === "apply_credit") {
-      setMethodTab("deposit");
-    }
 
     applySearchOrScan(code);
 
@@ -4266,18 +4132,9 @@ export default function ReceivePayment() {
       (res) => {
         setSubmitting(false);
         if (res?.success) {
-          toast.success(
-            res.message || "Credit approved — opening invoice to print",
-          );
+          toast.success(res.message || "Credit approved");
           closeHub();
           fetchDashboard();
-          if (row?.sale_code) {
-            navigate(
-              `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-                row.sale_code,
-              )}&doc=invoice`,
-            );
-          }
         } else {
           handleAlreadyProcessedError(
             res || { message: "Could not approve credit" },
@@ -4398,7 +4255,6 @@ export default function ReceivePayment() {
               `Credit ₦${formatNumber1(creditToSend)} saved`,
           );
           setSearch("");
-          setActiveTab("pending");
           closeHub();
           fetchDashboard();
           return;
@@ -4418,14 +4274,12 @@ export default function ReceivePayment() {
               toast.success("Last payment (credit) recorded");
               removeCollectedInvoice(saleCode);
               setSearch("");
-              setActiveTab("pending");
               closeHub();
               fetchDashboard();
             } else {
               toast.success("Last payment (credit) recorded");
               removeCollectedInvoice(saleCode);
               setSearch("");
-              setActiveTab("pending");
               closeHub();
               fetchDashboard();
             }
@@ -4435,7 +4289,6 @@ export default function ReceivePayment() {
             toast.success("Last payment (credit) recorded");
             removeCollectedInvoice(saleCode);
             setSearch("");
-            setActiveTab("pending");
             closeHub();
             fetchDashboard();
           },
@@ -4641,23 +4494,15 @@ export default function ReceivePayment() {
 
           toast.success(
             lastPay
-              ? res.message || "Payment confirmed — opening invoice to print"
+              ? res.message || "Payment confirmed"
               : res.message || "Payment recorded",
           );
           if (lastPay) {
             removeCollectedInvoice(target.sale_code);
           }
-          setSearch(lastPay ? String(target.sale_code || "") : "");
-          setActiveTab(lastPay ? "history" : "pending");
+          setSearch("");
           closeCollect();
           fetchDashboard();
-          if (lastPay && target?.sale_code) {
-            navigate(
-              `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-                target.sale_code,
-              )}&doc=invoice`,
-            );
-          }
         } else {
           handleAlreadyProcessedError(
             res || { message: "Could not confirm payment" },
