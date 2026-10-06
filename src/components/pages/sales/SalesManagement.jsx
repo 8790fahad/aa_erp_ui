@@ -342,7 +342,12 @@ export default function SalesManagement() {
     if (["sales_order", "invoice_generated", "submitted"].includes(s)) {
       return "invoice_generated";
     }
-    if (["awaiting_payment", "awaiting_cashier_confirm"].includes(s)) {
+    if (s === "awaiting_payment") {
+      return stagePath.some((stage) => stage.id === "awaiting_payment")
+        ? "awaiting_payment"
+        : "awaiting_cashier_confirm";
+    }
+    if (s === "awaiting_cashier_confirm") {
       return "awaiting_cashier_confirm";
     }
     if (["awaiting_discount_approval"].includes(s)) {
@@ -383,6 +388,24 @@ export default function SalesManagement() {
     if (
       ["awaiting_payment", "awaiting_cashier_confirm", "submitted"].includes(s)
     ) {
+      const paymentType = String(selected.payment_type || "").toLowerCase();
+      const isDeposit =
+        paymentType === "deposit" ||
+        paymentType === "apply_deposit" ||
+        paymentType === "apply_credit";
+      if (isDeposit && (s === "awaiting_payment" || s === "submitted")) {
+        const applyCredit = paymentType === "apply_credit";
+        return {
+          title: applyCredit ? "Next: Apply Credit" : "Next: Apply Deposit",
+          description: applyCredit
+            ? "Apply the customer credit balance on Verification Points."
+            : "Apply the customer deposit on Verification Points. Any leftover is credit or cash.",
+          to: applyCredit
+            ? "/app/payments/verification-points?tab=apply_credit"
+            : "/app/payments/verification-points?tab=deposit",
+          label: applyCredit ? "Open Apply Credit" : "Open Apply Deposit",
+        };
+      }
       return {
         title: "Next: Verification Points",
         description: "Collect payment for this invoice at Verification Points.",

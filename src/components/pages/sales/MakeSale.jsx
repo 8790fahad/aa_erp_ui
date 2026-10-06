@@ -90,7 +90,7 @@ function paymentModesHint(modes) {
     parts.push("remainder goes to Credit approval (credit limit applies)");
   }
   if (set.has("deposit") && set.has("credit")) {
-    parts.push("if the invoice is more than deposit plus credit, collect cash at Verification Points");
+    parts.push("invoice total cannot exceed deposit plus credit available unless Cash, Transfer, or POS is also selected");
   }
   if (!parts.length) return "Select at least one payment method.";
   return parts.join(". ") + ".";
@@ -131,7 +131,11 @@ function invoiceCoverageError({
   const prepaidLabel = "deposit";
 
   if (hasCredit && usePrepaid) {
-    // Invoice may exceed deposit + credit; leftover is collected as cash at VP.
+    if (unlimitedCredit) return null;
+    const cap = prepaidPool + creditLeft;
+    if (invoiceTotal > cap + 0.009) {
+      return `Invoice ${fmt(invoiceTotal)} exceeds deposit ${fmt(prepaidPool)} + credit available ${fmt(creditLeft)}. Tick Cash, Transfer, or POS for the leftover, or reduce the invoice.`;
+    }
     return null;
   }
   if (hasCredit) {
@@ -2786,32 +2790,7 @@ function MakeSale() {
         // Advance is applied manually (Pay Bills / Apply Advance) — never auto here.
         const prepaymentAmount = 0;
 
-        const paymentModesToSave = (() => {
-          const modes = [...selectedPaymentModes];
-          if (
-            hasCreditMode &&
-            hasDepositMode &&
-            !hasCashMode &&
-            !hasTransferMode &&
-            !hasCardMode
-          ) {
-            const prepaid = Math.max(0, Number(depositBalance) || 0);
-            const unlimited = isUnlimitedCreditLimit(creditLimitDisplay, {
-              walkIn: isWalkIn,
-            });
-            const parsedLimit =
-              parseCreditLimitValue(creditLimitDisplay, { walkIn: isWalkIn }) ??
-              0;
-            const creditLeft = unlimited
-              ? Infinity
-              : Math.max(0, parsedLimit - (Number(creditOutstanding) || 0));
-            const cap = prepaid + (Number.isFinite(creditLeft) ? creditLeft : 0);
-            if (totalWithTax > cap + 0.009 && !modes.includes("cash")) {
-              modes.push("cash");
-            }
-          }
-          return modes;
-        })();
+        const paymentModesToSave = selectedPaymentModes;
 
         const transactionId = UUIDV4();
         const transactionEntry = {

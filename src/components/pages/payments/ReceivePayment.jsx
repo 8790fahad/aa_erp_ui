@@ -840,22 +840,43 @@ function isApplyDepositPaymentRow(row) {
   return normalizePaymentMode(row?.payment_type) === "deposit";
 }
 
-/** Verification Points Credit tab: deposit invoices that still need apply-then-credit. */
+function depositAlreadyApplied(row) {
+  if ((Number(row?.split_progress?.deposit_applied) || 0) > 0.05) return true;
+  const history = Array.isArray(row?.history) ? row.history : [];
+  return history.some((h) => Number(h?.deposit_application?.amount) > 0.05);
+}
+
+function isUnappliedDepositInvoice(row) {
+  if (!row) return false;
+  const pt = normalizePaymentMode(row.payment_type);
+  const modes = rowPaymentModes(row);
+  const selectedDeposit =
+    pt === "deposit" ||
+    pt === "apply_credit" ||
+    modes.includes("deposit") ||
+    modes.includes("apply_credit") ||
+    Boolean(row.deposit_pending);
+  if (!selectedDeposit) return false;
+  return !depositAlreadyApplied(row);
+}
+
+/** Credit leftover after deposit has been applied — not while still waiting on Apply Deposit. */
 function isCreditPlusDepositRow(row) {
   if (!row || !isDepositWorkflowRow(row)) return false;
+  if (isUnappliedDepositInvoice(row)) return false;
   const modes = rowPaymentModes(row);
   if (row.credit_after_deposit || modes.includes("credit")) return true;
   if (modes.includes("cash") || modes.includes("transfer") || modes.includes("card")) return false;
-  if (row.deposit_pending) return true;
   if (Number(row.credit_remainder) > 0.05) return true;
   const due = Number(row.amount) || 0;
   const dep = Number(row.deposit_available) || 0;
   return due - dep > 0.05;
 }
 
-/** Deposit invoices that also selected Cash and/or Transfer. */
+/** Cash/Transfer/POS leftover after deposit — never list unapplied Apply Deposit here. */
 function isCollectionPlusDepositRow(row, method) {
   if (!row || !isDepositWorkflowRow(row)) return false;
+  if (isUnappliedDepositInvoice(row)) return false;
   if (String(row.status || "").toLowerCase() === "awaiting_credit_approval") {
     return false;
   }
@@ -1048,6 +1069,12 @@ function rowPaymentModeBreakdown(row) {
     else if (id === "deposit" || id === "apply_credit") amount = depositAmt;
     else if (id === "credit") {
       amount = creditKnown;
+      if (amount <= 0.05 && depositAmt > 0.05) {
+        amount = Math.max(
+          0,
+          Number((leftoverToSettle(row) - depositAmt).toFixed(2)),
+        );
+      }
       if (
         amount <= 0.05 &&
         (Boolean(sp.credit_pending_collection) ||
@@ -1796,44 +1823,6 @@ export default function ReceivePayment() {
     openCollectModes[0] === collectionSide;
   const lastCollectTarget =
     suggestedPortion > 0.05 ? suggestedPortion : remainingDue;
-  const depositThenCredit =
-    hubAction === "deposit" && isCreditPlusDepositRow(selected);
-  const depositApplyAmt =
-    String(depositAmount || "").trim() === ""
-      ? depositApplyPreview(selected).apply
-      : parseFormattedAmount(depositAmount);
-  const leftoverAfterDeposit = Number(
-    Math.max(0, leftoverToSettle(selected) - depositApplyAmt).toFixed(2),
-  );
-  const creditCapAfterDeposit = selected?.credit_unlimited
-    ? leftoverAfterDeposit
-    : Number(
-        Math.min(
-          leftoverAfterDeposit,
-          Math.max(0, Number(selected?.credit_available) || 0),
-        ).toFixed(2),
-      );
-  const creditAfterDeposit = Number(
-    Math.min(
-      leftoverAfterDeposit,
-      parseFormattedAmount(creditAmount) ||
-        (creditCapAfterDeposit > 0.05 ? creditCapAfterDeposit : 0),
-    ).toFixed(2),
-  );
-  const cashAfterDepositCredit = Number(
-    Math.max(
-      0,
-      leftoverAfterDeposit - parseFormattedAmount(creditAmount),
-    ).toFixed(2),
-  );
-  const creditLastReady =
-    !depositThenCredit ||
-    parseFormattedAmount(creditAmount) <= creditCapAfterDeposit + 0.05;
-  const cashLastReady =
-    !depositThenCredit ||
-    cashAfterDepositCredit <= 0.05 ||
-    Math.abs(parseFormattedAmount(cashAmount) - cashAfterDepositCredit) <=
-      0.05;
   const unpaidBeforeCredit = isSplit
     ? Number(
         (
@@ -1844,9 +1833,7 @@ export default function ReceivePayment() {
       )
     : amountDue;
 
-  const loadCashPayThrough =
-    (collectOpen && showCashFields) ||
-    (depositThenCredit && cashAfterDepositCredit > 0.05);
+  const loadCashPayThrough = collectOpen && showCashFields;
   const loadBankPayThrough =
     collectOpen && (showTransferFields || showCardFields);
 
@@ -2232,34 +2219,9 @@ export default function ReceivePayment() {
   ]);
 
   useEffect(() => {
-    if (hubAction !== "deposit" || !isCreditPlusDepositRow(selected)) return;
-    const leftover = leftoverToSettle(selected);
-    const dep =
-      String(depositAmount || "").trim() === ""
-        ? depositApplyPreview(selected).apply
-        : parseFormattedAmount(depositAmount);
-    const afterDep = Number(Math.max(0, leftover - dep).toFixed(2));
-    const cap = selected?.credit_unlimited
-      ? afterDep
-      : Number(
-          Math.min(
-            afterDep,
-            Math.max(0, Number(selected?.credit_available) || 0),
-          ).toFixed(2),
-        );
-    setCreditAmount(
-      cap > 0.05 ? formatNumberWithCommas(String(cap)) : "",
-    );
-    const cashLeft = Number(Math.max(0, afterDep - cap).toFixed(2));
-    setCashAmount(
-      cashLeft > 0.05 ? formatNumberWithCommas(String(cashLeft)) : "",
-    );
-  }, [hubAction, selected?.sale_code, selected?.amount, selected?.credit_available, depositAmount]);
-
-  useEffect(() => {
     if (!collectOpen) return;
     if (
-      (showCashFields || (depositThenCredit && cashAfterDepositCredit > 0.05)) &&
+      showCashFields &&
       !cashAccounts.accountHead?.head &&
       cashAccounts.headList?.length
     ) {
@@ -2297,31 +2259,24 @@ export default function ReceivePayment() {
   const viewSummary = useMemo(() => {
     const sumAmounts = (list) =>
       list.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-    const cashQueue = [
-      ...pendingToday.filter(
-        (r) =>
-          matchesMethod(r.payment_type, "cash", r) && needsCollectionSide(r, "cash"),
-      ),
-      ...depositPendingToday.filter((r) => isCollectionPlusDepositRow(r, "cash")),
-    ];
-    const transferQueue = [
-      ...pendingToday.filter(
-        (r) =>
-          matchesMethod(r.payment_type, "transfer", r) &&
-          needsCollectionSide(r, "transfer"),
-      ),
-      ...depositPendingToday.filter((r) =>
-        isCollectionPlusDepositRow(r, "transfer"),
-      ),
-    ];
-    const cardQueue = [
-      ...pendingToday.filter(
-        (r) =>
-          matchesMethod(r.payment_type, "card", r) &&
-          needsCollectionSide(r, "card"),
-      ),
-      ...depositPendingToday.filter((r) => isCollectionPlusDepositRow(r, "card")),
-    ];
+    const cashQueue = pendingToday.filter(
+      (r) =>
+        !isUnappliedDepositInvoice(r) &&
+        matchesMethod(r.payment_type, "cash", r) &&
+        needsCollectionSide(r, "cash"),
+    );
+    const transferQueue = pendingToday.filter(
+      (r) =>
+        !isUnappliedDepositInvoice(r) &&
+        matchesMethod(r.payment_type, "transfer", r) &&
+        needsCollectionSide(r, "transfer"),
+    );
+    const cardQueue = pendingToday.filter(
+      (r) =>
+        !isUnappliedDepositInvoice(r) &&
+        matchesMethod(r.payment_type, "card", r) &&
+        needsCollectionSide(r, "card"),
+    );
 
     if (methodTab === "cash") {
       return {
@@ -2674,6 +2629,7 @@ export default function ReceivePayment() {
     const transferCodes = new Set();
     const cardCodes = new Set();
     for (const r of pendingToday) {
+      if (isUnappliedDepositInvoice(r)) continue;
       if (
         r?.sale_code &&
         matchesMethod(r.payment_type, "cash", r) &&
@@ -2693,17 +2649,6 @@ export default function ReceivePayment() {
         matchesMethod(r.payment_type, "card", r) &&
         needsCollectionSide(r, "card")
       ) {
-        cardCodes.add(r.sale_code);
-      }
-    }
-    for (const r of depositPendingToday) {
-      if (r?.sale_code && isCollectionPlusDepositRow(r, "cash")) {
-        cashCodes.add(r.sale_code);
-      }
-      if (r?.sale_code && isCollectionPlusDepositRow(r, "transfer")) {
-        transferCodes.add(r.sale_code);
-      }
-      if (r?.sale_code && isCollectionPlusDepositRow(r, "card")) {
         cardCodes.add(r.sale_code);
       }
     }
@@ -2753,18 +2698,13 @@ export default function ReceivePayment() {
     } else if (methodTab === "discount") {
       list = discountPendingToday;
     } else {
-      const collectionDeposit = depositPendingToday.filter((r) =>
-        isCollectionPlusDepositRow(r, methodTab),
-      );
       const byCode = new Map();
-      for (const r of [
-        ...pendingToday.filter(
-          (r) =>
-            matchesMethod(r.payment_type, methodTab, r) &&
-            needsCollectionSide(r, methodTab),
-        ),
-        ...collectionDeposit,
-      ]) {
+      for (const r of pendingToday.filter(
+        (row) =>
+          !isUnappliedDepositInvoice(row) &&
+          matchesMethod(row.payment_type, methodTab, row) &&
+          needsCollectionSide(row, methodTab),
+      )) {
         if (!r?.sale_code) continue;
         if (!byCode.has(r.sale_code)) byCode.set(r.sale_code, r);
       }
@@ -3503,6 +3443,15 @@ export default function ReceivePayment() {
               return;
             }
             setHubInvoiceData(res.data);
+            const available = Number(res.data.deposit_available) || 0;
+            if (available > 0.05) {
+              setSelected((prev) => {
+                if (!prev || String(prev.sale_code || "").trim() !== code) {
+                  return prev;
+                }
+                return { ...prev, deposit_available: available };
+              });
+            }
           } else {
             toast.error(res?.message || "Failed to load invoice");
             setHubInvoiceData(null);
@@ -3636,51 +3585,7 @@ export default function ReceivePayment() {
     }
 
     const remaining = Number((leftover - depAmt).toFixed(2));
-    const mixCredit = isCreditPlusDepositRow(row);
-    const creditToSend = mixCredit ? parseFormattedAmount(creditAmount) : 0;
-    const creditCap = row?.credit_unlimited
-      ? remaining
-      : Number(
-          Math.min(
-            remaining,
-            Math.max(0, Number(row.credit_available) || 0),
-          ).toFixed(2),
-        );
-    const cashToCollect = mixCredit
-      ? Number(Math.max(0, remaining - creditToSend).toFixed(2))
-      : 0;
-
-    if (mixCredit && remaining > 0.05) {
-      if (creditToSend - creditCap > 0.05) {
-        toast.error(
-          `Credit cannot exceed ₦${formatNumber1(creditCap)}`,
-        );
-        return;
-      }
-      if (cashToCollect > 0.05) {
-        if (!cashAccounts.accountHead?.head) {
-          toast.error("Select a cash account (Pay Through)");
-          return;
-        }
-        const cashEntered = parseFormattedAmount(cashAmount);
-        if (Math.abs(cashEntered - cashToCollect) > 0.05) {
-          toast.error(
-            `Last payment (Cash) must equal the remaining ₦${formatNumber1(cashToCollect)} (entered ₦${formatNumber1(cashEntered)})`,
-          );
-          return;
-        }
-      } else if (creditToSend <= 0.05) {
-        toast.error(
-          `Enter credit and/or cash to complete the remaining ₦${formatNumber1(remaining)}`,
-        );
-        return;
-      } else if (Math.abs(creditToSend - remaining) > 0.05) {
-        toast.error(
-          `Credit plus cash must complete the remaining ₦${formatNumber1(remaining)}`,
-        );
-        return;
-      }
-    }
+    const modes = rowPaymentModes(row);
 
     setSubmitting(true);
     try {
@@ -3693,58 +3598,14 @@ export default function ReceivePayment() {
         applications: [{ invoice_ref: saleCode, amount: depAmt }],
       });
 
-      if (mixCredit && remaining > 0.05) {
-        if (creditToSend > 0.05) {
-          const credRes = await postJson(
-            "/api/v1/sale-workflows/send-credit-remainder",
-            {
-              facilityId: activeBusiness.id,
-              saleCode,
-              workflowId: target.id || undefined,
-              credit_amount: creditToSend,
-              updated_by: user.id,
-              note: `Credit ₦${creditToSend.toFixed(2)} after deposit`,
-            },
-          );
-          if (cashToCollect <= 0.05 && !credRes?.allocated) {
-            await postJson("/api/v1/sale-workflows/advance", {
-              facilityId: activeBusiness.id,
-              saleCode,
-              action: "advance",
-              updated_by: user.id,
-              note: `Credit ₦${creditToSend.toFixed(2)} approved after deposit`,
-            });
-          }
-        }
-        if (cashToCollect > 0.05) {
-          await postJson("/api/v1/sale-workflows/cashier-confirm", {
-            facilityId: activeBusiness.id,
-            saleCode,
-            workflowId: target.id || undefined,
-            updated_by: user.id,
-            cashier_type: "cash",
-            collection_side: "cash",
-            payment_splits: [
-              {
-                mode: "cash",
-                amount: cashToCollect,
-                accountHead: cashAccounts.accountHead,
-              },
-            ],
-            note: `Cash ₦${cashToCollect.toFixed(2)} after deposit/credit`,
-          });
-        }
-        toast.success(
-          cashToCollect > 0.05
-            ? `Deposit ₦${formatNumber1(depAmt)} + Credit ₦${formatNumber1(creditToSend)} + Cash ₦${formatNumber1(cashToCollect)} recorded`
-            : `Deposit ₦${formatNumber1(depAmt)} + Credit ₦${formatNumber1(creditToSend)} recorded — opening invoice to print`,
-        );
+      fetchDashboard();
+      if (remaining <= 0.05) {
+        toast.success("Last payment (deposit) recorded — opening invoice to print");
         removeCollectedInvoice(saleCode);
         setSearch("");
         setActiveTab("pending");
         setDepositConfirmRow(null);
         setHubOpen(false);
-        fetchDashboard();
         navigate(
           `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
             saleCode,
@@ -3753,26 +3614,28 @@ export default function ReceivePayment() {
         return;
       }
 
-          toast.success(
-            remaining > 0.05
-              ? `Deposit applied · ₦${formatNumber1(remaining)} left`
-              : "Last payment (deposit) recorded — opening invoice to print",
-          );
-          if (remaining <= 0.05) {
-            removeCollectedInvoice(saleCode);
-          }
-          setSearch("");
+      const leftoverParts = [];
+      if (modes.includes("credit")) leftoverParts.push("Credit");
+      if (modes.includes("cash")) leftoverParts.push("Cash");
+      if (modes.includes("transfer")) leftoverParts.push("Transfer");
+      if (modes.includes("card")) leftoverParts.push("POS");
+      const nextTab = modes.includes("cash")
+        ? "cash"
+        : modes.includes("transfer")
+          ? "transfer"
+          : modes.includes("card")
+            ? "card"
+            : modes.includes("credit")
+              ? "credit"
+              : "cash";
+      toast.success(
+        `Deposit ₦${formatNumber1(depAmt)} confirmed. Leftover ₦${formatNumber1(remaining)} — collect on ${leftoverParts.join(" / ") || "Cash"}.`,
+      );
+      setSearch("");
       setActiveTab("pending");
       setDepositConfirmRow(null);
       setHubOpen(false);
-      fetchDashboard();
-      if (remaining <= 0.05 && saleCode) {
-        navigate(
-          `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-            saleCode,
-          )}&doc=invoice`,
-        );
-      }
+      setMethodTab(nextTab);
     } catch (err) {
       handleAlreadyProcessedError(
         err || { message: "Could not apply deposit" },
@@ -3787,12 +3650,9 @@ export default function ReceivePayment() {
     activeBusiness?.id,
     user,
     depositAmount,
-    creditAmount,
     fetchDashboard,
     removeCollectedInvoice,
     navigate,
-    cashAmount,
-    cashAccounts.accountHead,
   ]);
 
   const openHub = useCallback(
@@ -3861,30 +3721,8 @@ export default function ReceivePayment() {
         setDepositAmount(
           preset > 0.05 ? formatNumberWithCommas(String(preset)) : "",
         );
-        if (isCreditPlusDepositRow(snapshot)) {
-          const afterDep = Math.max(
-            0,
-            Number((preview.leftover - (preset > 0.05 ? preset : 0)).toFixed(2)),
-          );
-          const cap = snapshot.credit_unlimited
-            ? afterDep
-            : Number(
-                Math.min(
-                  afterDep,
-                  Math.max(0, Number(snapshot.credit_available) || 0),
-                ).toFixed(2),
-              );
-          setCreditAmount(
-            cap > 0.05 ? formatNumberWithCommas(String(cap)) : "",
-          );
-          const cashLeft = Number(Math.max(0, afterDep - cap).toFixed(2));
-          setCashAmount(
-            cashLeft > 0.05 ? formatNumberWithCommas(String(cashLeft)) : "",
-          );
-        } else {
-          setCreditAmount("");
-          setCashAmount("");
-        }
+        setCreditAmount("");
+        setCashAmount("");
         setTransferAmount("");
       }
 
@@ -5653,26 +5491,12 @@ export default function ReceivePayment() {
                             </div>
                           ) : methodTab === "credit" &&
                             isDepositPendingCredit(row) ? (
-                            <div className="mt-1 text-[11px] text-slate-500">
-                              Deposit available ₦
-                              {formatNumber1(row.deposit_available || 0)}
-                              {Number(row.credit_remainder) > 0.05 ? (
-                                <span className="block text-amber-800">
-                                  Credit remainder ₦
-                                  {formatNumber1(row.credit_remainder)} after
-                                  deposit
-                                </span>
-                              ) : null}
+                            <div className="mt-1 text-[11px] text-amber-800">
+                              Leftover credit after deposit
                             </div>
                           ) : isDepositPendingCollection(row, methodTab) ? (
-                            <div className="mt-1 text-[11px] text-slate-500">
-                              Deposit available ₦
-                              {formatNumber1(row.deposit_available || 0)}
-                              <span className="block text-teal-700">
-                                {Number(row.credit_remainder) > 0.05
-                                  ? `Collect any mix — ₦${formatNumber1(row.credit_remainder)} still open after deposit`
-                                  : "Collect any mix — last payment opens print"}
-                              </span>
+                            <div className="mt-1 text-[11px] text-teal-700">
+                              Leftover after deposit — collect on this tab
                             </div>
                           ) : methodTab === "credit" &&
                             isCreditAvailabilityRow(row) &&
@@ -6187,194 +6011,6 @@ export default function ReceivePayment() {
                             : "deposit"}
                           .
                         </p>
-                      ) : null}
-                      {isCreditPlusDepositRow(selected) ? (
-                        <>
-                          {selected && !selected.credit_unlimited ? (
-                            <div
-                              className={`rounded-md border px-3 py-2 text-xs ${
-                                parseFormattedAmount(creditAmount) >
-                                  Number(selected.credit_available || 0) + 0.05
-                                  ? "border-red-200 bg-red-50 text-red-800"
-                                  : "border-amber-200 bg-amber-50 text-amber-950"
-                              }`}
-                            >
-                              <div>
-                                <span className="font-semibold">
-                                  Credit limit:{" "}
-                                </span>
-                                ₦{formatNumber1(selected.credit_limit)}
-                                <span className="mx-1.5">·</span>
-                                <span className="font-semibold">
-                                  Other outstanding:{" "}
-                                </span>
-                                ₦{formatNumber1(selected.credit_outstanding)}
-                                <span className="mx-1.5">·</span>
-                                <span className="font-semibold">
-                                  Available:{" "}
-                                </span>
-                                ₦{formatNumber1(selected.credit_available)}
-                              </div>
-                              <div className="mt-0.5">
-                                After this deposit, leftover ₦
-                                {formatNumber1(leftoverAfterDeposit)}
-                                {` · credit available ₦${formatNumber1(
-                                  selected.credit_available,
-                                )}`}
-                                {cashAfterDepositCredit > 0.05
-                                  ? ` · cash to collect ₦${formatNumber1(
-                                      cashAfterDepositCredit,
-                                    )}`
-                                  : ""}
-                              </div>
-                            </div>
-                          ) : (
-                            <p className="text-xs text-slate-600">
-                              No credit limit on this customer.
-                            </p>
-                          )}
-                          {leftoverAfterDeposit > 0.05 ? (
-                            <div>
-                              <div className="mb-1 flex items-center justify-between gap-2">
-                                <label className="text-sm font-medium text-slate-700">
-                                  Credit amount
-                                </label>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setCreditAmount(
-                                      formatNumberWithCommas(
-                                        String(creditCapAfterDeposit),
-                                      ),
-                                    )
-                                  }
-                                  className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
-                                >
-                                  Max (₦{formatNumber1(creditCapAfterDeposit)})
-                                </button>
-                              </div>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={creditAmount}
-                                onChange={(e) => {
-                                  const raw = e.target.value;
-                                  const parsed = parseFormattedAmount(raw);
-                                  if (
-                                    creditCapAfterDeposit > 0 &&
-                                    parsed > creditCapAfterDeposit + 0.05
-                                  ) {
-                                    setCreditAmount(
-                                      formatNumberWithCommas(
-                                        String(creditCapAfterDeposit),
-                                      ),
-                                    );
-                                    toast.error(
-                                      `Credit cannot exceed ₦${formatNumber1(creditCapAfterDeposit)}`,
-                                    );
-                                    return;
-                                  }
-                                  setCreditAmount(formatNumberWithCommas(raw));
-                                }}
-                                className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                                placeholder="0.00"
-                              />
-                            </div>
-                          ) : (
-                            <p className="text-xs text-teal-800">
-                              Deposit covers the leftover — no credit or cash remaining.
-                            </p>
-                          )}
-                          {cashAfterDepositCredit > 0.05 ? (
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <label className="text-sm font-medium text-slate-700">
-                                  Cash leftover — last payment
-                                </label>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setCashAmount(
-                                      formatNumberWithCommas(
-                                        String(cashAfterDepositCredit),
-                                      ),
-                                    )
-                                  }
-                                  className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
-                                >
-                                  All (₦{formatNumber1(cashAfterDepositCredit)})
-                                </button>
-                              </div>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={cashAmount}
-                                onChange={(e) => {
-                                  const raw = e.target.value;
-                                  const parsed = parseFormattedAmount(raw);
-                                  if (
-                                    cashAfterDepositCredit > 0 &&
-                                    parsed > cashAfterDepositCredit + 0.05
-                                  ) {
-                                    setCashAmount(
-                                      formatNumberWithCommas(
-                                        String(cashAfterDepositCredit),
-                                      ),
-                                    );
-                                    toast.error(
-                                      `Last payment (Cash) must equal ₦${formatNumber1(cashAfterDepositCredit)}`,
-                                    );
-                                    return;
-                                  }
-                                  setCashAmount(formatNumberWithCommas(raw));
-                                }}
-                                className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm tabular-nums outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
-                                placeholder={formatNumber1(cashAfterDepositCredit)}
-                              />
-                              <label className="text-sm font-medium text-slate-700">
-                                Pay Through
-                              </label>
-                              <Select
-                                value={
-                                  cashAccounts.accountHead?.head
-                                    ? String(cashAccounts.accountHead.head)
-                                    : undefined
-                                }
-                                onValueChange={(val) => {
-                                  const found = (
-                                    cashAccounts.headList || []
-                                  ).find(
-                                    (h) => String(h.head) === String(val),
-                                  );
-                                  cashAccounts.setAccountHead(found || {});
-                                }}
-                              >
-                                <SelectTrigger className={payThroughSelectTriggerClass}>
-                                  <SelectValue placeholder="Select cash / COA account…" />
-                                </SelectTrigger>
-                                <SelectContent className={payThroughSelectContentClass}>
-                                  {(cashAccounts.headList || []).map((h) => (
-                                    <SelectItem
-                                      key={String(h.head)}
-                                      value={String(h.head)}
-                                    >
-                                      {cashPayThroughLabel(h)}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <p className="text-xs text-teal-800">
-                                Last payment — enter the full remaining ₦
-                                {formatNumber1(cashAfterDepositCredit)} cash
-                                to finish the invoice.
-                              </p>
-                            </div>
-                          ) : leftoverAfterDeposit > 0.05 ? (
-                            <p className="text-xs text-teal-800">
-                              Credit completes the leftover — no cash to collect.
-                            </p>
-                          ) : null}
-                        </>
                       ) : null}
                     </div>
                   ) : null}
@@ -6922,9 +6558,11 @@ export default function ReceivePayment() {
                 ) : null}
                 {hubAction === "deposit" ? (
                   <p className="text-sm text-slate-600">
+                    Apply deposit here. Collect leftover cash on the Cash tab
                     {isCreditPlusDepositRow(selected)
-                      ? "Apply deposit, put as much as you can on Credit (up to available), then collect any leftover as cash."
-                      : "Apply only the leftover after cash, transfer, POS, and credit. If anything is still left, collect it on Cash — printing opens after that last payment."}
+                      ? ", and leftover credit on the Credit tab"
+                      : ""}
+                    .
                   </p>
                 ) : null}
                 {hubAction === "view" ? (
@@ -6972,18 +6610,7 @@ export default function ReceivePayment() {
                         submitting ||
                         !selected ||
                         (parseFormattedAmount(depositAmount) <= 0.05 &&
-                          depositApplyPreview(selected).apply <= 0.05) ||
-                        !creditLastReady ||
-                        !cashLastReady
-                      }
-                      title={
-                        depositThenCredit &&
-                        cashAfterDepositCredit > 0.05 &&
-                        !cashLastReady
-                          ? `Last payment (Cash) must equal the remaining ₦${formatNumber1(cashAfterDepositCredit)}`
-                          : depositThenCredit && !creditLastReady
-                            ? `Credit cannot exceed ₦${formatNumber1(creditCapAfterDeposit)}`
-                            : undefined
+                          depositApplyPreview(selected).apply <= 0.05)
                       }
                       onClick={confirmApplyDeposit}
                       className="inline-flex items-center gap-2 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
@@ -6993,28 +6620,10 @@ export default function ReceivePayment() {
                       ) : (
                         <Wallet className="h-4 w-4" />
                       )}
-                      {depositThenCredit
-                        ? `Confirm${
-                            depositApplyAmt > 0.05
-                              ? ` ₦${formatNumber1(depositApplyAmt)} deposit`
-                              : ""
-                          }${
-                            parseFormattedAmount(creditAmount) > 0.05
-                              ? `${depositApplyAmt > 0.05 ? " +" : ""} ₦${formatNumber1(parseFormattedAmount(creditAmount))} credit`
-                              : ""
-                          }${
-                            cashAfterDepositCredit > 0.05
-                              ? ` + ₦${formatNumber1(cashAfterDepositCredit)} cash`
-                              : ""
-                          }`
-                        : `Approve & apply${
-                            selected
-                              ? ` · ₦${formatNumber1(
-                                  parseFormattedAmount(depositAmount) ||
-                                    depositApplyPreview(selected).apply,
-                                )}`
-                              : ""
-                          }`}
+                      {`Confirm ₦${formatNumber1(
+                        parseFormattedAmount(depositAmount) ||
+                          depositApplyPreview(selected).apply,
+                      )} deposit`}
                     </button>
                   ) : null}
 

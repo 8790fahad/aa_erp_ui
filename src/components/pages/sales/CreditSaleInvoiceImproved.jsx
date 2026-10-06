@@ -1942,13 +1942,33 @@ export default function CreditSaleInvoice({
                 );
                 const onCredit = Number(creditAmount.toFixed(2));
                 const depositApplied = Number(depositPaid.toFixed(2));
+                const depositPlanned = Number(
+                  invoice?.deposit_to_apply ??
+                    invoice?.transaction?.deposit_to_apply ??
+                    0,
+                );
+                const creditPlanned = Number(
+                  invoice?.credit_to_apply ??
+                    invoice?.transaction?.credit_to_apply ??
+                    0,
+                );
+                const depositLine =
+                  depositApplied > 0.05 ? depositApplied : depositPlanned;
+                const creditLine = onCredit > 0.05 ? onCredit : creditPlanned;
                 const outstanding = Number(balanceDue.toFixed(2));
+                const splitCovers =
+                  depositPlanned > 0.05 &&
+                  depositApplied <= 0.05 &&
+                  Number((depositPlanned + creditPlanned).toFixed(2)) + 0.05 >=
+                    outstanding;
                 const isCreditOnly =
                   isCreditOnlyMode &&
                   onCredit > 0.05 &&
                   collectedNow <= 0.05 &&
                   depositApplied <= 0.05;
-                const creditShown = isCreditOnly ? outstanding || onCredit : onCredit;
+                const creditShown = isCreditOnly
+                  ? outstanding || onCredit
+                  : creditLine;
                 const fields = [
                   { label: "Mode", value: paymentModeLabel },
                 ];
@@ -1997,18 +2017,19 @@ export default function CreditSaleInvoice({
                     }`,
                   });
                 }
-                if (depositApplied > 0.05) {
+                if (depositLine > 0.05) {
                   fields.push({
-                    label: "Deposit applied",
-                    value: `₦${formatNumber(depositApplied)}`,
+                    label:
+                      depositApplied > 0.05 ? "Deposit applied" : "Deposit",
+                    value: `₦${formatNumber(depositLine)}`,
                   });
                 }
-                if (isCreditOnly || onCredit > 0.05) {
+                if (isCreditOnly || creditShown > 0.05) {
                   fields.push({
                     label: "On credit",
                     value: `₦${formatNumber(creditShown)}`,
                   });
-                } else if (outstanding > 0.05) {
+                } else if (outstanding > 0.05 && !splitCovers) {
                   fields.push({
                     label: "Still outstanding",
                     value: `₦${formatNumber(outstanding)}`,
@@ -2354,16 +2375,46 @@ export default function CreditSaleInvoice({
                         {formatNumber(cardPaid)}
                       </p>
                     ) : null}
-                    {depositPaid > 0.05 ? (
+                    {depositPaid > 0.05 ||
+                    Number(
+                      invoice?.deposit_to_apply ??
+                        invoice?.transaction?.deposit_to_apply ??
+                        0,
+                    ) > 0.05 ? (
                       <p className="text-sm">
-                        <span className="font-semibold">Deposit applied:</span>{" "}
-                        ₦{formatNumber(depositPaid)}
+                        <span className="font-semibold">
+                          {depositPaid > 0.05 ? "Deposit applied:" : "Deposit:"}
+                        </span>{" "}
+                        ₦
+                        {formatNumber(
+                          depositPaid > 0.05
+                            ? depositPaid
+                            : Number(
+                                invoice?.deposit_to_apply ??
+                                  invoice?.transaction?.deposit_to_apply ??
+                                  0,
+                              ),
+                        )}
                       </p>
                     ) : null}
-                    {creditAmount > 0.05 || hasCreditMode ? (
+                    {creditAmount > 0.05 ||
+                    Number(
+                      invoice?.credit_to_apply ??
+                        invoice?.transaction?.credit_to_apply ??
+                        0,
+                    ) > 0.05 ||
+                    hasCreditMode ? (
                       <p className="text-sm">
                         <span className="font-semibold">On credit:</span> ₦
-                        {formatNumber(creditAmount)}
+                        {formatNumber(
+                          creditAmount > 0.05
+                            ? creditAmount
+                            : Number(
+                                invoice?.credit_to_apply ??
+                                  invoice?.transaction?.credit_to_apply ??
+                                  0,
+                              ),
+                        )}
                       </p>
                     ) : null}
                   </div>
