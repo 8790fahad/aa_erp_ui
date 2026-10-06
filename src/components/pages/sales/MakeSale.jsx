@@ -112,8 +112,24 @@ function invoiceCoverageError({
   if (isWalkIn && hasCredit) {
     return "Walk-in customers cannot be invoiced on credit. Use Cash, Transfer, or POS.";
   }
+  if (hasCredit) {
+    const unlimitedCredit = isUnlimitedCreditLimit(creditLimit, {
+      walkIn: isWalkIn,
+    });
+    const limit = parseCreditLimitValue(creditLimit, { walkIn: isWalkIn }) ?? 0;
+    const outstandingNow = Math.max(0, Number(creditOutstanding) || 0);
+    const creditLeftNow = unlimitedCredit
+      ? Infinity
+      : Math.max(0, limit - outstandingNow);
+    if (!unlimitedCredit && creditLeftNow <= 0.05) {
+      return "This customer has no credit left. Credit stays off until the limit has room.";
+    }
+  }
   if (hasCash || hasTransfer || hasCard) return null;
   const usePrepaid = hasDeposit;
+  if (usePrepaid && Math.max(0, Number(depositBalance) || 0) <= 0.05) {
+    return "This customer has no deposit. Apply Deposit stays off until a deposit is available.";
+  }
   if (!hasCredit && !usePrepaid) return null;
   const invoiceTotal = Number(total) || 0;
   if (!(invoiceTotal > 0.009)) return "Invoice total must be greater than zero.";
@@ -1376,6 +1392,15 @@ function MakeSale() {
   const hasInvoiceParty =
     Boolean(selectedCustomer) ||
     (isWalkIn && String(walkInName || "").trim().length > 0);
+  const walkInParty = isWalkIn || isWalkInCustomer(selectedCustomer);
+  const creditModeLocked = useMemo(() => {
+    if (!selectedCustomer?.customerNo || walkInParty) return false;
+    if (isUnlimitedCreditLimit(selectedCustomer?.credit_limit)) return false;
+    if (balancesLoading || creditOutstanding == null) return true;
+    const limit = parseCreditLimitValue(selectedCustomer?.credit_limit) ?? 0;
+    const left = Math.max(0, limit - (Number(creditOutstanding) || 0));
+    return left <= 0.05;
+  }, [selectedCustomer, walkInParty, balancesLoading, creditOutstanding]);
 
   const visiblePaymentModeOptions = useMemo(
     () => allowedPaymentModeOptions,
@@ -1407,6 +1432,25 @@ function MakeSale() {
         );
         return;
       }
+      if (id === "credit" && creditModeLocked) {
+        toast.error(
+          balancesLoading
+            ? "Checking the customer credit balance."
+            : "This customer has no credit left. Credit stays off until the limit has room.",
+        );
+        return;
+      }
+      if (
+        id === "deposit" &&
+        (balancesLoading || (Number(depositBalance) || 0) <= 0.05)
+      ) {
+        toast.error(
+          balancesLoading
+            ? "Checking the customer deposit balance."
+            : "This customer has no deposit. Apply Deposit stays off until a deposit is available.",
+        );
+        return;
+      }
       const next = selectedPaymentModes.includes(id)
         ? selectedPaymentModes.filter((m) => m !== id)
         : [...selectedPaymentModes, id];
@@ -1417,6 +1461,9 @@ function MakeSale() {
       applyPaymentModes,
       allowedPaymentModeIds,
       isWalkIn,
+      balancesLoading,
+      depositBalance,
+      creditModeLocked,
     ],
   );
 
@@ -1447,11 +1494,7 @@ function MakeSale() {
   useEffect(() => {
     const customerNo = selectedCustomer?.customerNo;
     const facilityId = activeBusiness?.id;
-    if (
-      !customerNo ||
-      !facilityId ||
-      (!hasCreditMode && !hasPrepaidMode)
-    ) {
+    if (!customerNo || !facilityId) {
       setDepositBalance(null);
       setCreditOutstanding(null);
       setCreditLimitDisplay(
@@ -1472,10 +1515,8 @@ function MakeSale() {
         const receivables =
           parseFloat(res?.receivables ?? res?.balance) || 0;
         const deposit = parseFloat(res?.deposit) || 0;
-        if (hasDepositMode) {
-          setDepositBalance(deposit);
-        }
-        if (hasCreditMode) setCreditOutstanding(receivables);
+        setDepositBalance(deposit);
+        setCreditOutstanding(receivables);
         setCreditLimitDisplay(
           isWalkIn || isWalkInCustomer(selectedCustomer)
             ? 0
@@ -1485,10 +1526,8 @@ function MakeSale() {
       },
       () => {
         if (cancelled) return;
-        if (hasDepositMode) {
-          setDepositBalance(0);
-        }
-        if (hasCreditMode) setCreditOutstanding(0);
+        setDepositBalance(0);
+        setCreditOutstanding(0);
         setCreditLimitDisplay(
           isWalkIn || isWalkInCustomer(selectedCustomer)
             ? 0
@@ -1504,10 +1543,63 @@ function MakeSale() {
   }, [
     selectedCustomer,
     activeBusiness?.id,
-    hasCreditMode,
-    hasDepositMode,
-    hasPrepaidMode,
     isWalkIn,
+  ]);
+
+  const lockedPaymentModeIds = useMemo(() => {
+    const ids = [...disabledPaymentModeIds];
+    if (!selectedCustomer?.customerNo) return ids;
+    const deposit = Number(depositBalance) || 0;
+    if (balancesLoading || depositBalance == null || deposit <= 0.05) {
+      ids.push("deposit");
+    }
+    if (walkInParty || creditModeLocked) ids.push("credit");
+    return ids;
+  }, [
+    disabledPaymentModeIds,
+    selectedCustomer?.customerNo,
+    balancesLoading,
+    depositBalance,
+    walkInParty,
+    creditModeLocked,
+  ]);
+  const lockedPaymentModeHint = useMemo(
+    () => ({
+      ...disabledPaymentModeHint,
+      deposit: balancesLoading
+        ? "Checking the customer deposit balance."
+        : "This customer has no deposit. Apply Deposit stays off until a deposit is available.",
+      credit: walkInParty
+        ? disabledPaymentModeHint.credit
+        : balancesLoading
+          ? "Checking the customer credit balance."
+          : "This customer has no credit left. Credit stays off until the limit has room.",
+    }),
+    [disabledPaymentModeHint, balancesLoading, walkInParty],
+  );
+
+  useEffect(() => {
+    if (balancesLoading) return;
+    let next = selectedPaymentModes;
+    if (
+      next.includes("deposit") &&
+      depositBalance != null &&
+      (Number(depositBalance) || 0) <= 0.05
+    ) {
+      next = next.filter((id) => id !== "deposit");
+    }
+    if (next.includes("credit") && (walkInParty || creditModeLocked)) {
+      next = next.filter((id) => id !== "credit");
+    }
+    if (next.length === selectedPaymentModes.length) return;
+    applyPaymentModes(next);
+  }, [
+    selectedPaymentModes,
+    balancesLoading,
+    depositBalance,
+    walkInParty,
+    creditModeLocked,
+    applyPaymentModes,
   ]);
 
   const [invoiceNumberDisplay] = useState(
@@ -4954,8 +5046,8 @@ function MakeSale() {
                     selected={selectedPaymentModes}
                     onToggle={togglePaymentMode}
                     options={visiblePaymentModeOptions}
-                    disabledIds={disabledPaymentModeIds}
-                    disabledHint={disabledPaymentModeHint}
+                    disabledIds={lockedPaymentModeIds}
+                    disabledHint={lockedPaymentModeHint}
                     showRoleFilterHint={
                       allowedPaymentModeOptions.length <
                       PAYMENT_MODE_OPTIONS.length
@@ -4976,15 +5068,18 @@ function MakeSale() {
                     >
                       Sales → Credit Notes
                     </Link>
-                    . Saved as <strong>Customer deposit</strong>, then tick{" "}
-                    <strong>Apply Deposit</strong> here (hidden while balance is
-                    ₦0).
+                    . Saved as <strong>Customer deposit</strong>.{" "}
+                    <strong>Apply Deposit</strong> can be ticked only when that
+                    balance is above ₦0.
                   </p>
                   <CustomerPaymentBalances
                     showCash={hasCashMode}
                     showTransfer={hasTransferMode}
                     showCard={hasCardMode}
-                    showCredit={hasCreditMode && Boolean(selectedCustomer)}
+                    showCredit={
+                      Boolean(selectedCustomer) &&
+                      (hasCreditMode || lockedPaymentModeIds.includes("credit"))
+                    }
                     showDeposit={hasDepositMode && Boolean(selectedCustomer)}
                     loading={balancesLoading}
                     creditOutstanding={creditOutstanding}
@@ -5058,8 +5153,8 @@ function MakeSale() {
                       selected={selectedPaymentModes}
                       onToggle={togglePaymentMode}
                       options={visiblePaymentModeOptions}
-                      disabledIds={disabledPaymentModeIds}
-                      disabledHint={disabledPaymentModeHint}
+                      disabledIds={lockedPaymentModeIds}
+                      disabledHint={lockedPaymentModeHint}
                       showRoleFilterHint={
                         allowedPaymentModeOptions.length <
                         PAYMENT_MODE_OPTIONS.length
@@ -5075,7 +5170,10 @@ function MakeSale() {
                       showCash={hasCashMode}
                       showTransfer={hasTransferMode}
                       showCard={hasCardMode}
-                      showCredit={hasCreditMode && Boolean(selectedCustomer)}
+                      showCredit={
+                      Boolean(selectedCustomer) &&
+                      (hasCreditMode || lockedPaymentModeIds.includes("credit"))
+                    }
                       showDeposit={hasDepositMode && Boolean(selectedCustomer)}
                       loading={balancesLoading}
                       creditOutstanding={creditOutstanding}
