@@ -1952,15 +1952,52 @@ export default function CreditSaleInvoice({
                     invoice?.transaction?.credit_to_apply ??
                     0,
                 );
-                const depositLine =
-                  depositApplied > 0.05 ? depositApplied : depositPlanned;
-                const creditLine = onCredit > 0.05 ? onCredit : creditPlanned;
                 const outstanding = Number(balanceDue.toFixed(2));
-                const splitCovers =
-                  depositPlanned > 0.05 &&
+                const modeText = String(paymentModeLabel || "").toLowerCase();
+                const wantsDeposit =
+                  hasDepositMode || modeText.includes("deposit");
+                const wantsCredit = hasCreditMode || modeText.includes("credit");
+                const depositAvailable = Number(
+                  invoice?.deposit_available ??
+                    invoice?.transaction?.deposit_available ??
+                    0,
+                );
+                let depositFigure =
+                  depositApplied > 0.05 ? depositApplied : depositPlanned;
+                let creditFigure = onCredit > 0.05 ? onCredit : creditPlanned;
+                if (
+                  wantsDeposit &&
+                  wantsCredit &&
                   depositApplied <= 0.05 &&
-                  Number((depositPlanned + creditPlanned).toFixed(2)) + 0.05 >=
-                    outstanding;
+                  onCredit <= 0.05 &&
+                  depositFigure <= 0.05 &&
+                  depositAvailable > 0.05 &&
+                  outstanding > 0.05
+                ) {
+                  depositFigure = Number(
+                    Math.min(depositAvailable, outstanding).toFixed(2),
+                  );
+                  creditFigure = Number(
+                    Math.max(0, outstanding - depositFigure).toFixed(2),
+                  );
+                }
+                if (
+                  wantsCredit &&
+                  creditFigure <= 0.05 &&
+                  outstanding > depositFigure + 0.05
+                ) {
+                  creditFigure = Number(
+                    Math.max(0, outstanding - depositFigure).toFixed(2),
+                  );
+                }
+                const depositLine = depositFigure;
+                const creditLine = creditFigure;
+                const splitCovers =
+                  wantsDeposit &&
+                  wantsCredit &&
+                  Number((depositLine + creditLine).toFixed(2)) + 0.05 >=
+                    outstanding &&
+                  (depositLine > 0.05 || creditLine > 0.05);
                 const isCreditOnly =
                   isCreditOnlyMode &&
                   onCredit > 0.05 &&
