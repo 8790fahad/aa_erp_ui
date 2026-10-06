@@ -3456,6 +3456,10 @@ export default function ReceivePayment() {
 
   const resolveHubAction = useCallback(
     (row, preferred) => {
+      // Deposit + Credit: apply any deposit first; leftover is approved as credit.
+      if (isDepositPendingCredit(row) && preferred !== "view") {
+        return "deposit";
+      }
       if (preferred) return preferred;
       const pt = normalizePaymentMode(row?.payment_type);
       if (methodTab === "credit" && !isDepositPendingCredit(row)) {
@@ -3466,13 +3470,6 @@ export default function ReceivePayment() {
         ) {
           return "credit";
         }
-      }
-      if (
-        methodTab === "credit" &&
-        isDepositPendingCredit(row) &&
-        rowPaymentModes(row).includes("credit")
-      ) {
-        return "credit";
       }
       if (pt === "credit_split" || pt === "split") return "collect";
       if (methodTab === "cash" || methodTab === "transfer" || methodTab === "card") {
@@ -3588,7 +3585,9 @@ export default function ReceivePayment() {
 
           toast.success(
             remaining > 0.05
-              ? `Deposit applied · ₦${formatNumber1(remaining)} left`
+              ? isCreditPlusDepositRow(row)
+                ? `Deposit applied · ₦${formatNumber1(remaining)} left for Credit`
+                : `Deposit applied · ₦${formatNumber1(remaining)} left`
               : "Last payment (deposit) recorded — opening invoice to print",
           );
           if (remaining <= 0.05) {
@@ -3596,6 +3595,9 @@ export default function ReceivePayment() {
           }
           setSearch("");
       setActiveTab("pending");
+      if (remaining > 0.05 && isCreditPlusDepositRow(row)) {
+        setMethodTab("credit");
+      }
       setDepositConfirmRow(null);
       setHubOpen(false);
       fetchDashboard();
@@ -5570,12 +5572,20 @@ export default function ReceivePayment() {
                               {rowPaymentModes(row).includes("credit") ? (
                                 <button
                                   type="button"
-                                  disabled={submitting}
-                                  onClick={() => openHub(row, "credit")}
-                                  className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                                  disabled={
+                                    submitting ||
+                                    Number(row.deposit_available) <= 0.05
+                                  }
+                                  title={
+                                    Number(row.deposit_available) <= 0.05
+                                      ? "No deposit available — apply is blocked"
+                                      : "Apply deposit first, then approve leftover as credit"
+                                  }
+                                  onClick={() => openHub(row, "deposit")}
+                                  className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                  <CreditCard className="h-3.5 w-3.5" />
-                                  Confirm
+                                  <Wallet className="h-3.5 w-3.5" />
+                                  Apply deposit
                                 </button>
                               ) : (
                                 <button
@@ -5979,6 +5989,20 @@ export default function ReceivePayment() {
                             ? "credit"
                             : "deposit"}
                           .
+                        </p>
+                      ) : null}
+                      {isCreditPlusDepositRow(selected) ? (
+                        <p className="text-xs text-teal-800">
+                          Enter any deposit amount. Leftover ₦
+                          {formatNumber1(
+                            Math.max(
+                              0,
+                              leftoverToSettle(selected) -
+                                (parseFormattedAmount(depositAmount) ||
+                                  depositApplyPreview(selected).apply),
+                            ),
+                          )}{" "}
+                          goes to Credit for approval.
                         </p>
                       ) : null}
                     </div>
@@ -6527,9 +6551,9 @@ export default function ReceivePayment() {
                 ) : null}
                 {hubAction === "deposit" ? (
                   <p className="text-sm text-slate-600">
-                    Apply only the leftover after cash, transfer, POS, and
-                    credit. If anything is still left, collect it on Cash —
-                    printing opens after that last payment.
+                    {isCreditPlusDepositRow(selected)
+                      ? "Apply any deposit amount (or the max). Whatever is still left is approved as Credit next."
+                      : "Apply only the leftover after cash, transfer, POS, and credit. If anything is still left, collect it on Cash — printing opens after that last payment."}
                   </p>
                 ) : null}
                 {hubAction === "view" ? (
