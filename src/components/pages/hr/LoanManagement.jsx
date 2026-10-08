@@ -30,6 +30,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
 import { Label } from "@/components/ui/label";
 import {
@@ -152,11 +157,11 @@ const LoanManagement = () => {
   });
   const [investmentPerson, setInvestmentPerson] = useState(null);
   const [investmentAmount, setInvestmentAmount] = useState("");
-  const [investmentCurrentAmount, setInvestmentCurrentAmount] = useState("");
   const [investmentDate, setInvestmentDate] = useState(
     () => new Date().toISOString().slice(0, 10),
   );
   const [investmentAccount, setInvestmentAccount] = useState(null);
+  const [entryOpen, setEntryOpen] = useState(true);
   const [savingInvestment, setSavingInvestment] = useState(false);
 
   const [chartAccounts, setChartAccounts] = useState([]);
@@ -473,13 +478,6 @@ const LoanManagement = () => {
     setAssociatePanelOpen(true);
     setInvestmentPerson(person);
     setInvestmentAmount(principalInputValue(person.investmentOpeningBalance));
-    const hasOpening =
-      Number(person.investmentOpeningBalance) > 0 ||
-      Boolean(person.investmentReference);
-    setInvestmentCurrentAmount(
-      principalInputValue(investmentCurrentBalance(person)) ||
-        (hasOpening ? "0.00" : ""),
-    );
     setInvestmentDate(
       person.investmentOpeningDate
         ? String(person.investmentOpeningDate).slice(0, 10)
@@ -506,12 +504,6 @@ const LoanManagement = () => {
       if (currentNum > 0) return current;
       return saved;
     });
-    const savedCurrent = principalInputValue(investmentCurrentBalance(fresh));
-    if (!savedCurrent) return;
-    setInvestmentCurrentAmount((current) => {
-      if (String(current || "").trim()) return current;
-      return savedCurrent;
-    });
   }, [employees, investmentPerson]);
 
   const saveInvestmentBalance = () => {
@@ -519,13 +511,6 @@ const LoanManagement = () => {
     const amount = parseFloat(parseFormattedNumber(investmentAmount));
     if (!Number.isFinite(amount) || amount <= 0) {
       return toast.error("Enter the investment opening balance");
-    }
-    const currentRaw = String(investmentCurrentAmount || "").trim();
-    const currentBalance = currentRaw
-      ? parseFloat(parseFormattedNumber(currentRaw))
-      : amount;
-    if (!Number.isFinite(currentBalance) || currentBalance < 0) {
-      return toast.error("Enter a valid current balance");
     }
     const head =
       investmentAccount?.head ||
@@ -540,7 +525,6 @@ const LoanManagement = () => {
       {
         facilityId,
         amount,
-        currentBalance,
         asOfDate: investmentDate,
         investmentHead: head,
         userId: user?.id,
@@ -1445,7 +1429,7 @@ const LoanManagement = () => {
                   </p>
                 ) : null}
                 <p className={hintClass}>
-                  Principal is the amount they originally invested. Current balance is what the investment account shows now. That current balance is debited to Opening Balance Equity and credited to the investment account.
+                  Current balance is what the investment account shows now. The entry below is what Post opening balance will save.
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1.5">
@@ -1463,18 +1447,16 @@ const LoanManagement = () => {
                   </div>
                   <div className="space-y-1.5">
                     <label className={labelClass}>Current balance</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={formatNumberWithCommas(investmentCurrentAmount)}
-                      onChange={(e) =>
-                        setInvestmentCurrentAmount(
-                          parseFormattedNumber(e.target.value),
-                        )
-                      }
-                      placeholder="0.00"
-                      className={`${inputClass} tabular-nums`}
-                    />
+                    <div
+                      className={`${inputClass} flex items-center bg-slate-50 font-semibold tabular-nums text-slate-900`}
+                    >
+                      {formatCurrency(
+                        investmentCurrentBalance(
+                          employees.find((row) => row.id === investmentPerson.id) ||
+                            investmentPerson,
+                        ),
+                      )}
+                    </div>
                   </div>
                 </div>
                 <input
@@ -1492,6 +1474,70 @@ const LoanManagement = () => {
                   placeholder="Investment account…"
                   selected={investmentAccount ? [investmentAccount] : []}
                 />
+                <Collapsible
+                  open={entryOpen}
+                  onOpenChange={setEntryOpen}
+                  className="overflow-hidden rounded-md border border-slate-200"
+                >
+                  <CollapsibleTrigger asChild>
+                    <button
+                      type="button"
+                      className={`flex w-full items-center justify-between gap-2 bg-slate-50 px-3 py-2 text-left hover:bg-slate-100 ${
+                        entryOpen ? "border-b border-slate-200" : ""
+                      }`}
+                      aria-expanded={entryOpen}
+                    >
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Entry
+                      </span>
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${
+                          entryOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        <th className="px-3 py-2 text-left">Account</th>
+                        <th className="px-3 py-2 text-right">Debit</th>
+                        <th className="px-3 py-2 text-right">Credit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm">
+                      <tr>
+                        <td className="px-3 py-2 text-slate-900">
+                          {investmentAccount
+                            ? `${investmentAccount.head || investmentAccount.code || ""} — ${investmentAccount.description || investmentAccount.account_name || investmentAccount.name || "Investment"}`.replace(/^\s—\s/, "")
+                            : "Select an investment account"}
+                        </td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
+                          {formatCurrency(parseFloat(parseFormattedNumber(investmentAmount)) || 0)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-slate-400">—</td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-2 text-slate-900">
+                          {(() => {
+                            const code = String(activeBusiness?.opening_balance_equity || "");
+                            const equity = chartAccounts.find(
+                              (account) => accountHead(account) === code,
+                            );
+                            if (!equity) return code ? `${code} — Opening Balance Equity` : "Opening Balance Equity";
+                            return `${equity.head || equity.code || code} — ${equity.description || equity.account_name || equity.name || "Opening Balance Equity"}`;
+                          })()}
+                        </td>
+                        <td className="px-3 py-2 text-right text-slate-400">—</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
+                          {formatCurrency(parseFloat(parseFormattedNumber(investmentAmount)) || 0)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  </CollapsibleContent>
+                </Collapsible>
                 <div className="flex gap-2">
                   <button
                     type="button"

@@ -38,6 +38,9 @@ export default function InvoiceSeparation() {
   const [printingAll, setPrintingAll] = useState(false);
   const [pendingRows, setPendingRows] = useState([]);
   const [historyRows, setHistoryRows] = useState([]);
+  const [historyDate, setHistoryDate] = useState(() =>
+    moment().format("YYYY-MM-DD"),
+  );
   const [selectedCode, setSelectedCode] = useState(saleFromUrl);
   const [packs, setPacks] = useState([]);
   const [searchQuery, setSearchQuery] = useState(saleFromUrl);
@@ -81,6 +84,12 @@ export default function InvoiceSeparation() {
       "payment_confirmed,invoice_separation,credit_approved,final_invoice";
     const historyStatus =
       "warehouse_picking,dual_signature,goods_released,completed";
+    const historyQuery = new URLSearchParams({
+      facilityId,
+      status: historyStatus,
+      historyDate,
+      limit: "500",
+    });
 
     let pendingDone = false;
     let historyDone = false;
@@ -107,7 +116,7 @@ export default function InvoiceSeparation() {
     );
 
     _fetchApi(
-      `/api/v1/sale-workflows?facilityId=${facilityId}&status=${historyStatus}`,
+      `/api/v1/sale-workflows?${historyQuery.toString()}`,
       (res) => {
         historyDone = true;
         if (res.success) history = res.results || [];
@@ -118,13 +127,14 @@ export default function InvoiceSeparation() {
         finish();
       },
     );
-  }, [activeBusiness?.id, applyDashboardLists]);
+  }, [activeBusiness?.id, applyDashboardLists, historyDate]);
 
   const fetchList = useCallback(() => {
     if (!activeBusiness?.id) return;
     setLoading(true);
     const params = new URLSearchParams({
       facilityId: activeBusiness.id,
+      historyDate,
     });
     _fetchApi(
       `/api/v1/sale-workflows/separation-dashboard?${params.toString()}`,
@@ -144,7 +154,7 @@ export default function InvoiceSeparation() {
         fetchListFallback();
       },
     );
-  }, [activeBusiness?.id, applyDashboardLists, fetchListFallback]);
+  }, [activeBusiness?.id, applyDashboardLists, fetchListFallback, historyDate]);
 
   useEffect(() => {
     fetchList();
@@ -167,26 +177,32 @@ export default function InvoiceSeparation() {
   );
 
   const visibleRows = useMemo(() => {
-    if (!searchActive) return [];
     const q = searchQuery.trim().toLowerCase();
+    const matches = (list) =>
+      list.filter(
+        (r) =>
+          String(r.sale_code || "")
+            .toLowerCase()
+            .includes(q) ||
+          String(r.customer_name || "")
+            .toLowerCase()
+            .includes(q) ||
+          String(r.customer_no || "")
+            .toLowerCase()
+            .includes(q),
+      );
+    if (activeTab === "history") {
+      if (!q) return historyRows;
+      return matches(historyRows);
+    }
+    if (!searchActive) return [];
     if (!q) {
       return selectedCode
         ? rows.filter((r) => r.sale_code === selectedCode)
         : [];
     }
-    return rows.filter(
-      (r) =>
-        String(r.sale_code || "")
-          .toLowerCase()
-          .includes(q) ||
-        String(r.customer_name || "")
-          .toLowerCase()
-          .includes(q) ||
-        String(r.customer_no || "")
-          .toLowerCase()
-          .includes(q),
-    );
-  }, [rows, searchQuery, searchActive, selectedCode]);
+    return matches(rows);
+  }, [rows, historyRows, searchQuery, searchActive, selectedCode, activeTab]);
 
   const handleSearchQueryChange = useCallback(
     (value) => {
@@ -547,6 +563,21 @@ export default function InvoiceSeparation() {
                   History ({historyRows.length})
                 </button>
               </div>
+              {activeTab === "history" ? (
+                <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                  Date
+                  <input
+                    type="date"
+                    value={historyDate}
+                    onChange={(e) =>
+                      setHistoryDate(
+                        e.target.value || moment().format("YYYY-MM-DD"),
+                      )
+                    }
+                    className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
+                  />
+                </label>
+              ) : null}
               <SaleWorkflowSearchBar
                 facilityId={activeBusiness?.id}
                 rows={[...pendingRows, ...historyRows]}
@@ -555,7 +586,7 @@ export default function InvoiceSeparation() {
                 placeholder="Search or scan invoice, customer…"
               />
             </div>
-            {!searchActive ? (
+            {!searchActive && activeTab !== "history" ? (
               <div className="p-8 text-center text-gray-500 text-sm space-y-2">
                 <FileStack className="mx-auto h-10 w-10 text-gray-300" />
                 <p className="font-medium text-gray-600">
@@ -575,7 +606,9 @@ export default function InvoiceSeparation() {
             ) : visibleRows.length === 0 ? (
               <div className="p-8 text-center text-gray-500 text-sm">
                 {activeTab === "history"
-                  ? "No separated invoices match this search."
+                  ? searchQuery.trim()
+                    ? "No separated invoices match this search."
+                    : `No separated invoices on ${moment(historyDate).format("DD MMM YYYY")}.`
                   : "No invoices waiting match this search."}
               </div>
             ) : (
@@ -639,7 +672,7 @@ export default function InvoiceSeparation() {
               <div className="h-full flex flex-col items-center justify-center text-gray-500 gap-2 py-16 px-6 text-center">
                 <FileStack className="w-12 h-12 text-gray-300" />
                 <p className="font-medium text-gray-600">
-                  {searchActive
+                  {activeTab === "history" || searchActive
                     ? "Click an invoice to open separation"
                     : "Search an invoice first"}
                 </p>
