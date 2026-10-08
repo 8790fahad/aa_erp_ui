@@ -685,6 +685,19 @@ export default function ProductSupplierBill() {
     return items.reduce((sum, item) => sum + getLineTaxAmount(item), 0);
   };
 
+  // Cost is the amount before VAT. Inclusive VAT is already inside the line total.
+  const getLineCost = (item) => {
+    const total = parseFloat(item.total || 0) || 0;
+    const tax = getLineTax(item);
+    if (!tax || !isProductTaxable(item.taxable) || !isTaxInclusive(tax)) {
+      return total;
+    }
+    return total - calculateTaxAmount(total, tax);
+  };
+
+  const calculateCostSubtotal = () =>
+    items.reduce((sum, item) => sum + getLineCost(item), 0);
+
   // Grand total: subtotal + exclusive line tax only (inclusive already in cost)
   const getTotalWithTax = () => {
     const subtotal = calculateTotal();
@@ -1806,6 +1819,15 @@ export default function ProductSupplierBill() {
 
                   items.forEach((item) => {
                     const lineVat = getLineTaxAmount(item);
+                    const lineTax = getLineTax(item);
+                    const lineQty = getItemQty(item);
+                    const unitCost =
+                      lineQty > 0 &&
+                      lineTax &&
+                      lineVat > 0 &&
+                      isTaxInclusive(lineTax)
+                        ? getLineCost(item) / lineQty
+                        : null;
                     const lockPoLine =
                       isPoSourcedBillLine(item) && !canEditPoBillLines;
                     rows.push(
@@ -2064,6 +2086,11 @@ export default function ProductSupplierBill() {
                                 : "border-slate-300 focus:border-[var(--aa-accent)] focus:ring-[var(--aa-accent)]"
                             }`}
                           />
+                          {unitCost != null ? (
+                            <div className="mt-1 text-[11px] tabular-nums text-slate-500">
+                              Cost · ₦{formatNumber(unitCost)}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-2 py-3 align-top">
                           <select
@@ -2113,17 +2140,11 @@ export default function ProductSupplierBill() {
                           {isProductTaxable(item.taxable) &&
                           item.line_tax_id ? (
                             <div className="mt-1 text-[11px] tabular-nums text-slate-500">
-                              {isTaxInclusive(
-                                lineTaxOptions.find(
-                                  (t) =>
-                                    String(t.id) === String(item.line_tax_id),
-                                ),
-                              )
-                                ? "Inclusive"
-                                : "Exclusive"}
                               {lineVat > 0
-                                ? ` · ₦${formatNumber(lineVat)}`
-                                : ""}
+                                ? `VAT · ₦${formatNumber(lineVat)}`
+                                : isTaxInclusive(lineTax)
+                                  ? "Inclusive"
+                                  : "Exclusive"}
                             </div>
                           ) : null}
                         </td>
@@ -2266,7 +2287,7 @@ export default function ProductSupplierBill() {
               <div className="flex items-center justify-between gap-4">
                 <span className="text-slate-600">Sub Total</span>
                 <span className="tabular-nums text-slate-900">
-                  {formatNumber(calculateTotal())}
+                  {formatNumber(calculateCostSubtotal())}
                 </span>
               </div>
               {selectedTaxes.length > 0 &&

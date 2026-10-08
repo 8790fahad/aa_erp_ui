@@ -313,12 +313,29 @@ const LoanManagement = () => {
 
   const findSetupAccount = (field, accounts = chartAccounts, setups = loanSetups) => {
     const named = setups.find((setup) => setup.name === DEFAULT_RECEIVABLE_SETUP);
-    const setup = named || setups[0];
-    if (!setup?.[field]) return null;
+    const setup = named || setups.find((row) => row?.[field]) || setups[0];
+    const code = String(setup?.[field] || "").trim();
+    if (!code) return null;
     return (
-      accounts.find((account) => accountHead(account) === String(setup[field])) ||
-      null
+      accounts.find((account) => accountHead(account) === code) || {
+        head: code,
+        code,
+        description: setup?.name || "From Settings",
+      }
     );
+  };
+
+  const accountChoices = (preferred) => {
+    const extras = [preferred, selectedReceivable, settingsAccount].filter(Boolean);
+    const seen = new Set(chartAccounts.map((account) => accountHead(account)));
+    const missing = [];
+    extras.forEach((account) => {
+      const code = accountHead(account);
+      if (!code || seen.has(code)) return;
+      seen.add(code);
+      missing.push(account);
+    });
+    return [...missing, ...chartAccounts];
   };
 
   const findDefaultReceivable = (accounts = chartAccounts, setups = loanSetups) =>
@@ -1443,7 +1460,7 @@ const LoanManagement = () => {
             <div className="space-y-1.5">
               <label className={labelClass}>Loan Receivable Account</label>
               <TypeaheadCustom
-                options={chartAccounts}
+                options={accountChoices(findDefaultReceivable())}
                 labelKey={(account) =>
                   `${account.head || account.code || ""} ${account.description || account.account_name || ""}`.trim()
                 }
@@ -1853,7 +1870,7 @@ const LoanManagement = () => {
               <div className="space-y-1.5">
                 <label className={labelClass}>Loan Receivable Account</label>
                 <TypeaheadCustom
-                  options={chartAccounts}
+                  options={accountChoices(findDefaultReceivable())}
                   labelKey={(i) =>
                     `${i.head || i.code || ""} ${i.description || i.account_name || ""}`.trim()
                   }
