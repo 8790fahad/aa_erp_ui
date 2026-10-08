@@ -59,7 +59,10 @@ export default function WarehouseRequests() {
   const fetchList = useCallback(() => {
     if (!activeBusiness?.id) return;
     setLoading(true);
-    const params = new URLSearchParams({ facilityId: activeBusiness.id });
+    const params = new URLSearchParams({
+      facilityId: activeBusiness.id,
+      historyDate: moment().format("YYYY-MM-DD"),
+    });
     if (user?.id) params.set("userId", String(user.id));
     if (branchFilter !== "all") {
       params.set("branchId", String(branchFilter));
@@ -99,9 +102,13 @@ export default function WarehouseRequests() {
   );
 
   const collectedRows = useMemo(() => {
-    const list = rows.filter(
-      (r) => String(r.status || "").toLowerCase() === "collected",
-    );
+    const today = moment().format("YYYY-MM-DD");
+    const list = rows.filter((r) => {
+      if (String(r.status || "").toLowerCase() !== "collected") return false;
+      const when = r.collected_at || r.updated_at || r.updatedAt;
+      if (!when || !moment(when).isValid()) return false;
+      return moment(when).format("YYYY-MM-DD") === today;
+    });
     return list.sort((a, b) => {
       const ta = new Date(a.collected_at || a.updated_at || 0).getTime();
       const tb = new Date(b.collected_at || b.updated_at || 0).getTime();
@@ -156,29 +163,32 @@ export default function WarehouseRequests() {
   }, [fetchList]);
 
   const visibleRows = useMemo(() => {
-    if (!searchActive) return [];
     const q = searchQuery.trim().toLowerCase();
-    const source = listTab === "history" ? collectedRows : pendingRows;
-    if (!q) {
-      return selectedId
-        ? source.filter((r) => r.id === selectedId)
-        : [];
+    const matches = (list) =>
+      list.filter(
+        (r) =>
+          String(r.sale_code || "")
+            .toLowerCase()
+            .includes(q) ||
+          String(r.pack_code || "")
+            .toLowerCase()
+            .includes(q) ||
+          String(r.customer_name || r.workflow?.customer_name || "")
+            .toLowerCase()
+            .includes(q) ||
+          String(r.branch_name || "")
+            .toLowerCase()
+            .includes(q),
+      );
+    if (listTab === "history") {
+      if (!q) return collectedRows;
+      return matches(collectedRows);
     }
-    return source.filter(
-      (r) =>
-        String(r.sale_code || "")
-          .toLowerCase()
-          .includes(q) ||
-        String(r.pack_code || "")
-          .toLowerCase()
-          .includes(q) ||
-        String(r.customer_name || r.workflow?.customer_name || "")
-          .toLowerCase()
-          .includes(q) ||
-        String(r.branch_name || "")
-          .toLowerCase()
-          .includes(q),
-    );
+    if (!searchActive) return [];
+    if (!q) {
+      return selectedId ? pendingRows.filter((r) => r.id === selectedId) : [];
+    }
+    return matches(pendingRows);
   }, [
     searchActive,
     pendingRows,
@@ -402,7 +412,7 @@ export default function WarehouseRequests() {
                 placeholder="Search or scan invoice, pack, customer…"
               />
             </div>
-            {!searchActive ? (
+            {!searchActive && listTab !== "history" ? (
               <div className="p-8 text-center text-gray-500 text-sm space-y-2">
                 <Package className="mx-auto h-10 w-10 text-gray-300" />
                 <p className="font-medium text-gray-600">
@@ -422,7 +432,9 @@ export default function WarehouseRequests() {
             ) : visibleRows.length === 0 ? (
               <div className="p-8 text-center text-gray-500 text-sm">
                 {listTab === "history"
-                  ? "No collected invoices match this search."
+                  ? searchQuery.trim()
+                    ? "No collected invoices match this search."
+                    : `No invoices collected on ${moment().format("DD MMM YYYY")}.`
                   : "No warehouse invoices match this search."}
               </div>
             ) : (

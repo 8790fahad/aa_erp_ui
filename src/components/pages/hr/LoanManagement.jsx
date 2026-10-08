@@ -535,7 +535,9 @@ const LoanManagement = () => {
           toast.error(data.message || "Could not post the opening balance");
           return;
         }
-        toast.success("Investment opening balance posted");
+        toast.success(
+          data.message || "Investment opening balance updated",
+        );
         setEmployees((rows) =>
           rows.map((row) =>
             row.id === investmentPerson.id ? { ...row, ...data.data } : row,
@@ -1418,7 +1420,9 @@ const LoanManagement = () => {
             {investmentPerson ? (
               <div className="space-y-2 rounded-lg border border-slate-200 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Investment opening balance
+                  {Number(investmentPerson.investmentOpeningBalance) > 0
+                    ? "Edit opening balance"
+                    : "Investment opening balance"}
                 </p>
                 <p className="text-sm font-semibold text-slate-900">
                   {investmentPerson.firstName} {investmentPerson.lastName}
@@ -1545,7 +1549,11 @@ const LoanManagement = () => {
                     onClick={saveInvestmentBalance}
                     className="h-9 rounded-md bg-[var(--aa-navy)] px-3 text-sm font-semibold text-white disabled:opacity-60"
                   >
-                    {savingInvestment ? "Posting…" : "Post opening balance"}
+                    {savingInvestment
+                      ? "Saving…"
+                      : Number(investmentPerson.investmentOpeningBalance) > 0
+                        ? "Update opening balance"
+                        : "Post opening balance"}
                   </button>
                   <button
                     type="button"
@@ -1594,7 +1602,9 @@ const LoanManagement = () => {
                           onClick={() => openInvestmentBalance(person)}
                           className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
                         >
-                          Opening balance
+                          {Number(person.investmentOpeningBalance) > 0
+                            ? "Edit opening balance"
+                            : "Opening balance"}
                         </button>
                         <button
                           type="button"
