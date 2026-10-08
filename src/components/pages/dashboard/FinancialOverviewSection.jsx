@@ -42,6 +42,7 @@ const PL_COLORS = {
   cogs: "#F2A93B", // gold
   grossProfit: "#2563eb", // royal blue
   operatingExpenses: "#CC4D3D", // terracotta red
+  taxation: "#0891b2", // cyan
   netProfit: "#7c3aed", // violet (clearly different from blue)
 };
 
@@ -50,6 +51,7 @@ const PL_SERIES_ORDER = [
   "cogs",
   "grossProfit",
   "operatingExpenses",
+  "taxation",
   "netProfit",
 ];
 
@@ -91,6 +93,12 @@ function PlChartTooltip({ active, payload, label }) {
       color: colorByKey.operatingExpenses || PL_COLORS.operatingExpenses,
     },
     {
+      key: "taxation",
+      name: "Taxation",
+      value: point.taxation,
+      color: colorByKey.taxation || PL_COLORS.taxation,
+    },
+    {
       key: "netProfit",
       name: "Net Profit",
       value: point.netProfit,
@@ -123,6 +131,7 @@ function PlChartTooltip({ active, payload, label }) {
 function formatCompact(amount) {
   const value = parseFloat(amount || 0);
   const abs = Math.abs(value);
+  if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
   if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return formatNumber1(value);
@@ -185,8 +194,8 @@ function DashboardOverviewSkeleton({ period, onPeriodChange }) {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Dashboard</h2>
           <p className="mt-0.5 text-xs text-gray-500">
-            Revenue − COGS = Gross Profit · Gross Profit − Operating Expenses =
-            Net Profit
+            Revenue − COGS = Gross Profit · Gross Profit − Operating Expenses −
+            Taxation = Net Profit
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -195,8 +204,8 @@ function DashboardOverviewSkeleton({ period, onPeriodChange }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => (
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
           <SkeletonCard key={i} className="p-4 sm:p-5">
             <Skeleton className="mb-3 h-3 w-24" />
             <Skeleton className="h-8 w-28" />
@@ -309,6 +318,7 @@ const KPI_REPORT_PATHS = {
   grossProfit: "/app/reports/accounting-reports/sales-by-product",
   operatingExpenses:
     "/app/reports/accounting-reports/aa_erp-income-statement",
+  taxation: "/app/reports/accounting-reports/aa_erp-income-statement",
   netProfit: "/app/reports/accounting-reports/aa_erp-income-statement",
 };
 
@@ -1044,8 +1054,8 @@ export default function FinancialOverviewSection({
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Dashboard</h2>
           <p className="mt-0.5 text-xs text-gray-500">
-            Revenue − COGS = Gross Profit · Gross Profit − Operating Expenses =
-            Net Profit
+            Revenue − COGS = Gross Profit · Gross Profit − Operating Expenses −
+            Taxation = Net Profit
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1059,7 +1069,7 @@ export default function FinancialOverviewSection({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-6">
         <KpiCard
           title="Revenue"
           value={kpis.totalRevenue ?? kpis.totalIncome}
@@ -1106,6 +1116,17 @@ export default function FinancialOverviewSection({
               KPI_REPORT_PATHS.operatingExpenses,
               period,
             )
+          }
+        />
+        <KpiCard
+          title="Taxation"
+          value={kpis.taxation}
+          change={kpis.taxationChange}
+          changeLabel={kpis.taxationChangeLabel}
+          invertChange
+          color={PL_COLORS.taxation}
+          onClick={() =>
+            openPeriodReport(navigate, KPI_REPORT_PATHS.taxation, period)
           }
         />
         <KpiCard
@@ -1180,10 +1201,12 @@ export default function FinancialOverviewSection({
                   vertical={false}
                 />
                 <XAxis
-                  dataKey="month"
+                  dataKey="label"
                   tick={{ fontSize: 11, fill: "#6b7280" }}
                   axisLine={{ stroke: "#111827", strokeWidth: 1 }}
                   tickLine={false}
+                  interval="preserveStartEnd"
+                  minTickGap={24}
                 />
                 <YAxis
                   tick={{ fontSize: 11, fill: "#9ca3af" }}
@@ -1225,6 +1248,13 @@ export default function FinancialOverviewSection({
                   maxBarSize={22}
                 />
                 <Bar
+                  dataKey="taxation"
+                  name="Taxation"
+                  fill={PL_COLORS.taxation}
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={22}
+                />
+                <Bar
                   dataKey="netProfit"
                   name="Net Profit"
                   fill={PL_COLORS.netProfit}
@@ -1255,10 +1285,12 @@ export default function FinancialOverviewSection({
                   vertical={false}
                 />
                 <XAxis
-                  dataKey="month"
+                  dataKey="label"
                   tick={{ fontSize: 11, fill: "#6b7280" }}
                   axisLine={false}
                   tickLine={false}
+                  interval="preserveStartEnd"
+                  minTickGap={24}
                 />
                 <YAxis
                   tick={{ fontSize: 11, fill: "#9ca3af" }}
@@ -1327,6 +1359,20 @@ export default function FinancialOverviewSection({
                   activeDot={{
                     r: 5,
                     fill: PL_COLORS.operatingExpenses,
+                    stroke: "#fff",
+                    strokeWidth: 2,
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="taxation"
+                  name="Taxation"
+                  stroke={PL_COLORS.taxation}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{
+                    r: 5,
+                    fill: PL_COLORS.taxation,
                     stroke: "#fff",
                     strokeWidth: 2,
                   }}
