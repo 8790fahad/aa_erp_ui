@@ -11,6 +11,7 @@ import {
   Clock,
   Banknote,
   User,
+  Settings,
   MoreVertical,
   Filter,
   X,
@@ -54,6 +55,8 @@ const sheetContentClass =
   "!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-lg [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100";
 const sheetHeaderClass =
   "shrink-0 space-y-1 border-b border-white/10 bg-[var(--aa-navy,#1a2d5e)] px-5 py-4 pr-12 text-left";
+const DEFAULT_RECEIVABLE_SETUP = "Default loan receivable";
+
 const sheetFooterClass =
   "shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-4 flex flex-wrap justify-end gap-2";
 
@@ -81,11 +84,18 @@ function formatAppliesFrom(dateVal) {
 
 const emptyLoanForm = () => ({
   amount: "",
+  profit: "",
   purpose: "",
   repaymentMethod: "Salary Deduction",
   durationMonths: "1",
   startMonth: currentYearMonth(),
 });
+
+const loanDue = (loan) =>
+  parseFloat(loan?.amount || 0) + parseFloat(loan?.profit || 0);
+
+const loanBalance = (loan) =>
+  loanDue(loan) - parseFloat(loan?.amountPaid || 0);
 
 const LoanManagement = () => {
   const { user, activeBusiness } = useSelector((state) => state.auth);
@@ -106,11 +116,25 @@ const LoanManagement = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
+  const [personFilter, setPersonFilter] = useState("all");
+  const [pickerFilter, setPickerFilter] = useState("associate");
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [associatePanelOpen, setAssociatePanelOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [loanSetups, setLoanSetups] = useState([]);
+  const [settingsAccount, setSettingsAccount] = useState(null);
+  const [settingsProfitAccount, setSettingsProfitAccount] = useState(null);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [savingAssociate, setSavingAssociate] = useState(false);
+  const [associateForm, setAssociateForm] = useState({
+    firstName: "",
+    lastName: "",
+    contactInfo: "",
+  });
 
   const [chartAccounts, setChartAccounts] = useState([]);
   const [selectedReceivable, setSelectedReceivable] = useState(null);
@@ -143,6 +167,7 @@ const LoanManagement = () => {
   const [selectedBank, setSelectedBank] = useState(null);
   const [selectedCash, setSelectedCash] = useState(null);
   const [repaymentAmount, setRepaymentAmount] = useState("");
+  const [repaymentProfit, setRepaymentProfit] = useState("");
   const [paymentRef, setPaymentRef] = useState("");
   const [chequeNumber, setChequeNumber] = useState("");
 
@@ -199,6 +224,7 @@ const LoanManagement = () => {
       fetchLoans();
       fetchEmployees();
       fetchChartAccounts();
+      fetchLoanSetups();
       fetchBankAccounts();
       fetchCashAccounts();
     }
@@ -248,6 +274,41 @@ const LoanManagement = () => {
     );
   };
 
+  const accountHead = (account) =>
+    String(account?.head || account?.code || account?.account_code || "");
+
+  const findSetupAccount = (field, accounts = chartAccounts, setups = loanSetups) => {
+    const named = setups.find((setup) => setup.name === DEFAULT_RECEIVABLE_SETUP);
+    const setup = named || setups[0];
+    if (!setup?.[field]) return null;
+    return (
+      accounts.find((account) => accountHead(account) === String(setup[field])) ||
+      null
+    );
+  };
+
+  const findDefaultReceivable = (accounts = chartAccounts, setups = loanSetups) =>
+    findSetupAccount("receivableHead", accounts, setups);
+
+  const findDefaultProfit = (accounts = chartAccounts, setups = loanSetups) =>
+    findSetupAccount("profitHead", accounts, setups);
+
+  useEffect(() => {
+    if (!showForm || editMode || selectedReceivable) return;
+    const account = findDefaultReceivable();
+    if (account) setSelectedReceivable(account);
+  }, [showForm, editMode, selectedReceivable, chartAccounts, loanSetups]);
+
+  const fetchLoanSetups = () => {
+    _fetchApi(
+      `/api/hr/loan-setups?facilityId=${facilityId}`,
+      (data) => {
+        if (data.success) setLoanSetups(data.data || []);
+      },
+      (error) => console.error("Error fetching loan setups:", error),
+    );
+  };
+
   const fetchChartAccounts = () => {
     _postApi(
       `/account/chart-of-account?query_type=select`,
@@ -292,9 +353,100 @@ const LoanManagement = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const isBusinessAssociate = (person) =>
+    person?.contractType === "Business Associate";
+
+  const selectLoanPerson = (person) => {
+    setSelectedEmployee(person);
+    if (isBusinessAssociate(person)) {
+      setFormData((prev) => ({ ...prev, repaymentMethod: "Self" }));
+    }
+  };
+
+  const openReceivableSettings = () => {
+    setSettingsAccount(findDefaultReceivable());
+    setSettingsProfitAccount(findDefaultProfit());
+    setSettingsOpen(true);
+  };
+
+  const saveReceivableSetting = () => {
+    const head = accountHead(settingsAccount);
+    if (!head) return toast.error("Select the loan receivable account");
+    setSavingSettings(true);
+    const existing = loanSetups.find((setup) => setup.name === DEFAULT_RECEIVABLE_SETUP);
+    const payload = {
+      name: DEFAULT_RECEIVABLE_SETUP,
+      description: "Default account debited when a loan is disbursed",
+      receivableHead: head,
+      profitHead: accountHead(settingsProfitAccount),
+      facilityId,
+      userId: user?.id,
+    };
+    const onDone = (data) => {
+      setSavingSettings(false);
+      if (!data.success) {
+        toast.error(data.message || "Could not save the default account");
+        return;
+      }
+      toast.success("Default loan receivable account saved");
+      setSelectedReceivable(settingsAccount);
+      setSettingsOpen(false);
+      fetchLoanSetups();
+    };
+    const onFail = () => {
+      setSavingSettings(false);
+      toast.error("Could not save the default account");
+    };
+    if (existing?.id) {
+      _putApi(`/api/hr/loan-setups/${existing.id}`, payload, onDone, onFail);
+    } else {
+      _postApi("/api/hr/loan-setups", payload, onDone, onFail);
+    }
+  };
+
+  const saveBusinessAssociate = () => {
+    const firstName = associateForm.firstName.trim();
+    const lastName = associateForm.lastName.trim();
+    const contactInfo = associateForm.contactInfo.trim();
+    if (!firstName || !lastName) {
+      return toast.error("Enter the associate's first and last name");
+    }
+    if (!contactInfo) return toast.error("Enter a phone number");
+    setSavingAssociate(true);
+    _postApi(
+      "/api/hr/employees",
+      {
+        firstName,
+        lastName,
+        contactInfo,
+        contractType: "Business Associate",
+        designation: "Business Associate",
+        gender: "Other",
+        facilityId,
+        createdBy: user?.id,
+      },
+      (data) => {
+        setSavingAssociate(false);
+        if (!data.success) {
+          toast.error(data.message || "Could not add business associate");
+          return;
+        }
+        toast.success("Business associate registered");
+        setAssociateForm({ firstName: "", lastName: "", contactInfo: "" });
+        fetchEmployees();
+      },
+      () => {
+        setSavingAssociate(false);
+        toast.error("Could not add business associate");
+      },
+    );
+  };
+
   const handleSaveLoan = (e) => {
     e.preventDefault();
-    if (!selectedEmployee) return toast.error("Please select an employee");
+    if (!selectedEmployee) {
+      return toast.error("Select a staff member or business associate");
+    }
     const receivableHead =
       selectedReceivable?.head ||
       selectedReceivable?.code ||
@@ -314,6 +466,15 @@ const LoanManagement = () => {
     if (paymentMode === "cheque" && !String(chequeNumber || "").trim()) {
       return toast.error("Enter the cheque number");
     }
+    const profitValue = String(formData.profit || "").trim();
+    const profit = profitValue ? parseFloat(profitValue) : 0;
+    if (profitValue && (!Number.isFinite(profit) || profit < 0)) {
+      return toast.error("Enter a valid profit amount");
+    }
+    const profitHead = accountHead(findDefaultProfit());
+    if (profit > 0 && !profitHead) {
+      return toast.error("Set the loan profit account in Settings first");
+    }
     if (
       formData.repaymentMethod !== "Self" &&
       !/^\d{4}-\d{2}$/.test(String(formData.startMonth || ""))
@@ -326,6 +487,8 @@ const LoanManagement = () => {
       ...formData,
       purpose: formData.purpose || undefined,
       amount: parseFloat(formData.amount),
+      profit,
+      profitHead: profit > 0 ? profitHead : null,
       durationMonths: parseInt(formData.durationMonths),
       startMonth:
         formData.repaymentMethod === "Self"
@@ -388,6 +551,7 @@ const LoanManagement = () => {
     setEditingLoanId(loan.id);
     setFormData({
       amount: loan.amount.toString(),
+      profit: parseFloat(loan.profit) > 0 ? String(loan.profit) : "",
       purpose: loan.purpose,
       repaymentMethod: loan.repaymentMethod || "Salary Deduction",
       durationMonths: loan.durationMonths.toString(),
@@ -469,10 +633,7 @@ const LoanManagement = () => {
     const amount = parseFloat(repaymentAmount);
     if (!amount || amount <= 0) return toast.error("Enter valid amount");
 
-    const outstanding = viewLoanData
-      ? parseFloat(viewLoanData.amount) -
-        parseFloat(viewLoanData.amountPaid || 0)
-      : 0;
+    const outstanding = viewLoanData ? loanBalance(viewLoanData) : 0;
     if (amount > outstanding) {
       return toast.error(
         `Amount cannot exceed outstanding balance (${formatCurrency(outstanding)})`,
@@ -486,11 +647,23 @@ const LoanManagement = () => {
       return toast.error("Enter the cheque number");
     }
 
+    const profitValue = String(repaymentProfit || "").trim();
+    const profit = profitValue ? parseFloat(profitValue) : 0;
+    if (profitValue && (!Number.isFinite(profit) || profit < 0)) {
+      return toast.error("Enter a valid profit amount");
+    }
+    const profitHead = accountHead(findDefaultProfit());
+    if (profit > 0 && !profitHead) {
+      return toast.error("Set the loan profit account in Settings first");
+    }
+
     setRepaymentLoading(true);
     _postApi(
       `/api/hr/loans/${viewLoanId}/repayments`,
       {
         amount,
+        profit,
+        profitHead: profit > 0 ? profitHead : null,
         paymentMethod: "Manual",
         paymentMode,
         bankHead: (paymentMode === 'bank' || paymentMode === 'cheque') ? paymentHead : null,
@@ -504,6 +677,7 @@ const LoanManagement = () => {
           toast.success("Repayment recorded and ledger updated");
           setShowRepaymentForm(false);
           setRepaymentAmount("");
+          setRepaymentProfit("");
           resetPaymentSelection();
           handleViewLoan({ id: viewLoanId });
           fetchLoans();
@@ -571,9 +745,7 @@ const LoanManagement = () => {
 
   const draftMonthlyDeduction = (() => {
     if (!viewLoanData) return 0;
-    const outstanding =
-      parseFloat(viewLoanData.amount) -
-      parseFloat(viewLoanData.amountPaid || 0);
+    const outstanding = loanBalance(viewLoanData);
     const months = Math.max(1, parseInt(scheduleDraft.durationMonths, 10) || 1);
     return outstanding > 0 ? outstanding / months : 0;
   })();
@@ -668,10 +840,35 @@ const LoanManagement = () => {
     );
   };
 
+  const businessAssociates = employees.filter(isBusinessAssociate);
+
+  const openLoanForAssociate = (person) => {
+    setAssociatePanelOpen(false);
+    setEditMode(false);
+    setEditingLoanId(null);
+    setFormData({ ...emptyLoanForm(), repaymentMethod: "Self" });
+    setSelectedReceivable(null);
+    resetPaymentSelection();
+    selectLoanPerson(person);
+    setShowForm(true);
+  };
+
+  const matchesPersonFilter = (person, filter) => {
+    if (!filter || filter === "all") return true;
+    return filter === "associate"
+      ? isBusinessAssociate(person)
+      : !isBusinessAssociate(person);
+  };
+
+  const pickerOptions = employees.filter((person) =>
+    matchesPersonFilter(person, pickerFilter),
+  );
+
   const filteredLoans = loans.filter(l => {
     const matchesSearch = (l.employee?.firstName + " " + l.employee?.lastName).toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = selectedStatus ? l.status === selectedStatus : true;
-    return matchesSearch && matchesStatus;
+    const matchesPerson = matchesPersonFilter(l.employee, personFilter);
+    return matchesSearch && matchesStatus && matchesPerson;
   });
 
   return (
@@ -682,7 +879,7 @@ const LoanManagement = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Loan Management</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage employee loan requests, disbursements, and collections</p>
+            <p className="text-sm text-gray-500 mt-1">Manage staff and business associate loans, disbursements, and collections</p>
           </div>
           
           <div className="flex items-center gap-3">
@@ -697,6 +894,27 @@ const LoanManagement = () => {
                  All
                </div>
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={openReceivableSettings}
+              className="border-slate-200 bg-white text-[var(--aa-navy)] shadow-sm hover:bg-slate-50"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Settings
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setAssociatePanelOpen(true);
+                fetchEmployees();
+              }}
+              className="border-slate-200 bg-white text-[var(--aa-navy)] shadow-sm hover:bg-slate-50"
+            >
+              <User className="w-4 h-4 mr-2" />
+              Business Associate
+            </Button>
             <Button 
               type="button"
               onClick={() => {
@@ -750,10 +968,24 @@ const LoanManagement = () => {
                 <Filter className="h-3.5 w-3.5" />
               </div>
             </div>
+            <div className="relative">
+              <select
+                value={personFilter}
+                onChange={(e) => setPersonFilter(e.target.value)}
+                className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2 pl-4 pr-10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--app-primary)] focus:bg-white transition-all cursor-pointer"
+              >
+                <option value="all">Employees & associates</option>
+                <option value="employee">Employees</option>
+                <option value="associate">Business associates</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                <Filter className="h-3.5 w-3.5" />
+              </div>
+            </div>
             
-            {(searchTerm || selectedStatus) && (
+            {(searchTerm || selectedStatus || personFilter !== "all") && (
               <button 
-                onClick={() => { setSearchTerm(""); setSelectedStatus(""); }}
+                onClick={() => { setSearchTerm(""); setSelectedStatus(""); setPersonFilter("all"); }}
                 className="text-sm text-gray-500 hover:text-gray-700 px-2 transition-colors"
               >
                 Clear
@@ -820,7 +1052,10 @@ const LoanManagement = () => {
                             <div className="text-sm font-semibold text-gray-900">
                               {item.employee?.firstName} {item.employee?.lastName}
                             </div>
-                            <div className="text-xs text-gray-500">#{item.employee?.employeeId}</div>
+                            <div className="text-xs text-gray-500">
+                              #{item.employee?.employeeId}
+                              {isBusinessAssociate(item.employee) ? " · Business associate" : ""}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -838,7 +1073,7 @@ const LoanManagement = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-col">
                           <span className="text-sm font-bold text-gray-900">{formatCurrency(item.amount)}</span>
-                          <span className="text-[10px] text-orange-600 font-bold uppercase tracking-tighter">Bal: {formatCurrency(parseFloat(item.amount) - parseFloat(item.amountPaid || 0))}</span>
+                          <span className="text-[10px] text-orange-600 font-bold uppercase tracking-tighter">Bal: {formatCurrency(loanBalance(item))}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -899,6 +1134,176 @@ const LoanManagement = () => {
         </div>
       </div>
 
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent side="right" className={sheetContentClass}>
+          <SheetHeader className={sheetHeaderClass}>
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 rounded-md bg-white/10 p-2">
+                <Settings className="h-4 w-4 text-white/90" />
+              </div>
+              <div className="min-w-0">
+                <SheetTitle className="text-lg font-semibold leading-tight text-white">
+                  Loan settings
+                </SheetTitle>
+                <SheetDescription className="mt-0.5 text-xs text-white/70">
+                  Default receivable for new loans, and the profit account used when a collection includes a profit.
+                </SheetDescription>
+              </div>
+            </div>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-white px-5 py-5">
+            <div className="space-y-1.5">
+              <label className={labelClass}>Loan Receivable Account</label>
+              <TypeaheadCustom
+                options={chartAccounts}
+                labelKey={(account) =>
+                  `${account.head || account.code || ""} ${account.description || account.account_name || ""}`.trim()
+                }
+                onChange={(items) => setSettingsAccount(items[0] || null)}
+                placeholder="Select receivable account…"
+                selected={settingsAccount ? [settingsAccount] : []}
+              />
+              <p className={hintClass}>
+                New loans debit this account unless you pick a different one on that loan.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Loan Profit Account</label>
+              <TypeaheadCustom
+                options={chartAccounts}
+                labelKey={(account) =>
+                  `${account.head || account.code || ""} ${account.description || account.account_name || ""}`.trim()
+                }
+                onChange={(items) => setSettingsProfitAccount(items[0] || null)}
+                placeholder="Select profit account…"
+                selected={settingsProfitAccount ? [settingsProfitAccount] : []}
+              />
+              <p className={hintClass}>
+                Used only when a collection includes a profit. The profit is credited here.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={savingSettings}
+              onClick={saveReceivableSetting}
+              className="h-9 rounded-md bg-[var(--aa-navy)] px-3 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {savingSettings ? "Saving…" : "Save default"}
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={associatePanelOpen} onOpenChange={setAssociatePanelOpen}>
+        <SheetContent side="right" className={sheetContentClass}>
+          <SheetHeader className={sheetHeaderClass}>
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 rounded-md bg-white/10 p-2">
+                <User className="h-4 w-4 text-white/90" />
+              </div>
+              <div className="min-w-0">
+                <SheetTitle className="text-lg font-semibold leading-tight text-white">
+                  Business associates
+                </SheetTitle>
+                <SheetDescription className="mt-0.5 text-xs text-white/70">
+                  Register someone who is not on payroll. You give them a loan and they bring it back.
+                </SheetDescription>
+              </div>
+            </div>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-white px-5 py-5">
+            <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Register
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input
+                  type="text"
+                  value={associateForm.firstName}
+                  onChange={(e) =>
+                    setAssociateForm((prev) => ({
+                      ...prev,
+                      firstName: e.target.value,
+                    }))
+                  }
+                  placeholder="First name"
+                  className={inputClass}
+                />
+                <input
+                  type="text"
+                  value={associateForm.lastName}
+                  onChange={(e) =>
+                    setAssociateForm((prev) => ({
+                      ...prev,
+                      lastName: e.target.value,
+                    }))
+                  }
+                  placeholder="Last name"
+                  className={inputClass}
+                />
+              </div>
+              <input
+                type="text"
+                value={associateForm.contactInfo}
+                onChange={(e) =>
+                  setAssociateForm((prev) => ({
+                    ...prev,
+                    contactInfo: e.target.value,
+                  }))
+                }
+                placeholder="Phone number"
+                className={inputClass}
+              />
+              <button
+                type="button"
+                disabled={savingAssociate}
+                onClick={saveBusinessAssociate}
+                className="h-9 rounded-md bg-[var(--aa-navy)] px-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {savingAssociate ? "Saving…" : "Register"}
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Registered ({businessAssociates.length})
+              </p>
+              {businessAssociates.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-500">
+                  No business associates yet.
+                </p>
+              ) : (
+                <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                  {businessAssociates.map((person) => (
+                    <li
+                      key={person.id}
+                      className="flex items-center justify-between gap-3 px-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900">
+                          {person.firstName} {person.lastName}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">
+                          #{person.employeeId}
+                          {person.contactInfo ? ` · ${person.contactInfo}` : ""}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openLoanForAssociate(person)}
+                        className="shrink-0 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                      >
+                        Give loan
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* New Loan Sheet */}
       <Sheet
         open={showForm}
@@ -951,12 +1356,42 @@ const LoanManagement = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className={labelClass}>Staff Selection</label>
+                <label className={labelClass}>Staff or business associate</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: "all", label: "All" },
+                    { value: "employee", label: "Employees" },
+                    { value: "associate", label: "Associates" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setPickerFilter(option.value)}
+                      className={`rounded-md border py-1.5 text-[11px] font-semibold ${
+                        pickerFilter === option.value
+                          ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
                 <TypeaheadCustom
-                  options={employees}
-                  labelKey={(i) => `${i.firstName} ${i.lastName} (${i.employeeId})`}
-                  onChange={(items) => setSelectedEmployee(items[0] || null)}
-                  placeholder="Search staff..."
+                  options={pickerOptions}
+                  labelKey={(i) =>
+                    `${i.firstName} ${i.lastName} (${i.employeeId})${
+                      isBusinessAssociate(i) ? " · Business associate" : ""
+                    }`
+                  }
+                  onChange={(items) => selectLoanPerson(items[0] || null)}
+                  placeholder={
+                    pickerFilter === "associate"
+                      ? "Search business associates..."
+                      : pickerFilter === "employee"
+                        ? "Search employees..."
+                        : "Search staff or business associate..."
+                  }
                   selected={selectedEmployee ? [selectedEmployee] : []}
                 />
               </div>
@@ -973,7 +1408,9 @@ const LoanManagement = () => {
                   selected={selectedReceivable ? [selectedReceivable] : []}
                 />
                 <p className={hintClass}>
-                  Debit this account when the loan is disbursed
+                  {findDefaultReceivable()
+                    ? "Filled from Settings. Change it here only for this loan."
+                    : "Choose the account in Settings so new loans use it automatically."}
                 </p>
               </div>
 
@@ -994,6 +1431,23 @@ const LoanManagement = () => {
                   />
                 </div>
                 <div className="space-y-1.5">
+                  <label className={labelClass}>Profit (optional)</label>
+                  <input
+                    type="text"
+                    name="profit"
+                    value={formatNumberWithCommas(formData.profit)}
+                    onChange={(e) => {
+                      const val = parseFormattedNumber(e.target.value);
+                      setFormData((p) => ({ ...p, profit: val }));
+                    }}
+                    placeholder="0.00"
+                    className={`${inputClass} tabular-nums`}
+                  />
+                  <p className={hintClass}>
+                    Added to what they owe, and credited to the profit account in Settings.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
                   <label className={labelClass}>Duration (Months)</label>
                   <input
                     type="number"
@@ -1010,10 +1464,19 @@ const LoanManagement = () => {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className={labelClass}>Repayment Method</label>
-                  <p className={hintClass}>How the staff will repay</p>
+                  <p className={hintClass}>
+                    {isBusinessAssociate(selectedEmployee)
+                      ? "Business associates repay the loan themselves"
+                      : "How the staff will repay"}
+                  </p>
                   <select
                     className={inputClass}
-                    value={formData.repaymentMethod || "Salary Deduction"}
+                    value={
+                      isBusinessAssociate(selectedEmployee)
+                        ? "Self"
+                        : formData.repaymentMethod || "Salary Deduction"
+                    }
+                    disabled={isBusinessAssociate(selectedEmployee)}
                     onChange={(e) =>
                       setFormData((p) => ({
                         ...p,
@@ -1021,7 +1484,9 @@ const LoanManagement = () => {
                       }))
                     }
                   >
-                    <option value="Salary Deduction">Salary Deduction</option>
+                    {!isBusinessAssociate(selectedEmployee) && (
+                      <option value="Salary Deduction">Salary Deduction</option>
+                    )}
                     <option value="Self">Self (Manual Payment)</option>
                   </select>
                 </div>
@@ -1047,7 +1512,8 @@ const LoanManagement = () => {
                 </p>
                 <p className="mt-1 text-base font-semibold tabular-nums text-[var(--aa-navy)]">
                   {formatCurrency(
-                    parseFloat(formData.amount || 0) /
+                    (parseFloat(formData.amount || 0) +
+                      parseFloat(formData.profit || 0)) /
                       parseInt(formData.durationMonths || 1, 10),
                   )}
                   <span className="text-sm font-medium text-slate-500"> /Mo</span>
@@ -1215,13 +1681,16 @@ const LoanManagement = () => {
                           </p>
                         </div>
                         <span className="w-24 text-right text-xs font-semibold tabular-nums text-slate-900">
-                          {formData.amount
-                            ? formatCurrency(parseFloat(formData.amount))
+                          {parseFloat(formData.amount) > 0 || parseFloat(formData.profit) > 0
+                            ? formatCurrency(
+                                (parseFloat(formData.amount) || 0) +
+                                  (parseFloat(formData.profit) || 0),
+                              )
                             : "—"}
                         </span>
                         <span className="w-24 text-right text-xs text-slate-300">—</span>
                       </div>
-                      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 px-3 py-2.5">
+                      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-b border-slate-100 px-3 py-2.5">
                         <div className="min-w-0">
                           <p className="truncate text-xs font-semibold text-slate-800">
                             Cr · {paymentMode === "cash" ? "Cash" : "Bank"}
@@ -1243,6 +1712,23 @@ const LoanManagement = () => {
                             : "—"}
                         </span>
                       </div>
+                      {parseFloat(formData.profit) > 0 && (
+                        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 px-3 py-2.5">
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-semibold text-slate-800">
+                              Cr · Loan Profit
+                            </p>
+                            <p className="truncate font-mono text-[10px] text-slate-500">
+                              {accountHead(findDefaultProfit()) ||
+                                "Set profit account in Settings"}
+                            </p>
+                          </div>
+                          <span className="w-24 text-right text-xs text-slate-300">—</span>
+                          <span className="w-24 text-right text-xs font-semibold tabular-nums text-slate-900">
+                            {formatCurrency(parseFloat(formData.profit))}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {!(
@@ -1453,6 +1939,11 @@ const LoanManagement = () => {
                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Principal</p>
                        <p className="mt-1 text-sm font-semibold tabular-nums text-slate-900">{formatCurrency(viewLoanData.amount)}</p>
+                       {parseFloat(viewLoanData.profit) > 0 && (
+                         <p className="mt-0.5 text-[10px] font-medium text-slate-500">
+                           Profit {formatCurrency(viewLoanData.profit)}
+                         </p>
+                       )}
                      </div>
                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Paid</p>
@@ -1460,7 +1951,7 @@ const LoanManagement = () => {
                      </div>
                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Outstanding</p>
-                        <p className="mt-1 text-sm font-semibold tabular-nums text-orange-600">{formatCurrency(parseFloat(viewLoanData.amount) - parseFloat(viewLoanData.amountPaid || 0))}</p>
+                        <p className="mt-1 text-sm font-semibold tabular-nums text-orange-600">{formatCurrency(loanBalance(viewLoanData))}</p>
                      </div>
                    </div>
 
@@ -1655,8 +2146,7 @@ const LoanManagement = () => {
                                 onChange={(e) => {
                                   let val = parseFormattedNumber(e.target.value);
                                   const outstanding = viewLoanData
-                                    ? parseFloat(viewLoanData.amount) -
-                                      parseFloat(viewLoanData.amountPaid || 0)
+                                    ? loanBalance(viewLoanData)
                                     : 0;
                                   const num = parseFloat(val);
                                   if (Number.isFinite(num) && num > outstanding) {
@@ -1671,8 +2161,7 @@ const LoanManagement = () => {
                                   repaymentAmount &&
                                   viewLoanData &&
                                   parseFloat(repaymentAmount) >
-                                    parseFloat(viewLoanData.amount) -
-                                      parseFloat(viewLoanData.amountPaid || 0)
+                                    loanBalance(viewLoanData)
                                     ? "border-red-400 ring-1 ring-red-300"
                                     : ""
                                 }`}
@@ -1682,13 +2171,25 @@ const LoanManagement = () => {
                                 <p className={hintClass}>
                                   Outstanding:{" "}
                                   <span className="font-semibold text-orange-600">
-                                    {formatCurrency(
-                                      parseFloat(viewLoanData.amount) -
-                                        parseFloat(viewLoanData.amountPaid || 0),
-                                    )}
+                                    {formatCurrency(loanBalance(viewLoanData))}
                                   </span>
                                 </p>
                               )}
+                           </div>
+                           <div className="space-y-1.5">
+                              <label className={labelClass}>Profit (optional)</label>
+                              <input
+                                type="text"
+                                value={formatNumberWithCommas(repaymentProfit)}
+                                onChange={(e) =>
+                                  setRepaymentProfit(parseFormattedNumber(e.target.value))
+                                }
+                                className={`${inputClass} font-semibold`}
+                                placeholder="0.00"
+                              />
+                              <p className={hintClass}>
+                                Extra collected on top of the loan. Posted to the profit account in Settings.
+                              </p>
                            </div>
                            <div className="space-y-1.5">
                               <label className={labelClass}>Mode</label>
@@ -1785,8 +2286,7 @@ const LoanManagement = () => {
                                  parseFloat(repaymentAmount) <= 0 ||
                                  (viewLoanData &&
                                    parseFloat(repaymentAmount) >
-                                     parseFloat(viewLoanData.amount) -
-                                       parseFloat(viewLoanData.amountPaid || 0))
+                                     loanBalance(viewLoanData))
                                }
                                className="h-10 w-full rounded-md bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy-hover)] disabled:opacity-50"
                              >
@@ -1844,13 +2344,16 @@ const LoanManagement = () => {
                                      </p>
                                    </div>
                                    <span className="w-24 text-right text-xs font-semibold tabular-nums text-slate-900">
-                                     {repaymentAmount
-                                       ? formatCurrency(parseFloat(repaymentAmount))
+                                     {parseFloat(repaymentAmount) > 0 || parseFloat(repaymentProfit) > 0
+                                       ? formatCurrency(
+                                           (parseFloat(repaymentAmount) || 0) +
+                                             (parseFloat(repaymentProfit) || 0),
+                                         )
                                        : "—"}
                                    </span>
                                    <span className="w-24 text-right text-xs text-slate-300">—</span>
                                  </div>
-                                 <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 px-3 py-2.5">
+                                 <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-b border-slate-100 px-3 py-2.5">
                                    <div className="min-w-0">
                                      <p className="truncate text-xs font-semibold text-slate-800">
                                        Cr · Loan Receivable
@@ -1868,6 +2371,23 @@ const LoanManagement = () => {
                                        : "—"}
                                    </span>
                                  </div>
+                                 {parseFloat(repaymentProfit) > 0 && (
+                                   <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 px-3 py-2.5">
+                                     <div className="min-w-0">
+                                       <p className="truncate text-xs font-semibold text-slate-800">
+                                         Cr · Loan Profit
+                                       </p>
+                                       <p className="truncate font-mono text-[10px] text-slate-500">
+                                         {accountHead(findDefaultProfit()) ||
+                                           "Set profit account in Settings"}
+                                       </p>
+                                     </div>
+                                     <span className="w-24 text-right text-xs text-slate-300">—</span>
+                                     <span className="w-24 text-right text-xs font-semibold tabular-nums text-slate-900">
+                                       {formatCurrency(parseFloat(repaymentProfit))}
+                                     </span>
+                                   </div>
+                                 )}
                                </div>
                                {!(viewLoanData.receivableHead ||
                                  viewLoanData.setup?.receivableHead) && (
@@ -1886,8 +2406,7 @@ const LoanManagement = () => {
                                <span
                                  className={`font-semibold tabular-nums ${
                                    parseFloat(repaymentAmount) >
-                                   parseFloat(viewLoanData.amount) -
-                                     parseFloat(viewLoanData.amountPaid || 0)
+                                   loanBalance(viewLoanData)
                                      ? "text-red-600"
                                      : "text-[var(--aa-navy)]"
                                  }`}
@@ -1895,8 +2414,7 @@ const LoanManagement = () => {
                                  {formatCurrency(
                                    Math.max(
                                      0,
-                                     parseFloat(viewLoanData.amount) -
-                                       parseFloat(viewLoanData.amountPaid || 0) -
+                                     loanBalance(viewLoanData) -
                                        parseFloat(repaymentAmount || 0),
                                    ),
                                  )}
@@ -1921,7 +2439,14 @@ const LoanManagement = () => {
                            {viewLoanData.repayments?.map((rep) => (
                               <tr key={rep.id}>
                                  <td className="px-4 py-3 font-medium text-slate-700">{new Date(rep.createdAt).toLocaleDateString()}</td>
-                                 <td className="px-4 py-3 font-semibold tabular-nums text-emerald-600">{formatCurrency(rep.amount)}</td>
+                                 <td className="px-4 py-3 font-semibold tabular-nums text-emerald-600">
+                                   {formatCurrency(rep.amount)}
+                                   {parseFloat(rep.profit) > 0 && (
+                                     <span className="mt-0.5 block text-[10px] font-medium text-slate-500">
+                                       Profit {formatCurrency(rep.profit)}
+                                     </span>
+                                   )}
+                                 </td>
                                  <td className="px-4 py-3">
                                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">{rep.paymentMethod}</span>
                                  </td>

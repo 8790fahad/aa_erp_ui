@@ -84,7 +84,9 @@ export default function ApplySupplierDeposit({
   const [supplierOptions, setSupplierOptions] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const [availableDeposit, setAvailableDeposit] = useState(0);
+  const [availableCredit, setAvailableCredit] = useState(0);
   const [availableGit, setAvailableGit] = useState(0);
+  const [moveSource, setMoveSource] = useState("deposit"); // deposit | credit_note
   const [applySource, setApplySource] = useState("deposit"); // deposit | goods_in_transit
   const [moveAmount, setMoveAmount] = useState("");
   const [moving, setMoving] = useState(false);
@@ -135,8 +137,10 @@ export default function ApplySupplierDeposit({
   const supplierLabelKey = (s) => {
     const name = s?.supplier_name || s?.supplier_number || "";
     const dep = parseFloat(s?.available_deposit) || 0;
+    const credit = parseFloat(s?.available_credit_note) || 0;
     const git = parseFloat(s?.available_git) || 0;
     const bits = [];
+    if (credit > 0.009) bits.push(`CN ${formatNumber1(credit)}`);
     if (dep > 0.009) bits.push(`Dep ${formatNumber1(dep)}`);
     if (git > 0.009) bits.push(`GIT ${formatNumber1(git)}`);
     return bits.length ? `${name} · ${bits.join(" · ")}` : name;
@@ -163,18 +167,22 @@ export default function ApplySupplierDeposit({
           supplierNumber,
         )}&facilityId=${facilityId}&limit=5`,
         (res) => {
-          setAvailableDeposit(
-            parseFloat(res?.available_deposit ?? res?.available_advance) || 0,
-          );
+          const deposit =
+            parseFloat(res?.available_deposit ?? res?.available_advance) || 0;
+          const credit = parseFloat(res?.available_credit_note) || 0;
+          setAvailableDeposit(deposit);
+          setAvailableCredit(credit);
           setAvailableGit(
             parseFloat(
               res?.available_goods_in_transit ?? res?.available_git,
             ) || 0,
           );
+          setMoveSource(credit > 0.009 ? "credit_note" : "deposit");
           done();
         },
         () => {
           setAvailableDeposit(0);
+          setAvailableCredit(0);
           setAvailableGit(0);
           toast.error("Failed to load deposit balance");
           done();
@@ -292,6 +300,7 @@ export default function ApplySupplierDeposit({
         userId: user?.id || user?.user_id,
         supplier_no: supplierNo,
         amount: amt,
+        source: moveSource,
         transaction_date: paymentDate,
         narration: notes,
       },
@@ -300,12 +309,16 @@ export default function ApplySupplierDeposit({
         if (res?.success) {
           toast.success(res.message || "Moved to goods in transit");
           setMoveAmount("");
-          setAvailableDeposit(
-            parseFloat(res?.data?.available_deposit) || 0,
-          );
+          if (res?.data?.available_deposit != null) {
+            setAvailableDeposit(parseFloat(res.data.available_deposit) || 0);
+          }
+          if (res?.data?.available_credit_note != null) {
+            setAvailableCredit(parseFloat(res.data.available_credit_note) || 0);
+          }
           setAvailableGit(
             parseFloat(res?.data?.available_goods_in_transit) || 0,
           );
+          loadSupplierOptions();
           setApplySource("goods_in_transit");
           autoSeededFor.current = "";
           loadSupplierData(supplierNo);
@@ -331,8 +344,14 @@ export default function ApplySupplierDeposit({
       toast.error("Enter an amount to move");
       return;
     }
-    if (amt > availableDeposit + 0.01) {
-      toast.error("Amount exceeds available deposit");
+    const movePool =
+      moveSource === "credit_note" ? availableCredit : availableDeposit;
+    if (amt > movePool + 0.01) {
+      toast.error(
+        moveSource === "credit_note"
+          ? "Amount exceeds open vendor credit"
+          : "Amount exceeds available deposit",
+      );
       return;
     }
     const dateErr = validatePostingDateClient(paymentDate, { field: "Date" });
@@ -340,7 +359,7 @@ export default function ApplySupplierDeposit({
       toast.error(dateErr);
       return;
     }
-    setConfirmAction({ type: "move", amount: amt });
+    setConfirmAction({ type: "move", amount: amt, source: moveSource });
   };
 
   const executeWriteOffGit = (amt) => {
@@ -494,7 +513,9 @@ export default function ApplySupplierDeposit({
     if (confirmAction.type === "move") {
       return {
         title: "Confirm move to goods in transit",
-        description: `Move ${currency} ${formatNumber1(confirmAction.amount)} from deposit to goods in transit for ${supplierLabel}?`,
+        description: `Move ${currency} ${formatNumber1(confirmAction.amount)} from ${
+          confirmAction.source === "credit_note" ? "vendor credit" : "deposit"
+        } to goods in transit for ${supplierLabel}?`,
         confirmLabel: "Yes, move",
         destructive: false,
       };
@@ -659,7 +680,7 @@ export default function ApplySupplierDeposit({
                   placeholder={
                     loadingSuppliers
                       ? "Loading suppliers…"
-                      : "Search suppliers with a deposit…"
+                      : "Search credit note, deposit, or GIT…"
                   }
                   paginate={false}
                   maxResults={500}
@@ -668,10 +689,10 @@ export default function ApplySupplierDeposit({
                   {loadingSuppliers
                     ? "Loading…"
                     : supplierOptions.length === 0
-                      ? "No suppliers with a deposit or GIT"
+                      ? "No suppliers with a credit note, deposit, or GIT"
                       : `${supplierOptions.length} supplier${
                           supplierOptions.length === 1 ? "" : "s"
-                        } with a deposit or GIT`}
+                        } with a credit note, deposit, or GIT`}
                 </p>
               </div>
               <div>
@@ -707,7 +728,15 @@ export default function ApplySupplierDeposit({
 
             {selectedSupplier && (
               <>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border border-sky-200 bg-sky-50/80 px-3 py-2.5">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-sky-800">
+                      Vendor credit
+                    </p>
+                    <p className="mt-0.5 text-lg font-bold tabular-nums text-sky-950">
+                      {currency} {formatNumber1(availableCredit)}
+                    </p>
+                  </div>
                   <div
                     className="rounded-lg border px-3 py-2.5"
                     style={{
@@ -741,9 +770,30 @@ export default function ApplySupplierDeposit({
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
                     <ArrowRightLeft className="h-4 w-4" style={{ color: APP_BLUE }} />
-                    Move advance → goods in transit
+                    Move credit note or advance → goods in transit
                   </div>
                   <div className="flex flex-wrap items-end gap-2">
+                    <div className="min-w-[10rem]">
+                      <label className="mb-1 block text-xs text-slate-600">
+                        From
+                      </label>
+                      <select
+                        className={fieldClass}
+                        value={moveSource}
+                        disabled={moving || applying || writingOff}
+                        onChange={(e) => {
+                          setMoveSource(e.target.value);
+                          setMoveAmount("");
+                        }}
+                      >
+                        <option value="credit_note">
+                          Vendor credit ({formatNumber1(availableCredit)})
+                        </option>
+                        <option value="deposit">
+                          Deposit ({formatNumber1(availableDeposit)})
+                        </option>
+                      </select>
+                    </div>
                     <div className="min-w-[8rem] flex-1">
                       <label className="mb-1 block text-xs text-slate-600">
                         Amount
@@ -756,7 +806,12 @@ export default function ApplySupplierDeposit({
                           setMoveAmount(formatNumberWithCommas(e.target.value))
                         }
                         disabled={
-                          moving || applying || writingOff || availableDeposit <= 0
+                          moving ||
+                          applying ||
+                          writingOff ||
+                          (moveSource === "credit_note"
+                            ? availableCredit <= 0
+                            : availableDeposit <= 0)
                         }
                         placeholder="0.00"
                         className={fieldClass}
@@ -768,7 +823,9 @@ export default function ApplySupplierDeposit({
                         moving ||
                         applying ||
                         writingOff ||
-                        availableDeposit <= 0 ||
+                        (moveSource === "credit_note"
+                          ? availableCredit <= 0
+                          : availableDeposit <= 0) ||
                         !(parseFloat(parseNumberFromFormatted(moveAmount)) > 0)
                       }
                       onClick={handleMoveToGit}
@@ -782,10 +839,21 @@ export default function ApplySupplierDeposit({
                       type="button"
                       className="text-xs font-medium hover:underline disabled:opacity-40"
                       style={{ color: APP_BLUE }}
-                      disabled={moving || writingOff || availableDeposit <= 0}
+                      disabled={
+                        moving ||
+                        writingOff ||
+                        (moveSource === "credit_note"
+                          ? availableCredit <= 0
+                          : availableDeposit <= 0)
+                      }
                       onClick={() =>
                         setMoveAmount(
-                          formatNumberWithCommas(availableDeposit.toFixed(2)),
+                          formatNumberWithCommas(
+                            (moveSource === "credit_note"
+                              ? availableCredit
+                              : availableDeposit
+                            ).toFixed(2),
+                          ),
                         )
                       }
                     >

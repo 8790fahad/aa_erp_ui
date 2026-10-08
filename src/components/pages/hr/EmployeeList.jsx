@@ -361,6 +361,11 @@ const EmployeeList = ({
                           <div className="ml-4">
                             <div className="text-sm font-semibold text-gray-900 group-hover:opacity-80 transition-colors">
                               {person.firstName} {person.lastName}
+                              {person.contractType === "Business Associate" && (
+                                <span className="ml-2 inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                                  Business associate
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-gray-500 font-medium">#{person.employeeId}</div>
                           </div>

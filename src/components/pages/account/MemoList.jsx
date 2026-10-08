@@ -250,6 +250,16 @@ function MemoList() {
       component: (item) => <div className="text-center">{item.memo_id}</div>,
     },
     {
+      title: "Supplier",
+      custom: true,
+      className: "text-left",
+      component: (item) => (
+        <div className="text-left">
+          {item.supplier_name || item.supplier_number || "—"}
+        </div>
+      ),
+    },
+    {
       title: "Subject",
       custom: true,
       className: "text-left",
@@ -378,7 +388,10 @@ function MemoList() {
     const matchesSearch = searchTerm
       ? memo.from_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         memo.memo_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        memo.raise_by.toLowerCase().includes(searchTerm.toLowerCase())
+        memo.raise_by.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(memo.supplier_name || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase())
       : true;
 
     return matchesSearch && memoInDateRange(memo, dateFrom, dateTo);

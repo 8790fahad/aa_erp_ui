@@ -453,6 +453,25 @@ const EmployeeForm = ({
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === "contractType" && value === "Business Associate") {
+      setFormData((prev) => ({
+        ...prev,
+        contractType: value,
+        designation: prev.designation || "Business Associate",
+        basicSalary: "",
+      }));
+      setRoleQuery((current) => current || "Business Associate");
+      setDeptQuery((current) => current || "Business Associates");
+      if (errors.basicSalary || errors.departmentId || errors.designation) {
+        setErrors((prev) => ({
+          ...prev,
+          basicSalary: "",
+          departmentId: "",
+          designation: "",
+        }));
+      }
+      return;
+    }
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -526,17 +545,18 @@ const EmployeeForm = ({
     if (!formData.firstName.trim())
       newErrors.firstName = "First name is required";
     if (!formData.lastName.trim()) newErrors.lastName = "Last name is required";
-    if (!formData.dateOfBirth)
-      newErrors.dateOfBirth = "Date of birth is required";
     if (!formData.contactInfo.trim())
       newErrors.contactInfo = "Contact info is required";
-    if (!formData.departmentId && !deptQuery.trim())
+    const isAssociate = formData.contractType === "Business Associate";
+    if (!isAssociate && !formData.departmentId && !deptQuery.trim())
       newErrors.departmentId = "Department is required";
-    if (!(formData.designation || roleQuery).trim())
+    if (!isAssociate && !(formData.designation || roleQuery).trim())
       newErrors.designation = "Role / designation is required";
-    if (!formData.hireDate) newErrors.hireDate = "Hire date is required";
+    if (!isAssociate && !formData.hireDate) newErrors.hireDate = "Hire date is required";
+    if (!isAssociate && !formData.dateOfBirth)
+      newErrors.dateOfBirth = "Date of birth is required";
     const basic = parseFloat(String(formData.basicSalary).replace(/,/g, ""));
-    if (!basic || basic <= 0) {
+    if (!isAssociate && (!basic || basic <= 0)) {
       newErrors.basicSalary = "Basic salary is required for payroll";
     }
     if (
@@ -1142,9 +1162,17 @@ const EmployeeForm = ({
                 <option value="Contract">Contract</option>
                 <option value="Intern">Intern</option>
                 <option value="Part-time">Part-time</option>
+                <option value="Business Associate">Business Associate</option>
               </select>
+              {formData.contractType === "Business Associate" && (
+                <p className="mt-1 text-xs text-slate-500">
+                  Not on payroll. Use this person only for loans they repay themselves.
+                </p>
+              )}
             </div>
 
+            {formData.contractType !== "Business Associate" && (
+            <>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Basic Salary *
@@ -1320,6 +1348,8 @@ const EmployeeForm = ({
                 employee&apos;s PAYE calculation.
               </p>
             </div>
+            </>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

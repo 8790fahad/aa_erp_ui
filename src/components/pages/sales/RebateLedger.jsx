@@ -27,10 +27,27 @@ const TABS = [
   { key: "rebates", label: "Rebates" },
 ];
 
+function emptyGrantForm() {
+  return {
+    basis: "purchase",
+    partyNo: "",
+    partyName: "",
+    amount: "",
+    note: "",
+    grantDate: moment().format("YYYY-MM-DD"),
+    settle: "record",
+  };
+}
+
+function parseMoney(value) {
+  const n = parseFloat(String(value ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
 function emptyRuleForm() {
   return {
     name: "",
-    basis: "sales",
+    basis: "purchase",
     // product | category | all — product selection mode
     productMode: "all",
     product: "All products",
@@ -321,6 +338,13 @@ export default function RebateLedger() {
   const [issuingCnKey, setIssuingCnKey] = useState(null);
   const [payingKey, setPayingKey] = useState(null);
   const [addRuleOpen, setAddRuleOpen] = useState(false);
+  const [earlyGrantKeys, setEarlyGrantKeys] = useState({});
+  const [grants, setGrants] = useState([]);
+  const [recordOpen, setRecordOpen] = useState(false);
+  const [savingGrant, setSavingGrant] = useState(false);
+  const [grantParty, setGrantParty] = useState(null);
+  const [grantForm, setGrantForm] = useState(() => emptyGrantForm());
+  const [settlingGrantId, setSettlingGrantId] = useState(null);
   const [creditNoteDoc, setCreditNoteDoc] = useState(null);
   const [coaCategories, setCoaCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
@@ -416,6 +440,13 @@ export default function RebateLedger() {
         );
       },
       () => setStatuses({}),
+    );
+    _fetchApi(
+      `/api/v1/rebate-ledger/grants?facilityId=${facilityId}`,
+      (resp) => {
+        setGrants(Array.isArray(resp?.results) ? resp.results : []);
+      },
+      () => setGrants([]),
     );
   }, [facilityId]);
 
@@ -748,9 +779,8 @@ export default function RebateLedger() {
           0,
         );
         const qualifies = totalQty >= rule.minQty;
-        const rebateAmount = qualifies
-          ? totalValue * (rule.rebatePercent / 100)
-          : 0;
+        const earnedRebate = totalValue * (rule.rebatePercent / 100);
+        const rebateAmount = qualifies ? earnedRebate : 0;
         const qtyRemaining = Math.max(0, rule.minQty - totalQty);
         const unitValue =
           totalQty > 0 ? totalValue / totalQty : 0;
@@ -775,6 +805,7 @@ export default function RebateLedger() {
           totalValue,
           qualifies,
           rebateAmount,
+          earnedRebate,
           qtyRemaining,
           projectedRebate,
           progress: Math.min(100, (totalQty / rule.minQty) * 100),
@@ -790,6 +821,17 @@ export default function RebateLedger() {
     return rows.sort((a, b) => b.rebateAmount - a.rebateAmount);
   }, [billing, rules, statuses]);
 
+  const settleAmount = (row) =>
+    Number(row.qualifies ? row.rebateAmount : row.earnedRebate) || 0;
+
+  const canSettle = (row) =>
+    !!row.qualifies ||
+    !!earlyGrantKeys[row.key] ||
+    row.status === "approved" ||
+    row.status === "paid" ||
+    !!row.creditNoteNumber ||
+    !!row.paymentReference;
+
   const openCreditNotePreview = (row, overrides = {}) => {
     setCreditNoteDoc({
       creditNoteNumber: overrides.creditNoteNumber || row.creditNoteNumber,
@@ -800,12 +842,19 @@ export default function RebateLedger() {
         overrides.reason ||
         (row.basis === "purchase"
           ? `Post-purchase volume rebate: ${row.rule.name} (${row.rule.period})`
-          : `Post-sale volume rebate: ${row.rule.name} (${row.rule.period})`),
+          : `Post-sale volume rebate: ${row.rule.name} (${row.rule.period})`) +
+          (row.qualifies
+            ? ""
+            : " Granted before the quantity target was reached."),
       basis: row.basis || "sales",
       lineDescription:
         overrides.lineDescription ||
-        `Volume rebate — ${row.rule.name} (${row.rule.period}) · ${row.rule.product}`,
-      amount: overrides.amount ?? row.rebateAmount,
+        `Volume rebate — ${row.rule.name} (${row.rule.period}) · ${row.rule.product}${
+          row.qualifies
+            ? ""
+            : " Granted before the quantity target was reached."
+        }`,
+      amount: overrides.amount ?? settleAmount(row),
       ruleName: row.rule.name,
       period: row.rule.period,
       product: row.rule.product,
@@ -819,6 +868,10 @@ export default function RebateLedger() {
 
   const issueCreditNote = (row) => {
     if (!facilityId || !userId) return;
+    if (settleAmount(row) <= 0) {
+      toast.error("Rebate amount is zero — there is nothing to grant yet.");
+      return;
+    }
     if (!row.customerNo) {
       toast.error("Customer number missing on this rebate — refresh billing.");
       return;
@@ -836,7 +889,8 @@ export default function RebateLedger() {
         ruleId: row.rule.id,
         customer: row.customer,
         customerNo: row.customerNo,
-        rebateAmount: row.rebateAmount,
+        rebateAmount: settleAmount(row),
+        beforeTarget: !row.qualifies,
       },
       (resp) => {
         setIssuingCnKey(null);
@@ -882,6 +936,10 @@ export default function RebateLedger() {
 
   const issuePayment = (row) => {
     if (!facilityId || !userId) return;
+    if (settleAmount(row) <= 0) {
+      toast.error("Rebate amount is zero — there is nothing to grant yet.");
+      return;
+    }
     if (!row.customerNo) {
       toast.error("Customer number missing on this rebate — refresh billing.");
       return;
@@ -917,7 +975,8 @@ export default function RebateLedger() {
         ruleId: row.rule.id,
         customer: row.customer,
         customerNo: row.customerNo,
-        rebateAmount: row.rebateAmount,
+        rebateAmount: settleAmount(row),
+        beforeTarget: !row.qualifies,
         modeOfPayment: mode,
         accountHead:
           mode === "cash"
@@ -993,12 +1052,207 @@ export default function RebateLedger() {
     );
   };
 
+  const applyGrantResult = (grant) => {
+    if (!grant?.id) return;
+    setGrants((rows) => {
+      const next = rows.filter((g) => g.id !== grant.id);
+      return [grant, ...next];
+    });
+  };
+
+  const saveGrant = (e) => {
+    e.preventDefault();
+    if (!facilityId || !userId) return;
+    const amount = parseMoney(grantForm.amount);
+    if (!grantForm.partyName) {
+      toast.error("Select the customer or supplier");
+      return;
+    }
+    if (amount <= 0) {
+      toast.error("Enter the rebate amount, for example 100000000");
+      return;
+    }
+    if (grantForm.settle !== "record" && !grantForm.partyNo) {
+      toast.error("Select the customer or supplier from the list");
+      return;
+    }
+    if (grantForm.settle === "cash") {
+      const mode = payForm.modeOfPayment;
+      if (mode === "cash" && !accountHead?.head && !accountHead?.code) {
+        toast.error("Select a cash account");
+        return;
+      }
+      if (["bank", "cheque"].includes(mode) && !bankAccount?.id) {
+        toast.error("Select a bank account");
+        return;
+      }
+      if (mode === "cheque" && !String(payForm.chequeNo || "").trim()) {
+        toast.error("Enter cheque number");
+        return;
+      }
+    }
+
+    setSavingGrant(true);
+    _postApi(
+      "/api/v1/rebate-ledger/grants",
+      {
+        facilityId,
+        userId,
+        basis: grantForm.basis,
+        partyName: grantForm.partyName,
+        partyNo: grantForm.partyNo,
+        amount,
+        note: grantForm.note,
+        grantDate: grantForm.grantDate,
+        settle: grantForm.settle,
+        modeOfPayment: payForm.modeOfPayment,
+        accountHead:
+          payForm.modeOfPayment === "cash"
+            ? { head: accountHead?.head || accountHead?.code }
+            : undefined,
+        bankAccount:
+          ["bank", "cheque"].includes(payForm.modeOfPayment) && bankAccount
+            ? { id: bankAccount.id }
+            : undefined,
+        chequeNo:
+          payForm.modeOfPayment === "cheque" ? payForm.chequeNo : undefined,
+      },
+      (resp) => {
+        setSavingGrant(false);
+        if (resp?.data) applyGrantResult(resp.data);
+        if (!resp?.success) {
+          toast.error(resp?.message || "Failed to record rebate");
+          return;
+        }
+        toast.success(resp.message || "Rebate recorded");
+        setRecordOpen(false);
+        setGrantParty(null);
+        setGrantForm(emptyGrantForm());
+      },
+      (err) => {
+        setSavingGrant(false);
+        toast.error(err?.message || "Failed to record rebate");
+      },
+    );
+  };
+
+  const issueGrantCredit = (grant) => {
+    if (!facilityId || !userId) return;
+    setSettlingGrantId(grant.id);
+    _postApi(
+      `/api/v1/rebate-ledger/grants/${grant.id}/issue-credit-note`,
+      { facilityId, userId },
+      (resp) => {
+        setSettlingGrantId(null);
+        if (!resp?.success) {
+          toast.error(resp?.message || "Failed to issue credit note");
+          return;
+        }
+        applyGrantResult(resp.data);
+        toast.success(resp.message || "Credit note issued");
+        if (resp.data?.creditNoteNumber) {
+          setCreditNoteDoc({
+            creditNoteNumber: resp.data.creditNoteNumber,
+            customer: grant.partyName,
+            customerNo: grant.partyNo,
+            date: resp.data.date || grant.grantDate,
+            reason: resp.data.reason || grant.note,
+            basis: grant.basis,
+            lineDescription: resp.data.lineDescription || grant.note,
+            amount: grant.amount,
+            ruleName: "Discretionary rebate",
+            period: grant.grantDate,
+            product: "No volume target",
+            rebatePercent: "",
+            businessName:
+              activeBusiness?.business_name ||
+              activeBusiness?.name ||
+              "AA Foods Nigeria Limited",
+          });
+        }
+      },
+      () => {
+        setSettlingGrantId(null);
+        toast.error("Failed to issue credit note");
+      },
+    );
+  };
+
+  const issueGrantPayment = (grant) => {
+    if (!facilityId || !userId) return;
+    const mode = payForm.modeOfPayment;
+    if (mode === "cash" && !accountHead?.head && !accountHead?.code) {
+      toast.error("Select a cash account");
+      return;
+    }
+    if (["bank", "cheque"].includes(mode) && !bankAccount?.id) {
+      toast.error("Select a bank account");
+      return;
+    }
+    if (mode === "cheque" && !String(payForm.chequeNo || "").trim()) {
+      toast.error("Enter cheque number");
+      return;
+    }
+    setSettlingGrantId(grant.id);
+    _postApi(
+      `/api/v1/rebate-ledger/grants/${grant.id}/issue-payment`,
+      {
+        facilityId,
+        userId,
+        modeOfPayment: mode,
+        accountHead:
+          mode === "cash"
+            ? { head: accountHead?.head || accountHead?.code }
+            : undefined,
+        bankAccount:
+          ["bank", "cheque"].includes(mode) && bankAccount
+            ? { id: bankAccount.id }
+            : undefined,
+        chequeNo: mode === "cheque" ? payForm.chequeNo : undefined,
+      },
+      (resp) => {
+        setSettlingGrantId(null);
+        if (!resp?.success) {
+          toast.error(resp?.message || "Failed to pay rebate");
+          return;
+        }
+        applyGrantResult(resp.data);
+        toast.success(resp.message || "Rebate paid");
+      },
+      () => {
+        setSettlingGrantId(null);
+        toast.error("Failed to pay rebate");
+      },
+    );
+  };
+
+  const removeGrant = (grant) => {
+    if (!facilityId) return;
+    _deleteApi(
+      `/api/v1/rebate-ledger/grants/${grant.id}?facilityId=${facilityId}`,
+      {},
+      (resp) => {
+        if (!resp?.success) {
+          toast.error(resp?.message || "Failed to remove rebate");
+          return;
+        }
+        setGrants((rows) => rows.filter((g) => g.id !== grant.id));
+        toast.success("Rebate removed");
+      },
+      () => toast.error("Failed to remove rebate"),
+    );
+  };
+
   const totalPayable = ledger
-    .filter((r) => r.qualifies)
-    .reduce((s, r) => s + r.rebateAmount, 0);
+    .filter((r) => canSettle(r))
+    .reduce((s, r) => s + settleAmount(r), 0)
+    + grants.reduce((s, g) => s + (parseFloat(g.amount) || 0), 0);
   const totalPaid = ledger
-    .filter((r) => r.qualifies && r.status === "paid")
-    .reduce((s, r) => s + r.rebateAmount, 0);
+    .filter((r) => canSettle(r) && r.status === "paid")
+    .reduce((s, r) => s + settleAmount(r), 0)
+    + grants
+      .filter((g) => g.status === "paid")
+      .reduce((s, g) => s + (parseFloat(g.amount) || 0), 0);
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 p-4 md:p-6">
@@ -1015,7 +1269,8 @@ export default function RebateLedger() {
             Each rule is based on{" "}
             <span className="font-medium text-slate-700">Sales</span> (customer invoices)
             or <span className="font-medium text-slate-700">Purchase</span> (supplier bills).
-            Settle with credit note / vendor credit, or mode of payment.
+            Settle with credit note / vendor credit, or mode of payment. A rebate
+            can still be granted before the quantity target is reached.
           </p>
         </div>
         <div className="flex gap-6 text-right">
@@ -1136,8 +1391,8 @@ export default function RebateLedger() {
                         setSelectedCustomer(null);
                       }}
                     >
-                      <option value="sales">Sales</option>
                       <option value="purchase">Purchase</option>
+                      <option value="sales">Sales</option>
                     </select>
                   </div>
 
@@ -1382,16 +1637,20 @@ export default function RebateLedger() {
                       <label className="text-xs font-medium text-slate-600">
                         Min qty
                       </label>
-                      <input
-                        className={`${inputClass} w-full font-mono`}
-                        type="number"
-                        placeholder="1"
-                        value={ruleForm.minQty}
-                        onChange={(e) =>
-                          setRuleForm({ ...ruleForm, minQty: e.target.value })
-                        }
-                      />
-                    </div>
+                        <input
+                          className={`${inputClass} w-full font-mono`}
+                          type="number"
+                          placeholder="1"
+                          value={ruleForm.minQty}
+                          onChange={(e) =>
+                            setRuleForm({ ...ruleForm, minQty: e.target.value })
+                          }
+                        />
+                        <p className="text-[11px] text-slate-400">
+                          Target quantity. The rebate can still be granted
+                          before this is reached.
+                        </p>
+                      </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-slate-600">
                         Rebate %
@@ -1694,20 +1953,37 @@ export default function RebateLedger() {
               <span className="font-semibold text-slate-700">50%</span>,{" "}
               <span className="font-semibold text-slate-700">75%</span>, and{" "}
               <span className="font-semibold text-slate-700">100%</span> of
-              target qty, including the rebate %.
+              target qty. Use <span className="font-semibold text-slate-700">Record rebate</span> to
+              give a fixed amount, such as 100,000,000, when the person has not
+              reached any rebate.
             </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={fetchBilling}
-              disabled={loadingBilling}
-            >
-              <RefreshCw
-                className={`mr-1.5 h-3.5 w-3.5 ${loadingBilling ? "animate-spin" : ""}`}
-              />
-              Refresh billing
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="bg-[var(--aa-navy,#0f2744)] text-white hover:bg-[var(--aa-navy,#0f2744)]/90"
+                onClick={() => {
+                  setGrantParty(null);
+                  setGrantForm(emptyGrantForm());
+                  setRecordOpen(true);
+                }}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Record rebate
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={fetchBilling}
+                disabled={loadingBilling}
+              >
+                <RefreshCw
+                  className={`mr-1.5 h-3.5 w-3.5 ${loadingBilling ? "animate-spin" : ""}`}
+                />
+                Refresh billing
+              </Button>
+            </div>
           </div>
 
           {loadingBilling && (
@@ -1717,10 +1993,189 @@ export default function RebateLedger() {
             </div>
           )}
 
-          {!loadingBilling && ledger.length === 0 && (
+          {!loadingBilling && ledger.length === 0 && grants.length === 0 && (
             <div className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm text-slate-500">
-              No billing lines match a rebate rule yet. Check Rules basis (Sales /
-              Purchase), dates, and product names.
+              No billing lines match a rebate rule yet. You can still record a
+              fixed rebate for someone who has not reached any target.
+            </div>
+          )}
+
+          {grants.length > 0 && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {grants.map((grant) => (
+                <div
+                  key={`grant-${grant.id}`}
+                  className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="mb-3 flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-semibold text-slate-900">
+                        {grant.partyName}
+                      </div>
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        <span className="mr-1.5 inline-flex rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-800">
+                          Discretionary
+                        </span>
+                        {grant.basis === "purchase" ? "Purchase" : "Sales"} ·{" "}
+                        {grant.grantDate
+                          ? moment(grant.grantDate).format("DD MMM YYYY")
+                          : "—"}
+                      </div>
+                    </div>
+                    <span
+                      className={`rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                        grant.status === "paid"
+                          ? STATUS_META.paid.className
+                          : STATUS_META.pending.className
+                      }`}
+                    >
+                      {grant.status === "paid" ? "Paid" : "Recorded"}
+                    </span>
+                  </div>
+                  <div className="mb-2 text-xs text-slate-600">
+                    {grant.note || "No volume target was reached."}
+                  </div>
+                  <div className="mb-3 text-right">
+                    <div className="text-[10px] uppercase text-slate-500">
+                      Rebate given
+                    </div>
+                    <div className="font-mono text-sm font-semibold text-slate-900">
+                      {formatNumber1(grant.amount)}
+                    </div>
+                  </div>
+                  {grant.status !== "paid" ? (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-8 bg-[var(--aa-navy,#0f2744)] text-white hover:bg-[var(--aa-navy,#0f2744)]/90"
+                          disabled={settlingGrantId === grant.id}
+                          onClick={() => issueGrantCredit(grant)}
+                        >
+                          <FileText className="mr-1.5 h-3.5 w-3.5" />
+                          {settlingGrantId === grant.id
+                            ? "Issuing…"
+                            : grant.basis === "purchase"
+                              ? "Issue vendor credit"
+                              : "Issue credit note"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8"
+                          onClick={() => removeGrant(grant)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                      <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50/80 p-2.5">
+                        <div className="flex flex-wrap gap-2">
+                          <select
+                            className={`${inputClass} min-w-[120px] flex-1`}
+                            value={payForm.modeOfPayment}
+                            onChange={(e) =>
+                              setPayForm({
+                                ...payForm,
+                                modeOfPayment: e.target.value,
+                                chequeNo: "",
+                              })
+                            }
+                          >
+                            <option value="cash">Cash</option>
+                            <option value="bank">Bank</option>
+                            <option value="cheque">Cheque</option>
+                          </select>
+                          {payForm.modeOfPayment === "cash" ? (
+                            <select
+                              className={`${inputClass} min-w-[160px] flex-[1.4]`}
+                              value={accountHead?.head || ""}
+                              onChange={(e) => {
+                                const head = e.target.value;
+                                const found =
+                                  headList.find(
+                                    (h) => String(h.head || h.code) === head,
+                                  ) || {};
+                                setAccountHead({
+                                  ...found,
+                                  head: found.head || found.code || head,
+                                });
+                              }}
+                            >
+                              <option value="">Cash account…</option>
+                              {headList.map((h) => {
+                                const code = h.head || h.code;
+                                return (
+                                  <option key={code} value={code}>
+                                    {h.description || h.name || code} ({code})
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          ) : (
+                            <select
+                              className={`${inputClass} min-w-[160px] flex-[1.4]`}
+                              value={bankAccount?.id || ""}
+                              onChange={(e) => {
+                                const id = e.target.value;
+                                setBankAccount(
+                                  accountList.find(
+                                    (a) => String(a.id) === String(id),
+                                  ) || null,
+                                );
+                              }}
+                            >
+                              <option value="">Bank account…</option>
+                              {accountList.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.account_name}
+                                  {a.head ? ` (${a.head})` : ""}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {payForm.modeOfPayment === "cheque" ? (
+                            <input
+                              className={`${inputClass} min-w-[120px]`}
+                              placeholder="Cheque no."
+                              value={payForm.chequeNo}
+                              onChange={(e) =>
+                                setPayForm({
+                                  ...payForm,
+                                  chequeNo: e.target.value,
+                                })
+                              }
+                            />
+                          ) : null}
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8"
+                          disabled={settlingGrantId === grant.id}
+                          onClick={() => issueGrantPayment(grant)}
+                        >
+                          <Banknote className="mr-1.5 h-3.5 w-3.5" />
+                          {grant.basis === "purchase"
+                            ? "Receive this amount"
+                            : "Pay this amount"}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="font-mono text-[11px] text-slate-600">
+                      {grant.creditNoteNumber ||
+                        grant.paymentReference ||
+                        "Settled"}
+                      {grant.modeOfPayment
+                        ? ` · ${String(grant.modeOfPayment).toUpperCase()}`
+                        : ""}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
@@ -1749,11 +2204,13 @@ export default function RebateLedger() {
                         {row.rule.name} · {row.rule.period}
                       </div>
                     </div>
-                    {row.qualifies ? (
+                    {row.qualifies || canSettle(row) ? (
                       <span
                         className={`rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STATUS_META[row.status].className}`}
                       >
-                        {STATUS_META[row.status].label}
+                        {row.qualifies
+                          ? STATUS_META[row.status].label
+                          : `${STATUS_META[row.status].label} · before target`}
                       </span>
                     ) : (
                       <span className="rounded border border-dashed border-slate-300 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
@@ -1799,6 +2256,39 @@ export default function RebateLedger() {
                         </span>{" "}
                         ({row.rule.rebatePercent}%).
                       </div>
+                      {!canSettle(row) ? (
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-amber-200/80 pt-2">
+                          <span>
+                            Grant{" "}
+                            <span className="font-mono font-semibold">
+                              {formatNumber1(row.earnedRebate)}
+                            </span>{" "}
+                            now ({row.rule.rebatePercent}% of billed value).
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 bg-[var(--aa-navy,#0f2744)] text-white hover:bg-[var(--aa-navy,#0f2744)]/90"
+                            disabled={!(Number(row.earnedRebate) > 0)}
+                            onClick={() =>
+                              setEarlyGrantKeys((keys) => ({
+                                ...keys,
+                                [row.key]: true,
+                              }))
+                            }
+                          >
+                            Grant rebate
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="mt-2 border-t border-amber-200/80 pt-2">
+                          Granted before target:{" "}
+                          <span className="font-mono font-semibold">
+                            {formatNumber1(settleAmount(row))}
+                          </span>{" "}
+                          ({row.rule.rebatePercent}% of billed value).
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
@@ -1821,25 +2311,27 @@ export default function RebateLedger() {
                     </div>
                     <div className="text-right">
                       <div className="text-[10px] uppercase text-slate-500">
-                        {row.qualifies
+                        {row.qualifies || canSettle(row)
                           ? `Rebate (${row.rule.rebatePercent}%)`
                           : `Est. rebate (${row.rule.rebatePercent}%)`}
                       </div>
                       <div
                         className={`font-mono text-sm font-semibold ${
-                          row.qualifies ? "text-slate-900" : "text-amber-700"
+                          row.qualifies || canSettle(row)
+                            ? "text-slate-900"
+                            : "text-amber-700"
                         }`}
                       >
                         {formatNumber1(
-                          row.qualifies
-                            ? row.rebateAmount
+                          row.qualifies || canSettle(row)
+                            ? settleAmount(row)
                             : row.projectedRebate,
                         )}
                       </div>
                     </div>
                   </div>
 
-                  {row.qualifies && (
+                  {canSettle(row) && (
                     <div className="space-y-2">
                       <div className="flex gap-2">
                         <select
@@ -2031,6 +2523,242 @@ export default function RebateLedger() {
         </section>
       )}
 
+      <Sheet open={recordOpen} onOpenChange={setRecordOpen}>
+        <SheetContent
+          side="right"
+          className="!inset-y-0 !right-0 !left-auto flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-l border-slate-200 p-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:!max-w-md [&>button]:text-white [&>button]:opacity-80 [&>button]:hover:bg-white/10 [&>button]:hover:opacity-100"
+        >
+          <SheetHeader className="shrink-0 space-y-1 border-b border-slate-200 bg-[var(--aa-navy,#0f2744)] px-5 py-4 pr-12 text-left">
+            <SheetTitle className="text-lg font-semibold leading-tight text-white">
+              Record rebate
+            </SheetTitle>
+            <SheetDescription className="text-xs text-white/70">
+              Give a fixed amount even when no rebate target was reached.
+            </SheetDescription>
+          </SheetHeader>
+          <form onSubmit={saveGrant} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-white px-5 py-5">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600">
+                  Basis
+                </label>
+                <select
+                  className={`${inputClass} w-full`}
+                  value={grantForm.basis}
+                  onChange={(e) => {
+                    setGrantParty(null);
+                    setGrantForm({
+                      ...grantForm,
+                      basis: e.target.value,
+                      partyNo: "",
+                      partyName: "",
+                    });
+                  }}
+                >
+                  <option value="purchase">Purchase — supplier</option>
+                  <option value="sales">Sales — customer</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600">
+                  {grantForm.basis === "purchase" ? "Supplier" : "Customer"}
+                </label>
+                {grantForm.basis === "purchase" ? (
+                  <SearchSupplierInput
+                    selected={grantParty ? [grantParty] : []}
+                    onChange={(sup) => {
+                      setGrantParty(sup);
+                      setGrantForm((f) => ({
+                        ...f,
+                        partyNo: sup?.supplier_number || sup?.supplierNo || "",
+                        partyName: sup?.supplier_name || "",
+                      }));
+                    }}
+                  />
+                ) : (
+                  <SearchCustomerInput
+                    selected={grantParty ? [grantParty] : []}
+                    onChange={(cus) => {
+                      setGrantParty(cus);
+                      setGrantForm((f) => ({
+                        ...f,
+                        partyNo: cus?.customerNo || "",
+                        partyName: cus
+                          ? cus.fullname ||
+                            cus.name ||
+                            cus.customerName ||
+                            cus.company_name ||
+                            ""
+                          : "",
+                      }));
+                    }}
+                  />
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600">
+                  Amount
+                </label>
+                <input
+                  className={`${inputClass} w-full font-mono`}
+                  inputMode="decimal"
+                  placeholder="100000000"
+                  value={grantForm.amount}
+                  onChange={(e) =>
+                    setGrantForm({ ...grantForm, amount: e.target.value })
+                  }
+                />
+                <p className="text-[11px] text-slate-400">
+                  The amount you are giving. 100 million is 100000000
+                  {parseMoney(grantForm.amount) > 0
+                    ? ` · ${formatNumber1(parseMoney(grantForm.amount))}`
+                    : ""}
+                  .
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600">
+                  Date
+                </label>
+                <input
+                  className={`${inputClass} w-full`}
+                  type="date"
+                  value={grantForm.grantDate}
+                  onChange={(e) =>
+                    setGrantForm({ ...grantForm, grantDate: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600">
+                  Note
+                </label>
+                <textarea
+                  className="min-h-[72px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                  placeholder="Given even though no rebate target was reached"
+                  value={grantForm.note}
+                  onChange={(e) =>
+                    setGrantForm({ ...grantForm, note: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600">
+                  How to record it
+                </label>
+                <select
+                  className={`${inputClass} w-full`}
+                  value={grantForm.settle}
+                  onChange={(e) =>
+                    setGrantForm({ ...grantForm, settle: e.target.value })
+                  }
+                >
+                  <option value="record">Record only</option>
+                  <option value="credit">
+                    {grantForm.basis === "purchase"
+                      ? "Record and issue vendor credit"
+                      : "Record and issue credit note"}
+                  </option>
+                  <option value="cash">Record and pay now</option>
+                </select>
+              </div>
+              {grantForm.settle === "cash" ? (
+                <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <select
+                    className={`${inputClass} w-full`}
+                    value={payForm.modeOfPayment}
+                    onChange={(e) =>
+                      setPayForm({
+                        ...payForm,
+                        modeOfPayment: e.target.value,
+                        chequeNo: "",
+                      })
+                    }
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="bank">Bank</option>
+                    <option value="cheque">Cheque</option>
+                  </select>
+                  {payForm.modeOfPayment === "cash" ? (
+                    <select
+                      className={`${inputClass} w-full`}
+                      value={accountHead?.head || ""}
+                      onChange={(e) => {
+                        const head = e.target.value;
+                        const found =
+                          headList.find(
+                            (h) => String(h.head || h.code) === head,
+                          ) || {};
+                        setAccountHead({
+                          ...found,
+                          head: found.head || found.code || head,
+                        });
+                      }}
+                    >
+                      <option value="">Cash account…</option>
+                      {headList.map((h) => {
+                        const code = h.head || h.code;
+                        return (
+                          <option key={code} value={code}>
+                            {h.description || h.name || code} ({code})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  ) : (
+                    <select
+                      className={`${inputClass} w-full`}
+                      value={bankAccount?.id || ""}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setBankAccount(
+                          accountList.find((a) => String(a.id) === String(id)) ||
+                            null,
+                        );
+                      }}
+                    >
+                      <option value="">Bank account…</option>
+                      {accountList.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.account_name}
+                          {a.head ? ` (${a.head})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {payForm.modeOfPayment === "cheque" ? (
+                    <input
+                      className={`${inputClass} w-full`}
+                      placeholder="Cheque no."
+                      value={payForm.chequeNo}
+                      onChange={(e) =>
+                        setPayForm({ ...payForm, chequeNo: e.target.value })
+                      }
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRecordOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={savingGrant}
+                className="bg-[var(--aa-navy,#0f2744)] text-white hover:bg-[var(--aa-navy,#0f2744)]/90"
+              >
+                {savingGrant ? "Saving…" : "Save rebate"}
+              </Button>
+            </div>
+          </form>
+        </SheetContent>
+      </Sheet>
+
       {creditNoteDoc && (
         <CreditNotePreviewModal
           doc={creditNoteDoc}
@@ -2130,7 +2858,9 @@ function CreditNotePreviewModal({ doc, onClose }) {
                     <td className="px-3 py-3 text-slate-800">
                       <div>{doc.lineDescription}</div>
                       <div className="mt-0.5 text-xs text-slate-500">
-                        {doc.rebatePercent}% of qualifying billed sales ·{" "}
+                        {doc.rebatePercent !== "" && doc.rebatePercent != null
+                          ? `${doc.rebatePercent}% of billed value · `
+                          : "Fixed amount, no volume target · "}
                         {doc.period}
                       </div>
                     </td>

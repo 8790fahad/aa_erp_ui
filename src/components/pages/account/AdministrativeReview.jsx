@@ -336,6 +336,9 @@ function MemoReviewal() {
           .includes(searchTerm.toLowerCase()) ||
         String(memo.memo_id || "")
           .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        String(memo.supplier_name || "")
+          .toLowerCase()
           .includes(searchTerm.toLowerCase())
       : true;
     return matchesSearch && memoInDateRange(memo, dateFrom, dateTo);
@@ -353,6 +356,15 @@ function MemoReviewal() {
       title: "Memo No.",
       custom: true,
       component: (item) => <div className="text-center">{item.memo_id}</div>,
+    },
+    {
+      title: "Supplier",
+      custom: true,
+      component: (item) => (
+        <div className="text-left">
+          {item.supplier_name || item.supplier_number || "—"}
+        </div>
+      ),
     },
     {
       title: "Subject",

@@ -325,6 +325,19 @@ const CustomMemoModal = ({
                     marginRight: 10,
                   }}
                 >
+                  Supplier:{" "}
+                  <b>{items?.supplier_name || items?.supplier_number || "—"}</b>
+                </div>
+              </div>
+              <div style={{ flexDirection: "row", width: "100%" }}>
+                <div
+                  style={{
+                    marginBottom: 10,
+                    fontSize: 14,
+                    textTransform: "uppercase",
+                    marginRight: 10,
+                  }}
+                >
                   Subject: <b>{items?.subject}</b>
                 </div>
               </div>
