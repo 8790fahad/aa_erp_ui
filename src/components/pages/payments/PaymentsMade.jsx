@@ -36,6 +36,10 @@ function isUserCodeLabel(value) {
   return /^USER-\d+$/i.test(String(value || "").trim());
 }
 
+function todayDate() {
+  return moment().format("YYYY-MM-DD");
+}
+
 function staffDisplayName(user) {
   const name = [user?.firstname, user?.lastname]
     .map((v) => String(v || "").trim())
@@ -65,6 +69,7 @@ export default function PaymentsMade() {
   const [searchInput, setSearchInput] = useState("");
   const [modeFilter, setModeFilter] = useState(null);
   const [paidByFilter, setPaidByFilter] = useState("all");
+  const [paymentDate, setPaymentDate] = useState(todayDate);
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
   const [payers, setPayers] = useState([]);
@@ -88,6 +93,7 @@ export default function PaymentsMade() {
     if (canSeeAll && paidByFilter && paidByFilter !== "all") {
       params.set("createdBy", String(paidByFilter));
     }
+    if (paymentDate) params.set("date", paymentDate);
 
     _fetchApi(
       `/api/v1/get-supplier-advance-history?${params.toString()}`,
@@ -109,7 +115,7 @@ export default function PaymentsMade() {
         setRows([]);
       },
     );
-  }, [facilityId, user?.id, user?.user_id, canSeeAll, paidByFilter]);
+  }, [facilityId, user?.id, user?.user_id, canSeeAll, paidByFilter, paymentDate]);
 
   useEffect(() => {
     fetchList();
@@ -191,6 +197,11 @@ export default function PaymentsMade() {
 
   const handlePaidByFilter = (e) => {
     setPaidByFilter(e.target.value || "all");
+    setPage(1);
+  };
+
+  const handlePaymentDate = (e) => {
+    setPaymentDate(e.target.value || todayDate());
     setPage(1);
   };
 
@@ -436,6 +447,26 @@ export default function PaymentsMade() {
           />
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">
+            <input
+              type="date"
+              value={paymentDate}
+              onChange={handlePaymentDate}
+              className="h-9 shrink-0 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+              aria-label="Filter by payment date"
+              title="Payment date"
+            />
+            {paymentDate !== todayDate() ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentDate(todayDate());
+                  setPage(1);
+                }}
+                className="text-xs text-[var(--aa-navy)] hover:underline"
+              >
+                Today
+              </button>
+            ) : null}
             <select
               value={modeFilter || "all"}
               onChange={handleModeFilter}
@@ -502,7 +533,7 @@ export default function PaymentsMade() {
                       <p className="text-lg text-gray-500">
                         {searchInput || modeFilter || paidByFilter !== "all"
                           ? "No payments found"
-                          : "No payments recorded yet"}
+                          : `No payments on ${moment(paymentDate).format("MM/DD/YYYY")}`}
                       </p>
                       {!searchInput && !modeFilter && paidByFilter === "all" && (
                         <Button
