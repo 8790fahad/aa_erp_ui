@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { APP_VERSION, shouldPromptUpdate } from "@/version";
+import { APP_UPDATE_RETURN_KEY, APP_VERSION, shouldPromptUpdate } from "@/version";
 
 const CHECK_MS = 5 * 60 * 1000;
 // Dev never swaps in a new bundle, so a completed local update is remembered
@@ -16,24 +16,50 @@ function versionInUse() {
   return APP_VERSION;
 }
 
-function versionUrl() {
+function basePrefix() {
   const base = import.meta.env.BASE_URL || "/";
-  const prefix = base.endsWith("/") ? base : `${base}/`;
+  return base.endsWith("/") ? base : `${base}/`;
+}
+
+function versionUrl() {
   // Dev reads an optional local file so the prompt can be tried without a build.
-  // Production always compares the baked bundle version to /version.json.
   const file = import.meta.env.DEV ? "version.local.json" : "version.json";
-  return `${prefix}${file}`;
+  return `${basePrefix()}${file}`;
+}
+
+const noCache = {
+  cache: "no-store",
+  headers: {
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
+  },
+};
+
+async function readPublishedVersion() {
+  // A never-requested path misses the host cache. The server returns the
+  // current app shell, whose meta tag is the version a reload would run.
+  const url = new URL(
+    `${basePrefix()}__app_update_${Date.now()}`,
+    window.location.origin,
+  );
+  const response = await fetch(url.toString(), noCache);
+  const html = await response.text();
+  const match = html.match(
+    /name=["']app-version["'][^>]*content=["']([^"']+)["']/i,
+  );
+  return match?.[1]?.trim() || "";
 }
 
 async function loadLatestVersion() {
-  const response = await fetch(`${versionUrl()}?t=${Date.now()}`, {
-    cache: "no-store",
-    headers: {
-      "Cache-Control": "no-cache",
-      Pragma: "no-cache",
-    },
-  });
-  if (import.meta.env.DEV && response.status === 404) return null;
+  if (import.meta.env.DEV) {
+    const response = await fetch(`${versionUrl()}?t=${Date.now()}`, noCache);
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error("version check failed");
+    return response.json();
+  }
+  const published = await readPublishedVersion();
+  if (published) return { version: published, forceUpdate: true };
+  const response = await fetch(`${versionUrl()}?t=${Date.now()}`, noCache);
   if (!response.ok) throw new Error("version check failed");
   return response.json();
 }
@@ -70,9 +96,24 @@ async function applyAppUpdate(acceptedVersion) {
     /* Cache Storage unavailable */
   }
 
-  const url = new URL(window.location.href);
-  url.searchParams.set("v", String(Date.now()));
-  window.location.replace(url.toString());
+  if (import.meta.env.DEV) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("v", String(Date.now()));
+    window.location.replace(url.toString());
+    return;
+  }
+
+  const here = new URL(window.location.href);
+  here.searchParams.delete("v");
+  sessionStorage.setItem(
+    APP_UPDATE_RETURN_KEY,
+    `${here.pathname}${here.search}${here.hash}`,
+  );
+  const next = new URL(
+    `${basePrefix()}__app_update_${Date.now()}`,
+    window.location.origin,
+  );
+  window.location.replace(next.toString());
 }
 
 export default function VersionUpdate() {

@@ -9,6 +9,10 @@ import { useSelector } from "react-redux";
 import { toast } from "sonner";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import { formatNumber1 } from "@/components/router/utilities";
+import {
+  allowedJournalEntryTabs,
+  getUserFunctionalities,
+} from "@/lib/access";
 
 const getYearToDateDefaults = () => {
   const formatLocalDate = (date) => {
@@ -169,21 +173,44 @@ const JournalEntryList = () => {
     );
   };
 
+  const functionalities = getUserFunctionalities(user, activeBusiness);
+  const allowedTabs = useMemo(
+    () => allowedJournalEntryTabs(functionalities),
+    [functionalities],
+  );
+
+  useEffect(() => {
+    if (allowedTabs.includes(statusFilter)) return;
+    setStatusFilter(allowedTabs[0] || "all");
+  }, [allowedTabs, statusFilter]);
+
+  const visibleEntries = useMemo(() => {
+    if (allowedTabs.includes("all")) return entries;
+    return entries.filter((item) =>
+      allowedTabs.includes(normalizeStatus(item.status)),
+    );
+  }, [entries, allowedTabs]);
+
   const filteredEntries = useMemo(() => {
-    if (statusFilter === "all") return entries;
-    return entries.filter(
+    if (statusFilter === "all") return visibleEntries;
+    return visibleEntries.filter(
       (item) => normalizeStatus(item.status) === statusFilter,
     );
-  }, [entries, statusFilter]);
+  }, [visibleEntries, statusFilter]);
 
   const counts = useMemo(() => {
-    const c = { all: entries.length, pending: 0, approved: 0, reversed: 0 };
-    entries.forEach((e) => {
+    const c = {
+      all: visibleEntries.length,
+      pending: 0,
+      approved: 0,
+      reversed: 0,
+    };
+    visibleEntries.forEach((e) => {
       const s = normalizeStatus(e.status);
       if (c[s] !== undefined) c[s] += 1;
     });
     return c;
-  }, [entries]);
+  }, [visibleEntries]);
 
   // API allows any authenticated user to approve; keep UI aligned.
   const canManage = true;
@@ -282,7 +309,7 @@ const JournalEntryList = () => {
     { key: "pending", label: "Pending" },
     { key: "approved", label: "Approved" },
     { key: "reversed", label: "Reversed" },
-  ];
+  ].filter((tab) => allowedTabs.includes(tab.key));
 
   return (
     <div className="min-h-[70vh] px-3 py-4 sm:px-4 lg:px-6">

@@ -72,6 +72,12 @@ function toYearMonth(dateVal) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function principalInputValue(value) {
+  const num = Number(String(value ?? "").replace(/,/g, ""));
+  if (!Number.isFinite(num) || num <= 0) return "";
+  return formatNumberWithCommas(num.toFixed(2));
+}
+
 function formatAppliesFrom(dateVal) {
   const ym = toYearMonth(dateVal);
   if (!ym) return "—";
@@ -93,6 +99,15 @@ const emptyLoanForm = () => ({
 
 const loanDue = (loan) =>
   parseFloat(loan?.amount || 0) + parseFloat(loan?.profit || 0);
+
+const investmentPrincipal = (person) =>
+  Number(person?.investmentOpeningBalance) || 0;
+
+const investmentCurrentBalance = (person) => {
+  const current = Number(person?.investmentCurrentBalance);
+  if (Number.isFinite(current)) return current;
+  return investmentPrincipal(person);
+};
 
 const loanBalance = (loan) =>
   loanDue(loan) - parseFloat(loan?.amountPaid || 0);
@@ -135,6 +150,14 @@ const LoanManagement = () => {
     lastName: "",
     contactInfo: "",
   });
+  const [investmentPerson, setInvestmentPerson] = useState(null);
+  const [investmentAmount, setInvestmentAmount] = useState("");
+  const [investmentCurrentAmount, setInvestmentCurrentAmount] = useState("");
+  const [investmentDate, setInvestmentDate] = useState(
+    () => new Date().toISOString().slice(0, 10),
+  );
+  const [investmentAccount, setInvestmentAccount] = useState(null);
+  const [savingInvestment, setSavingInvestment] = useState(false);
 
   const [chartAccounts, setChartAccounts] = useState([]);
   const [selectedReceivable, setSelectedReceivable] = useState(null);
@@ -229,6 +252,10 @@ const LoanManagement = () => {
       fetchCashAccounts();
     }
   }, [facilityId]);
+
+  useEffect(() => {
+    if (associatePanelOpen && facilityId) fetchEmployees();
+  }, [associatePanelOpen, facilityId]);
 
   useEffect(() => {
     if (!showForm || !facilityId || editMode) {
@@ -438,6 +465,103 @@ const LoanManagement = () => {
       () => {
         setSavingAssociate(false);
         toast.error("Could not add business associate");
+      },
+    );
+  };
+
+  const openInvestmentBalance = (person) => {
+    setAssociatePanelOpen(true);
+    setInvestmentPerson(person);
+    setInvestmentAmount(principalInputValue(person.investmentOpeningBalance));
+    const hasOpening =
+      Number(person.investmentOpeningBalance) > 0 ||
+      Boolean(person.investmentReference);
+    setInvestmentCurrentAmount(
+      principalInputValue(investmentCurrentBalance(person)) ||
+        (hasOpening ? "0.00" : ""),
+    );
+    setInvestmentDate(
+      person.investmentOpeningDate
+        ? String(person.investmentOpeningDate).slice(0, 10)
+        : new Date().toISOString().slice(0, 10),
+    );
+    const head = person.investmentAccountHead;
+    const found = head
+      ? chartAccounts.find(
+          (account) => String(account.head || account.code) === String(head),
+        )
+      : null;
+    setInvestmentAccount(found || null);
+  };
+
+  useEffect(() => {
+    if (!investmentPerson?.id) return;
+    const fresh =
+      employees.find((row) => row.id === investmentPerson.id) ||
+      investmentPerson;
+    const saved = principalInputValue(fresh.investmentOpeningBalance);
+    if (!saved) return;
+    setInvestmentAmount((current) => {
+      const currentNum = Number(parseFormattedNumber(current));
+      if (currentNum > 0) return current;
+      return saved;
+    });
+    const savedCurrent = principalInputValue(investmentCurrentBalance(fresh));
+    if (!savedCurrent) return;
+    setInvestmentCurrentAmount((current) => {
+      if (String(current || "").trim()) return current;
+      return savedCurrent;
+    });
+  }, [employees, investmentPerson]);
+
+  const saveInvestmentBalance = () => {
+    if (!investmentPerson) return;
+    const amount = parseFloat(parseFormattedNumber(investmentAmount));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return toast.error("Enter the investment opening balance");
+    }
+    const currentRaw = String(investmentCurrentAmount || "").trim();
+    const currentBalance = currentRaw
+      ? parseFloat(parseFormattedNumber(currentRaw))
+      : amount;
+    if (!Number.isFinite(currentBalance) || currentBalance < 0) {
+      return toast.error("Enter a valid current balance");
+    }
+    const head =
+      investmentAccount?.head ||
+      investmentAccount?.code ||
+      investmentAccount?.account_code;
+    if (!head) {
+      return toast.error("Select the business associate investment account");
+    }
+    setSavingInvestment(true);
+    _postApi(
+      `/api/hr/employees/${investmentPerson.id}/investment-opening-balance`,
+      {
+        facilityId,
+        amount,
+        currentBalance,
+        asOfDate: investmentDate,
+        investmentHead: head,
+        userId: user?.id,
+      },
+      (data) => {
+        setSavingInvestment(false);
+        if (!data.success) {
+          toast.error(data.message || "Could not post the opening balance");
+          return;
+        }
+        toast.success("Investment opening balance posted");
+        setEmployees((rows) =>
+          rows.map((row) =>
+            row.id === investmentPerson.id ? { ...row, ...data.data } : row,
+          ),
+        );
+        setInvestmentPerson(null);
+      },
+      (err) => {
+        setSavingInvestment(false);
+        toast.error(err?.message || "Could not post the opening balance");
       },
     );
   };
@@ -827,6 +951,7 @@ const LoanManagement = () => {
 
   const getStatusBadge = (status) => {
     const statusStyles = {
+      Investment: "bg-slate-100 text-[var(--aa-navy)] border-slate-200",
       Pending: "bg-amber-50 text-amber-600 border-amber-200",
       Approved: "bg-[color:var(--app-primary)]/10 text-[color:var(--app-primary)] border-[color:var(--app-primary)]/30",
       Repaying: "bg-[color:var(--app-primary)]/10 text-[color:var(--app-primary)] border-[color:var(--app-primary)]/30",
@@ -864,12 +989,44 @@ const LoanManagement = () => {
     matchesPersonFilter(person, pickerFilter),
   );
 
-  const filteredLoans = loans.filter(l => {
-    const matchesSearch = (l.employee?.firstName + " " + l.employee?.lastName).toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = selectedStatus ? l.status === selectedStatus : true;
-    const matchesPerson = matchesPersonFilter(l.employee, personFilter);
-    return matchesSearch && matchesStatus && matchesPerson;
-  });
+  const investmentLoanRows = businessAssociates
+    .filter((person) => {
+      const principal = investmentPrincipal(person);
+      const current = investmentCurrentBalance(person);
+      return principal > 0.009 || current > 0.009;
+    })
+    .map((person) => {
+      const principal = investmentPrincipal(person);
+      const current = investmentCurrentBalance(person);
+      return {
+        id: `investment-${person.id}`,
+        isInvestment: true,
+        referenceNumber: person.investmentReference || "Opening balance",
+        amount: principal,
+        profit: 0,
+        amountPaid: Math.max(0, principal - current),
+        status: "Investment",
+        startDate: person.investmentOpeningDate,
+        employee: person,
+        setup: { name: "Investment opening balance" },
+      };
+    });
+
+  const filteredLoans = [
+    ...investmentLoanRows.filter((row) => {
+      const name = `${row.employee?.firstName || ""} ${row.employee?.lastName || ""}`.toLowerCase();
+      const matchesSearch = name.includes(searchTerm.toLowerCase());
+      const matchesStatus = selectedStatus ? selectedStatus === "Investment" : true;
+      const matchesPerson = matchesPersonFilter(row.employee, personFilter);
+      return matchesSearch && matchesStatus && matchesPerson;
+    }),
+    ...loans.filter((l) => {
+      const matchesSearch = (l.employee?.firstName + " " + l.employee?.lastName).toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = selectedStatus ? l.status === selectedStatus : true;
+      const matchesPerson = matchesPersonFilter(l.employee, personFilter);
+      return matchesSearch && matchesStatus && matchesPerson;
+    }),
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50/50 pb-12" style={appColorStyle}>
@@ -913,7 +1070,7 @@ const LoanManagement = () => {
               className="border-slate-200 bg-white text-[var(--aa-navy)] shadow-sm hover:bg-slate-50"
             >
               <User className="w-4 h-4 mr-2" />
-              Business Associate
+              Investment
             </Button>
             <Button 
               type="button"
@@ -1066,8 +1223,12 @@ const LoanManagement = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-col">
-                          <span className="text-sm font-medium text-gray-900">{item.setup?.name}</span>
-                          <span className="text-xs text-gray-500 mt-0.5">{item.durationMonths} Months · From {formatAppliesFrom(item.startDate)}</span>
+                          <span className="text-sm font-medium text-gray-900">{item.setup?.name || (item.isInvestment ? "Investment opening balance" : "")}</span>
+                          <span className="text-xs text-gray-500 mt-0.5">
+                            {item.isInvestment
+                              ? `From ${formatAppliesFrom(item.startDate)}`
+                              : `${item.durationMonths} Months · From ${formatAppliesFrom(item.startDate)}`}
+                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1082,9 +1243,13 @@ const LoanManagement = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                         <div className="flex items-center justify-end gap-2">
                            <button 
-                             onClick={() => handleViewLoan(item)}
+                             onClick={() =>
+                               item.isInvestment
+                                 ? openInvestmentBalance(item.employee)
+                                 : handleViewLoan(item)
+                             }
                              className="p-2 text-gray-400 hover:text-[color:var(--app-primary)] hover:bg-[color:var(--app-primary)]/10 rounded-lg transition-all"
-                             title="View Ledger"
+                             title={item.isInvestment ? "Opening balance" : "View Ledger"}
                            >
                              <Eye size={18} />
                            </button>
@@ -1097,6 +1262,7 @@ const LoanManagement = () => {
                                <CheckCircle size={18} />
                              </button>
                            )}
+                           {!item.isInvestment && (
                            <DropdownMenu>
                              <DropdownMenuTrigger asChild>
                                <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
@@ -1123,6 +1289,7 @@ const LoanManagement = () => {
                                )}
                              </DropdownMenuContent>
                            </DropdownMenu>
+                           )}
                         </div>
                       </td>
                     </tr>
@@ -1206,7 +1373,7 @@ const LoanManagement = () => {
                   Business associates
                 </SheetTitle>
                 <SheetDescription className="mt-0.5 text-xs text-white/70">
-                  Register someone who is not on payroll. You give them a loan and they bring it back.
+                  Register someone who is not on payroll. Record their investment opening balance, or give them a loan they bring back.
                 </SheetDescription>
               </div>
             </div>
@@ -1264,6 +1431,87 @@ const LoanManagement = () => {
               </button>
             </div>
 
+            {investmentPerson ? (
+              <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Investment opening balance
+                </p>
+                <p className="text-sm font-semibold text-slate-900">
+                  {investmentPerson.firstName} {investmentPerson.lastName}
+                </p>
+                {investmentPerson.employeeId ? (
+                  <p className="text-xs text-slate-500">
+                    #{investmentPerson.employeeId}
+                  </p>
+                ) : null}
+                <p className={hintClass}>
+                  Principal is the amount they originally invested. Current balance is what the investment account shows now. That current balance is debited to Opening Balance Equity and credited to the investment account.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <label className={labelClass}>Principal amount</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={formatNumberWithCommas(investmentAmount)}
+                      onChange={(e) =>
+                        setInvestmentAmount(parseFormattedNumber(e.target.value))
+                      }
+                      placeholder="0.00"
+                      className={`${inputClass} tabular-nums`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={labelClass}>Current balance</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={formatNumberWithCommas(investmentCurrentAmount)}
+                      onChange={(e) =>
+                        setInvestmentCurrentAmount(
+                          parseFormattedNumber(e.target.value),
+                        )
+                      }
+                      placeholder="0.00"
+                      className={`${inputClass} tabular-nums`}
+                    />
+                  </div>
+                </div>
+                <input
+                  type="date"
+                  value={investmentDate}
+                  onChange={(e) => setInvestmentDate(e.target.value)}
+                  className={inputClass}
+                />
+                <TypeaheadCustom
+                  options={chartAccounts}
+                  labelKey={(account) =>
+                    `${account.head || account.code || ""} ${account.description || account.account_name || ""}`.trim()
+                  }
+                  onChange={(items) => setInvestmentAccount(items[0] || null)}
+                  placeholder="Investment account…"
+                  selected={investmentAccount ? [investmentAccount] : []}
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={savingInvestment}
+                    onClick={saveInvestmentBalance}
+                    className="h-9 rounded-md bg-[var(--aa-navy)] px-3 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {savingInvestment ? "Posting…" : "Post opening balance"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInvestmentPerson(null)}
+                    className="h-9 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Registered ({businessAssociates.length})
@@ -1287,14 +1535,29 @@ const LoanManagement = () => {
                           #{person.employeeId}
                           {person.contactInfo ? ` · ${person.contactInfo}` : ""}
                         </p>
+                        <p className="text-xs font-semibold tabular-nums text-slate-700">
+                          Principal {formatCurrency(investmentPrincipal(person))}
+                        </p>
+                        <p className="text-xs font-semibold tabular-nums text-slate-700">
+                          Current balance {formatCurrency(investmentCurrentBalance(person))}
+                        </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => openLoanForAssociate(person)}
-                        className="shrink-0 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
-                      >
-                        Give loan
-                      </button>
+                      <div className="flex shrink-0 flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => openInvestmentBalance(person)}
+                          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                        >
+                          Opening balance
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openLoanForAssociate(person)}
+                          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                        >
+                          Give loan
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>

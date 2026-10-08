@@ -144,6 +144,21 @@ export default function CreditNotePreview() {
     return [];
   }, [detail]);
 
+  const journalEntries = useMemo(() => {
+    const rows = Array.isArray(detail?.entries) ? detail.entries : [];
+    return [...rows].sort(
+      (a, b) => (Number(b.dr) || 0) - (Number(a.dr) || 0),
+    );
+  }, [detail]);
+
+  const isMoneyFromSupplier = useMemo(() => {
+    const text = `${detail?.reason || ""} ${detail?.description || ""}`;
+    const appliedToAdvance = (detail?.applications || []).some(
+      (a) => String(a.invoiceRef || "").toUpperCase() === "ADVANCE",
+    );
+    return /money from supplier/i.test(text) || appliedToAdvance;
+  }, [detail]);
+
   const openApply = useCallback(
     (doc = detail) => {
       if (!doc?.entityId) {
@@ -457,7 +472,23 @@ export default function CreditNotePreview() {
             <div className="text-[10px]">Ref: {detail.reference}</div>
           ) : null}
           <div className="my-2 border-t border-dashed border-slate-400" />
-          {lineItems.map((item, idx) => (
+          {isMoneyFromSupplier && journalEntries.length
+            ? journalEntries.map((entry, idx) => (
+                <div key={`${entry.account_code}-${idx}`} className="mb-1.5">
+                  <div className="font-semibold">
+                    {entry.account_code} — {entry.account_description}
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span>{Number(entry.dr) > 0 ? "Debit" : "Credit"}</span>
+                    <span>
+                      {formatNumber(
+                        Number(entry.dr) > 0 ? entry.dr : entry.cr,
+                      )}
+                    </span>
+                  </div>
+                </div>
+              ))
+            : lineItems.map((item, idx) => (
             <div key={`${item.sku || item.item_name}-${idx}`} className="mb-1.5">
               <div className="font-semibold">
                 {item.item_name || item.description || "Item"}
@@ -564,6 +595,74 @@ export default function CreditNotePreview() {
           </div>
 
           <div className={isA5 ? "mb-0.5" : "mb-1"}>
+            {isMoneyFromSupplier && journalEntries.length ? (
+              <table className="invoice-items-table w-full border-collapse overflow-hidden border border-gray-300 shadow-sm">
+                <thead>
+                  <tr className="bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white">
+                    <th
+                      className={`border-r border-[var(--aa-accent)] text-left font-semibold tracking-wide ${
+                        isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"
+                      }`}
+                    >
+                      Account
+                    </th>
+                    <th
+                      className={`border-r border-[var(--aa-accent)] text-right font-semibold tracking-wide ${
+                        isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"
+                      }`}
+                    >
+                      Debit(₦)
+                    </th>
+                    <th
+                      className={`text-right font-semibold tracking-wide ${
+                        isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"
+                      }`}
+                    >
+                      Credit(₦)
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white">
+                  {journalEntries.map((entry, index) => (
+                    <tr
+                      key={`${entry.account_code}-${index}`}
+                      className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                    >
+                      <td
+                        className={`border-r border-t border-gray-200 ${
+                          isA5
+                            ? "px-1.5 py-1 text-[12px]"
+                            : "px-2.5 py-2 text-[15px]"
+                        }`}
+                      >
+                        <span className="font-semibold leading-snug text-gray-900">
+                          {entry.account_description || "Account"}
+                        </span>
+                        {entry.account_code ? (
+                          <div className="font-mono text-[10px] font-normal text-gray-500">
+                            {entry.account_code}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td
+                        className={`border-r border-t border-gray-200 text-right tabular-nums text-gray-800 ${
+                          isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"
+                        }`}
+                      >
+                        {Number(entry.dr) > 0 ? formatNumber(entry.dr) : "—"}
+                      </td>
+                      <td
+                        className={`border-t border-gray-200 text-right tabular-nums text-gray-800 ${
+                          isA5 ? "px-1.5 py-1 text-[11px]" : "px-2.5 py-2 text-sm"
+                        }`}
+                      >
+                        {Number(entry.cr) > 0 ? formatNumber(entry.cr) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
             <table className="invoice-items-table w-full border-collapse overflow-hidden border border-gray-300 shadow-sm">
               <thead>
                 <tr className="bg-[var(--aa-doc-header,var(--aa-navy,#1a2d5e))] text-white">
@@ -678,6 +777,7 @@ export default function CreditNotePreview() {
                 </tr>
               </tbody>
             </table>
+            )}
           </div>
 
           <div
@@ -750,7 +850,9 @@ export default function CreditNotePreview() {
                           ? "Refund (cash / bank)"
                           : String(a.invoiceRef).toUpperCase() === "DEPOSIT"
                             ? "Customer deposit"
-                            : a.invoiceRef}
+                            : String(a.invoiceRef).toUpperCase() === "ADVANCE"
+                              ? "Supplier advance"
+                              : a.invoiceRef}
                       </td>
                       <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">
                         {formatNumber(a.amount)}

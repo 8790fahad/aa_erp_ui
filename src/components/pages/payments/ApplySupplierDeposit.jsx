@@ -139,11 +139,7 @@ export default function ApplySupplierDeposit({
     const dep = parseFloat(s?.available_deposit) || 0;
     const credit = parseFloat(s?.available_credit_note) || 0;
     const git = parseFloat(s?.available_git) || 0;
-    const bits = [];
-    if (credit > 0.009) bits.push(`CN ${formatNumber1(credit)}`);
-    if (dep > 0.009) bits.push(`Dep ${formatNumber1(dep)}`);
-    if (git > 0.009) bits.push(`GIT ${formatNumber1(git)}`);
-    return bits.length ? `${name} · ${bits.join(" · ")}` : name;
+    return `${name} — Credit note ${formatNumber1(credit)} — Deposit ${formatNumber1(dep)} — GIT ${formatNumber1(git)}`;
   };
 
   const sourceBalance =

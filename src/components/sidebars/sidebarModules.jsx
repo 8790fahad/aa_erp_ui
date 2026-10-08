@@ -760,6 +760,12 @@ export const modules = [
       {
         title: "Journal Entries",
         url: "/app/account/journal-entries",
+        subFunctionalities: [
+          { title: "All Journal Entries" },
+          { title: "Pending Journal Entries" },
+          { title: "Approved Journal Entries" },
+          { title: "Reversed Journal Entries" },
+        ],
         access: [
           "services",
           "retailers",

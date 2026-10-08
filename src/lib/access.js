@@ -123,6 +123,10 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "All Memos",
   "Approved Memos",
   "Pending Memos",
+  "All Journal Entries",
+  "Pending Journal Entries",
+  "Approved Journal Entries",
+  "Reversed Journal Entries",
   "See All Pay Bills",
   "Inventory Vendors",
   "Expense Vendors",
@@ -321,6 +325,30 @@ export function resolveBillFetchType(functionalities, requestedType = "all") {
 /** Show the type filter on the Bill list when any filter option is granted. */
 export function canUseBillTypeFilter(functionalities) {
   return allowedBillFilterOptions(functionalities).length > 0;
+}
+
+export const JOURNAL_ENTRY_TAB_PRIVILEGES = {
+  all: "All Journal Entries",
+  pending: "Pending Journal Entries",
+  approved: "Approved Journal Entries",
+  reversed: "Reversed Journal Entries",
+};
+
+const ALL_JOURNAL_ENTRY_TABS = ["all", "pending", "approved", "reversed"];
+
+/**
+ * Journal Entries status tabs.
+ * A specific tab grant hides the others. Journal Entries with no tab
+ * grants yet keeps every tab so existing staff are not locked out.
+ */
+export function allowedJournalEntryTabs(functionalities) {
+  if (hasFullAccess(functionalities)) return [...ALL_JOURNAL_ENTRY_TABS];
+  const funcs = Array.isArray(functionalities) ? functionalities : [];
+  const granted = ALL_JOURNAL_ENTRY_TABS.filter((key) =>
+    funcs.includes(JOURNAL_ENTRY_TAB_PRIVILEGES[key]),
+  );
+  if (granted.length) return granted;
+  return [...ALL_JOURNAL_ENTRY_TABS];
 }
 
 /** Memo drawer filter: All / Approved / Pending. */

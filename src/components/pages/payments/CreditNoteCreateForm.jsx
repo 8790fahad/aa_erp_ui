@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { useLocation, useSearchParams } from "react-router-dom";
 import moment from "moment";
 import { toast } from "sonner";
-import { FileText, Loader2, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { ChevronDown, FileText, Loader2, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { Typeahead } from "react-bootstrap-typeahead";
 import "react-bootstrap-typeahead/css/Typeahead.css";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -13,6 +13,11 @@ import {
   parseNumberFromFormatted,
 } from "@/utilities";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
 import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
 
@@ -78,6 +83,12 @@ export default function CreditNoteCreateForm({
   const [accounts, setAccounts] = useState([]);
   const [products, setProducts] = useState([]);
   const [selectedParty, setSelectedParty] = useState([]);
+  const [partyQuery, setPartyQuery] = useState("");
+  const [partyMenuOpen, setPartyMenuOpen] = useState(false);
+  const [moneyAmount, setMoneyAmount] = useState("");
+  const [moneyHeadCode, setMoneyHeadCode] = useState("");
+  const [treatmentOpen, setTreatmentOpen] = useState(true);
+  const partyBoxRef = useRef(null);
   const [date, setDate] = useState(moment().format("YYYY-MM-DD"));
   const [subject, setSubject] = useState("");
   const [reference, setReference] = useState("");
@@ -101,6 +112,7 @@ export default function CreditNoteCreateForm({
   const needsInventory = !!(
     selectedReason?.inventoryRelated && selectedReason?.restockInventory
   );
+  const isMoneyOnly = selectedReason?.category === "MONEY_ONLY";
 
   const numberQueryType = isVendor
     ? "credit_note_supplier"
@@ -245,7 +257,7 @@ export default function CreditNoteCreateForm({
   const loadReasons = useCallback(() => {
     const docType = isVendor ? "debit" : "credit";
     _fetchApi(
-      `/api/credit-notes/reason-metadata?docType=${docType}`,
+      `/api/credit-notes/reason-metadata?docType=${docType}&t=${Date.now()}`,
       (resp) => {
         const list = resp?.data?.reasons || [];
         setReasons(Array.isArray(list) ? list : []);
@@ -319,7 +331,35 @@ export default function CreditNoteCreateForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reload when mode/outcome changes
   }, [facilityId, outcome, refundMode]);
 
+  const filteredParties = useMemo(() => {
+    const q = partyQuery.trim().toLowerCase();
+    const list = q
+      ? partyOptions.filter((p) =>
+          String(p.label || "")
+            .toLowerCase()
+            .includes(q),
+        )
+      : partyOptions;
+    return list.slice(0, 40);
+  }, [partyOptions, partyQuery]);
+
+  useEffect(() => {
+    if (!partyMenuOpen) return undefined;
+    const close = (event) => {
+      if (!partyBoxRef.current?.contains(event.target)) {
+        setPartyMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [partyMenuOpen]);
+
   const totals = useMemo(() => {
+    if (isMoneyOnly) {
+      const total =
+        parseFloat(parseNumberFromFormatted(String(moneyAmount || "0"))) || 0;
+      return { subtotal: total, total };
+    }
     const subtotal = lineItems.reduce(
       (s, row) => s + (Number(row.amount) || 0),
       0,
@@ -328,7 +368,18 @@ export default function CreditNoteCreateForm({
       subtotal,
       total: subtotal,
     };
-  }, [lineItems]);
+  }, [isMoneyOnly, lineItems, moneyAmount]);
+
+  const advanceCode = activeBusiness?.payable_accural_code || "";
+  const advanceMatch = accounts.find(
+    (a) => String(a.code) === String(advanceCode),
+  );
+  const advanceLabel = advanceMatch
+    ? `${advanceMatch.code} — ${advanceMatch.name}`
+    : advanceCode || "Not set for this business";
+  const moneyHeadLabel =
+    accountOptions.find((a) => String(a.code) === String(moneyHeadCode))
+      ?.label || "Select a head";
 
   const updateLine = (idx, patch) => {
     setLineItems((rows) =>
@@ -404,15 +455,48 @@ export default function CreditNoteCreateForm({
       toast.error("Date is required");
       return;
     }
-    const validLines = lineItems.filter(
-      (l) =>
-        (l.description || "").trim() &&
-        l.account?.code &&
-        (Number(l.amount) || 0) > 0,
-    );
-    if (!validLines.length) {
-      toast.error("Add at least one line with item/description, account, qty and rate");
-      return;
+    let validLines;
+    if (isMoneyOnly) {
+      const amount =
+        parseFloat(parseNumberFromFormatted(String(moneyAmount || "0"))) || 0;
+      if (amount <= 0) {
+        toast.error("Enter the amount received from the supplier");
+        return;
+      }
+      if (!moneyHeadCode) {
+        toast.error("Select a head");
+        return;
+      }
+      if (!activeBusiness?.payable_accural_code) {
+        toast.error("Supplier advance account is not set for this business");
+        return;
+      }
+      validLines = [
+        {
+          description: subject.trim() || "Money from supplier",
+          account: null,
+          quantity: "1",
+          rate: String(amount),
+          amount,
+          lineKind: "service",
+          product: null,
+          product_id: null,
+          cost_price: 0,
+        },
+      ];
+    } else {
+      validLines = lineItems.filter(
+        (l) =>
+          (l.description || "").trim() &&
+          l.account?.code &&
+          (Number(l.amount) || 0) > 0,
+      );
+      if (!validLines.length) {
+        toast.error(
+          "Add at least one line with item/description, account, qty and rate",
+        );
+        return;
+      }
     }
     if (totals.total <= 0) {
       toast.error("Total must be greater than 0");
@@ -459,8 +543,15 @@ export default function CreditNoteCreateForm({
       inventoryExplanation: needsInventory
         ? inventoryExplanation.trim()
         : undefined,
-      paymentAdjustmentMethod:
-        outcome === "refund" ? "refund_bank" : "offset_outstanding",
+      paymentAdjustmentMethod: isMoneyOnly
+        ? "supplier_advance"
+        : outcome === "refund"
+          ? "refund_bank"
+          : "offset_outstanding",
+      moneyHeadCode: isMoneyOnly ? moneyHeadCode : undefined,
+      payableAccrualCode: isMoneyOnly
+        ? activeBusiness?.payable_accural_code
+        : undefined,
       discount: { type: "fixed", scope: "document", value: totals.total },
       lineItems: validLines.map((item) => ({
         account: item.account,
@@ -489,7 +580,7 @@ export default function CreditNoteCreateForm({
       vatRate: 0,
     };
 
-    if (outcome === "refund") {
+    if (!isMoneyOnly && outcome === "refund") {
       payload.refundModeOfPayment = refundMode;
       if (refundMode === "bank") {
         if (!refundBankAccount?.id && !refundBankAccount?.head) {
@@ -530,11 +621,13 @@ export default function CreditNoteCreateForm({
           const cnNo = response.data?.creditNoteNumber;
           const closed = response.data?.status === "closed";
           toast.success(
-            outcome === "refund"
-              ? `${isVendor ? "Vendor credit" : "Credit note"} ${cnNo} refunded${closed ? " and closed" : ""}`
-              : isVendor
-                ? `Vendor credit ${cnNo} saved as open credits`
-                : `Credit note ${cnNo} posted to customer deposit. Use Apply Deposit on Create Invoice.`,
+            isMoneyOnly
+              ? `Vendor credit ${cnNo} posted to the supplier advance`
+              : outcome === "refund"
+                ? `${isVendor ? "Vendor credit" : "Credit note"} ${cnNo} refunded${closed ? " and closed" : ""}`
+                : isVendor
+                  ? `Vendor credit ${cnNo} saved as open credits`
+                  : `Credit note ${cnNo} posted to customer deposit. Use Apply Deposit on Create Invoice.`,
           );
           if (typeof onCreated === "function") onCreated(cnNo);
         } else {
@@ -599,21 +692,60 @@ export default function CreditNoteCreateForm({
       <div className="space-y-4 border-b border-slate-100 bg-white px-6 py-5">
         <FormRow label={labels.party} required>
           {isVendor ? (
-            <Typeahead
-              id="cn-party"
-              labelKey="label"
-              options={partyOptions}
-              selected={selectedParty}
-              onChange={setSelectedParty}
-              placeholder={labels.partyPlaceholder}
-              clearButton
-              size="sm"
-              className="z-[300] w-full"
-              positionFixed
-              inputProps={{
-                className: fieldInputClass,
-              }}
-            />
+            <div className="relative" ref={partyBoxRef}>
+              <input
+                id="cn-party"
+                value={
+                  partyMenuOpen
+                    ? partyQuery
+                    : selectedParty[0]?.label || ""
+                }
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setPartyQuery(next);
+                  setPartyMenuOpen(true);
+                  if (
+                    selectedParty[0] &&
+                    next !== selectedParty[0].label
+                  ) {
+                    setSelectedParty([]);
+                  }
+                }}
+                onFocus={() => {
+                  setPartyQuery(selectedParty[0]?.label || "");
+                  setPartyMenuOpen(true);
+                }}
+                placeholder={labels.partyPlaceholder}
+                autoComplete="off"
+                className={fieldInputClass}
+              />
+              {partyMenuOpen ? (
+                <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+                  {filteredParties.length === 0 ? (
+                    <li className="px-3 py-2 text-sm text-slate-500">
+                      No vendors found
+                    </li>
+                  ) : (
+                    filteredParties.map((opt) => (
+                      <li key={opt.id}>
+                        <button
+                          type="button"
+                          className="w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setSelectedParty([opt]);
+                            setPartyQuery(opt.label);
+                            setPartyMenuOpen(false);
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              ) : null}
+            </div>
           ) : (
             <SearchCustomerInput
               size="sm"
@@ -758,6 +890,24 @@ export default function CreditNoteCreateForm({
           </>
         ) : null}
 
+        {isMoneyOnly ? (
+          <FormRow label="Amount" required>
+            <input
+              inputMode="decimal"
+              value={
+                moneyAmount === ""
+                  ? ""
+                  : formatNumberWithCommas(String(moneyAmount))
+              }
+              onChange={(e) =>
+                setMoneyAmount(parseNumberFromFormatted(e.target.value))
+              }
+              placeholder="0.00"
+              className={`${fieldInputClass} max-w-xs text-right tabular-nums`}
+            />
+          </FormRow>
+        ) : null}
+
         <FormRow label="Subject" align="start">
           <Textarea
             value={subject}
@@ -768,6 +918,48 @@ export default function CreditNoteCreateForm({
           />
         </FormRow>
 
+        {isMoneyOnly ? (
+          <>
+            <FormRow label="Supplier advance">
+              <div className="flex h-9 max-w-xs items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
+                {advanceLabel}
+              </div>
+            </FormRow>
+            <FormRow label="Head" required>
+              <Typeahead
+                id="cn-money-head"
+                labelKey="label"
+                options={accountOptions}
+                selected={
+                  moneyHeadCode
+                    ? accountOptions.filter(
+                        (a) => String(a.code) === String(moneyHeadCode),
+                      )
+                    : []
+                }
+                onChange={(sel) => setMoneyHeadCode(sel[0]?.code || "")}
+                placeholder="Select a head"
+                clearButton
+                size="sm"
+                className="relative z-10 w-full"
+                positionFixed
+                filterBy={(opt, props) => {
+                  const q = String(props.text || "").toLowerCase();
+                  if (!q) return true;
+                  return [opt.code, opt.name, opt.label].some((v) =>
+                    String(v || "")
+                      .toLowerCase()
+                      .includes(q),
+                  );
+                }}
+                inputProps={{
+                  className: fieldInputClass,
+                }}
+              />
+            </FormRow>
+          </>
+        ) : (
+          <>
         <FormRow label={labels.balanceAccount}>
           <div className="flex h-9 max-w-xs items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
             {labels.balanceAccount}
@@ -862,8 +1054,74 @@ export default function CreditNoteCreateForm({
             </div>
           ) : null}
         </FormRow>
+          </>
+        )}
       </div>
 
+      {isMoneyOnly ? (
+      <Collapsible
+        open={treatmentOpen}
+        onOpenChange={setTreatmentOpen}
+        className="flex w-full flex-col bg-white"
+      >
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-2 border-b border-slate-200 px-6 py-2.5 text-left hover:bg-slate-50"
+            aria-expanded={treatmentOpen}
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Account treatment
+            </p>
+            <ChevronDown
+              className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${
+                treatmentOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+        <div className="w-full overflow-x-auto px-4 py-3 sm:px-6">
+          <table className="min-w-full">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">
+                  Account
+                </th>
+                <th className="w-36 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
+                  Debit
+                </th>
+                <th className="w-36 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">
+                  Credit
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              <tr>
+                <td className="px-3 py-3 text-sm text-slate-900">{advanceLabel}</td>
+                <td className="px-3 py-3 text-right text-sm font-semibold tabular-nums text-slate-900">
+                  {formatNumber1(totals.total)}
+                </td>
+                <td className="px-3 py-3 text-right text-sm text-slate-400">—</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-3 text-sm text-slate-900">
+                  {moneyHeadLabel}
+                </td>
+                <td className="px-3 py-3 text-right text-sm text-slate-400">—</td>
+                <td className="px-3 py-3 text-right text-sm font-semibold tabular-nums text-slate-900">
+                  {formatNumber1(totals.total)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="mt-2 text-[11px] text-slate-500">
+            Debit the supplier advance. Credit the head you select. Stock is not changed.
+          </p>
+        </div>
+        </CollapsibleContent>
+      </Collapsible>
+      ) : (
       <div className="flex w-full flex-col bg-white">
         <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-6 py-2.5">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -1083,6 +1341,7 @@ export default function CreditNoteCreateForm({
           </div>
         </div>
       </div>
+      )}
 
       <div className="sticky bottom-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-[#f7f7f8] px-6 py-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -1098,7 +1357,11 @@ export default function CreditNoteCreateForm({
                 Saving…
               </>
             ) : (
-              outcome === "refund" ? labels.saveRefund : labels.save
+              isMoneyOnly
+                ? "Save"
+                : outcome === "refund"
+                  ? labels.saveRefund
+                  : labels.save
             )}
           </button>
           <button
