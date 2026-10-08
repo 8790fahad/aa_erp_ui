@@ -35,6 +35,10 @@ const DEPOSIT_HISTORY_PRIVILEGE = "Deposit History";
 const MAKE_DEPOSIT_PRIVILEGE = "Make Deposit";
 const APPLY_DEPOSIT_PRIVILEGE = "Apply Deposit";
 
+function todayDate() {
+  return moment().format("YYYY-MM-DD");
+}
+
 function modeBreakdown(item) {
   if (
     item.direction === "applied" ||
@@ -134,6 +138,8 @@ export default function ReceivedFunds() {
     parentPaymentAccess;
 
   const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState(() => todayDate());
+  const [toDate, setToDate] = useState(() => todayDate());
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -145,8 +151,16 @@ export default function ReceivedFunds() {
     const params = new URLSearchParams({
       facilityId,
       page: "1",
-      pageSize: "100",
+      pageSize: "500",
     });
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(String(fromDate || ""))
+      ? fromDate
+      : todayDate();
+    const to = /^\d{4}-\d{2}-\d{2}$/.test(String(toDate || ""))
+      ? toDate
+      : from;
+    params.set("fromDate", from);
+    params.set("toDate", to);
 
     _fetchApi(
       `/api/v1/get-received-payment-history?${params.toString()}`,
@@ -168,7 +182,7 @@ export default function ReceivedFunds() {
         setTotalCount(0);
       },
     );
-  }, [facilityId]);
+  }, [facilityId, fromDate, toDate]);
 
   useEffect(() => {
     if (canHistory || canSummary || canCreditSummary) fetchHistory();
@@ -471,6 +485,46 @@ export default function ReceivedFunds() {
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={fromDate}
+              max={toDate || undefined}
+              onChange={(e) => {
+                const value = e.target.value || todayDate();
+                setFromDate(value);
+                if (toDate && value > toDate) setToDate(value);
+              }}
+              aria-label="From date"
+              title="From date"
+              className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-[var(--aa-accent)]"
+            />
+            <span className="text-xs text-slate-400">to</span>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate || undefined}
+              onChange={(e) => {
+                const value = e.target.value || todayDate();
+                setToDate(value);
+                if (fromDate && value < fromDate) setFromDate(value);
+              }}
+              aria-label="To date"
+              title="To date"
+              className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-[var(--aa-accent)]"
+            />
+            {fromDate !== todayDate() || toDate !== todayDate() ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const today = todayDate();
+                  setFromDate(today);
+                  setToDate(today);
+                }}
+                className="text-xs text-[var(--aa-navy)] hover:underline"
+              >
+                Today
+              </button>
+            ) : null}
             <Button
               variant="outline"
               size="sm"
@@ -517,12 +571,12 @@ export default function ReceivedFunds() {
               <h3 className="text-sm font-semibold text-slate-900">
                 {search
                   ? "No matching payments"
-                  : "No deposits or applications yet"}
+                  : "No payments in this date range"}
               </h3>
               <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500">
                 {search
                   ? "Try a different search term."
-                  : "Make a customer deposit, or apply a deposit to an invoice — both appear here."}
+                  : `Nothing from ${moment(fromDate).format("DD MMM YYYY")} to ${moment(toDate).format("DD MMM YYYY")}.`}
               </p>
               {!search && (canMakeDeposit || canApplyDeposit) && (
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2">

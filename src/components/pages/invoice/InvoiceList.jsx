@@ -25,6 +25,12 @@ import {
   getWorkflowStatusMeta,
   statusMatchesProcessStage,
 } from "@/lib/saleWorkflowStatus.js";
+import {
+  MemoDateRangeFilter,
+  inferDateRange,
+  resolvePresetRange,
+  writeDateRangeParams,
+} from "@/components/pages/account/memoDateFilter";
 
 const STAGE_LEGEND = [...PROCESS_STAGES, CREDIT_PROCESS_STAGE];
 
@@ -42,9 +48,15 @@ export default function InvoiceList() {
   const branchFromUrl = searchParams.get("branchId") || "";
   const createdByFromUrl = searchParams.get("createdBy") || "";
   const statusFromUrl = searchParams.get("status") || "";
-  // Default to today's date when URL has no date params.
-  const fromDateFromUrl = searchParams.get("fromDate") || todayDate();
-  const toDateFromUrl = searchParams.get("toDate") || todayDate();
+  const dateFilter = useMemo(
+    () =>
+      inferDateRange(
+        searchParams.get("dateRange"),
+        searchParams.get("fromDate"),
+        searchParams.get("toDate"),
+      ),
+    [searchParams],
+  );
   const pageFromUrl = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const pageSizeFromUrl = Math.max(
     1,
@@ -61,10 +73,14 @@ export default function InvoiceList() {
     const today = todayDate();
     const next = new URLSearchParams(searchParams);
     let changed = false;
-    // Drop legacy "all dates" mode — always use a date range.
     if (next.get("allDates")) {
       next.delete("allDates");
+      if (!next.get("dateRange")) next.set("dateRange", "all");
       changed = true;
+    }
+    if (next.get("dateRange") === "all") {
+      if (changed) setSearchParams(next, { replace: true });
+      return;
     }
     if (!next.get("fromDate")) {
       next.set("fromDate", today);
@@ -84,18 +100,17 @@ export default function InvoiceList() {
   const fetchInvoices = useCallback(() => {
     if (!activeBusiness?.id) return;
 
-    const fromDate = fromDateFromUrl || todayDate();
-    const toDate = toDateFromUrl || todayDate();
-
     setLoading(true);
     const params = new URLSearchParams({
       facilityId: activeBusiness.id,
       type: "sales",
       page: String(pageFromUrl),
       pageSize: String(pageSizeFromUrl),
-      fromDate,
-      toDate,
     });
+    if (dateFilter.dateRange !== "all") {
+      if (dateFilter.dateFrom) params.set("fromDate", dateFilter.dateFrom);
+      if (dateFilter.dateTo) params.set("toDate", dateFilter.dateTo);
+    }
     if (searchFromUrl.trim()) params.set("search", searchFromUrl.trim());
     if (branchFromUrl) params.set("branchId", branchFromUrl);
     if (createdByFromUrl) params.set("createdBy", createdByFromUrl);
@@ -126,8 +141,9 @@ export default function InvoiceList() {
     searchFromUrl,
     branchFromUrl,
     createdByFromUrl,
-    fromDateFromUrl,
-    toDateFromUrl,
+    dateFilter.dateRange,
+    dateFilter.dateFrom,
+    dateFilter.dateTo,
     pageFromUrl,
     pageSizeFromUrl,
   ]);
@@ -252,28 +268,20 @@ export default function InvoiceList() {
     setSearchParams(next, { replace: true });
   };
 
-  const handleDateFilterChange = (key, value) => {
+  const applyDateFilter = (nextRange) => {
     const next = new URLSearchParams(searchParams);
-    const today = todayDate();
-    const nextFrom =
-      key === "fromDate" ? value || today : searchParams.get("fromDate") || today;
-    const nextTo =
-      key === "toDate" ? value || today : searchParams.get("toDate") || today;
-    next.set("fromDate", nextFrom);
-    next.set("toDate", nextTo);
-    next.delete("allDates");
+    writeDateRangeParams(next, nextRange);
     next.set("page", "1");
     setSearchParams(next, { replace: true });
   };
 
-  const resetToToday = () => {
-    const next = new URLSearchParams(searchParams);
-    const today = todayDate();
-    next.set("fromDate", today);
-    next.set("toDate", today);
-    next.delete("allDates");
-    next.set("page", "1");
-    setSearchParams(next, { replace: true });
+  const handleDateRangeChange = (value) => {
+    const resolved = resolvePresetRange(value, dateFilter);
+    applyDateFilter({
+      dateRange: value,
+      dateFrom: value === "custom" ? dateFilter.dateFrom : resolved.dateFrom,
+      dateTo: value === "custom" ? dateFilter.dateTo : resolved.dateTo,
+    });
   };
 
   const handleStatusFilter = (statusId) => {
@@ -382,41 +390,27 @@ export default function InvoiceList() {
                 <option value={createdByFromUrl}>{createdByFromUrl}</option>
               ) : null}
             </select>
+            <MemoDateRangeFilter
+              dateRange={dateFilter.dateRange}
+              dateFrom={dateFilter.dateFrom}
+              dateTo={dateFilter.dateTo}
+              onRangeChange={handleDateRangeChange}
+              onFromChange={(value) =>
+                applyDateFilter({
+                  dateRange: "custom",
+                  dateFrom: value,
+                  dateTo: dateFilter.dateTo,
+                })
+              }
+              onToChange={(value) =>
+                applyDateFilter({
+                  dateRange: "custom",
+                  dateFrom: dateFilter.dateFrom,
+                  dateTo: value,
+                })
+              }
+            />
             <div className="flex flex-wrap items-center gap-1.5">
-              <input
-                type="date"
-                value={fromDateFromUrl}
-                onChange={(e) =>
-                  handleDateFilterChange("fromDate", e.target.value)
-                }
-                title="From date"
-                aria-label="From date"
-                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20"
-                disabled={loading}
-              />
-              <span className="text-xs text-slate-400">to</span>
-              <input
-                type="date"
-                value={toDateFromUrl}
-                min={fromDateFromUrl || undefined}
-                onChange={(e) =>
-                  handleDateFilterChange("toDate", e.target.value)
-                }
-                title="To date"
-                aria-label="To date"
-                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-[var(--aa-navy)] focus:ring-2 focus:ring-[var(--aa-accent)]/20"
-                disabled={loading}
-              />
-              {(fromDateFromUrl !== todayDate() ||
-                toDateFromUrl !== todayDate()) && (
-                <button
-                  type="button"
-                  onClick={resetToToday}
-                  className="text-[11px] text-[var(--aa-navy)] hover:underline"
-                >
-                  Today
-                </button>
-              )}
               <Button
                 type="button"
                 variant="outline"
@@ -471,12 +465,11 @@ export default function InvoiceList() {
                 {searchFromUrl ||
                 statusFromUrl ||
                 createdByFromUrl ||
-                fromDateFromUrl ||
-                toDateFromUrl
+                dateFilter.dateRange !== "all"
                   ? "Try adjusting your search, dates, user, or status filter"
                   : "Create your first invoice to get started"}
               </p>
-              {!searchFromUrl && !statusFromUrl && !fromDateFromUrl && !toDateFromUrl && (
+              {!searchFromUrl && !statusFromUrl && dateFilter.dateRange === "all" && (
                 <Button
                   onClick={() => navigate("/app/sales/sale?view=lines")}
                   className="mx-auto flex items-center gap-2 border-0 bg-[var(--aa-accent)] text-white hover:bg-[var(--aa-accent)]/90"

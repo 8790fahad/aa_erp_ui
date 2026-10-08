@@ -21,6 +21,12 @@ import { formatNumber1 } from "@/components/router/utilities";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import MemoNav from "./MemoNav";
 import { FileText, Search } from "lucide-react";
+import {
+  MemoDateRangeFilter,
+  getTodayDateRange,
+  memoInDateRange,
+  resolvePresetRange,
+} from "./memoDateFilter";
 
 function MemoReviewal() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
@@ -33,6 +39,10 @@ function MemoReviewal() {
   const [memos, setMemos] = useState([]);
   const [remark, setRemark] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const initialDates = getTodayDateRange();
+  const [dateFrom, setDateFrom] = useState(initialDates.dateFrom);
+  const [dateTo, setDateTo] = useState(initialDates.dateTo);
+  const [dateRange, setDateRange] = useState(initialDates.dateRange);
   const [itemList, setItemList] = useState([]);
   const [logs, setLogs] = useState([]);
 
@@ -310,16 +320,26 @@ function MemoReviewal() {
     getMemos();
   }, [getMemos]);
 
-  const filteredMemos = (Array.isArray(memos) ? memos : []).filter((memo) =>
-    searchTerm
+  const handleDateRangeChange = (value) => {
+    const next = resolvePresetRange(value, { dateFrom, dateTo });
+    setDateRange(value);
+    if (value !== "custom") {
+      setDateFrom(next.dateFrom);
+      setDateTo(next.dateTo);
+    }
+  };
+
+  const filteredMemos = (Array.isArray(memos) ? memos : []).filter((memo) => {
+    const matchesSearch = searchTerm
       ? String(memo.from_name || "")
           .toLowerCase()
           .includes(searchTerm.toLowerCase()) ||
         String(memo.memo_id || "")
           .toLowerCase()
           .includes(searchTerm.toLowerCase())
-      : true
-  );
+      : true;
+    return matchesSearch && memoInDateRange(memo, dateFrom, dateTo);
+  });
 
   const fields = [
     {
@@ -412,15 +432,25 @@ function MemoReviewal() {
                 Approve pending memos
               </p>
             </div>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-              <input
-                id="searchFilter"
-                type="text"
-                placeholder="Search by warehouse or memo ID…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-9 w-56 rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-[var(--aa-navy,#0f2744)] focus:ring-1 focus:ring-[var(--aa-navy,#0f2744)]"
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="searchFilter"
+                  type="text"
+                  placeholder="Search by warehouse or memo ID…"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="h-9 w-56 rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-[var(--aa-navy,#0f2744)] focus:ring-1 focus:ring-[var(--aa-navy,#0f2744)]"
+                />
+              </div>
+              <MemoDateRangeFilter
+                dateRange={dateRange}
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                onRangeChange={handleDateRangeChange}
+                onFromChange={setDateFrom}
+                onToChange={setDateTo}
               />
             </div>
           </div>

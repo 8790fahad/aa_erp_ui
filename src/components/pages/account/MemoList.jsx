@@ -27,6 +27,12 @@ import CustomTable1 from "@/common/Custom/CustomTable1";
 import MemoNav from "./MemoNav";
 import MemoFormModal from "./MemoFormModal";
 import { FileText } from "lucide-react";
+import {
+  MemoDateRangeFilter,
+  getTodayDateRange,
+  memoInDateRange,
+  resolvePresetRange,
+} from "./memoDateFilter";
 
 function MemoList() {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
@@ -75,9 +81,10 @@ function MemoList() {
 
   const [limit, setLimit] = useState(10);
   const [page, setPage] = useState(1);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [dateRange, setDateRange] = useState("all"); // all | today | this_month | last_month | this_year | custom
+  const initialDates = getTodayDateRange();
+  const [dateFrom, setDateFrom] = useState(initialDates.dateFrom);
+  const [dateTo, setDateTo] = useState(initialDates.dateTo);
+  const [dateRange, setDateRange] = useState(initialDates.dateRange);
 
   const toggleCollapse = (memoId) => {
     setSelectedMemoId(memoId);
@@ -132,12 +139,14 @@ function MemoList() {
     }
     if (rangeParam) {
       setDateRange(rangeParam);
-    }
-    if (typeof fromParam === "string") {
-      setDateFrom(fromParam);
-    }
-    if (typeof toParam === "string") {
-      setDateTo(toParam);
+      if (rangeParam === "custom") {
+        if (typeof fromParam === "string") setDateFrom(fromParam);
+        if (typeof toParam === "string") setDateTo(toParam);
+      } else {
+        const resolved = resolvePresetRange(rangeParam);
+        setDateFrom(fromParam || resolved.dateFrom);
+        setDateTo(toParam || resolved.dateTo);
+      }
     }
     if (!isNaN(limitParam) && limitParam > 0) {
       setLimit(limitParam);
@@ -372,19 +381,7 @@ function MemoList() {
         memo.raise_by.toLowerCase().includes(searchTerm.toLowerCase())
       : true;
 
-    const memoDate = memo.date ? moment(memo.date).startOf("day") : null;
-    const fromOk = dateFrom
-      ? memoDate
-        ? memoDate.isSameOrAfter(moment(dateFrom).startOf("day"))
-        : false
-      : true;
-    const toOk = dateTo
-      ? memoDate
-        ? memoDate.isSameOrBefore(moment(dateTo).endOf("day"))
-        : false
-      : true;
-
-    return matchesSearch && fromOk && toOk;
+    return matchesSearch && memoInDateRange(memo, dateFrom, dateTo);
   });
 
   useEffect(() => {
@@ -423,47 +420,17 @@ function MemoList() {
   };
 
   const handleDateRangeChange = (value) => {
+    const next = resolvePresetRange(value, { dateFrom, dateTo });
     setDateRange(value);
-
-    let from = dateFrom;
-    let to = dateTo;
-    const today = moment();
-
-    if (value === "all") {
-      from = "";
-      to = "";
-    } else if (value === "today") {
-      from = today.format("YYYY-MM-DD");
-      to = from;
-    } else if (value === "this_month") {
-      from = today.clone().startOf("month").format("YYYY-MM-DD");
-      to = today.clone().endOf("month").format("YYYY-MM-DD");
-    } else if (value === "last_month") {
-      const lastMonth = today.clone().subtract(1, "month");
-      from = lastMonth.startOf("month").format("YYYY-MM-DD");
-      to = lastMonth.endOf("month").format("YYYY-MM-DD");
-    } else if (value === "this_year") {
-      from = today.clone().startOf("year").format("YYYY-MM-DD");
-      to = today.clone().endOf("year").format("YYYY-MM-DD");
-    }
-
-    // For non-custom ranges, update dates immediately
     if (value !== "custom") {
-      setDateFrom(from);
-      setDateTo(to);
-      updateUrl({
-        dateRange: value,
-        dateFrom: from,
-        dateTo: to,
-      });
-    } else {
-      // Custom range: just update range & keep current dates
-      updateUrl({
-        dateRange: value,
-        dateFrom,
-        dateTo,
-      });
+      setDateFrom(next.dateFrom);
+      setDateTo(next.dateTo);
     }
+    updateUrl({
+      dateRange: value,
+      dateFrom: value === "custom" ? dateFrom : next.dateFrom,
+      dateTo: value === "custom" ? dateTo : next.dateTo,
+    });
   };
 
   return (
@@ -535,55 +502,20 @@ function MemoList() {
                   </Select>
                 </div>
               )}
-              <div className="w-full sm:w-1/5 flex gap-2">
-                <Select
-                  className="w-full"
-                  value={dateRange}
-                  onValueChange={handleDateRangeChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All dates" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All dates</SelectItem>
-                    <SelectItem value="today">Today</SelectItem>
-                    <SelectItem value="this_month">This month</SelectItem>
-                    <SelectItem value="last_month">Last month</SelectItem>
-                    <SelectItem value="this_year">This year</SelectItem>
-                    <SelectItem value="custom">Custom range</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {dateRange === "custom" && (
-                <div className="w-full sm:w-1/3 flex gap-2 mt-2 sm:mt-0">
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={dateFrom}
-                    onChange={(e) => {
-                      setDateFrom(e.target.value);
-                      updateUrl({
-                        dateRange,
-                        dateFrom: e.target.value,
-                        dateTo,
-                      });
-                    }}
-                  />
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={dateTo}
-                    onChange={(e) => {
-                      setDateTo(e.target.value);
-                      updateUrl({
-                        dateRange,
-                        dateFrom,
-                        dateTo: e.target.value,
-                      });
-                    }}
-                  />
-                </div>
-              )}
+              <MemoDateRangeFilter
+                dateRange={dateRange}
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                onRangeChange={handleDateRangeChange}
+                onFromChange={(value) => {
+                  setDateFrom(value);
+                  updateUrl({ dateRange, dateFrom: value, dateTo });
+                }}
+                onToChange={(value) => {
+                  setDateTo(value);
+                  updateUrl({ dateRange, dateFrom, dateTo: value });
+                }}
+              />
             </div>
 
             <Row className="mx-0 my-2">

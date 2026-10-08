@@ -88,6 +88,16 @@ const bankPayThroughLabel = (option) => {
   return num ? `${name} (${num})` : String(name);
 };
 
+function isPosChannelAccount(account) {
+  const channel = String(account?.channel || "").trim().toLowerCase();
+  const type = String(
+    account?.account_bank_type_title || account?.account_bank_type || "",
+  )
+    .trim()
+    .toLowerCase();
+  return channel === "pos" || type === "pos";
+}
+
 function tillPayBillMode(tab) {
   if (tab === "transfer") return "bank";
   if (tab === "card") return "card";
@@ -1829,6 +1839,14 @@ export default function ReceivePayment() {
     activeBusiness?.id,
     "bank",
   );
+  const transferBankList = useMemo(
+    () => (bankAccounts.accountList || []).filter((b) => !isPosChannelAccount(b)),
+    [bankAccounts.accountList],
+  );
+  const posBankList = useMemo(
+    () => (bankAccounts.accountList || []).filter((b) => isPosChannelAccount(b)),
+    [bankAccounts.accountList],
+  );
 
   const removeCollectedInvoice = useCallback((saleCode) => {
     const code = String(saleCode || "").trim();
@@ -2122,8 +2140,7 @@ export default function ReceivePayment() {
             : remainingDue
         : remainingDue,
     );
-    const defaultBank =
-      bankAccounts.bankAccount || bankAccounts.accountList?.[0] || null;
+    const defaultBank = transferBankList[0] || null;
     setTransferLegs([
       {
         key: `leg-${selected.sale_code || "1"}`,
@@ -2153,7 +2170,7 @@ export default function ReceivePayment() {
   // Once bank list loads, fill empty Pay Through on the first transfer leg
   useEffect(() => {
     if (!showTransferFields || showCardFields) return;
-    const list = bankAccounts.accountList || [];
+    const list = transferBankList;
     if (!list.length) return;
     setTransferLegs((prev) => {
       if (!prev.length) return prev;
@@ -2165,7 +2182,7 @@ export default function ReceivePayment() {
   }, [
     showTransferFields,
     showCardFields,
-    bankAccounts.accountList,
+    transferBankList,
   ]);
 
   // Prefill Apply Deposit with available balance when the hub opens.
@@ -2214,20 +2231,16 @@ export default function ReceivePayment() {
   ]);
 
   useEffect(() => {
-    if (!collectOpen) return;
-    if (
-      (showTransferFields || showCardFields) &&
-      !bankAccounts.bankAccount?.id &&
-      bankAccounts.accountList?.length
-    ) {
-      bankAccounts.setBankAccount(bankAccounts.accountList[0]);
-    }
+    if (!collectOpen || !showCardFields) return;
+    if (isPosChannelAccount(bankAccounts.bankAccount)) return;
+    const first = posBankList[0];
+    if (!first) return;
+    bankAccounts.setBankAccount(first);
   }, [
     collectOpen,
-    showTransferFields,
     showCardFields,
-    bankAccounts.bankAccount?.id,
-    bankAccounts.accountList,
+    bankAccounts.bankAccount,
+    posBankList,
     bankAccounts.setBankAccount,
   ]);
 
@@ -4389,8 +4402,8 @@ export default function ReceivePayment() {
     }
 
     if (showCardFields && transferAmt > 0) {
-      if (!bankAccounts.bankAccount?.id) {
-        toast.error("Select a bank account (Pay Through)");
+      if (!isPosChannelAccount(bankAccounts.bankAccount)) {
+        toast.error("Select a POS account (Pay Through)");
         return;
       }
       splits.push({
@@ -6204,7 +6217,7 @@ export default function ReceivePayment() {
                                 <SelectContent
                                   className={payThroughSelectContentClass}
                                 >
-                                  {(bankAccounts.accountList || []).map((b) => (
+                                  {transferBankList.map((b) => (
                                     <SelectItem
                                       key={String(b.id)}
                                       value={String(b.id)}
@@ -6214,6 +6227,11 @@ export default function ReceivePayment() {
                                   ))}
                                 </SelectContent>
                               </Select>
+                              {transferBankList.length === 0 ? (
+                                <p className="text-[11px] text-amber-700">
+                                  No bank account with type Bank. Set Type to Bank in Admin → Settings → Bank setup.
+                                </p>
+                              ) : null}
                               <input
                                 type="text"
                                 inputMode="decimal"
@@ -6341,22 +6359,22 @@ export default function ReceivePayment() {
                         </label>
                         <Select
                           value={
-                            bankAccounts.bankAccount?.id != null
+                            isPosChannelAccount(bankAccounts.bankAccount)
                               ? String(bankAccounts.bankAccount.id)
                               : undefined
                           }
                           onValueChange={(val) => {
-                            const found = (bankAccounts.accountList || []).find(
+                            const found = posBankList.find(
                               (b) => String(b.id) === String(val),
                             );
                             bankAccounts.setBankAccount(found || null);
                           }}
                         >
                           <SelectTrigger className={payThroughSelectTriggerClass}>
-                            <SelectValue placeholder="Select bank / POS account…" />
+                            <SelectValue placeholder="Select POS account…" />
                           </SelectTrigger>
                           <SelectContent className={payThroughSelectContentClass}>
-                            {(bankAccounts.accountList || []).map((b) => (
+                            {posBankList.map((b) => (
                               <SelectItem
                                 key={String(b.id)}
                                 value={String(b.id)}
@@ -6366,6 +6384,11 @@ export default function ReceivePayment() {
                             ))}
                           </SelectContent>
                         </Select>
+                        {posBankList.length === 0 ? (
+                          <p className="text-[11px] text-amber-700">
+                            No POS account yet. In Bank setup, set Type to POS on the account that should receive card payments.
+                          </p>
+                        ) : null}
                       </div>
                     ) : null}
 

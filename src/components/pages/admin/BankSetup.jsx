@@ -89,6 +89,7 @@ const BankSetup = ({ embedded = false }) => {
     account_name: "",
     code: "20",
     account_bank_type: "",
+    channel: "bank",
     head: null,
     opening_balance: "",
     opening_balance_date: "",
@@ -138,6 +139,10 @@ const BankSetup = ({ embedded = false }) => {
       account_name: String(bank.account_name ?? bank.accountName ?? ""),
       code: bankTypeCode,
       account_bank_type: bankTypeCode,
+      channel:
+        String(bank.channel || "bank").trim().toLowerCase() === "pos"
+          ? "pos"
+          : "bank",
       head:
         headCode != null && String(headCode).trim() !== ""
           ? String(headCode).trim()
@@ -199,6 +204,7 @@ const BankSetup = ({ embedded = false }) => {
       bank_name: formData.bank_name,
       bank_cbn_code: formData.bank_cbn_code,
       account_bank_type: formData.code,
+      channel: formData.channel === "pos" ? "pos" : "bank",
       head: formData.head,
       facilityId: activeBusiness.id,
       opening_balance: obCheck.amount,
@@ -278,6 +284,7 @@ const BankSetup = ({ embedded = false }) => {
       account_name: "",
       code: "20",
       account_bank_type: "",
+      channel: "bank",
       head: null,
       opening_balance: "",
       opening_balance_date: "",
@@ -527,6 +534,26 @@ const BankSetup = ({ embedded = false }) => {
             <div className="font-medium text-gray-900">
               {item.account_number}
             </div>
+          </div>
+        );
+      },
+    },
+    {
+      title: "Type",
+      custom: true,
+      component: (item) => {
+        const isPos = String(item.channel || "bank").toLowerCase() === "pos";
+        return (
+          <div className="text-center">
+            <span
+              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                isPos
+                  ? "bg-indigo-100 text-indigo-800"
+                  : "bg-sky-100 text-sky-800"
+              }`}
+            >
+              {isPos ? "POS" : "Bank"}
+            </span>
           </div>
         );
       },
@@ -1065,6 +1092,28 @@ const BankSetup = ({ embedded = false }) => {
                       }
                       placeholder="Account holder name"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Type <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      value={formData.channel === "pos" ? "pos" : "bank"}
+                      onValueChange={(value) =>
+                        setFormData({
+                          ...formData,
+                          channel: value === "pos" ? "pos" : "bank",
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Bank" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bank">Bank</SelectItem>
+                        <SelectItem value="pos">POS</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
