@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
 import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
+import { normalizeVendorType } from "@/utils/vendorType";
 
 /**
  * Zoho Books–style create form.
@@ -173,7 +174,7 @@ export default function CreditNoteCreateForm({
     if (!facilityId) return;
     if (isVendor) {
       _fetchApi(
-        `/api/suppliers?facilityId=${facilityId}&limit=1000`,
+        `/api/suppliers?facilityId=${facilityId}&limit=1000&vendorType=inventory`,
         (resp) => {
           const raw =
             resp?.results ||
@@ -188,7 +189,13 @@ export default function CreditNoteCreateForm({
               ? raw.rows
               : [];
           setParties(
-            list.map((s) => ({
+            list
+              .filter(
+                (s) =>
+                  normalizeVendorType(s.vendor_type || s.supplier_type) ===
+                  "inventory",
+              )
+              .map((s) => ({
               id: s.supplier_number || s.supplierNo,
               label:
                 s.supplier_name ||
