@@ -1129,6 +1129,7 @@ const EmployeeForm = ({
               )}
             </div>
 
+            {formData.contractType !== "Business Associate" && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Hire Date *
@@ -1146,6 +1147,7 @@ const EmployeeForm = ({
                 <p className="text-red-500 text-sm mt-1">{errors.hireDate}</p>
               )}
             </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1162,7 +1164,7 @@ const EmployeeForm = ({
                 <option value="Contract">Contract</option>
                 <option value="Intern">Intern</option>
                 <option value="Part-time">Part-time</option>
-                <option value="Business Associate">Business Associate</option>
+                <option value="Business Associate">Investment</option>
               </select>
               {formData.contractType === "Business Associate" && (
                 <p className="mt-1 text-xs text-slate-500">

@@ -347,7 +347,7 @@ const EmployeeDetail = () => {
                <CardContent className="pt-6 space-y-6">
                   <div>
                     <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Current Designation</p>
-                    <h3 className="text-lg font-bold tracking-tight italic uppercase">{employee.designation}</h3>
+                    <h3 className="text-lg font-bold tracking-tight italic uppercase">{employee.contractType === "Business Associate" ? "Investment" : employee.designation}</h3>
                   </div>
                   
                   <Separator className="bg-muted/50" />
@@ -357,13 +357,15 @@ const EmployeeDetail = () => {
                       <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Department</span>
                       <span className="text-sm font-bold">{employee.department?.departmentName || "General"}</span>
                     </div>
+                    {employee.contractType !== "Business Associate" && (
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Joining Date</span>
                       <span className="text-sm font-bold font-mono tabular-nums">{new Date(employee.hireDate).toLocaleDateString('en-GB')}</span>
                     </div>
+                    )}
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Type</span>
-                      <Badge variant="outline" className="h-5 px-2 text-[10px] font-bold uppercase tracking-tighter border-muted-foreground/30">{employee.contractType}</Badge>
+                      <Badge variant="outline" className="h-5 px-2 text-[10px] font-bold uppercase tracking-tighter border-muted-foreground/30">{employee.contractType === "Business Associate" ? "Investment" : employee.contractType}</Badge>
                     </div>
                   </div>
                </CardContent>

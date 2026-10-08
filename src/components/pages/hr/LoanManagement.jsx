@@ -21,7 +21,9 @@ import {
   ChevronRight,
   ChevronDown,
   Edit,
+  Download,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -460,16 +462,16 @@ const LoanManagement = () => {
       (data) => {
         setSavingAssociate(false);
         if (!data.success) {
-          toast.error(data.message || "Could not add business associate");
+          toast.error(data.message || "Could not add the investment");
           return;
         }
-        toast.success("Business associate registered");
+        toast.success("Investment registered");
         setAssociateForm({ firstName: "", lastName: "", contactInfo: "" });
         fetchEmployees();
       },
       () => {
         setSavingAssociate(false);
-        toast.error("Could not add business associate");
+        toast.error("Could not add the investment");
       },
     );
   };
@@ -517,7 +519,7 @@ const LoanManagement = () => {
       investmentAccount?.code ||
       investmentAccount?.account_code;
     if (!head) {
-      return toast.error("Select the business associate investment account");
+      return toast.error("Select the investment account");
     }
     setSavingInvestment(true);
     _postApi(
@@ -555,7 +557,7 @@ const LoanManagement = () => {
   const handleSaveLoan = (e) => {
     e.preventDefault();
     if (!selectedEmployee) {
-      return toast.error("Select a staff member or business associate");
+      return toast.error("Select a staff member or investment");
     }
     const receivableHead =
       selectedReceivable?.head ||
@@ -975,44 +977,97 @@ const LoanManagement = () => {
     matchesPersonFilter(person, pickerFilter),
   );
 
+  const toInvestmentRow = (person) => {
+    const principal = investmentPrincipal(person);
+    const current = investmentCurrentBalance(person);
+    return {
+      id: `investment-${person.id}`,
+      isInvestment: true,
+      referenceNumber: person.investmentReference || "Opening balance",
+      amount: principal,
+      profit: 0,
+      amountPaid: Math.max(0, principal - current),
+      status: "Investment",
+      startDate: person.investmentOpeningDate,
+      employee: person,
+      setup: { name: "Investment opening balance" },
+    };
+  };
+
   const investmentLoanRows = businessAssociates
     .filter((person) => {
       const principal = investmentPrincipal(person);
       const current = investmentCurrentBalance(person);
-      return principal > 0.009 || current > 0.009;
+      return principal > 0.009 || Math.abs(current) > 0.009;
     })
-    .map((person) => {
-      const principal = investmentPrincipal(person);
-      const current = investmentCurrentBalance(person);
-      return {
-        id: `investment-${person.id}`,
-        isInvestment: true,
-        referenceNumber: person.investmentReference || "Opening balance",
-        amount: principal,
-        profit: 0,
-        amountPaid: Math.max(0, principal - current),
-        status: "Investment",
-        startDate: person.investmentOpeningDate,
-        employee: person,
-        setup: { name: "Investment opening balance" },
-      };
-    });
+    .map(toInvestmentRow);
 
-  const filteredLoans = [
-    ...investmentLoanRows.filter((row) => {
-      const name = `${row.employee?.firstName || ""} ${row.employee?.lastName || ""}`.toLowerCase();
-      const matchesSearch = name.includes(searchTerm.toLowerCase());
-      const matchesStatus = selectedStatus ? selectedStatus === "Investment" : true;
-      const matchesPerson = matchesPersonFilter(row.employee, personFilter);
-      return matchesSearch && matchesStatus && matchesPerson;
-    }),
-    ...loans.filter((l) => {
-      const matchesSearch = (l.employee?.firstName + " " + l.employee?.lastName).toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = selectedStatus ? l.status === selectedStatus : true;
-      const matchesPerson = matchesPersonFilter(l.employee, personFilter);
-      return matchesSearch && matchesStatus && matchesPerson;
-    }),
-  ];
+  const nameMatches = (person, term) =>
+    `${person?.firstName || ""} ${person?.lastName || ""}`
+      .toLowerCase()
+      .includes(String(term || "").toLowerCase());
+
+  const filteredInvestments = (
+    personFilter === "investment" ? businessAssociates.map(toInvestmentRow) : investmentLoanRows
+  ).filter((row) => {
+    if (personFilter === "employee") return false;
+    const matchesSearch = nameMatches(row.employee, searchTerm);
+    const matchesStatus = selectedStatus ? selectedStatus === "Investment" : true;
+    return matchesSearch && matchesStatus;
+  });
+
+  const filteredStaffLoans = loans.filter((loan) => {
+    if (personFilter === "investment") return false;
+    const matchesSearch = nameMatches(loan.employee, searchTerm);
+    const matchesStatus = selectedStatus ? loan.status === selectedStatus : true;
+    const matchesPerson = matchesPersonFilter(loan.employee, personFilter);
+    return matchesSearch && matchesStatus && matchesPerson;
+  });
+
+  const filteredLoans =
+    personFilter === "investment"
+      ? filteredInvestments
+      : [...filteredInvestments, ...filteredStaffLoans];
+
+  const investmentTotalPrincipal = filteredLoans.reduce(
+    (sum, row) => sum + (row.isInvestment ? investmentPrincipal(row.employee) : 0),
+    0,
+  );
+  const investmentTotalCurrent = filteredLoans.reduce(
+    (sum, row) => sum + (row.isInvestment ? investmentCurrentBalance(row.employee) : 0),
+    0,
+  );
+
+  const downloadInvestments = () => {
+    const lines = filteredLoans.filter((row) => row.isInvestment);
+    if (!lines.length) {
+      toast.error("No investments to download");
+      return;
+    }
+    const rows = lines.map((row) => ({
+      Associate: `${row.employee?.firstName || ""} ${row.employee?.lastName || ""}`.trim(),
+      ID: row.employee?.employeeId || "",
+      Reference: row.referenceNumber || "",
+      Principal: investmentPrincipal(row.employee),
+      "Current balance": investmentCurrentBalance(row.employee),
+      "As of": row.startDate || "",
+      Account: row.employee?.investmentAccountHead || "",
+    }));
+    rows.push({
+      Associate: "Total",
+      ID: "",
+      Reference: "",
+      Principal: investmentTotalPrincipal,
+      "Current balance": investmentTotalCurrent,
+      "As of": "",
+      Account: "",
+    });
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, "Investments");
+    XLSX.writeFile(book, `Investments_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast.success("Investment list downloaded");
+  };
 
   return (
     <div className="min-h-screen bg-gray-50/50 pb-12" style={appColorStyle}>
@@ -1022,7 +1077,7 @@ const LoanManagement = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Loan Management</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage staff and business associate loans, disbursements, and collections</p>
+            <p className="text-sm text-gray-500 mt-1">Manage staff loans, investments, disbursements, and collections</p>
           </div>
           
           <div className="flex items-center gap-3">
@@ -1119,7 +1174,7 @@ const LoanManagement = () => {
               >
                 <option value="all">Employees & associates</option>
                 <option value="employee">Employees</option>
-                <option value="associate">Business associates</option>
+                <option value="investment">Investment</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
                 <Filter className="h-3.5 w-3.5" />
@@ -1136,6 +1191,38 @@ const LoanManagement = () => {
             )}
           </div>
         </div>
+
+        {personFilter === "investment" && (
+          <div className="mb-6 flex flex-col gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-8">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Total principal
+                </p>
+                <p className="text-lg font-bold text-gray-900">
+                  {formatCurrency(investmentTotalPrincipal)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Total current balance
+                </p>
+                <p className="text-lg font-bold text-orange-600">
+                  {formatCurrency(investmentTotalCurrent)}
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={downloadInvestments}
+              className="border-slate-200 bg-white text-[var(--aa-navy)] shadow-sm hover:bg-slate-50"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download
+            </Button>
+          </div>
+        )}
 
         {/* Table - Old Style */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative z-10">
@@ -1176,7 +1263,9 @@ const LoanManagement = () => {
                   <tr>
                     <td colSpan="6" className="px-6 py-16 text-center text-gray-500">
                       <Banknote className="h-12 w-12 mx-auto text-gray-300 mb-3" />
-                      <p className="text-lg font-medium text-gray-900">No loan records found</p>
+                      <p className="text-lg font-medium text-gray-900">
+                        {personFilter === "investment" ? "No investments found" : "No loan records found"}
+                      </p>
                     </td>
                   </tr>
                 ) : (
@@ -1197,7 +1286,7 @@ const LoanManagement = () => {
                             </div>
                             <div className="text-xs text-gray-500">
                               #{item.employee?.employeeId}
-                              {isBusinessAssociate(item.employee) ? " · Business associate" : ""}
+                              {isBusinessAssociate(item.employee) ? " · Investment" : ""}
                             </div>
                           </div>
                         </div>
@@ -1220,7 +1309,9 @@ const LoanManagement = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-col">
                           <span className="text-sm font-bold text-gray-900">{formatCurrency(item.amount)}</span>
-                          <span className="text-[10px] text-orange-600 font-bold uppercase tracking-tighter">Bal: {formatCurrency(loanBalance(item))}</span>
+                          <span className="text-[10px] text-orange-600 font-bold uppercase tracking-tighter">
+                            Bal: {formatCurrency(item.isInvestment ? investmentCurrentBalance(item.employee) : loanBalance(item))}
+                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1235,7 +1326,7 @@ const LoanManagement = () => {
                                  : handleViewLoan(item)
                              }
                              className="p-2 text-gray-400 hover:text-[color:var(--app-primary)] hover:bg-[color:var(--app-primary)]/10 rounded-lg transition-all"
-                             title={item.isInvestment ? "Opening balance" : "View Ledger"}
+                             title={item.isInvestment ? "Edit opening balance" : "View Ledger"}
                            >
                              <Eye size={18} />
                            </button>
@@ -1356,7 +1447,7 @@ const LoanManagement = () => {
               </div>
               <div className="min-w-0">
                 <SheetTitle className="text-lg font-semibold leading-tight text-white">
-                  Business associates
+                  Investments
                 </SheetTitle>
                 <SheetDescription className="mt-0.5 text-xs text-white/70">
                   Register someone who is not on payroll. Record their investment opening balance, or give them a loan they bring back.
@@ -1572,7 +1663,7 @@ const LoanManagement = () => {
               </p>
               {businessAssociates.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-500">
-                  No business associates yet.
+                  No investments yet.
                 </p>
               ) : (
                 <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
@@ -1675,12 +1766,12 @@ const LoanManagement = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className={labelClass}>Staff or business associate</label>
+                <label className={labelClass}>Staff or investment</label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { value: "all", label: "All" },
                     { value: "employee", label: "Employees" },
-                    { value: "associate", label: "Associates" },
+                    { value: "associate", label: "Investment" },
                   ].map((option) => (
                     <button
                       key={option.value}
@@ -1700,16 +1791,16 @@ const LoanManagement = () => {
                   options={pickerOptions}
                   labelKey={(i) =>
                     `${i.firstName} ${i.lastName} (${i.employeeId})${
-                      isBusinessAssociate(i) ? " · Business associate" : ""
+                      isBusinessAssociate(i) ? " · Investment" : ""
                     }`
                   }
                   onChange={(items) => selectLoanPerson(items[0] || null)}
                   placeholder={
                     pickerFilter === "associate"
-                      ? "Search business associates..."
+                      ? "Search investments..."
                       : pickerFilter === "employee"
                         ? "Search employees..."
-                        : "Search staff or business associate..."
+                        : "Search staff or investment..."
                   }
                   selected={selectedEmployee ? [selectedEmployee] : []}
                 />
@@ -1785,7 +1876,7 @@ const LoanManagement = () => {
                   <label className={labelClass}>Repayment Method</label>
                   <p className={hintClass}>
                     {isBusinessAssociate(selectedEmployee)
-                      ? "Business associates repay the loan themselves"
+                      ? "They repay the loan themselves"
                       : "How the staff will repay"}
                   </p>
                   <select

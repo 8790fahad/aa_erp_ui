@@ -59,6 +59,7 @@ const EmployeeList = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
+  const [personFilter, setPersonFilter] = useState("employee");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
@@ -119,10 +120,14 @@ const EmployeeList = ({
     setCurrentPage(1);
   };
 
+  const isBusinessAssociate = (person) =>
+    person?.contractType === "Business Associate";
+
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedDepartment("");
     setSelectedStatus("");
+    setPersonFilter("employee");
     setCurrentPage(1);
   };
 
@@ -170,8 +175,14 @@ const EmployeeList = ({
       filtered = filtered.filter(emp => emp.status === selectedStatus);
     }
 
+    if (personFilter === "employee") {
+      filtered = filtered.filter((emp) => !isBusinessAssociate(emp));
+    } else if (personFilter === "associate") {
+      filtered = filtered.filter((emp) => isBusinessAssociate(emp));
+    }
+
     setFilteredEmployees(filtered);
-  }, [employees, searchTerm, selectedDepartment, selectedStatus]);
+  }, [employees, searchTerm, selectedDepartment, selectedStatus, personFilter]);
 
   const handleRowClick = (id) => {
     navigate(`/app/admin/hr/employees/${id}`);
@@ -195,10 +206,10 @@ const EmployeeList = ({
             <div className="flex items-center -space-x-2 mr-4">
                {/* Quick stats mini avatars */}
                <div className="flex items-center justify-center w-8 h-8 rounded-full border-2 border-white bg-emerald-100 text-emerald-700 text-xs font-bold z-30" title="Active">
-                 {employees.filter(e => e.status === "Active").length}
+                 {filteredEmployees.filter(e => e.status === "Active").length}
                </div>
                <div className="flex items-center justify-center w-8 h-8 rounded-full border-2 border-white bg-amber-100 text-amber-700 text-xs font-bold z-20" title="On Leave">
-                 {employees.filter(e => e.status === "On Leave").length}
+                 {filteredEmployees.filter(e => e.status === "On Leave").length}
                </div>
                <div className="flex items-center justify-center w-8 h-8 rounded-full border-2 border-white bg-gray-100 text-gray-600 text-xs font-medium z-10 pl-2 pr-2" title="Total">
                  All
@@ -262,6 +273,22 @@ const EmployeeList = ({
 
             <div className="relative">
               <select
+                value={personFilter}
+                onChange={(e) => setPersonFilter(e.target.value)}
+                className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2 pl-4 pr-10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--app-primary)] focus:bg-white transition-all cursor-pointer"
+              >
+                <option value="employee">Employees</option>
+                <option value="associate">Investment</option>
+                <option value="all">Everyone</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                <Filter className="h-3.5 w-3.5" />
+              </div>
+            </div>
+
+            {personFilter !== "associate" && (
+            <div className="relative">
+              <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
                 className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2 pl-4 pr-10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--app-primary)] focus:bg-white transition-all cursor-pointer"
@@ -272,9 +299,13 @@ const EmployeeList = ({
                 <option value="On Leave">On Leave</option>
                 <option value="Terminated">Terminated</option>
               </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                <Filter className="h-3.5 w-3.5" />
+              </div>
             </div>
+            )}
             
-            {(searchTerm || selectedDepartment || selectedStatus) && (
+            {(searchTerm || selectedDepartment || selectedStatus || personFilter !== "employee") && (
               <button 
                 onClick={clearFilters}
                 className="text-sm text-gray-500 hover:text-gray-700 px-2 transition-colors"
@@ -300,6 +331,8 @@ const EmployeeList = ({
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden sm:table-cell">
                     Department & Role
                   </th>
+                  {personFilter !== "associate" && (
+                    <>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">
                     Hired
                   </th>
@@ -309,12 +342,14 @@ const EmployeeList = ({
                   <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-12 text-center">
+                    <td colSpan={personFilter === "associate" ? 3 : 6} className="px-6 py-12 text-center">
                       <div className="flex justify-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[color:var(--app-primary)]"></div>
                       </div>
@@ -322,7 +357,7 @@ const EmployeeList = ({
                   </tr>
                 ) : filteredEmployees.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-16 text-center text-gray-500">
+                    <td colSpan={personFilter === "associate" ? 3 : 6} className="px-6 py-16 text-center text-gray-500">
                       <User className="h-12 w-12 mx-auto text-gray-300 mb-3" />
                       <p className="text-lg font-medium text-gray-900">No employees found</p>
                       <p className="text-sm mt-1">Try adjusting your filters or search term.</p>
@@ -363,7 +398,7 @@ const EmployeeList = ({
                               {person.firstName} {person.lastName}
                               {person.contractType === "Business Associate" && (
                                 <span className="ml-2 inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
-                                  Business associate
+                                  Investment
                                 </span>
                               )}
                             </div>
@@ -394,12 +429,16 @@ const EmployeeList = ({
                           </span>
                         </div>
                       </td>
+                      {personFilter !== "associate" && (
+                        <>
                       <td className="px-6 py-4 whitespace-nowrap hidden lg:table-cell text-sm text-gray-600">
-                        {new Date(person.hireDate).toLocaleDateString(undefined, {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
+                        {isBusinessAssociate(person) || !person.hireDate
+                          ? "—"
+                          : new Date(person.hireDate).toLocaleDateString(undefined, {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-col gap-1 items-end">
@@ -443,6 +482,8 @@ const EmployeeList = ({
                                   {/* Delete button removed as per request for switch */}
                                 </div>
                       </td>
+                        </>
+                      )}
                     </tr>
                   ))
                 )}
