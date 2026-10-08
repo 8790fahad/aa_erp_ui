@@ -3517,6 +3517,20 @@ export default function ReceivePayment() {
     };
   };
 
+  /** Last completing payment opens the invoice and the print dialog. */
+  const openCompletedInvoicePrint = useCallback(
+    (saleCode) => {
+      const code = String(saleCode || "").trim();
+      if (!code) return;
+      navigate(
+        `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
+          code,
+        )}&doc=invoice&auto_print=1`,
+      );
+    },
+    [navigate],
+  );
+
   const confirmApplyDeposit = useCallback(async () => {
     const target = resolveTreatingInvoice();
     const row = depositConfirmRow || selected;
@@ -3575,11 +3589,14 @@ export default function ReceivePayment() {
 
       fetchDashboard();
       if (remaining <= 0.05) {
-        toast.success("Last payment (deposit) recorded");
+        toast.success(
+          "Last payment (deposit) recorded — opening invoice to print",
+        );
         removeCollectedInvoice(saleCode);
         setSearch("");
         setDepositConfirmRow(null);
         setHubOpen(false);
+        openCompletedInvoicePrint(saleCode);
         return;
       }
 
@@ -3610,6 +3627,7 @@ export default function ReceivePayment() {
     depositAmount,
     fetchDashboard,
     removeCollectedInvoice,
+    openCompletedInvoicePrint,
   ]);
 
   const openHub = useCallback(
@@ -4132,9 +4150,12 @@ export default function ReceivePayment() {
       (res) => {
         setSubmitting(false);
         if (res?.success) {
-          toast.success(res.message || "Credit approved");
+          toast.success(
+            res.message || "Credit approved — opening invoice to print",
+          );
           closeHub();
           fetchDashboard();
+          openCompletedInvoicePrint(row.sale_code);
         } else {
           handleAlreadyProcessedError(
             res || { message: "Could not approve credit" },
@@ -4271,11 +4292,14 @@ export default function ReceivePayment() {
           (advRes) => {
             setSubmitting(false);
             if (advRes?.success) {
-              toast.success("Last payment (credit) recorded");
+              toast.success(
+                "Last payment (credit) recorded — opening invoice to print",
+              );
               removeCollectedInvoice(saleCode);
               setSearch("");
               closeHub();
               fetchDashboard();
+              openCompletedInvoicePrint(saleCode);
             } else {
               toast.success("Last payment (credit) recorded");
               removeCollectedInvoice(saleCode);
@@ -4494,7 +4518,7 @@ export default function ReceivePayment() {
 
           toast.success(
             lastPay
-              ? res.message || "Payment confirmed"
+              ? res.message || "Payment confirmed — opening invoice to print"
               : res.message || "Payment recorded",
           );
           if (lastPay) {
@@ -4503,6 +4527,9 @@ export default function ReceivePayment() {
           setSearch("");
           closeCollect();
           fetchDashboard();
+          if (lastPay && target?.sale_code) {
+            openCompletedInvoicePrint(target.sale_code);
+          }
         } else {
           handleAlreadyProcessedError(
             res || { message: "Could not confirm payment" },
@@ -5635,6 +5662,15 @@ export default function ReceivePayment() {
                           <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
                           <button
                             type="button"
+                            onClick={() => openCompletedInvoicePrint(row.sale_code)}
+                            title="Print sales invoice"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            <Printer className="h-3.5 w-3.5" />
+                            Print
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => downloadSalesInvoice(row)}
                             disabled={downloadingSaleCode === row.sale_code}
                             title="Download sales invoice"
@@ -6433,13 +6469,7 @@ export default function ReceivePayment() {
                     <>
                     <button
                       type="button"
-                      onClick={() =>
-                        navigate(
-                          `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-                            selected.sale_code,
-                          )}&doc=invoice`,
-                        )
-                      }
+                      onClick={() => openCompletedInvoicePrint(selected.sale_code)}
                       className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-navy)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
                     >
                       <Printer className="h-4 w-4" />
