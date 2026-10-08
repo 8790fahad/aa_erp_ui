@@ -1029,44 +1029,70 @@ const LoanManagement = () => {
       ? filteredInvestments
       : [...filteredInvestments, ...filteredStaffLoans];
 
-  const investmentTotalPrincipal = filteredLoans.reduce(
-    (sum, row) => sum + (row.isInvestment ? investmentPrincipal(row.employee) : 0),
-    0,
-  );
-  const investmentTotalCurrent = filteredLoans.reduce(
-    (sum, row) => sum + (row.isInvestment ? investmentCurrentBalance(row.employee) : 0),
-    0,
-  );
+  const rowAmount = (row) => Number(row.amount) || 0;
+  const rowBalance = (row) =>
+    row.isInvestment ? investmentCurrentBalance(row.employee) : loanBalance(row);
 
-  const downloadInvestments = () => {
-    const lines = filteredLoans.filter((row) => row.isInvestment);
-    if (!lines.length) {
-      toast.error("No investments to download");
+  const listTotalAmount = filteredLoans.reduce((sum, row) => sum + rowAmount(row), 0);
+  const listTotalBalance = filteredLoans.reduce((sum, row) => sum + rowBalance(row), 0);
+
+  const downloadList = () => {
+    if (!filteredLoans.length) {
+      toast.error("Nothing to download");
       return;
     }
-    const rows = lines.map((row) => ({
-      Associate: `${row.employee?.firstName || ""} ${row.employee?.lastName || ""}`.trim(),
-      ID: row.employee?.employeeId || "",
-      Reference: row.referenceNumber || "",
-      Principal: investmentPrincipal(row.employee),
-      "Current balance": investmentCurrentBalance(row.employee),
-      "As of": row.startDate || "",
-      Account: row.employee?.investmentAccountHead || "",
-    }));
-    rows.push({
-      Associate: "Total",
-      ID: "",
-      Reference: "",
-      Principal: investmentTotalPrincipal,
-      "Current balance": investmentTotalCurrent,
-      "As of": "",
-      Account: "",
-    });
+    const investmentOnly = filteredLoans.every((row) => row.isInvestment);
+    const rows = investmentOnly
+      ? filteredLoans.map((row) => ({
+          Associate: `${row.employee?.firstName || ""} ${row.employee?.lastName || ""}`.trim(),
+          ID: row.employee?.employeeId || "",
+          Reference: row.referenceNumber || "",
+          Principal: investmentPrincipal(row.employee),
+          "Current balance": investmentCurrentBalance(row.employee),
+          "As of": row.startDate || "",
+          Account: row.employee?.investmentAccountHead || "",
+        }))
+      : filteredLoans.map((row) => ({
+          Name: `${row.employee?.firstName || ""} ${row.employee?.lastName || ""}`.trim(),
+          ID: row.employee?.employeeId || "",
+          Type: row.isInvestment ? "Investment" : "Loan",
+          Reference: row.referenceNumber || "",
+          Details: row.setup?.name || "",
+          Amount: rowAmount(row),
+          Balance: rowBalance(row),
+          Status: row.status || "",
+        }));
+    if (investmentOnly) {
+      rows.push({
+        Associate: "Total",
+        ID: "",
+        Reference: "",
+        Principal: listTotalAmount,
+        "Current balance": listTotalBalance,
+        "As of": "",
+        Account: "",
+      });
+    } else {
+      rows.push({
+        Name: "Total",
+        ID: "",
+        Type: "",
+        Reference: "",
+        Details: "",
+        Amount: listTotalAmount,
+        Balance: listTotalBalance,
+        Status: "",
+      });
+    }
     const sheet = XLSX.utils.json_to_sheet(rows);
     const book = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(book, sheet, "Investments");
-    XLSX.writeFile(book, `Investments_${new Date().toISOString().slice(0, 10)}.xlsx`);
-    toast.success("Investment list downloaded");
+    const sheetName = investmentOnly ? "Investments" : "Loans";
+    XLSX.utils.book_append_sheet(book, sheet, sheetName);
+    XLSX.writeFile(
+      book,
+      `${sheetName}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+    toast.success("List downloaded");
   };
 
   return (
@@ -1192,37 +1218,35 @@ const LoanManagement = () => {
           </div>
         </div>
 
-        {personFilter === "investment" && (
-          <div className="mb-6 flex flex-col gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap gap-8">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Total principal
-                </p>
-                <p className="text-lg font-bold text-gray-900">
-                  {formatCurrency(investmentTotalPrincipal)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Total current balance
-                </p>
-                <p className="text-lg font-bold text-orange-600">
-                  {formatCurrency(investmentTotalCurrent)}
-                </p>
-              </div>
+        <div className="mb-6 flex flex-col gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-8">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                {personFilter === "investment" ? "Total principal" : "Total amount"}
+              </p>
+              <p className="text-lg font-bold text-gray-900">
+                {formatCurrency(listTotalAmount)}
+              </p>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={downloadInvestments}
-              className="border-slate-200 bg-white text-[var(--aa-navy)] shadow-sm hover:bg-slate-50"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Download
-            </Button>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                {personFilter === "investment" ? "Total current balance" : "Total balance"}
+              </p>
+              <p className="text-lg font-bold text-orange-600">
+                {formatCurrency(listTotalBalance)}
+              </p>
+            </div>
           </div>
-        )}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={downloadList}
+            className="border-slate-200 bg-white text-[var(--aa-navy)] shadow-sm hover:bg-slate-50"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Download
+          </Button>
+        </div>
 
         {/* Table - Old Style */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative z-10">
@@ -1373,6 +1397,26 @@ const LoanManagement = () => {
                   ))
                 )}
               </tbody>
+              {!loading && filteredLoans.length > 0 && (
+                <tfoot>
+                  <tr className="border-t border-gray-200 bg-gray-50">
+                    <td colSpan={3} className="px-6 py-4 text-sm font-semibold text-gray-700">
+                      Total
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-gray-900">
+                          {formatCurrency(listTotalAmount)}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-tighter text-orange-600">
+                          Bal: {formatCurrency(listTotalBalance)}
+                        </span>
+                      </div>
+                    </td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>
