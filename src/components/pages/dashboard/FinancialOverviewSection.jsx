@@ -42,7 +42,7 @@ const PL_COLORS = {
   cogs: "#F2A93B", // gold
   grossProfit: "#2563eb", // royal blue
   operatingExpenses: "#CC4D3D", // terracotta red
-  taxation: "#0891b2", // cyan
+  otherIncome: "#14b8a6", // teal
   netProfit: "#7c3aed", // violet (clearly different from blue)
 };
 
@@ -50,8 +50,8 @@ const PL_SERIES_ORDER = [
   "revenue",
   "cogs",
   "grossProfit",
+  "otherIncome",
   "operatingExpenses",
-  "taxation",
   "netProfit",
 ];
 
@@ -87,16 +87,16 @@ function PlChartTooltip({ active, payload, label }) {
       color: colorByKey.grossProfit || PL_COLORS.grossProfit,
     },
     {
+      key: "otherIncome",
+      name: "Other Income",
+      value: point.otherIncome,
+      color: colorByKey.otherIncome || PL_COLORS.otherIncome,
+    },
+    {
       key: "operatingExpenses",
       name: "Operating Expenses",
       value: point.operatingExpenses,
       color: colorByKey.operatingExpenses || PL_COLORS.operatingExpenses,
-    },
-    {
-      key: "taxation",
-      name: "Taxation",
-      value: point.taxation,
-      color: colorByKey.taxation || PL_COLORS.taxation,
     },
     {
       key: "netProfit",
@@ -194,8 +194,8 @@ function DashboardOverviewSkeleton({ period, onPeriodChange }) {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Dashboard</h2>
           <p className="mt-0.5 text-xs text-gray-500">
-            Revenue − COGS = Gross Profit · Gross Profit − Operating Expenses −
-            Taxation = Net Profit
+            Revenue − COGS = Gross Profit · Gross Profit + Other Income −
+            Operating Expenses = Net Profit
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -318,7 +318,7 @@ const KPI_REPORT_PATHS = {
   grossProfit: "/app/reports/accounting-reports/sales-by-product",
   operatingExpenses:
     "/app/reports/accounting-reports/aa_erp-income-statement",
-  taxation: "/app/reports/accounting-reports/aa_erp-income-statement",
+  otherIncome: "/app/reports/accounting-reports/aa_erp-income-statement",
   netProfit: "/app/reports/accounting-reports/aa_erp-income-statement",
 };
 
@@ -1054,8 +1054,8 @@ export default function FinancialOverviewSection({
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Dashboard</h2>
           <p className="mt-0.5 text-xs text-gray-500">
-            Revenue − COGS = Gross Profit · Gross Profit − Operating Expenses −
-            Taxation = Net Profit
+            Revenue − COGS = Gross Profit · Gross Profit + Other Income −
+            Operating Expenses = Net Profit
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1102,6 +1102,16 @@ export default function FinancialOverviewSection({
           }
         />
         <KpiCard
+          title="Other Income"
+          value={kpis.otherIncome}
+          change={kpis.otherIncomeChange}
+          changeLabel={kpis.otherIncomeChangeLabel}
+          color={PL_COLORS.otherIncome}
+          onClick={() =>
+            openPeriodReport(navigate, KPI_REPORT_PATHS.otherIncome, period)
+          }
+        />
+        <KpiCard
           title="Operating Expenses"
           value={kpis.operatingExpenses ?? kpis.totalExpenses}
           change={kpis.operatingExpensesChange ?? kpis.expenseChange}
@@ -1116,17 +1126,6 @@ export default function FinancialOverviewSection({
               KPI_REPORT_PATHS.operatingExpenses,
               period,
             )
-          }
-        />
-        <KpiCard
-          title="Taxation"
-          value={kpis.taxation}
-          change={kpis.taxationChange}
-          changeLabel={kpis.taxationChangeLabel}
-          invertChange
-          color={PL_COLORS.taxation}
-          onClick={() =>
-            openPeriodReport(navigate, KPI_REPORT_PATHS.taxation, period)
           }
         />
         <KpiCard
@@ -1241,16 +1240,16 @@ export default function FinancialOverviewSection({
                   maxBarSize={22}
                 />
                 <Bar
-                  dataKey="operatingExpenses"
-                  name="Operating Expenses"
-                  fill={PL_COLORS.operatingExpenses}
+                  dataKey="otherIncome"
+                  name="Other Income"
+                  fill={PL_COLORS.otherIncome}
                   radius={[4, 4, 0, 0]}
                   maxBarSize={22}
                 />
                 <Bar
-                  dataKey="taxation"
-                  name="Taxation"
-                  fill={PL_COLORS.taxation}
+                  dataKey="operatingExpenses"
+                  name="Operating Expenses"
+                  fill={PL_COLORS.operatingExpenses}
                   radius={[4, 4, 0, 0]}
                   maxBarSize={22}
                 />
@@ -1351,6 +1350,20 @@ export default function FinancialOverviewSection({
                 />
                 <Line
                   type="monotone"
+                  dataKey="otherIncome"
+                  name="Other Income"
+                  stroke={PL_COLORS.otherIncome}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{
+                    r: 5,
+                    fill: PL_COLORS.otherIncome,
+                    stroke: "#fff",
+                    strokeWidth: 2,
+                  }}
+                />
+                <Line
+                  type="monotone"
                   dataKey="operatingExpenses"
                   name="Operating Expenses"
                   stroke={PL_COLORS.operatingExpenses}
@@ -1359,20 +1372,6 @@ export default function FinancialOverviewSection({
                   activeDot={{
                     r: 5,
                     fill: PL_COLORS.operatingExpenses,
-                    stroke: "#fff",
-                    strokeWidth: 2,
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="taxation"
-                  name="Taxation"
-                  stroke={PL_COLORS.taxation}
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{
-                    r: 5,
-                    fill: PL_COLORS.taxation,
                     stroke: "#fff",
                     strokeWidth: 2,
                   }}
