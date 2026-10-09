@@ -42,7 +42,6 @@ const PL_COLORS = {
   cogs: "#F2A93B", // gold
   grossProfit: "#2563eb", // royal blue
   operatingExpenses: "#CC4D3D", // terracotta red
-  otherIncome: "#14b8a6", // teal
   netProfit: "#7c3aed", // violet (clearly different from blue)
 };
 
@@ -50,7 +49,6 @@ const PL_SERIES_ORDER = [
   "revenue",
   "cogs",
   "grossProfit",
-  "otherIncome",
   "operatingExpenses",
   "netProfit",
 ];
@@ -85,12 +83,6 @@ function PlChartTooltip({ active, payload, label }) {
       name: "Gross Profit",
       value: point.grossProfit,
       color: colorByKey.grossProfit || PL_COLORS.grossProfit,
-    },
-    {
-      key: "otherIncome",
-      name: "Other Income",
-      value: point.otherIncome,
-      color: colorByKey.otherIncome || PL_COLORS.otherIncome,
     },
     {
       key: "operatingExpenses",
@@ -194,8 +186,8 @@ function DashboardOverviewSkeleton({ period, onPeriodChange }) {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Dashboard</h2>
           <p className="mt-0.5 text-xs text-gray-500">
-            Revenue − COGS = Gross Profit · Gross Profit + Other Income −
-            Operating Expenses = Net Profit
+            Revenue − COGS = Gross Profit · Gross Profit − Operating Expenses =
+            Net Profit
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -204,8 +196,8 @@ function DashboardOverviewSkeleton({ period, onPeriodChange }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-6">
-        {Array.from({ length: 6 }).map((_, i) => (
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
           <SkeletonCard key={i} className="p-4 sm:p-5">
             <Skeleton className="mb-3 h-3 w-24" />
             <Skeleton className="h-8 w-28" />
@@ -318,7 +310,6 @@ const KPI_REPORT_PATHS = {
   grossProfit: "/app/reports/accounting-reports/sales-by-product",
   operatingExpenses:
     "/app/reports/accounting-reports/aa_erp-income-statement",
-  otherIncome: "/app/reports/accounting-reports/aa_erp-income-statement",
   netProfit: "/app/reports/accounting-reports/aa_erp-income-statement",
 };
 
@@ -1054,8 +1045,8 @@ export default function FinancialOverviewSection({
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Dashboard</h2>
           <p className="mt-0.5 text-xs text-gray-500">
-            Revenue − COGS = Gross Profit · Gross Profit + Other Income −
-            Operating Expenses = Net Profit
+            Revenue − COGS = Gross Profit · Gross Profit − Operating Expenses =
+            Net Profit
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1069,7 +1060,7 @@ export default function FinancialOverviewSection({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         <KpiCard
           title="Revenue"
           value={kpis.totalRevenue ?? kpis.totalIncome}
@@ -1099,16 +1090,6 @@ export default function FinancialOverviewSection({
           color={PL_COLORS.grossProfit}
           onClick={() =>
             openPeriodReport(navigate, KPI_REPORT_PATHS.grossProfit, period)
-          }
-        />
-        <KpiCard
-          title="Other Income"
-          value={kpis.otherIncome}
-          change={kpis.otherIncomeChange}
-          changeLabel={kpis.otherIncomeChangeLabel}
-          color={PL_COLORS.otherIncome}
-          onClick={() =>
-            openPeriodReport(navigate, KPI_REPORT_PATHS.otherIncome, period)
           }
         />
         <KpiCard
@@ -1240,13 +1221,6 @@ export default function FinancialOverviewSection({
                   maxBarSize={22}
                 />
                 <Bar
-                  dataKey="otherIncome"
-                  name="Other Income"
-                  fill={PL_COLORS.otherIncome}
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={22}
-                />
-                <Bar
                   dataKey="operatingExpenses"
                   name="Operating Expenses"
                   fill={PL_COLORS.operatingExpenses}
@@ -1344,20 +1318,6 @@ export default function FinancialOverviewSection({
                   activeDot={{
                     r: 5,
                     fill: PL_COLORS.grossProfit,
-                    stroke: "#fff",
-                    strokeWidth: 2,
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="otherIncome"
-                  name="Other Income"
-                  stroke={PL_COLORS.otherIncome}
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{
-                    r: 5,
-                    fill: PL_COLORS.otherIncome,
                     stroke: "#fff",
                     strokeWidth: 2,
                   }}
