@@ -530,7 +530,7 @@ const AaErpGeneralLedger = () => {
           const begBalRow = worksheet.getRow(currentRow);
           begBalRow.getCell(2).value = ""; // Date
           begBalRow.getCell(3).value = ""; // Num
-          begBalRow.getCell(4).value = "Beginning Balance";
+          begBalRow.getCell(4).value = "Balance Brought Forward";
           begBalRow.getCell(4).style = { ...boldStyle, ...dataStyle };
           begBalRow.getCell(5).value = ""; // Debit
           begBalRow.getCell(6).value = ""; // Credit
@@ -1113,7 +1113,7 @@ const AaErpGeneralLedger = () => {
                                           {/* Blank */}
                                         </td>
                                         <td className="px-2 py-1 text-sm text-gray-900 font-medium border-r border-gray-200">
-                                          Beginning Balance
+                                          Balance Brought Forward
                                         </td>
                                         <td className="px-2 py-1 text-sm text-right text-gray-600 border-r border-gray-200">
                                           {/* Blank */}
@@ -1469,7 +1469,7 @@ const AaErpGeneralLedger = () => {
                                                   {/* Blank */}
                                                 </td>
                                                 <td className="px-4 py-2 text-sm text-gray-900 font-semibold">
-                                                  Beginning Balance
+                                                  Balance Brought Forward
                                                 </td>
                                                 <td className="px-4 py-2 text-sm text-right text-gray-900">
                                                   {/* Blank */}

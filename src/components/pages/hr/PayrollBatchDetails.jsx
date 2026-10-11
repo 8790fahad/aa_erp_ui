@@ -1096,8 +1096,8 @@ const PayrollBatchDetails = ({
         <div className="flex items-center gap-3 relative z-10">
           {hasDrafts && !isPaid && (
             <Button
-              className="bg-white hover:bg-white/90 h-11 px-8 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center gap-2"
-              style={{ color: primaryColor }}
+              variant="secondary"
+              className="h-11 px-8 rounded-xl bg-white text-slate-900 hover:bg-slate-50 hover:text-slate-900 font-black text-xs uppercase tracking-widest shadow-lg transition-all active:scale-95"
               onClick={approveBatch} disabled={loading}
             >
               <CheckCircle className="size-4" />
@@ -1106,8 +1106,8 @@ const PayrollBatchDetails = ({
           )}
           {allowPayment && hasProcessed && !isPaid && (
             <Button
-              className="bg-white hover:bg-white/90 h-11 px-8 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center gap-2 disabled:opacity-50"
-              style={{ color: primaryColor }}
+              variant="secondary"
+              className="h-11 px-8 rounded-xl bg-white text-slate-900 hover:bg-slate-50 hover:text-slate-900 font-black text-xs uppercase tracking-widest shadow-lg transition-all active:scale-95 disabled:opacity-50"
               onClick={() => setShowReleaseModal(true)}
               disabled={!allProcessed || loading}
             >
@@ -1116,8 +1116,8 @@ const PayrollBatchDetails = ({
           )}
           {allowPayment && isPaid && (
             <Button
-              className="bg-white hover:bg-white/90 h-11 px-8 rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2 shadow-sm"
-              style={{ color: primaryColor }}
+              variant="secondary"
+              className="h-11 px-8 rounded-xl bg-white text-slate-900 hover:bg-slate-50 hover:text-slate-900 font-black text-xs uppercase tracking-widest shadow-sm transition-all active:scale-95"
               onClick={() => setShowScheduleModal(true)}
             >
               <Download className="w-4 h-4 mr-2" /> Download Schedule

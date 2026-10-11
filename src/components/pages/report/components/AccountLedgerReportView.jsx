@@ -93,6 +93,16 @@ const resolveBreakdownBalanceSide = (value) => {
   return SUMMARY_BALANCE_SIDE.ALL;
 };
 
+const ledgerDrCr = (txn) => {
+  const dr = parseFloat(txn?.dr || 0);
+  const cr = parseFloat(txn?.cr || 0);
+  const desc = String(txn?.transaction_description || "");
+  if (/^Customer payment/i.test(desc) && dr > 0 && cr === 0) {
+    return { dr: 0, cr: dr };
+  }
+  return { dr, cr };
+};
+
 const getSummaryBalanceSide = (row) => {
   const net =
     parseFloat(row.total_debit || 0) - parseFloat(row.total_credit || 0);
@@ -999,7 +1009,7 @@ export default function AccountLedgerReportView({
       begRow.getCell(2).style = { border };
       begRow.getCell(3).value = "";
       begRow.getCell(3).style = { border };
-      begRow.getCell(4).value = "Beginning Balance";
+      begRow.getCell(4).value = "Balance Brought Forward";
       begRow.getCell(4).style = { font: { bold: true }, border };
       begRow.getCell(5).value = "";
       begRow.getCell(5).style = { border };
@@ -1044,15 +1054,14 @@ export default function AccountLedgerReportView({
         dr.getCell(4).value =
           txn.transaction_description || txn.purpose_of_payment || "";
         dr.getCell(4).style = { border };
-        dr.getCell(5).value =
-          parseFloat(txn.dr || 0) > 0 ? parseFloat(txn.dr) : "";
+        const { dr: debitAmt, cr: creditAmt } = ledgerDrCr(txn);
+        dr.getCell(5).value = debitAmt > 0 ? debitAmt : "";
         dr.getCell(5).style = {
           numFmt: "#,##0.00",
           alignment: { horizontal: "right" },
           border,
         };
-        dr.getCell(6).value =
-          parseFloat(txn.cr || 0) > 0 ? parseFloat(txn.cr) : "";
+        dr.getCell(6).value = creditAmt > 0 ? creditAmt : "";
         dr.getCell(6).style = {
           numFmt: "#,##0.00",
           alignment: { horizontal: "right" },
@@ -1630,7 +1639,7 @@ export default function AccountLedgerReportView({
                                   <td className="px-2 py-1 text-sm text-gray-600 border-r border-gray-200" />
                                   <td className="px-2 py-1 text-sm text-gray-600 border-r border-gray-200" />
                                   <td className="px-2 py-1 text-sm text-gray-900 font-medium border-r border-gray-200">
-                                    Beginning Balance
+                                    Balance Brought Forward
                                   </td>
                                   <td className="px-2 py-1 text-sm text-right text-gray-600 border-r border-gray-200" />
                                   <td className="px-2 py-1 text-sm text-right text-gray-600 border-r border-gray-200" />
@@ -1663,6 +1672,8 @@ export default function AccountLedgerReportView({
                                 ) : (
                                   account.transactions.map((txn, idx) => {
                                     const balance = txn.running_balance || 0;
+                                    const { dr: debitAmt, cr: creditAmt } =
+                                      ledgerDrCr(txn);
                                     return (
                                       <tr
                                         key={`${account.account_code}-${idx}`}
@@ -1692,13 +1703,13 @@ export default function AccountLedgerReportView({
                                             ""}
                                         </td>
                                         <td className="px-2 py-1 text-sm text-right text-gray-900 border-r border-gray-200">
-                                          {parseFloat(txn.dr || 0) > 0
-                                            ? formatCurrency(txn.dr)
+                                          {debitAmt > 0
+                                            ? formatCurrency(debitAmt)
                                             : ""}
                                         </td>
                                         <td className="px-2 py-1 text-sm text-right text-gray-900 border-r border-gray-200">
-                                          {parseFloat(txn.cr || 0) > 0
-                                            ? formatCurrency(txn.cr)
+                                          {creditAmt > 0
+                                            ? formatCurrency(creditAmt)
                                             : ""}
                                         </td>
                                         <td

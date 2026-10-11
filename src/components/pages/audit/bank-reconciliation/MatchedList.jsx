@@ -210,7 +210,7 @@ const MatchedList = ({ matchedPairs, onUndo, bankAccount }) => {
 
       let runningBalance = 0;
       const begBalRow = worksheet.getRow(currentRow);
-      begBalRow.getCell(4).value = "Beginning Balance";
+      begBalRow.getCell(4).value = "Balance Brought Forward";
       begBalRow.getCell(4).style = { ...boldStyle, ...dataStyle };
       begBalRow.getCell(7).value = runningBalance;
       begBalRow.getCell(7).style = { ...numberStyleNoRightBorder, font: { bold: true } };
