@@ -84,8 +84,12 @@ export function useNetworkStatus() {
     setLastCheckedAt(Date.now());
     if (ping?.rtt != null) setRttMs(ping.rtt);
 
-    if (!browserOnline || !ping?.ok) {
+    if (!browserOnline) {
       setStatus("offline");
+      return;
+    }
+    if (!ping?.ok) {
+      setStatus("unreachable");
       return;
     }
 
@@ -148,7 +152,9 @@ export function useNetworkStatus() {
     const scheduleNext = () => {
       if (!mountedRef.current) return;
       const ms =
-        statusRef.current === "offline" || statusRef.current === "slow"
+        statusRef.current === "offline" ||
+        statusRef.current === "unreachable" ||
+        statusRef.current === "slow"
           ? OFFLINE_POLL_MS
           : ONLINE_POLL_MS;
       timeoutId = setTimeout(async () => {
@@ -174,6 +180,7 @@ export function useNetworkStatus() {
     status,
     isOnline: status === "online" || status === "slow",
     isOffline: status === "offline",
+    isUnreachable: status === "unreachable",
     isSlow: status === "slow",
     rttMs,
     lastCheckedAt,

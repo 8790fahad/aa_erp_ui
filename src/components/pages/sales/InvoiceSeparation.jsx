@@ -22,13 +22,40 @@ import {
   WorkflowStatusBadge,
 } from "@/lib/saleWorkflowStatus.js";
 import SaleWorkflowSearchBar from "./SaleWorkflowSearchBar";
+import {
+  canAccessPrivileges,
+  getUserFunctionalities,
+} from "@/lib/access";
+
+const REPRINT_GOODS_ISSUE_PRIVILEGE = "Reprint Goods Issue Note";
+const HISTORY_PRIVILEGE = "Invoice Separation History";
+
+function isPackPrinted(pack) {
+  if (!pack) return false;
+  if (pack.printed_at) return true;
+  return ["printed", "collecting", "collected"].includes(
+    String(pack.status || "").toLowerCase(),
+  );
+}
 
 export default function InvoiceSeparation() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
+  const functionalities = getUserFunctionalities(user, activeBusiness);
+  const canReprintGoodsIssue = canAccessPrivileges(
+    [REPRINT_GOODS_ISSUE_PRIVILEGE],
+    functionalities,
+  );
+  const canViewHistory = canAccessPrivileges(
+    [HISTORY_PRIVILEGE],
+    functionalities,
+  );
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const saleFromUrl = searchParams.get("sale_code") || "";
-  const tabFromUrl = searchParams.get("tab") === "history" ? "history" : "pending";
+  const tabFromUrl =
+    searchParams.get("tab") === "history" && canViewHistory
+      ? "history"
+      : "pending";
 
   const [activeTab, setActiveTab] = useState(tabFromUrl);
   const [loading, setLoading] = useState(false);
@@ -60,7 +87,7 @@ export default function InvoiceSeparation() {
             setSearchActive(true);
             return saleFromUrl;
           }
-          if (history.some((r) => r.sale_code === saleFromUrl)) {
+          if (canViewHistory && history.some((r) => r.sale_code === saleFromUrl)) {
             setActiveTab("history");
             setSearchActive(true);
             return saleFromUrl;
@@ -68,13 +95,15 @@ export default function InvoiceSeparation() {
         }
         if (prev) {
           if (pending.some((r) => r.sale_code === prev)) return prev;
-          if (history.some((r) => r.sale_code === prev)) return prev;
+          if (canViewHistory && history.some((r) => r.sale_code === prev)) {
+            return prev;
+          }
         }
         // Do not auto-open the first invoice — wait for search / scan.
         return "";
       });
     },
-    [saleFromUrl],
+    [saleFromUrl, canViewHistory],
   );
 
   const fetchListFallback = useCallback(() => {
@@ -170,6 +199,27 @@ export default function InvoiceSeparation() {
   );
 
   const isHistoryRecord = activeTab === "history";
+  const needsCreditApproval =
+    selected?.status === "awaiting_credit_approval";
+  const parkedPaidModeSwitch =
+    selected?.status === "awaiting_payment_mode_approval" &&
+    [
+      "payment_confirmed",
+      "invoice_separation",
+      "credit_approved",
+      "final_invoice",
+    ].includes(selected?.pending_payment_mode?.previous_status);
+  const canSeparate =
+    selected &&
+    !isHistoryRecord &&
+    !needsCreditApproval &&
+    ([
+      "payment_confirmed",
+      "invoice_separation",
+      "credit_approved",
+      "final_invoice",
+    ].includes(selected.status) ||
+      parkedPaidModeSwitch);
 
   const selectedHistory = useMemo(
     () => normalizeWorkflowHistory(selected?.history),
@@ -235,7 +285,7 @@ export default function InvoiceSeparation() {
       setSearchActive(true);
       const inHistory = historyRows.some((r) => r.sale_code === saleCode);
       const inPending = pendingRows.some((r) => r.sale_code === saleCode);
-      if (inHistory && !inPending) setActiveTab("history");
+      if (canViewHistory && inHistory && !inPending) setActiveTab("history");
       else setActiveTab("pending");
       if (!inPending && !inHistory && row) {
         setPendingRows((prev) => [{ ...row, sale_code: saleCode }, ...prev]);
@@ -246,8 +296,18 @@ export default function InvoiceSeparation() {
       next.set("sale_code", saleCode);
       setSearchParams(next, { replace: true });
     },
-    [historyRows, pendingRows, searchParams, setSearchParams],
+    [canViewHistory, historyRows, pendingRows, searchParams, setSearchParams],
   );
+
+  useEffect(() => {
+    if (canViewHistory || activeTab !== "history") return;
+    setActiveTab("pending");
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.delete("tab");
+      return next;
+    }, { replace: true });
+  }, [activeTab, canViewHistory, setSearchParams]);
 
   const fetchPacks = useCallback(() => {
     if (!activeBusiness?.id || !selectedCode) {
@@ -303,6 +363,10 @@ export default function InvoiceSeparation() {
   };
 
   const switchTab = (tab) => {
+    if (tab === "history" && !canViewHistory) {
+      toast.error("You need History permission to open Invoice Separation history.");
+      return;
+    }
     setActiveTab(tab);
     const list = tab === "history" ? historyRows : pendingRows;
     const nextCode =
@@ -318,8 +382,70 @@ export default function InvoiceSeparation() {
     setSearchParams(next, { replace: true });
   };
 
+  const denyReprint = () => {
+    toast.error(
+      "This Goods Issue Note is already printed. Ask an admin for Reprint Goods Issue Note permission.",
+    );
+  };
+
+  const goToHistoryIfAllowed = (saleCode) => {
+    if (!canViewHistory || !saleCode) return;
+    setActiveTab("history");
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", "history");
+    next.set("sale_code", saleCode);
+    setSearchParams(next, { replace: true });
+  };
+
+  const completeSeparation = (saleCode, packCount, done) => {
+    if (!activeBusiness?.id || !saleCode) {
+      done?.({ success: false });
+      return;
+    }
+    _postApi(
+      "/api/v1/sale-workflows/complete-separation",
+      {
+        facilityId: activeBusiness.id,
+        saleCode,
+        updated_by: user?.id,
+        note: `Printed and separated into ${packCount || 1} store invoice copies`,
+      },
+      (res) => {
+        if (res?.success) {
+          goToHistoryIfAllowed(saleCode);
+          fetchList();
+        }
+        done?.(res);
+      },
+      () => done?.({ success: false }),
+    );
+  };
+
+  const openPrintPreview = (pack, line) => {
+    navigate(
+      `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
+        pack.sale_code,
+      )}&doc=gin&branch_id=${pack.branch_id}&pack_code=${encodeURIComponent(
+        pack.pack_code,
+      )}&branch_name=${encodeURIComponent(
+        pack.branch_name || `Warehouse ${pack.branch_id}`,
+      )}${
+        line?.id
+          ? `&line_id=${encodeURIComponent(line.id)}&product_id=${encodeURIComponent(
+              line.product_id || "",
+            )}`
+          : ""
+      }`,
+    );
+  };
+
   const openBranchInvoice = (pack, line) => {
     if (!activeBusiness?.id || !pack) return;
+    if (isPackPrinted(pack) && !canReprintGoodsIssue) {
+      denyReprint();
+      return;
+    }
+    const firstPrint = !isPackPrinted(pack);
     setPrintingId(line?.id || pack.id);
     _postApi(
       "/api/v1/sale-workflows/fulfillment/print",
@@ -330,27 +456,26 @@ export default function InvoiceSeparation() {
         updated_by: user?.id,
       },
       (res) => {
-        setPrintingId(null);
-        if (res.success) {
-          fetchPacks();
-          navigate(
-            `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-              pack.sale_code,
-            )}&doc=gin&branch_id=${pack.branch_id}&pack_code=${encodeURIComponent(
-              pack.pack_code,
-            )}&branch_name=${encodeURIComponent(
-              pack.branch_name || `Warehouse ${pack.branch_id}`,
-            )}${
-              line?.id
-                ? `&line_id=${encodeURIComponent(line.id)}&product_id=${encodeURIComponent(
-                    line.product_id || "",
-                  )}`
-                : ""
-            }`,
-          );
-        } else {
+        if (!res.success) {
+          setPrintingId(null);
           toast.error(res.message || "Could not open branch invoice");
+          return;
         }
+        const finish = () => {
+          setPrintingId(null);
+          fetchPacks();
+          openPrintPreview(pack, line);
+        };
+        if (firstPrint && canSeparate) {
+          completeSeparation(pack.sale_code || selected?.sale_code, packs.length, (res) => {
+            if (res?.success) {
+              toast.success(res.message || "Printed and marked separated");
+            }
+            finish();
+          });
+          return;
+        }
+        finish();
       },
       () => {
         setPrintingId(null);
@@ -431,26 +556,76 @@ export default function InvoiceSeparation() {
         return;
       }
       markPacksPrinted(packList, (failed) => {
-        setPrintingAll(false);
-        fetchPacks();
         if (failed) {
+          setPrintingAll(false);
+          fetchPacks();
           toast.error("Some copies could not be marked printed");
+          navigate(printPreviewUrl(unique));
+          return;
         }
-        navigate(printPreviewUrl(unique));
+        const pendingCodes = unique.filter((code) =>
+          pendingRows.some((row) => row.sale_code === code),
+        );
+        const finish = () => {
+          setPrintingAll(false);
+          fetchPacks();
+          if (pendingCodes.length) {
+            toast.success(
+              pendingCodes.length === 1
+                ? "Printed and marked separated"
+                : `Printed and marked ${pendingCodes.length} invoices separated`,
+            );
+          }
+          navigate(printPreviewUrl(unique));
+        };
+        if (!pendingCodes.length) {
+          finish();
+          return;
+        }
+        let left = pendingCodes.length;
+        pendingCodes.forEach((code) => {
+          const count = packList.filter((pack) => pack.sale_code === code).length;
+          completeSeparation(code, count || packs.length, () => {
+            left -= 1;
+            if (left <= 0) finish();
+          });
+        });
       });
     },
-    [fetchPacks, markPacksPrinted, navigate, printPreviewUrl],
+    [fetchPacks, markPacksPrinted, navigate, pendingRows, packs.length, printPreviewUrl],
   );
 
   const printAllInvoices = () => {
     if (!activeBusiness?.id || !selected || packs.length === 0) return;
+    const toPrint = canReprintGoodsIssue
+      ? packs
+      : packs.filter((pack) => !isPackPrinted(pack));
+    if (!toPrint.length) {
+      if (canSeparate && selected.sale_code) {
+        setPrintingAll(true);
+        completeSeparation(selected.sale_code, packs.length, (res) => {
+          setPrintingAll(false);
+          if (res?.success) {
+            toast.success(res.message || "Marked separated");
+          } else {
+            toast.error(res?.message || "Could not mark separated");
+          }
+        });
+        return;
+      }
+      denyReprint();
+      return;
+    }
     setPrintingAll(true);
-    openPrintAllPreview([selected.sale_code], packs);
+    openPrintAllPreview([selected.sale_code], toPrint);
   };
 
   const printAllQueueInvoices = () => {
     if (!activeBusiness?.id) return;
-    const list = [...pendingRows, ...historyRows];
+    const list =
+      canReprintGoodsIssue && canViewHistory
+        ? [...pendingRows, ...historyRows]
+        : [...pendingRows];
     const codes = [
       ...new Set(list.map((row) => row.sale_code).filter(Boolean)),
     ];
@@ -459,12 +634,26 @@ export default function InvoiceSeparation() {
       return;
     }
     setPrintingAll(true);
-    const knownPacks = historyRows.flatMap((row) => row.packs || []);
+    const knownPacks =
+      canReprintGoodsIssue && canViewHistory
+        ? historyRows.flatMap((row) => row.packs || [])
+        : [];
     const pendingCodes = pendingRows
       .map((row) => row.sale_code)
       .filter(Boolean);
+    const finishQueue = (allPacks) => {
+      const toPrint = canReprintGoodsIssue
+        ? allPacks
+        : allPacks.filter((pack) => !isPackPrinted(pack));
+      if (!toPrint.length) {
+        setPrintingAll(false);
+        denyReprint();
+        return;
+      }
+      openPrintAllPreview(codes, toPrint);
+    };
     if (!pendingCodes.length) {
-      openPrintAllPreview(codes, knownPacks);
+      finishQueue(knownPacks);
       return;
     }
     let remaining = pendingCodes.length;
@@ -479,11 +668,11 @@ export default function InvoiceSeparation() {
         (res) => {
           if (res.success) packList.push(...(res.results || []));
           remaining -= 1;
-          if (remaining <= 0) openPrintAllPreview(codes, packList);
+          if (remaining <= 0) finishQueue(packList);
         },
         () => {
           remaining -= 1;
-          if (remaining <= 0) openPrintAllPreview(codes, packList);
+          if (remaining <= 0) finishQueue(packList);
         },
       );
     });
@@ -496,56 +685,15 @@ export default function InvoiceSeparation() {
       return;
     }
     setSeparating(true);
-    _postApi(
-      "/api/v1/sale-workflows/complete-separation",
-      {
-        facilityId: activeBusiness.id,
-        saleCode: selected.sale_code,
-        updated_by: user?.id,
-        note: `Separated into ${packs.length} store invoice copies`,
-      },
-      (res) => {
-        setSeparating(false);
-        if (res.success) {
-          toast.success(res.message || "Marked separated");
-          setActiveTab("history");
-          const next = new URLSearchParams(searchParams);
-          next.set("tab", "history");
-          if (selected.sale_code) next.set("sale_code", selected.sale_code);
-          setSearchParams(next, { replace: true });
-          fetchList();
-        } else {
-          toast.error(res.message || "Could not mark separated");
-        }
-      },
-      () => {
-        setSeparating(false);
-        toast.error("Could not mark separated");
-      },
-    );
+    completeSeparation(selected.sale_code, packs.length, (res) => {
+      setSeparating(false);
+      if (res?.success) {
+        toast.success(res.message || "Marked separated");
+      } else {
+        toast.error(res?.message || "Could not mark separated");
+      }
+    });
   };
-
-  const needsCreditApproval =
-    selected?.status === "awaiting_credit_approval";
-  const parkedPaidModeSwitch =
-    selected?.status === "awaiting_payment_mode_approval" &&
-    [
-      "payment_confirmed",
-      "invoice_separation",
-      "credit_approved",
-      "final_invoice",
-    ].includes(selected?.pending_payment_mode?.previous_status);
-  const canSeparate =
-    selected &&
-    !isHistoryRecord &&
-    !needsCreditApproval &&
-    ([
-      "payment_confirmed",
-      "invoice_separation",
-      "credit_approved",
-      "final_invoice",
-    ].includes(selected.status) ||
-      parkedPaidModeSwitch);
 
   const productPrints = packs.flatMap((pack) => {
     const lines =
@@ -581,9 +729,10 @@ export default function InvoiceSeparation() {
               </h1>
               <p className="text-gray-600 mt-1">
                 Print one {dispatchDocLabel} for each product (Sales Invoice is
-                printed at Verification Points), then mark separated. Use Print
-                all to print every invoice in Awaiting and History. Credit
-                invoices appear here only after approval at Verification Points.
+                printed at Verification Points), then mark separated. After a
+                copy is printed, reprint needs Reprint Goods Issue Note
+                permission. Credit invoices appear here only after approval at
+                Verification Points.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -649,6 +798,7 @@ export default function InvoiceSeparation() {
                 >
                   Awaiting ({pendingRows.length})
                 </button>
+                {canViewHistory ? (
                 <button
                   type="button"
                   onClick={() => switchTab("history")}
@@ -661,6 +811,7 @@ export default function InvoiceSeparation() {
                   <History className="h-3.5 w-3.5" />
                   History ({historyRows.length})
                 </button>
+                ) : null}
               </div>
               {activeTab === "history" ? (
                 <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
@@ -776,8 +927,8 @@ export default function InvoiceSeparation() {
                     : "Search an invoice first"}
                 </p>
                 <p className="text-sm">
-                  Print store copies and Mark Separated only after you open the
-                  invoice.
+                  Print store copies after you open the invoice. Printing
+                  marks it separated.
                 </p>
               </div>
             ) : (
@@ -848,7 +999,7 @@ export default function InvoiceSeparation() {
                         {separating ? "Separating…" : "Mark Separated"}
                       </Button>
                     ) : null}
-                    {isHistoryRecord && packs.length > 0 ? (
+                    {isHistoryRecord && packs.length > 0 && canReprintGoodsIssue ? (
                       <Button
                         type="button"
                         variant="outline"
@@ -893,7 +1044,7 @@ export default function InvoiceSeparation() {
 
                   {!needsCreditApproval &&
                   productPrints.length > 0 &&
-                  (canSeparate || isHistoryRecord) ? (
+                  (canSeparate || (isHistoryRecord && canReprintGoodsIssue)) ? (
                     <div className="mb-3">
                       <Button
                         type="button"
@@ -982,15 +1133,20 @@ export default function InvoiceSeparation() {
                               type="button"
                               size="sm"
                               variant="outline"
-                              disabled={printingId === printKey}
+                              disabled={
+                                printingId === printKey ||
+                                (isPackPrinted(pack) && !canReprintGoodsIssue)
+                              }
                               onClick={() => openBranchInvoice(pack, line)}
                               className="h-8"
                             >
                               <Printer className="w-3.5 h-3.5 mr-1" />
                               {printingId === printKey
                                 ? "Opening…"
-                                : isHistoryRecord
-                                  ? `Reprint ${dispatchDocLabel}`
+                                : isPackPrinted(pack)
+                                  ? canReprintGoodsIssue
+                                    ? `Reprint ${dispatchDocLabel}`
+                                    : "Already printed"
                                   : `Print ${dispatchDocLabel}`}
                             </Button>
                           </li>
@@ -1002,9 +1158,11 @@ export default function InvoiceSeparation() {
 
                 {canSeparate && packs.length > 0 ? (
                   <p className="text-xs text-gray-500">
-                    After you print the copies, click{" "}
-                    <strong>Mark Separated</strong> to move this sale to
-                    Warehouse Requests (and History).
+                    Printing the copies also marks this sale separated and
+                    moves it to Warehouse Requests
+                    {canViewHistory ? " (and History)" : ""}. Use{" "}
+                    <strong>Mark Separated</strong> only if the copies are
+                    already printed.
                   </p>
                 ) : null}
 

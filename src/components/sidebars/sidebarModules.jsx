@@ -535,6 +535,10 @@ export const modules = [
           "Invoices",
           "Sales",
         ],
+        subFunctionalities: [
+          { title: "History", functionality: ["Invoice Separation History"] },
+          { title: "Reprint Goods Issue Note" },
+        ],
         access: [
           "services",
           "retailers",

@@ -1,15 +1,14 @@
-// export default SearchCustomerInput;
 /* eslint-disable react/prop-types */
-import { getCustomers } from "@/redux/actions/customer";
-import { useCallback, useEffect, useId, useMemo } from "react";
-import { Typeahead } from "react-bootstrap-typeahead";
-import { useDispatch, useSelector } from "react-redux";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
+import { AsyncTypeahead } from "react-bootstrap-typeahead";
+import "react-bootstrap-typeahead/css/Typeahead.css";
+import { useSelector } from "react-redux";
+import { _fetchApi } from "@/redux/actions/api";
 import { customerKindLabel } from "@/utils/customerKind";
 
 function SearchCustomerInput(props) {
-  const dispatch = useDispatch();
   const typeaheadId = useId();
-  const options = useSelector((state) => state.customer.customerList) || [];
+  const facilityId = useSelector((state) => state.auth.activeBusiness?.id);
   const {
     onChange,
     disabled,
@@ -21,13 +20,9 @@ function SearchCustomerInput(props) {
     ...restProps
   } = props;
 
-  const getList = useCallback(() => {
-    dispatch(getCustomers());
-  }, [dispatch]);
-
-  useEffect(() => {
-    getList();
-  }, [getList]);
+  const [options, setOptions] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const requestId = useRef(0);
 
   const labelKeyFn = useCallback((row) => {
     if (!row) return "";
@@ -35,13 +30,6 @@ function SearchCustomerInput(props) {
     if (typeof name === "string" && name.trim()) return name.trim();
     return row.customerNo != null ? String(row.customerNo) : "";
   }, []);
-
-  const validOptions = useMemo(() => {
-    return (options || []).filter((opt) => {
-      if (!opt || opt.customerNo == null) return false;
-      return labelKeyFn(opt).length > 0;
-    });
-  }, [options, labelKeyFn]);
 
   const selectedForTypeahead = useMemo(() => {
     const list =
@@ -54,11 +42,56 @@ function SearchCustomerInput(props) {
     const item = list[0];
     if (!item || item.customerNo == null) return list;
     const id = String(item.customerNo);
-    const fromStore = validOptions.find(
-      (o) => String(o.customerNo) === id
-    );
-    return fromStore ? [fromStore] : list;
-  }, [selected, validOptions]);
+    const fromOptions = options.find((o) => String(o.customerNo) === id);
+    return fromOptions ? [fromOptions] : list;
+  }, [selected, options]);
+
+  const mergedOptions = useMemo(() => {
+    const list = (options || []).filter((opt) => {
+      if (!opt || opt.customerNo == null) return false;
+      return labelKeyFn(opt).length > 0;
+    });
+    const sel = selectedForTypeahead[0];
+    if (
+      sel?.customerNo != null &&
+      !list.some((o) => String(o.customerNo) === String(sel.customerNo))
+    ) {
+      return [sel, ...list];
+    }
+    return list;
+  }, [options, selectedForTypeahead, labelKeyFn]);
+
+  const handleSearch = useCallback(
+    (query) => {
+      if (!facilityId) {
+        setOptions([]);
+        setIsLoading(false);
+        return;
+      }
+      const id = ++requestId.current;
+      setIsLoading(true);
+      const params = new URLSearchParams({
+        query_type: "search",
+        customer: facilityId,
+        search: String(query || "").trim(),
+        limit: "25",
+      });
+      _fetchApi(
+        `/account/customer-details?${params.toString()}`,
+        (data) => {
+          if (id !== requestId.current) return;
+          setOptions(data?.results || []);
+          setIsLoading(false);
+        },
+        () => {
+          if (id !== requestId.current) return;
+          setOptions([]);
+          setIsLoading(false);
+        },
+      );
+    },
+    [facilityId],
+  );
 
   const controlId = elId || `search-customer-${typeaheadId}`;
 
@@ -72,14 +105,22 @@ function SearchCustomerInput(props) {
           {labelText}
         </label>
       ) : null}
-      <Typeahead
+      <AsyncTypeahead
         id={controlId}
         disabled={disabled}
-        options={validOptions}
+        isLoading={isLoading}
+        options={mergedOptions}
         className="z-[300] w-full"
         positionFixed
-        placeholder="Select Customer"
+        placeholder="Type to search customer"
+        promptText="Type at least 3 characters"
+        searchText="Searching…"
+        emptyLabel="No customers found"
         labelKey={labelKeyFn}
+        minLength={3}
+        delay={250}
+        useCache
+        filterBy={() => true}
         clearButton
         selected={selectedForTypeahead}
         renderMenuItemChildren={(option) => (
@@ -103,6 +144,7 @@ function SearchCustomerInput(props) {
             </small>
           </div>
         )}
+        onSearch={handleSearch}
         onChange={(selectedItems) => {
           if (!onChange) return;
           onChange(selectedItems?.[0] || null);

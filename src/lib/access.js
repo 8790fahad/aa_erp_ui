@@ -107,6 +107,8 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "Imprest",
   "Pay Bill",
   "Edit Invoice",
+  "Reprint Goods Issue Note",
+  "Invoice Separation History",
   "Edit",
   "Change",
   "Deposit Summary",

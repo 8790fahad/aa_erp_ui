@@ -498,13 +498,6 @@ export default function SalesManagement() {
                 <Package className="w-4 h-4" />
                 Warehouse Collection
               </Button>
-              <Button
-                onClick={() => navigate("/app/sales/sale?view=lines")}
-                className="flex items-center gap-2"
-                style={{ backgroundColor: "var(--aa-navy)" }}
-              >
-                Create Invoice
-              </Button>
             </div>
           </div>
 

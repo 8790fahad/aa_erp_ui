@@ -64,6 +64,8 @@ const sheetContentClass =
 const sheetHeaderClass =
   "shrink-0 space-y-1 border-b border-white/10 bg-[var(--aa-navy,#1a2d5e)] px-5 py-4 pr-12 text-left";
 const DEFAULT_RECEIVABLE_SETUP = "Default loan receivable";
+const STAFF_LOAN_RECEIVABLE_HEAD = "112104";
+const STAFF_LOAN_RECEIVABLE_NAME = "Staff Advances and Imprests";
 
 const sheetFooterClass =
   "shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-4 flex flex-wrap justify-end gap-2";
@@ -141,7 +143,6 @@ const LoanManagement = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
-  const [pickerFilter, setPickerFilter] = useState("associate");
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
@@ -176,6 +177,8 @@ const LoanManagement = () => {
   );
   const [receiptMode, setReceiptMode] = useState("");
   const [receiptAccount, setReceiptAccount] = useState("");
+  const [receiptProfit, setReceiptProfit] = useState("");
+  const [receiptProfitAccount, setReceiptProfitAccount] = useState(null);
   const [savingReceipt, setSavingReceipt] = useState(false);
 
   const [chartAccounts, setChartAccounts] = useState([]);
@@ -350,17 +353,25 @@ const LoanManagement = () => {
     return [...missing, ...chartAccounts];
   };
 
+  const findStaffLoanReceivable = (accounts = chartAccounts) =>
+    accounts.find(
+      (account) => accountHead(account) === STAFF_LOAN_RECEIVABLE_HEAD,
+    ) || {
+      head: STAFF_LOAN_RECEIVABLE_HEAD,
+      code: STAFF_LOAN_RECEIVABLE_HEAD,
+      description: STAFF_LOAN_RECEIVABLE_NAME,
+    };
+
   const findDefaultReceivable = (accounts = chartAccounts, setups = loanSetups) =>
+    findStaffLoanReceivable(accounts) ||
     findSetupAccount("receivableHead", accounts, setups);
 
   const findDefaultProfit = (accounts = chartAccounts, setups = loanSetups) =>
     findSetupAccount("profitHead", accounts, setups);
 
-  useEffect(() => {
-    if (!showForm || editMode || selectedReceivable) return;
-    const account = findDefaultReceivable();
-    if (account) setSelectedReceivable(account);
-  }, [showForm, editMode, selectedReceivable, chartAccounts, loanSetups]);
+  const applyDefaultReceivable = () => {
+    setSelectedReceivable(findDefaultReceivable());
+  };
 
   const fetchLoanSetups = () => {
     _fetchApi(
@@ -666,6 +677,8 @@ const LoanManagement = () => {
     setReceiptDate(new Date().toISOString().slice(0, 10));
     setReceiptMode("");
     setReceiptAccount("");
+    setReceiptProfit("");
+    setReceiptProfitAccount(findDefaultProfit());
   };
 
   const openInvestmentReceipt = (person) => {
@@ -763,12 +776,24 @@ const LoanManagement = () => {
       );
       return;
     }
+    const profit = parseFloat(parseFormattedNumber(receiptProfit)) || 0;
+    if (receiptProfit && (!Number.isFinite(profit) || profit < 0)) {
+      toast.error("Enter a valid profit amount");
+      return;
+    }
+    const profitHead = accountHead(receiptProfitAccount);
+    if (profit > 0 && !profitHead) {
+      toast.error("Select the profit account");
+      return;
+    }
     setSavingReceipt(true);
     _postApi(
       `/api/hr/employees/${investmentPerson.id}/investment-receipt`,
       {
         facilityId,
         amount,
+        profit,
+        profitHead: profit > 0 ? profitHead : null,
         transaction_date: receiptDate,
         accountCode: receiptAccount,
         userId: user?.id,
@@ -804,6 +829,8 @@ const LoanManagement = () => {
         setReceiptAmount("");
         setReceiptMode("");
         setReceiptAccount("");
+        setReceiptProfit("");
+        setReceiptProfitAccount(findDefaultProfit());
       },
       (err) => {
         setSavingReceipt(false);
@@ -815,7 +842,7 @@ const LoanManagement = () => {
   const handleSaveLoan = (e) => {
     e.preventDefault();
     if (!selectedEmployee) {
-      return toast.error("Select a staff member or investment");
+      return toast.error("Select an employee");
     }
     const receivableHead =
       selectedReceivable?.head ||
@@ -1223,21 +1250,14 @@ const LoanManagement = () => {
     setEditMode(false);
     setEditingLoanId(null);
     setFormData({ ...emptyLoanForm(), repaymentMethod: "Self" });
-    setSelectedReceivable(null);
+    applyDefaultReceivable();
     resetPaymentSelection();
     selectLoanPerson(person);
     setShowForm(true);
   };
 
-  const matchesPersonFilter = (person, filter) => {
-    if (!filter || filter === "all") return true;
-    return filter === "associate"
-      ? isBusinessAssociate(person)
-      : !isBusinessAssociate(person);
-  };
-
-  const pickerOptions = employees.filter((person) =>
-    matchesPersonFilter(person, pickerFilter),
+  const pickerOptions = employees.filter(
+    (person) => !isBusinessAssociate(person),
   );
 
   const toInvestmentRow = (person) => {
@@ -1409,7 +1429,7 @@ const LoanManagement = () => {
                 setEditingLoanId(null);
                 setFormData(emptyLoanForm());
                 setSelectedEmployee(null);
-                setSelectedReceivable(null);
+                applyDefaultReceivable();
                 resetPaymentSelection();
                 setShowForm(true);
               }}
@@ -2314,6 +2334,45 @@ const LoanManagement = () => {
                         />
                       </div>
                       <div className="space-y-1.5">
+                        <label className={labelClass}>Profit</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={formatNumberWithCommas(receiptProfit)}
+                          onChange={(e) =>
+                            setReceiptProfit(parseFormattedNumber(e.target.value))
+                          }
+                          placeholder="0.00"
+                          className={`${inputClass} tabular-nums`}
+                        />
+                        <p className={hintClass}>
+                          Extra they pay on top of the investment. Cash received is amount plus profit.
+                        </p>
+                      </div>
+                      {(parseFloat(parseFormattedNumber(receiptProfit)) || 0) > 0 ? (
+                        <div className="space-y-1.5">
+                          <label className={labelClass}>
+                            Profit account <span className="text-red-600">*</span>
+                          </label>
+                          <TypeaheadCustom
+                            options={accountChoices(findDefaultProfit())}
+                            labelKey={(account) =>
+                              `${account.head || account.code || ""} ${account.description || account.account_name || ""}`.trim()
+                            }
+                            onChange={(items) =>
+                              setReceiptProfitAccount(items[0] || null)
+                            }
+                            placeholder="Select profit account…"
+                            selected={
+                              receiptProfitAccount ? [receiptProfitAccount] : []
+                            }
+                          />
+                          <p className={hintClass}>
+                            Profit is credited to this head.
+                          </p>
+                        </div>
+                      ) : null}
+                      <div className="space-y-1.5">
                         <label className={labelClass}>
                           Date <span className="text-red-600">*</span>
                         </label>
@@ -2372,13 +2431,25 @@ const LoanManagement = () => {
                       ) : null}
                       {receiptAccount ? (
                         <div className="overflow-hidden rounded-md border border-slate-200 text-sm">
+                          {(() => {
+                            const principal =
+                              parseFormattedNumber(receiptAmount) || 0;
+                            const profitAmt =
+                              parseFloat(parseFormattedNumber(receiptProfit)) ||
+                              0;
+                            const cashIn = principal + profitAmt;
+                            const profitLabel = receiptProfitAccount
+                              ? `${receiptProfitAccount.head || receiptProfitAccount.code || ""} — ${receiptProfitAccount.description || receiptProfitAccount.account_name || "Profit"}`.replace(/^\s—\s/, "")
+                              : "Select a profit account";
+                            return (
+                              <>
                           <div className="flex items-start justify-between gap-3 px-3 py-2">
                             <span className="text-slate-900">
                               {receiptAccounts.find((account) => account.code === receiptAccount)?.label ||
                                 "Cash or bank"}
                             </span>
                             <span className="shrink-0 font-semibold tabular-nums text-slate-900">
-                              Dr {formatCurrency(parseFormattedNumber(receiptAmount) || 0)}
+                              Dr {formatCurrency(cashIn)}
                             </span>
                           </div>
                           <div className="flex items-start justify-between gap-3 border-t border-slate-100 px-3 py-2">
@@ -2394,9 +2465,20 @@ const LoanManagement = () => {
                               })()}
                             </span>
                             <span className="shrink-0 font-semibold tabular-nums text-slate-900">
-                              Cr {formatCurrency(parseFormattedNumber(receiptAmount) || 0)}
+                              Cr {formatCurrency(principal)}
                             </span>
                           </div>
+                          {profitAmt > 0 ? (
+                            <div className="flex items-start justify-between gap-3 border-t border-slate-100 px-3 py-2">
+                              <span className="text-slate-900">{profitLabel}</span>
+                              <span className="shrink-0 font-semibold tabular-nums text-slate-900">
+                                Cr {formatCurrency(profitAmt)}
+                              </span>
+                            </div>
+                          ) : null}
+                              </>
+                            );
+                          })()}
                         </div>
                       ) : null}
                       <button
@@ -2531,42 +2613,14 @@ const LoanManagement = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className={labelClass}>Staff or investment</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { value: "all", label: "All" },
-                    { value: "employee", label: "Employees" },
-                    { value: "associate", label: "Investment" },
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setPickerFilter(option.value)}
-                      className={`rounded-md border py-1.5 text-[11px] font-semibold ${
-                        pickerFilter === option.value
-                          ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white"
-                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+                <label className={labelClass}>Employee</label>
                 <TypeaheadCustom
                   options={pickerOptions}
                   labelKey={(i) =>
-                    `${i.firstName} ${i.lastName} (${i.employeeId})${
-                      isBusinessAssociate(i) ? " · Investment" : ""
-                    }`
+                    `${i.firstName} ${i.lastName} (${i.employeeId})`
                   }
                   onChange={(items) => selectLoanPerson(items[0] || null)}
-                  placeholder={
-                    pickerFilter === "associate"
-                      ? "Search investments..."
-                      : pickerFilter === "employee"
-                        ? "Search employees..."
-                        : "Search staff or investment..."
-                  }
+                  placeholder="Search employees..."
                   selected={selectedEmployee ? [selectedEmployee] : []}
                 />
               </div>
@@ -2581,11 +2635,11 @@ const LoanManagement = () => {
                   onChange={(items) => setSelectedReceivable(items[0] || null)}
                   placeholder="Select receivable account…"
                   selected={selectedReceivable ? [selectedReceivable] : []}
+                  clearButton
                 />
                 <p className={hintClass}>
-                  {findDefaultReceivable()
-                    ? "Filled from Settings. Change it here only for this loan."
-                    : "Choose the account in Settings so new loans use it automatically."}
+                  Default head is 112104 Staff Advances and Imprests. Change it
+                  here only for this loan.
                 </p>
               </div>
 
