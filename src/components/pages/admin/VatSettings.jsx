@@ -607,12 +607,36 @@ export default function VatSettings() {
           return;
         }
         setAccountName(res.description || "VAT Recoverable");
+        const nearest = res.nearest;
+        const nearestYear = Number(nearest?.year);
+        const nearestMonth = Number(nearest?.month);
+        if (
+          !Number(res.line_count) &&
+          Number.isInteger(nearestYear) &&
+          nearestMonth >= 1 &&
+          nearestMonth <= 12 &&
+          (nearestYear !== periodYear || nearestMonth !== periodMonth)
+        ) {
+          toast.message(
+            `No VAT posted in ${moment({
+              year: periodYear,
+              month: periodMonth - 1,
+            }).format("MMMM YYYY")}. Showing ${nearest.label || moment({
+              year: nearestYear,
+              month: nearestMonth - 1,
+            }).format("MMMM YYYY")}.`,
+          );
+          setPeriodYear(nearestYear);
+          setPeriodMonth(nearestMonth);
+          return;
+        }
         setSummary({
           inputVat: Number(res.input_vat || 0),
           outputVat: Number(res.output_vat || 0),
           net: Number(res.net || 0),
           amountToPay: Number(res.amount_to_pay || 0),
           recoverable: Number(res.recoverable || 0),
+          lineCount: Number(res.line_count || 0),
         });
       },
       (err) => {
@@ -622,7 +646,7 @@ export default function VatSettings() {
         toast.error("Unable to load VAT Recoverable totals");
       },
     );
-  }, [activeBusiness?.id, vatAccountCode, fromDate, toDate]);
+  }, [activeBusiness?.id, vatAccountCode, fromDate, toDate, periodYear, periodMonth]);
 
   useEffect(() => {
     if (!activeBusiness?.id) {
@@ -828,6 +852,13 @@ export default function VatSettings() {
                   </p>
                 </div>
               </div>
+              {summary && !summary.lineCount ? (
+                <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-0">
+                  No Input or Output VAT was posted to this head in{" "}
+                  {periodLabel}. Change the month, or post sales and purchases
+                  with tax, to see totals here.
+                </p>
+              ) : null}
               <div className="flex flex-wrap gap-3 pt-1">
                 <Link
                   to="/app/purchase/input-vat"
