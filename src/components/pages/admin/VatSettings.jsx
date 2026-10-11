@@ -807,29 +807,29 @@ export default function VatSettings() {
                 <div
                   className={`rounded-lg border p-4 ${
                     vatIsCredit
-                      ? "border-teal-200 bg-teal-50"
+                      ? "border-green-300 bg-green-50"
                       : vatIsPayable
-                        ? "border-amber-200 bg-amber-50"
+                        ? "border-red-300 bg-red-50"
                         : "border-slate-200 bg-slate-50"
                   }`}
                 >
                   <p
                     className={`text-xs font-semibold uppercase tracking-wide mb-1 ${
                       vatIsCredit
-                        ? "text-teal-800"
+                        ? "text-green-800"
                         : vatIsPayable
-                          ? "text-amber-800"
+                          ? "text-red-800"
                           : "text-slate-600"
                     }`}
                   >
-                    VAT Recoverable
+                    {vatIsPayable ? "VAT Payable" : "VAT Recoverable"}
                   </p>
                   <p
                     className={`text-xl font-bold tabular-nums mb-0 ${
                       vatIsCredit
-                        ? "text-teal-900"
+                        ? "text-green-700"
                         : vatIsPayable
-                          ? "text-amber-900"
+                          ? "text-red-700"
                           : "text-slate-800"
                     }`}
                   >
@@ -838,9 +838,9 @@ export default function VatSettings() {
                   <p
                     className={`text-xs mt-1 mb-0 ${
                       vatIsCredit
-                        ? "text-teal-800/80"
+                        ? "text-green-800/80"
                         : vatIsPayable
-                          ? "text-amber-800/80"
+                          ? "text-red-800/80"
                           : "text-slate-500"
                     }`}
                   >
