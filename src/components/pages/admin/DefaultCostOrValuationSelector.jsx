@@ -31,7 +31,10 @@ const DefaultCostOrValuationSelector = ({
     {
       value: "system_valuation",
       label: "Use System Valuation Method",
-      description: `Use inventory valuation method: ${invEvM}`,
+      description:
+        invEvM === "Batch by Batch"
+          ? "Use each batch's purchase cost"
+          : `Use inventory valuation method: ${invEvM}`,
     },
   ];
 

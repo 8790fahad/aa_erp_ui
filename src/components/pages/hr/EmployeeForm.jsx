@@ -114,13 +114,18 @@ const EmployeeForm = ({
   const [creatingRole, setCreatingRole] = useState(false);
   const [autoFilledFields, setAutoFilledFields] = useState({});
 
-  // Load users and departments on component mount
+  // Load lookup lists on mount; users load when the staff picker opens
   useEffect(() => {
-    loadUsers();
     loadDepartments();
     loadRoles();
     getBankList();
   }, [activeBusiness?.id]);
+
+  useEffect(() => {
+    if (showUserDropdown && users.length === 0) {
+      loadUsers();
+    }
+  }, [showUserDropdown]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

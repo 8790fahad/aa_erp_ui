@@ -42,22 +42,6 @@ function bankAccountLabel(bank) {
   return number ? `${name} (${number})` : String(name);
 }
 
-/** Access Bank on chart 112202 is the default pay-from account. */
-function pickDefaultBank(banks) {
-  const list = Array.isArray(banks) ? banks : [];
-  const preferred = list.find((bank) => {
-    const code = bankChartCode(bank);
-    const number = String(bank?.account_number || "");
-    const name = String(bank?.account_name || bank?.bank_name || "");
-    return (
-      code === "112202" ||
-      number.replace(/\s/g, "").includes("112202") ||
-      /access bank/i.test(name)
-    );
-  });
-  return preferred || list[0] || null;
-}
-
 /**
  * Pay back a customer's available deposit.
  * The amount cannot exceed the deposit balance.
@@ -135,8 +119,11 @@ export default function ReverseCustomerDeposit({
           const list = data?.results || data?.data || [];
           const banks = Array.isArray(list) ? list : [];
           setBankList(banks);
-          const preferred = pickDefaultBank(banks);
-          setBankId(preferred?.id != null ? String(preferred.id) : "");
+          setBankId((current) =>
+            banks.some((bank) => String(bank.id) === String(current))
+              ? current
+              : "",
+          );
         },
         () => setBankList([]),
       );
@@ -147,11 +134,11 @@ export default function ReverseCustomerDeposit({
         (resp) => {
           const list = Array.isArray(resp?.results) ? resp.results : [];
           setCashHeads(list);
-          setCashHead((current) => {
-            if (current) return current;
-            const first = list[0];
-            return first ? String(first.head || first.code || "") : "";
-          });
+          setCashHead((current) =>
+            list.some((head) => String(head.head || head.code) === String(current))
+              ? current
+              : "",
+          );
         },
         () => setCashHeads([]),
       );
@@ -327,10 +314,12 @@ export default function ReverseCustomerDeposit({
             </div>
           ) : null}
 
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="mt-4 space-y-3">
             <div>
               <div className="mb-1 flex items-center justify-between">
-                <label className="text-[13px] text-gray-700">Amount</label>
+                <label className="text-[13px] text-gray-700">
+                  Amount <span className="text-red-600">*</span>
+                </label>
                 <button
                   type="button"
                   className="text-xs font-medium text-blue-600 hover:text-blue-700 disabled:opacity-40"
@@ -352,12 +341,15 @@ export default function ReverseCustomerDeposit({
                 value={amount}
                 onChange={(e) => onAmountChange(e.target.value)}
                 disabled={saving || !selectedCustomer || availableDeposit <= 0}
+                required
                 placeholder="0.00"
                 className="h-9 w-full rounded border border-gray-300 px-2.5 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
               />
             </div>
             <div>
-              <label className="mb-1 block text-[13px] text-gray-700">Date</label>
+              <label className="mb-1 block text-[13px] text-gray-700">
+                Date <span className="text-red-600">*</span>
+              </label>
               <input
                 type="date"
                 value={paymentDate}
@@ -365,15 +357,23 @@ export default function ReverseCustomerDeposit({
                 max={getPostingDateMax()}
                 onChange={(e) => setPaymentDate(e.target.value)}
                 disabled={saving}
+                required
                 className="h-9 w-full rounded border border-gray-300 px-2.5 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
               />
             </div>
             <div>
-              <label className="mb-1 block text-[13px] text-gray-700">Pay from</label>
+              <label className="mb-1 block text-[13px] text-gray-700">
+                Pay from <span className="text-red-600">*</span>
+              </label>
               <select
                 value={mode}
-                onChange={(e) => setMode(e.target.value)}
+                onChange={(e) => {
+                  setMode(e.target.value);
+                  setBankId("");
+                  setCashHead("");
+                }}
                 disabled={saving}
+                required
                 className="h-9 w-full rounded border border-gray-300 bg-white px-2.5 text-sm"
               >
                 <option value="transfer">Bank transfer</option>
@@ -382,15 +382,17 @@ export default function ReverseCustomerDeposit({
             </div>
             <div>
               <label className="mb-1 block text-[13px] text-gray-700">
-                {mode === "transfer" ? "Bank account" : "Cash account"}
+                {mode === "transfer" ? "Bank account" : "Cash account"}{" "}
+                <span className="text-red-600">*</span>
               </label>
               {mode === "transfer" ? (
                 <Typeahead
                   id="reverse-deposit-bank-account"
                   labelKey={bankAccountLabel}
                   options={bankList}
-                  placeholder="Search bank account"
+                  placeholder="Select bank account"
                   disabled={saving}
+                  inputProps={{ required: true }}
                   clearButton
                   positionFixed
                   flip
@@ -427,9 +429,10 @@ export default function ReverseCustomerDeposit({
                   value={cashHead}
                   onChange={(e) => setCashHead(e.target.value)}
                   disabled={saving}
+                  required
                   className="h-9 w-full rounded border border-gray-300 bg-white px-2.5 text-sm"
                 >
-                  <option value="">Select cash</option>
+                  <option value="">Select cash account</option>
                   {cashHeads.map((h) => (
                     <option key={h.head || h.code} value={h.head || h.code}>
                       {h.description || h.name || h.head}
@@ -438,7 +441,7 @@ export default function ReverseCustomerDeposit({
                 </select>
               )}
             </div>
-            <div className="sm:col-span-2">
+            <div>
               <label className="mb-1 block text-[13px] text-gray-700">
                 Notes (optional)
               </label>

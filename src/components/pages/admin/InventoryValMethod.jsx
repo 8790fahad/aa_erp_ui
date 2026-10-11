@@ -28,8 +28,12 @@ const InventoryValMethod = ({
 
   // Inventory valuation method options
   const inventoryValMethods = [
-    { value: "Weighted Average Cost", label: "Weighted Average Cost" },
+    { value: "Weighted Average Cost", label: "Normal (Weighted Average Cost)" },
     { value: "FIFO", label: "FIFO (First In, First Out)" },
+    {
+      value: "Batch by Batch",
+      label: "Batch by Batch (use each purchase cost)",
+    },
   ];
 
   // Valuation date options
@@ -184,6 +188,12 @@ const InventoryValMethod = ({
                   </option>
                 ))}
               </select>
+              {form.method === "Batch by Batch" && (
+                <small className="text-muted d-block mt-2">
+                  Cost of goods uses the purchase cost of each lot or batch,
+                  not a blended average.
+                </small>
+              )}
             </div>
 
             <div className="mb-3">
@@ -266,11 +276,16 @@ const InventoryValMethod = ({
 
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <div className="fw-semibold" style={{ color: "var(--aa-navy)" }}>
-                {currentMethod?.label}
+                {currentMethod?.label || code}
               </div>
               <div className="text-muted small">
-                Method: {currentMethod?.value}
+                Method: {currentMethod?.value || code}
               </div>
+              {code === "Batch by Batch" && (
+                <div className="text-muted small mt-1">
+                  Each sale or issue uses that batch&apos;s purchase cost.
+                </div>
+              )}
             </div>
 
             <div className="d-flex justify-content-between align-items-center">

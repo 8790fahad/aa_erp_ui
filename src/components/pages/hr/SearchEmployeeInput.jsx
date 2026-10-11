@@ -15,7 +15,7 @@ export default function SearchEmployeeInput(props) {
     try {
       setLoading(true);
       const response = await fetch(
-        `/api/hr/employees?facilityId=${facilityId}`
+        `/api/hr/employees?facilityId=${facilityId}&limit=500&lite=1&status=Active`
       );
       const data = await response.json();
 

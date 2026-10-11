@@ -3,6 +3,8 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   FileDown,
   FileSpreadsheet,
@@ -36,7 +38,7 @@ import MultipleSelector from "@/components/ui/multiselect";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 50;
 
 const REPORT_VIEWS = [
   { key: "summary", label: "Sales Summary" },
@@ -80,6 +82,65 @@ function canonicalizeCategoryName(name) {
 
 function lineVat(row) {
   return num(row.vat_amount ?? row.vat);
+}
+
+function applyVatDisplayRows(rows, vatDivisor, paymentModeFilter) {
+  const list = paymentModeFilter
+    ? rows.filter(
+        (r) => formatSalesPaymentMode(r.mode_of_payment) === paymentModeFilter,
+      )
+    : rows;
+  if (!(vatDivisor > 1)) return list;
+  return list.map((r) => ({
+    ...r,
+    unit_price: divideMoney(r.unit_price, vatDivisor),
+    line_total: divideMoney(r.line_total, vatDivisor),
+    vat_amount: divideMoney(r.vat_amount ?? r.vat, vatDivisor),
+    vat: divideMoney(r.vat_amount ?? r.vat, vatDivisor),
+  }));
+}
+
+function vatExportTable(rows, totals) {
+  return {
+    headers: [
+      "Invoice",
+      "Date",
+      "Customer",
+      "Item",
+      "Qty",
+      "Amount (₦)",
+      "Output VAT (₦)",
+      "Total incl. VAT (₦)",
+    ],
+    rows: [
+      [
+        "Period total",
+        "",
+        "",
+        "",
+        totals.qty,
+        totals.line_total,
+        totals.vat_amount,
+        totals.total_incl_vat,
+      ],
+      ...rows.map((row) => {
+        const vat = lineVat(row);
+        const line = num(row.line_total);
+        return [
+          row.invoice_no || "",
+          row.invoice_date
+            ? moment(row.invoice_date).format("DD MMM YYYY")
+            : "",
+          row.customer_name || "",
+          row.product_name || "",
+          num(row.qty),
+          line,
+          vat,
+          line + vat,
+        ];
+      }),
+    ],
+  };
 }
 
 function aggregateBy(rows, keyFn, labelFn) {
@@ -169,6 +230,9 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     () => searchParams.get("mode") || "",
   );
   const [rows, setRows] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [periodSummary, setPeriodSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [pdfExporting, setPdfExporting] = useState(false);
@@ -225,6 +289,13 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
       },
       () => setCategories([]),
     );
+  }, [activeBusiness?.id]);
+
+  useEffect(() => {
+    if (!activeBusiness?.id || !category.trim()) {
+      setCategoryProducts([]);
+      return;
+    }
     _fetchApi(
       `/api/products?facilityId=${activeBusiness.id}`,
       (res) => {
@@ -242,7 +313,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
       },
       () => setCategoryProducts([]),
     );
-  }, [activeBusiness?.id]);
+  }, [activeBusiness?.id, category]);
 
   const productsInCategory = useMemo(() => {
     if (!category.trim()) return [];
@@ -281,17 +352,41 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     setLoading(true);
     setError("");
     try {
-      const allRows = await fetchAllSalesLines({
-        facilityId: activeBusiness.id,
-        userId: String(userId),
-        fromDate,
-        toDate,
-        search: search.trim(),
-        category: category.trim(),
-        productSku: productSku.trim(),
-        branchId: branchFromUrl,
-      });
-      setRows(allRows);
+      if (isVatReport) {
+        const batch = await fetchSalesLinePage({
+          facilityId: activeBusiness.id,
+          userId: String(userId),
+          fromDate,
+          toDate,
+          search: search.trim(),
+          category: category.trim(),
+          productSku: productSku.trim(),
+          branchId: branchFromUrl,
+          page,
+          pageSize: PAGE_SIZE,
+          all: false,
+          includeCount: page === 1,
+        });
+        setRows(batch.rows);
+        if (page === 1) {
+          setTotalCount(batch.totalCount);
+          setPeriodSummary(batch.periodSummary);
+        }
+      } else {
+        const allRows = await fetchAllSalesLines({
+          facilityId: activeBusiness.id,
+          userId: String(userId),
+          fromDate,
+          toDate,
+          search: search.trim(),
+          category: category.trim(),
+          productSku: productSku.trim(),
+          branchId: branchFromUrl,
+        });
+        setRows(allRows);
+        setTotalCount(allRows.length);
+        setPeriodSummary(null);
+      }
     } catch (e) {
       console.error(e);
       setError("Unable to load sales report");
@@ -309,15 +404,31 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     category,
     productSku,
     branchFromUrl,
+    isVatReport,
+    page,
   ]);
 
   useEffect(() => {
-    runFetch();
-  }, [runFetch]);
+    setPage(1);
+  }, [activeBusiness?.id, fromDate, toDate, category, productSku, branchFromUrl]);
 
   useEffect(() => {
-    if (!isVatReport || !activeBusiness?.id || !vatAccountCode) {
-      setVatLedger(null);
+    runFetch();
+    // Search is applied from Run Report so typing does not re-query the ledger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeBusiness?.id,
+    userId,
+    fromDate,
+    toDate,
+    category,
+    productSku,
+    branchFromUrl,
+    page,
+  ]);
+
+  useEffect(() => {
+    if (!vatLedgerModalOpen || !isVatReport || !activeBusiness?.id || !vatAccountCode) {
       return;
     }
     setVatLedgerLoading(true);
@@ -342,7 +453,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
         setVatLedger(null);
       },
     );
-  }, [isVatReport, activeBusiness?.id, vatAccountCode, fromDate, toDate]);
+  }, [vatLedgerModalOpen, isVatReport, activeBusiness?.id, vatAccountCode, fromDate, toDate]);
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
@@ -389,26 +500,41 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     }));
   }, [rows, paymentModeFilter, isVatReport, vatDivisor]);
 
-  const totalLineAmount = useMemo(
+  const pageLineAmount = useMemo(
     () => filteredRows.reduce((s, r) => s + num(r.line_total), 0),
     [filteredRows],
   );
-  const totalVatAmount = useMemo(
+  const pageVatAmount = useMemo(
     () => filteredRows.reduce((s, r) => s + lineVat(r), 0),
     [filteredRows],
   );
-  const totalInclVat = useMemo(
-    () => totalLineAmount + totalVatAmount,
-    [totalLineAmount, totalVatAmount],
-  );
-  const totalQty = useMemo(
+  const pageInclVat = pageLineAmount + pageVatAmount;
+  const pageQty = useMemo(
     () => filteredRows.reduce((s, r) => s + num(r.qty), 0),
     [filteredRows],
   );
-  const invoiceCount = useMemo(
-    () => new Set(filteredRows.map((r) => r.invoice_no).filter(Boolean)).size,
-    [filteredRows],
-  );
+  const usePeriodTotals = isVatReport && periodSummary && !paymentModeFilter;
+  const totalLineAmount = usePeriodTotals
+    ? divideMoney(periodSummary.line_total, vatDivisor)
+    : pageLineAmount;
+  const totalVatAmount = usePeriodTotals
+    ? divideMoney(periodSummary.vat_total, vatDivisor)
+    : pageVatAmount;
+  const totalInclVat = usePeriodTotals
+    ? divideMoney(periodSummary.total_incl_vat, vatDivisor)
+    : pageInclVat;
+  const totalQty = usePeriodTotals
+    ? divideMoney(periodSummary.qty, 1)
+    : pageQty;
+  const invoiceCount = usePeriodTotals
+    ? Number(periodSummary.invoice_count || 0)
+    : new Set(filteredRows.map((r) => r.invoice_no).filter(Boolean)).size;
+  const lineCount = usePeriodTotals
+    ? Number(periodSummary.line_count || 0)
+    : filteredRows.length;
+  const totalPages = Math.max(1, Math.ceil((totalCount || 0) / PAGE_SIZE));
+  const pageFrom = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const pageTo = Math.min(page * PAGE_SIZE, totalCount || filteredRows.length);
 
   const uniqueInvoiceNos = useMemo(
     () =>
@@ -930,15 +1056,78 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     totalInclVat,
   ]);
 
+  const loadVatExportTable = useCallback(async () => {
+    const moreThanPage = totalCount > filteredRows.length;
+    const wantAll =
+      isVatReport &&
+      moreThanPage &&
+      window.confirm(
+        `Download all ${totalCount} records?\n\nOK = all records\nCancel = this page only (${filteredRows.length})`,
+      );
+    if (!wantAll) {
+      return vatExportTable(filteredRows, {
+        qty: usePeriodTotals ? totalQty : pageQty,
+        line_total: usePeriodTotals ? totalLineAmount : pageLineAmount,
+        vat_amount: usePeriodTotals ? totalVatAmount : pageVatAmount,
+        total_incl_vat: usePeriodTotals ? totalInclVat : pageInclVat,
+      });
+    }
+    toast.message("Loading all records…");
+    const all = await fetchAllSalesLines({
+      facilityId: activeBusiness.id,
+      userId: String(userId),
+      fromDate,
+      toDate,
+      search: search.trim(),
+      category: category.trim(),
+      productSku: productSku.trim(),
+      branchId: branchFromUrl,
+    });
+    const displayed = applyVatDisplayRows(all, vatDivisor, paymentModeFilter);
+    const qty = displayed.reduce((s, r) => s + num(r.qty), 0);
+    const line = displayed.reduce((s, r) => s + num(r.line_total), 0);
+    const vat = displayed.reduce((s, r) => s + lineVat(r), 0);
+    return vatExportTable(displayed, {
+      qty,
+      line_total: line,
+      vat_amount: vat,
+      total_incl_vat: line + vat,
+    });
+  }, [
+    isVatReport,
+    totalCount,
+    filteredRows,
+    usePeriodTotals,
+    totalQty,
+    pageQty,
+    totalLineAmount,
+    pageLineAmount,
+    totalVatAmount,
+    pageVatAmount,
+    totalInclVat,
+    pageInclVat,
+    activeBusiness?.id,
+    userId,
+    fromDate,
+    toDate,
+    search,
+    category,
+    productSku,
+    branchFromUrl,
+    vatDivisor,
+    paymentModeFilter,
+  ]);
+
   const handleExportExcel = useCallback(async () => {
     if (!filteredRows.length && reportView !== "summary") {
       toast.error("No rows to export");
       return;
     }
     try {
+      const table = isVatReport ? await loadVatExportTable() : exportRows;
       const workbook = new ExcelJS.Workbook();
       const ws = workbook.addWorksheet(activeViewMeta.label.slice(0, 31));
-      const colCount = Math.max(exportRows.headers.length, 2);
+      const colCount = Math.max(table.headers.length, 2);
       ws.columns = Array.from({ length: colCount }, () => ({ width: 16 }));
       let r = 1;
       ws.mergeCells(r, 1, r, colCount);
@@ -955,13 +1144,10 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
       ws.mergeCells(r, 1, r, colCount);
-      // ws.getCell(r, 1).value = `Period: ${periodLabel} · All amounts in ₦${
-      //   vatDivisor > 1 ? ` · divided by ${vatDivisor} (test copy)` : ""
-      // }${category ? ` · Category: ${category}` : ""}`;
       ws.getCell(r, 1).alignment = { horizontal: "center" };
       r += 2;
 
-      exportRows.headers.forEach((h, i) => {
+      table.headers.forEach((h, i) => {
         const c = ws.getCell(r, i + 1);
         c.value = h;
         c.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -973,7 +1159,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
       });
       r++;
 
-      exportRows.rows.forEach((row) => {
+      table.rows.forEach((row) => {
         if (!row.length) {
           r++;
           return;
@@ -1007,11 +1193,10 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     filteredRows.length,
     reportView,
     isVatReport,
+    loadVatExportTable,
     activeViewMeta,
     exportRows,
     activeBusiness,
-    periodLabel,
-    category,
     fromDate,
     toDate,
     vatDivisor,
@@ -1025,6 +1210,58 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     }
     setPdfExporting(true);
     try {
+      if (isVatReport) {
+        const table = await loadVatExportTable();
+        const pdf = new jsPDF("l", "mm", "a4");
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 10;
+        let y = 12;
+        pdf.setFontSize(12);
+        pdf.text(
+          activeBusiness?.business_name ||
+            activeBusiness?.name ||
+            "Output VAT",
+          pageWidth / 2,
+          y,
+          { align: "center" },
+        );
+        y += 6;
+        pdf.setFontSize(10);
+        pdf.text(`Output VAT  ·  ${periodLabel || `${fromDate} to ${toDate}`}`, pageWidth / 2, y, {
+          align: "center",
+        });
+        y += 8;
+        const colWidths = [28, 24, 40, 40, 18, 28, 28, 32];
+        const drawRow = (cells, bold = false) => {
+          if (y > pageHeight - 12) {
+            pdf.addPage();
+            y = 12;
+          }
+          let x = margin;
+          pdf.setFont("helvetica", bold ? "bold" : "normal");
+          pdf.setFontSize(8);
+          cells.forEach((cell, i) => {
+            const text = cell == null ? "" : String(cell);
+            pdf.text(text, i >= 4 ? x + colWidths[i] - 1 : x, y, {
+              align: i >= 4 ? "right" : "left",
+              maxWidth: colWidths[i] - 2,
+            });
+            x += colWidths[i];
+          });
+          y += 5;
+        };
+        drawRow(table.headers, true);
+        table.rows.forEach((row, idx) => {
+          const cells = row.map((val, i) =>
+            typeof val === "number" ? formatNumber1(val) : val,
+          );
+          drawRow(cells, idx === 0);
+        });
+        pdf.save(`vat-report-${fromDate}-to-${toDate}.pdf`);
+        toast.success("PDF downloaded");
+        return;
+      }
       const canvas = await html2canvas(el, {
         scale: 2,
         useCORS: true,
@@ -1042,9 +1279,7 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
         pdf.addImage(imgData, "PNG", 0, -y, pageWidth, imgHeight);
         y += pageHeight;
       }
-      pdf.save(
-        `${isVatReport ? "vat-report" : `sales-${reportView}`}-${fromDate}-to-${toDate}.pdf`,
-      );
+      pdf.save(`sales-${reportView}-${fromDate}-to-${toDate}.pdf`);
       toast.success("PDF downloaded");
     } catch (e) {
       console.error(e);
@@ -1052,7 +1287,15 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     } finally {
       setPdfExporting(false);
     }
-  }, [fromDate, toDate, reportView, isVatReport]);
+  }, [
+    fromDate,
+    toDate,
+    reportView,
+    isVatReport,
+    loadVatExportTable,
+    activeBusiness,
+    periodLabel,
+  ]);
 
   const renderAggTable = (items, firstHeader, options = {}) => (
     <div className="overflow-x-auto">
@@ -1257,6 +1500,149 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     }
 
     // Sales Detail (default)
+    if (isVatReport) {
+      return (
+        <div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-slate-600 text-white">
+                  <Th className="px-6">Invoice</Th>
+                  <Th>Date</Th>
+                  <Th>Customer</Th>
+                  <Th>Item</Th>
+                  <Th align="right">Qty</Th>
+                  <Th align="right">Amount (₦)</Th>
+                  <Th align="right">Output VAT (₦)</Th>
+                  <Th align="right" className="px-6">
+                    Total incl. VAT (₦)
+                  </Th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.length > 0 && (
+                  <tr className="bg-slate-100 font-semibold border-b-2 border-slate-300">
+                    <td className="py-4 px-6" colSpan={4}>
+                      Period total
+                    </td>
+                    <Td align="right">{formatNumber1(totalQty)}</Td>
+                    <Td align="right">{formatNumber1(totalLineAmount)}</Td>
+                    <Td align="right">{formatNumber1(totalVatAmount)}</Td>
+                    <Td align="right" className="px-6">
+                      {formatNumber1(totalInclVat)}
+                    </Td>
+                  </tr>
+                )}
+                {filteredRows.map((r, idx) => {
+                  const vat = lineVat(r);
+                  const line = num(r.line_total);
+                  return (
+                    <tr key={`${r.invoice_no}-${r.store_entry_id || idx}`} className="border-b">
+                      <Td className="px-6 font-mono text-sm font-medium">
+                        {r.invoice_no ? (
+                          <Link
+                            to={invoicePreviewPath(r.invoice_no)}
+                            className="text-blue-700 hover:underline"
+                          >
+                            {r.invoice_no}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </Td>
+                      <Td>
+                        {r.invoice_date
+                          ? moment(r.invoice_date).format("DD MMM YYYY")
+                          : "—"}
+                      </Td>
+                      <Td>
+                        <div className="font-medium">{r.customer_name || "—"}</div>
+                        {r.customer_no ? (
+                          <div className="font-mono text-[11px] text-slate-400">
+                            {r.customer_no}
+                          </div>
+                        ) : null}
+                      </Td>
+                      <Td>
+                        <div>{r.product_name || "—"}</div>
+                        {r.product_sku ? (
+                          <div className="font-mono text-[11px] text-slate-400">
+                            {r.product_sku}
+                          </div>
+                        ) : null}
+                      </Td>
+                      <Td align="right">{formatNumber1(r.qty)}</Td>
+                      <Td align="right">{formatNumber1(line)}</Td>
+                      <Td align="right">{formatNumber1(vat)}</Td>
+                      <Td align="right" className="px-6 font-semibold">
+                        {formatNumber1(line + vat)}
+                      </Td>
+                    </tr>
+                  );
+                })}
+                {filteredRows.length > 0 && (
+                  <tr className="bg-white font-semibold border-t">
+                    <td className="py-4 px-6" colSpan={4}>
+                      Page total
+                    </td>
+                    <Td align="right">{formatNumber1(pageQty)}</Td>
+                    <Td align="right">{formatNumber1(pageLineAmount)}</Td>
+                    <Td align="right">{formatNumber1(pageVatAmount)}</Td>
+                    <Td align="right" className="px-6">
+                      {formatNumber1(pageInclVat)}
+                    </Td>
+                  </tr>
+                )}
+                {filteredRows.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="py-12 text-center text-sm text-gray-500"
+                    >
+                      No Output VAT lines found for this period.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="no-print flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-6 py-3">
+            <p className="text-sm text-gray-600">
+              {totalCount === 0
+                ? "No lines"
+                : `Showing ${formatNumber1(pageFrom)}–${formatNumber1(pageTo)} of ${formatNumber1(totalCount)}`}
+              {loading ? " · Loading…" : ""}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-gray-300"
+                disabled={page <= 1 || loading}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <span className="text-sm tabular-nums text-gray-700">
+                {page} / {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-gray-300"
+                disabled={page >= totalPages || loading}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
@@ -1405,6 +1791,12 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    runFetch();
+                  }
+                }}
                 placeholder="Invoice, customer, product…"
                 className="border rounded px-2 py-2 text-sm bg-white w-full"
               />
@@ -1486,7 +1878,10 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
               </div>
             )}
             <Button
-              onClick={runFetch}
+              onClick={() => {
+                if (page !== 1) setPage(1);
+                else runFetch();
+              }}
               disabled={loading || !activeBusiness?.id}
               className="bg-[var(--aa-navy)] hover:bg-[var(--aa-navy-hover)] text-white"
             >
@@ -1593,19 +1988,19 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
         </div>
       </div>
 
-      {loading && (
+      {loading && rows.length === 0 && (
         <div className="space-y-4">
           <Skeleton className="h-56 w-full" />
         </div>
       )}
 
-      {!loading && error && (
+      {error && !loading && rows.length === 0 && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-800 text-sm">{error}</p>
         </div>
       )}
 
-      {!loading && !error && (
+      {(rows.length > 0 || (!loading && !error)) && (
         <div
           ref={reportExportRef}
           className="bg-white border border-gray-200 rounded-xl overflow-hidden"
@@ -1626,10 +2021,16 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
           <div className="px-6 py-4 flex flex-wrap justify-between gap-2 text-sm text-gray-700">
             <p className="font-semibold">{activeViewMeta.label}</p>
             <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
-              <p>{filteredRows.length} line(s)</p>
+              <p>{lineCount} line(s)</p>
               <p>{invoiceCount} invoice(s)</p>
               <p>
-                VAT:{" "}
+                Amount:{" "}
+                <span className="font-semibold tabular-nums">
+                  ₦{formatNumber1(totalLineAmount)}
+                </span>
+              </p>
+              <p>
+                {isVatReport ? "Output VAT" : "VAT"}:{" "}
                 <span className="font-semibold tabular-nums">
                   ₦{formatNumber1(totalVatAmount)}
                 </span>
@@ -1937,30 +2338,21 @@ async function fetchAllSalesLines({
   productSku,
   branchId,
 }) {
-  let page = 1;
-  let all = [];
-  let totalCount = Infinity;
-  while (all.length < totalCount) {
-    const batch = await fetchSalesLinePage({
-      facilityId,
-      userId,
-      fromDate,
-      toDate,
-      search,
-      category,
-      productSku,
-      branchId,
-      page,
-      pageSize: PAGE_SIZE,
-    });
-    all = all.concat(batch.rows);
-    totalCount = Number.isFinite(batch.totalCount)
-      ? batch.totalCount
-      : all.length;
-    if (!batch.rows.length) break;
-    page += 1;
-  }
-  return all;
+  const batch = await fetchSalesLinePage({
+    facilityId,
+    userId,
+    fromDate,
+    toDate,
+    search,
+    category,
+    productSku,
+    branchId,
+    page: 1,
+    pageSize: 500,
+    all: true,
+    includeCount: false,
+  });
+  return batch.rows;
 }
 
 function fetchSalesLinePage({
@@ -1974,6 +2366,8 @@ function fetchSalesLinePage({
   branchId,
   page,
   pageSize,
+  all = false,
+  includeCount = true,
 }) {
   return new Promise((resolve, reject) => {
     const params = new URLSearchParams({
@@ -1984,6 +2378,8 @@ function fetchSalesLinePage({
       page: String(page),
       pageSize: String(pageSize),
     });
+    if (all) params.set("all", "1");
+    if (!includeCount) params.set("includeCount", "0");
     if (search) params.set("search", search);
     if (category) params.set("category", category);
     if (productSku) params.set("productSku", productSku);
@@ -1996,6 +2392,7 @@ function fetchSalesLinePage({
           resolve({
             rows: Array.isArray(res.results) ? res.results : [],
             totalCount: parseInt(res.totalCount || 0, 10),
+            periodSummary: res.periodSummary || null,
           });
         } else {
           reject(new Error(res?.message || "Failed to fetch sales lines"));

@@ -59,16 +59,52 @@ function formatLayerType(type) {
   const labels = {
     purchase: "Purchase",
     opening_balance: "Opening balance",
+    opening: "Opening",
     production: "Production",
     adjustment: "Adjustment",
     sales: "Sale return",
+    transfer: "Transfer",
   };
   return labels[type] || type || "—";
+}
+
+function groupCostRowsByUnitCost(rows) {
+  const groups = [];
+  const map = new Map();
+  for (const row of rows || []) {
+    const key = Number(row.cost_price || 0).toFixed(2);
+    if (!map.has(key)) {
+      const group = { costKey: key, cost: Number(key), rows: [] };
+      map.set(key, group);
+      groups.push(group);
+    }
+    map.get(key).rows.push(row);
+  }
+  let majorityKey = groups[0]?.costKey || "";
+  let majorityQty = 0;
+  for (const group of groups) {
+    const qty = group.rows.reduce((sum, row) => sum + (Number(row.qty) || 0), 0);
+    if (qty > majorityQty) {
+      majorityQty = qty;
+      majorityKey = group.costKey;
+    }
+  }
+  return groups.map((group) => ({
+    ...group,
+    isDifferent: groups.length > 1 && group.costKey !== majorityKey,
+  }));
 }
 
 function formatLayerDate(value) {
   if (!value) return "—";
   return moment(value).format("DD MMM YYYY");
+}
+
+function isDifferentBatchCost(item, differentSkuCosts) {
+  const skuKey = String(item.sku || item.batch_no || "");
+  const costKey = Number(item.cost_per_unit || 0).toFixed(2);
+  const mix = differentSkuCosts.get(skuKey);
+  return Boolean(mix?.hasDifferent && mix.majorityCost !== costKey);
 }
 
 function warehouseLabel(branch) {
@@ -93,16 +129,8 @@ export default function InventoryValuationReport() {
   const businessName =
     business.business_name || business.name || "Company";
 
-  // Map business inv_ev_m to API method string
-  const businessMethod = (() => {
-    const m = business.inv_ev_m || "";
-    if (m === "Weighted Average Cost") return "AVCO";
-    if (m === "LIFO") return "LIFO";
-    return "FIFO"; // default
-  })();
-
   const [asOfDate, setAsOfDate] = useState(moment().format("YYYY-MM-DD"));
-  const [valuationMethod, setValuationMethod] = useState(businessMethod);
+  const [valuationMethod, setValuationMethod] = useState("BATCH");
   const [warehouseId, setWarehouseId] = useState("");
   const [productSku, setProductSku] = useState("");
   const [category, setCategory] = useState("");
@@ -120,13 +148,13 @@ export default function InventoryValuationReport() {
   const [layersData, setLayersData] = useState(null);
 
   const openCostLayers = useCallback(
-    (sku, itemName) => {
+    (sku, itemName, unitCost) => {
       if (!facilityId || !asOfDate || !sku) return;
       setLayersOpen(true);
       setLayersLoading(true);
       setLayersError("");
       setLayersData({
-        item: { name: itemName, sku },
+        item: { name: itemName, sku, unitCost: unitCost ?? null },
         layers: [],
         byCost: [],
         totals: null,
@@ -138,6 +166,10 @@ export default function InventoryValuationReport() {
           facilityId,
           asOfDate,
           sku,
+          valuationMethod,
+          ...(unitCost !== undefined && unitCost !== null && unitCost !== ""
+            ? { unitCost: Number(unitCost) }
+            : {}),
           ...(warehouseId ? { branchId: Number(warehouseId) } : {}),
         },
         (response) => {
@@ -154,7 +186,7 @@ export default function InventoryValuationReport() {
         },
       );
     },
-    [facilityId, asOfDate, warehouseId],
+    [facilityId, asOfDate, warehouseId, valuationMethod],
   );
 
   const fetchReport = useCallback(() => {
@@ -269,23 +301,24 @@ export default function InventoryValuationReport() {
       const sectionFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
 
       // ── Finished Goods sheet ──
+      const colCount = 8;
       const wsFG = wb.addWorksheet("Finished Goods");
       wsFG.columns = [
         { width: 24 }, { width: 32 }, { width: 14 }, { width: 16 },
         { width: 16 }, { width: 18 }, { width: 18 }, { width: 16 },
       ];
       let r = 1;
-      wsFG.mergeCells(r, 1, r, 8);
+      wsFG.mergeCells(r, 1, r, colCount);
       wsFG.getCell(r, 1).value = businessName;
       wsFG.getCell(r, 1).font = { bold: true, size: 14 };
       wsFG.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
-      wsFG.mergeCells(r, 1, r, 8);
+      wsFG.mergeCells(r, 1, r, colCount);
       wsFG.getCell(r, 1).value = "INVENTORY REPORT";
       wsFG.getCell(r, 1).font = { bold: true, size: 12 };
       wsFG.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
-      wsFG.mergeCells(r, 1, r, 8);
+      wsFG.mergeCells(r, 1, r, colCount);
       wsFG.getCell(r, 1).value = `As of ${moment(asOfDate).format("DD MMMM YYYY")}  |  Method: ${valuationMethod}`;
       wsFG.getCell(r, 1).alignment = { horizontal: "center" };
       r += 2;
@@ -303,6 +336,8 @@ export default function InventoryValuationReport() {
 
       const fgItems = (data.finishedGoods?.items || []).filter((item) => {
         if (!(parseFloat(item.quantity) > 0)) return false;
+        const store = String(item.warehouse_name || item.warehouse_location || "").trim();
+        if (!store || store === "—") return false;
         if (warehouseId && String(item.branch_id) !== String(warehouseId)) {
           return false;
         }
@@ -314,36 +349,40 @@ export default function InventoryValuationReport() {
         wsFG.getCell(r, 1).value = store !== previousStore ? store : "";
         previousStore = store;
         wsFG.getCell(r, 2).value = item.product_name || "";
-        wsFG.getCell(r, 3).value = Number(item.quantity) || 0;
-        wsFG.getCell(r, 4).value = Number(item.cost_per_unit) || 0;
-        wsFG.getCell(r, 5).value = Number(item.selling_price) || 0;
-        wsFG.getCell(r, 6).value = Number(item.total_value) || 0;
-        wsFG.getCell(r, 7).value = Number(item.selling_amount) || 0;
-        wsFG.getCell(r, 8).value = item.last_update
+        const qtyCol = 3;
+        wsFG.getCell(r, qtyCol).value = Number(item.quantity) || 0;
+        wsFG.getCell(r, qtyCol + 1).value = Number(item.cost_per_unit) || 0;
+        wsFG.getCell(r, qtyCol + 2).value = Number(item.selling_price) || 0;
+        wsFG.getCell(r, qtyCol + 3).value = Number(item.total_value) || 0;
+        wsFG.getCell(r, qtyCol + 4).value = Number(item.selling_amount) || 0;
+        wsFG.getCell(r, qtyCol + 5).value = item.last_update
           ? moment(item.last_update).format("D MMM YYYY")
           : "";
-        [4, 5, 6, 7].forEach((col) => { wsFG.getCell(r, col).numFmt = "#,##0.00"; });
-        [3, 4, 5, 6, 7].forEach((col) => { wsFG.getCell(r, col).alignment = { horizontal: "right" }; });
-        for (let col = 1; col <= 8; col++) wsFG.getCell(r, col).border = borderThin;
+        [qtyCol + 1, qtyCol + 2, qtyCol + 3, qtyCol + 4].forEach((col) => { wsFG.getCell(r, col).numFmt = "#,##0.00"; });
+        [qtyCol, qtyCol + 1, qtyCol + 2, qtyCol + 3, qtyCol + 4].forEach((col) => { wsFG.getCell(r, col).alignment = { horizontal: "right" }; });
+        for (let col = 1; col <= colCount; col++) wsFG.getCell(r, col).border = borderThin;
         r++;
       }
       r++;
-      wsFG.getCell(r, 5).value = "TOTAL";
-      wsFG.getCell(r, 5).font = { bold: true };
-      wsFG.getCell(r, 6).value = fgItems.reduce(
+      const totalLabelCol = 5;
+      const costAmtCol = totalLabelCol + 1;
+      const sellAmtCol = totalLabelCol + 2;
+      wsFG.getCell(r, totalLabelCol).value = "TOTAL";
+      wsFG.getCell(r, totalLabelCol).font = { bold: true };
+      wsFG.getCell(r, costAmtCol).value = fgItems.reduce(
         (sum, item) => sum + (Number(item.total_value) || 0),
         0,
       );
-      wsFG.getCell(r, 7).value = fgItems.reduce(
+      wsFG.getCell(r, sellAmtCol).value = fgItems.reduce(
         (sum, item) => sum + (Number(item.selling_amount) || 0),
         0,
       );
-      [6, 7].forEach((col) => {
+      [costAmtCol, sellAmtCol].forEach((col) => {
         wsFG.getCell(r, col).font = { bold: true };
         wsFG.getCell(r, col).numFmt = "#,##0.00";
         wsFG.getCell(r, col).alignment = { horizontal: "right" };
       });
-      [5, 6, 7].forEach((col) => { wsFG.getCell(r, col).border = borderThin; wsFG.getCell(r, col).fill = headerFill; });
+      [totalLabelCol, costAmtCol, sellAmtCol].forEach((col) => { wsFG.getCell(r, col).border = borderThin; wsFG.getCell(r, col).fill = headerFill; });
 
       // ── Summary sheet ──
       const wsSummary = wb.addWorksheet("Summary");
@@ -434,8 +473,11 @@ export default function InventoryValuationReport() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   // Filter out zero-qty items before rendering
+  const storeName = (item) =>
+    String(item.warehouse_name || item.warehouse_location || "").trim();
   const fgItems = (data?.finishedGoods?.items || []).filter((item) => {
     if (!(parseFloat(item.quantity) > 0)) return false;
+    if (!storeName(item) || storeName(item) === "—") return false;
     if (warehouseId && String(item.branch_id) !== String(warehouseId)) {
       return false;
     }
@@ -449,8 +491,36 @@ export default function InventoryValuationReport() {
     (sum, item) => sum + (parseFloat(item.selling_amount) || 0),
     0,
   );
-  const storeName = (item) =>
-    item.warehouse_name || item.warehouse_location || "—";
+  const isBatchMethod = String(valuationMethod || "").toUpperCase() === "BATCH";
+  const layersAreBatch =
+    String(layersData?.formula?.method || "").toUpperCase() === "BATCH" ||
+    isBatchMethod;
+  const layerCostGroups = groupCostRowsByUnitCost(layersData?.byCost);
+  const tableHeaders = ["Store", "Product Name", "Qty", "Cost Price", "Selling Price", "Cost Amount", "Selling Amount", "Last Update"];
+  const qtyColIndex = 2;
+  const amountEndIndex = 6;
+  const colCount = tableHeaders.length;
+  const differentSkuCosts = fgItems.reduce((map, item) => {
+    const sku = String(item.sku || item.batch_no || "");
+    const costKey = Number(item.cost_per_unit || 0).toFixed(2);
+    const qty = Number(item.quantity) || 0;
+    if (!map.has(sku)) map.set(sku, { qtyByCost: new Map() });
+    const entry = map.get(sku);
+    entry.qtyByCost.set(costKey, (entry.qtyByCost.get(costKey) || 0) + qty);
+    return map;
+  }, new Map());
+  for (const entry of differentSkuCosts.values()) {
+    let majorityCost = "";
+    let majorityQty = -1;
+    for (const [costKey, qty] of entry.qtyByCost) {
+      if (qty > majorityQty) {
+        majorityQty = qty;
+        majorityCost = costKey;
+      }
+    }
+    entry.majorityCost = majorityCost;
+    entry.hasDifferent = entry.qtyByCost.size > 1;
+  }
   const storeGroups = fgItems.reduce((groups, item) => {
     const name = storeName(item);
     const last = groups[groups.length - 1];
@@ -501,7 +571,7 @@ export default function InventoryValuationReport() {
                     className="h-10 rounded border border-gray-300 bg-white px-3 text-sm"
                   />
                 </div>
-                <div className="flex min-w-[11rem] flex-col gap-1">
+                <div className="flex min-w-[15rem] flex-col gap-1">
                   <label className="text-sm font-semibold text-gray-700">
                     Valuation Method
                   </label>
@@ -510,9 +580,10 @@ export default function InventoryValuationReport() {
                     onChange={(e) => setValuationMethod(e.target.value)}
                     className="h-10 rounded border border-gray-300 bg-white px-3 text-sm"
                   >
+                    <option value="BATCH">Batch by Batch</option>
+                    <option value="AVCO">Weighted Average (AVCO)</option>
                     <option value="FIFO">FIFO</option>
                     <option value="LIFO">LIFO</option>
-                    <option value="AVCO">Weighted Average (AVCO)</option>
                   </select>
                 </div>
                 <div className="flex min-w-[12rem] flex-col gap-1">
@@ -671,8 +742,8 @@ export default function InventoryValuationReport() {
                   <table className="w-full text-sm border-collapse">
                     <thead className="bg-gray-100 border-b-2 border-gray-300">
                       <tr>
-                        {["Store", "Product Name", "Qty", "Cost Price", "Selling Price", "Cost Amount", "Selling Amount", "Last Update"].map((h, i) => (
-                          <th key={h} className={`px-3 py-2 text-xs font-bold text-gray-700 uppercase border-r border-gray-200 ${i >= 2 && i <= 6 ? "text-right" : "text-left"}`}>
+                        {tableHeaders.map((h, i) => (
+                          <th key={h} className={`px-3 py-2 text-xs font-bold text-gray-700 uppercase border-r border-gray-200 ${i >= qtyColIndex && i <= amountEndIndex ? "text-right" : "text-left"}`}>
                             {h}
                           </th>
                         ))}
@@ -680,11 +751,18 @@ export default function InventoryValuationReport() {
                     </thead>
                     <tbody>
                       {fgItems.length === 0 ? (
-                        <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400 text-sm">No goods found</td></tr>
+                        <tr><td colSpan={colCount} className="px-3 py-6 text-center text-gray-400 text-sm">No goods found</td></tr>
                       ) : storeGroups.map((group) => (
                         <Fragment key={group.store}>
                         {group.items.map((item, idx) => (
-                          <tr key={`${group.store}-${item.batch_no}-${item.branch_id ?? idx}`} className="border-b border-gray-100 hover:bg-gray-50/80">
+                          <tr
+                            key={`${group.store}-${item.sku}-${item.cost_per_unit}-${item.branch_id ?? idx}`}
+                            className={`border-b border-gray-100 hover:bg-gray-50/80 ${
+                              isBatchMethod && isDifferentBatchCost(item, differentSkuCosts)
+                                ? "bg-amber-50"
+                                : ""
+                            }`}
+                          >
                             {idx === 0 ? (
                               <td rowSpan={group.items.length} className="px-3 py-1.5 align-top font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
                                 {group.store}
@@ -696,9 +774,13 @@ export default function InventoryValuationReport() {
                               <button
                                 type="button"
                                 className="tabular-nums text-blue-700 underline decoration-dotted underline-offset-2 hover:text-blue-900"
-                                title="View the receipts that make this unit cost"
+                                title="View receipts at this purchase amount"
                                 onClick={() =>
-                                  openCostLayers(item.batch_no, item.product_name)
+                                  openCostLayers(
+                                    item.sku || item.batch_no,
+                                    item.product_name,
+                                    item.cost_per_unit,
+                                  )
                                 }
                               >
                                 {formatNaira(item.cost_per_unit)}
@@ -754,7 +836,10 @@ export default function InventoryValuationReport() {
                 : "Unit cost"}
             </DialogTitle>
             <DialogDescription>
-              {layersData?.item?.sku ? `SKU ${layersData.item.sku}` : "Average cost"}
+              {layersData?.item?.sku ? `SKU ${layersData.item.sku}` : "Cost"}
+              {layersData?.item?.unitCost != null || layersData?.item?.unit_cost != null
+                ? ` · ₦${formatCell(layersData.item.unitCost ?? layersData.item.unit_cost)}`
+                : ""}
               {asOfDate ? ` · as of ${formatReportDate(asOfDate)}` : ""}
             </DialogDescription>
           </DialogHeader>
@@ -777,26 +862,62 @@ export default function InventoryValuationReport() {
                 {(layersData.byCost || []).length > 0 && (
                   <div className="border rounded">
                     <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 bg-gray-50 border-b">
-                      Costs that accumulated
+                      {layersAreBatch ? "Remaining stock by purchase amount" : "Costs that accumulated"}
                     </p>
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 border-b">
                         <tr>
-                          <th className="px-3 py-2 text-left">Type</th>
-                          <th className="px-3 py-2 text-right">Unit cost (₦)</th>
-                          <th className="px-3 py-2 text-right">Qty</th>
-                          <th className="px-3 py-2 text-right">Value (₦)</th>
+                          {layersAreBatch ? (
+                            <>
+                              <th className="px-3 py-2 text-left">Store</th>
+                              <th className="px-3 py-2 text-right">Unit cost (₦)</th>
+                              <th className="px-3 py-2 text-right">Qty</th>
+                              <th className="px-3 py-2 text-right">Value (₦)</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="px-3 py-2 text-left">Type</th>
+                              <th className="px-3 py-2 text-right">Unit cost (₦)</th>
+                              <th className="px-3 py-2 text-right">Qty</th>
+                              <th className="px-3 py-2 text-right">Value (₦)</th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
-                        {layersData.byCost.map((row, idx) => (
-                          <tr key={`${row.type}-${row.cost_price}-${idx}`} className="border-b">
-                            <td className="px-3 py-1.5">{formatLayerType(row.type)}</td>
-                            <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.cost_price)}</td>
-                            <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.qty)}</td>
-                            <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.value)}</td>
-                          </tr>
-                        ))}
+                        {layersAreBatch
+                          ? layerCostGroups.map((group) => (
+                              <Fragment key={group.costKey}>
+                                {layerCostGroups.length > 1 ? (
+                                  <tr className={group.isDifferent ? "bg-amber-100" : "bg-sky-50"}>
+                                    <td colSpan={4} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide">
+                                      {group.isDifferent
+                                        ? `Different purchase amount ₦${formatCell(group.cost)}`
+                                        : `Purchase amount ₦${formatCell(group.cost)}`}
+                                    </td>
+                                  </tr>
+                                ) : null}
+                                {group.rows.map((row, idx) => (
+                                  <tr
+                                    key={`${row.warehouse_name || "store"}-${row.cost_price}-${idx}`}
+                                    className={`border-b ${group.isDifferent ? "bg-amber-50" : ""}`}
+                                  >
+                                    <td className="px-3 py-1.5">{row.warehouse_name || "—"}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{formatCell(row.cost_price)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.qty)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.value)}</td>
+                                  </tr>
+                                ))}
+                              </Fragment>
+                            ))
+                          : layersData.byCost.map((row, idx) => (
+                              <tr key={`${row.type}-${row.cost_price}-${idx}`} className="border-b">
+                                <td className="px-3 py-1.5">{formatLayerType(row.type)}</td>
+                                <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.cost_price)}</td>
+                                <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.qty)}</td>
+                                <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.value)}</td>
+                              </tr>
+                            ))}
                       </tbody>
                     </table>
                   </div>
@@ -822,8 +943,13 @@ export default function InventoryValuationReport() {
                         </tr>
                       </thead>
                       <tbody>
-                        {layersData.layers.map((row) => (
-                          <tr key={row.id} className="border-b">
+                        {layersData.layers.map((row) => {
+                          const rowCost = Number(row.cost_price || 0).toFixed(2);
+                          const differentCost = layerCostGroups.some(
+                            (group) => group.isDifferent && group.costKey === rowCost,
+                          );
+                          return (
+                          <tr key={row.id} className={`border-b ${differentCost ? "bg-amber-50" : ""}`}>
                             <td className="px-3 py-1.5">{formatLayerDate(row.txn_date)}</td>
                             <td className="px-3 py-1.5">{formatLayerType(row.type)}</td>
                             <td className="px-3 py-1.5 text-xs">
@@ -842,7 +968,8 @@ export default function InventoryValuationReport() {
                             <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.cost_price)}</td>
                             <td className="px-3 py-1.5 text-right tabular-nums">{formatCell(row.line_value)}</td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                       <tfoot className="bg-gray-50 border-t">
                         <tr>
@@ -861,7 +988,9 @@ export default function InventoryValuationReport() {
                         </tr>
                         <tr>
                           <td colSpan={5} className="px-3 py-2 text-right text-gray-600">
-                            Qty on hand × average cost
+                            {layersAreBatch
+                              ? "Qty on hand × this purchase amount"
+                              : "Qty on hand × average cost"}
                           </td>
                           <td className="px-3 py-2 text-right font-semibold tabular-nums">
                             {formatCell(layersData.totals?.stockQty)} × {formatCell(layersData.totals?.avcoCost)} = {formatCell(layersData.totals?.totalValue)}

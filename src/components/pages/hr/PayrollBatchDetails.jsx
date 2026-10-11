@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
@@ -43,6 +43,35 @@ const months = [
 
 const formatCurrency = (amount) =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" }).format(amount || 0);
+
+const parseDetails = (raw) => {
+  if (!raw) return {};
+  let data = raw;
+  if (typeof data === "string") {
+    try {
+      data = JSON.parse(data);
+      if (typeof data === "string") data = JSON.parse(data);
+    } catch {
+      return {};
+    }
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+  const cleaned = {};
+  Object.entries(data).forEach(([k, v]) => {
+    if (!k || /^\d+$/.test(String(k))) return;
+    const n = parseFloat(v);
+    if (Number.isFinite(n) && n !== 0) cleaned[k] = n;
+  });
+  return cleaned;
+};
+
+const detailsHint = (raw) => {
+  const map = parseDetails(raw);
+  const parts = Object.entries(map).map(
+    ([k, v]) => `${k}: ${formatCurrency(v)}`
+  );
+  return parts.length ? parts.join(" · ") : "";
+};
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -159,29 +188,8 @@ const PayrollBatchDetails = ({
     return name;
   };
 
-  const parseDetailMap = (raw) => {
-    if (!raw) return {};
-    let data = raw;
-    if (typeof data === "string") {
-      try {
-        data = JSON.parse(data);
-        if (typeof data === "string") data = JSON.parse(data);
-      } catch {
-        return {};
-      }
-    }
-    if (!data || typeof data !== "object" || Array.isArray(data)) return {};
-    const cleaned = {};
-    Object.entries(data).forEach(([k, v]) => {
-      if (!k || /^\d+$/.test(String(k))) return;
-      const n = parseFloat(v);
-      if (Number.isFinite(n) && n !== 0) cleaned[k] = n;
-    });
-    return cleaned;
-  };
-
   /** Preview of GL lines that will post when payroll is released */
-  const releaseAccountingPreview = (() => {
+  const releaseAccountingPreview = useMemo(() => {
     const processed = payrolls.filter((p) => p.status === "Processed");
     const source =
       modeOfPayment === "cash"
@@ -217,7 +225,7 @@ const PayrollBatchDetails = ({
         pension += parseFloat(p.pension || 0);
       }
       loan += parseFloat(p.loanRepayment || 0);
-      Object.entries(parseDetailMap(p.deduction_details)).forEach(([name, amt]) => {
+      Object.entries(parseDetails(p.deduction_details)).forEach(([name, amt]) => {
         const key = name.toLowerCase();
         if (
           ["paye", "tax", "income tax", "pension", "loan", "loan repayment", "staff loan"].some(
@@ -255,7 +263,7 @@ const PayrollBatchDetails = ({
     });
 
     return rows.filter((r) => r.amount > 0);
-  })();
+  }, [payrolls, modeOfPayment, accountHead, bankAccount, payeEnabled]);
 
   // Fetch bank accounts or cash heads when mode changes
   useEffect(() => {
@@ -312,7 +320,7 @@ const PayrollBatchDetails = ({
     setFilteredData(filtered);
   }, [payrollData, searchTerm, paymentBasisFilter]);
 
-  const fetchAttendance = async (employee, empId = null) => {
+  const fetchAttendance = useCallback(async (employee, empId = null) => {
     const idToUse = empId || employee?.id;
     if (!idToUse || !facilityId) return;
     setAttendanceLoading(true);
@@ -336,10 +344,10 @@ const PayrollBatchDetails = ({
         setAttendanceLoading(false);
       }
     );
-  };
+  }, [facilityId, selectedMonth, selectedYear]);
 
   // ── API Helpers ────────────────────────────────────────────────────────────
-  const updateIndividualStatus = async (item, newStatus) => {
+  const updateIndividualStatus = useCallback(async (item, newStatus) => {
     try {
       const res = await window.fetch(`${apiURL}/api/hr/payroll/status/${item.id}`, {
         method: "PUT", headers: { "Content-Type": "application/json", Authorization: localStorage.getItem("@@__token") || "" },
@@ -351,7 +359,7 @@ const PayrollBatchDetails = ({
         onRefresh?.(selectedMonth, selectedYear);
       } else toast.error(data.message);
     } catch { toast.error("Status update failed"); }
-  };
+  }, [facilityId, user?.id, onRefresh, selectedMonth, selectedYear]);
 
   const approveBatch = async () => {
     const draftIds = selectedLedgerIds.length > 0
@@ -453,6 +461,7 @@ const PayrollBatchDetails = ({
         "Allowances",
         "Bonus",
         ...(payeEnabled ? ["PAYE Tax"] : []),
+        "Loan Deduction",
         "Deductions",
         "Gross Pay",
         "Net Pay",
@@ -537,7 +546,7 @@ const PayrollBatchDetails = ({
           },
           alignment: {
             horizontal:
-              ["Basic Salary", "Allowances", "Bonus", "PAYE Tax", "Deductions", "Gross Pay", "Net Pay"].includes(h)
+              ["Basic Salary", "Allowances", "Bonus", "PAYE Tax", "Loan Deduction", "Deductions", "Gross Pay", "Net Pay"].includes(h)
                 ? "right"
                 : "left",
           },
@@ -549,7 +558,7 @@ const PayrollBatchDetails = ({
       const moneyCols = new Set(
         headers
           .map((h, i) =>
-            ["Basic Salary", "Allowances", "Bonus", "PAYE Tax", "Deductions", "Gross Pay", "Net Pay"].includes(h)
+            ["Basic Salary", "Allowances", "Bonus", "PAYE Tax", "Loan Deduction", "Deductions", "Gross Pay", "Net Pay"].includes(h)
               ? i + 1
               : null
           )
@@ -560,6 +569,7 @@ const PayrollBatchDetails = ({
       let totalAllowances = 0;
       let totalBonus = 0;
       let totalPaye = 0;
+      let totalLoan = 0;
       let totalDeductions = 0;
       let totalGross = 0;
       let totalNet = 0;
@@ -570,6 +580,7 @@ const PayrollBatchDetails = ({
         const allowances = parseFloat(p.allowances || 0);
         const bonus = parseFloat(p.bonuses || 0);
         const paye = parseFloat(p.paye || 0);
+        const loan = parseFloat(p.loanRepayment || 0);
         const deductions = parseFloat(p.deductions || 0);
         const gross = parseFloat(p.grossPay || 0);
         const net = parseFloat(p.netPay || 0);
@@ -578,6 +589,7 @@ const PayrollBatchDetails = ({
         totalAllowances += allowances;
         totalBonus += bonus;
         totalPaye += paye;
+        totalLoan += loan;
         totalDeductions += deductions;
         totalGross += gross;
         totalNet += net;
@@ -590,6 +602,7 @@ const PayrollBatchDetails = ({
           allowances,
           bonus,
           ...(payeEnabled ? [paye] : []),
+          loan,
           deductions,
           gross,
           net,
@@ -619,6 +632,7 @@ const PayrollBatchDetails = ({
         Allowances: totalAllowances,
         Bonus: totalBonus,
         "PAYE Tax": totalPaye,
+        "Loan Deduction": totalLoan,
         Deductions: totalDeductions,
         "Gross Pay": totalGross,
         "Net Pay": totalNet,
@@ -652,34 +666,6 @@ const PayrollBatchDetails = ({
       console.error("Excel export failed", err);
       toast.error("Export failed");
     }
-  };
-
-  const parseDetails = (raw) => {
-    if (!raw) return {};
-    let data = raw;
-    if (typeof data === "string") {
-      try {
-        data = JSON.parse(data);
-        if (typeof data === "string") data = JSON.parse(data);
-      } catch {
-        return {};
-      }
-    }
-    if (!data || typeof data !== "object" || Array.isArray(data)) return {};
-    const cleaned = {};
-    Object.entries(data).forEach(([k, v]) => {
-      const n = parseFloat(v);
-      if (Number.isFinite(n) && n !== 0) cleaned[k] = n;
-    });
-    return cleaned;
-  };
-
-  const detailsHint = (raw) => {
-    const map = parseDetails(raw);
-    const parts = Object.entries(map).map(
-      ([k, v]) => `${k}: ${formatCurrency(v)}`
-    );
-    return parts.length ? parts.join(" · ") : "";
   };
 
   // Professional bank schedule (no template) — using ExcelJS for styling
@@ -847,7 +833,7 @@ const PayrollBatchDetails = ({
   };
 
   // ── Table columns ──────────────────────────────────────────────────────────
-  const columns = [
+  const columns = useMemo(() => [
     {
       value: "selection",
       title: (
@@ -955,6 +941,17 @@ const PayrollBatchDetails = ({
         ]
       : []),
     {
+      value: "loanRepayment",
+      title: "Loan",
+      custom: true,
+      className: "text-center font-mono tabular-nums",
+      component: (item) => (
+        <span className="text-sm font-medium text-destructive">
+          -{formatCurrency(item.loanRepayment || 0)}
+        </span>
+      ),
+    },
+    {
       value: "deductions", title: "Deductions", custom: true,
       className: "text-center font-mono tabular-nums",
       component: (item) => <span className="text-sm font-medium text-destructive">-{formatCurrency(item.deductions)}</span>,
@@ -1027,7 +1024,20 @@ const PayrollBatchDetails = ({
         </DropdownMenu>
       ),
     },
-  ];
+  ], [
+    selectedLedgerIds,
+    filteredData,
+    payeEnabled,
+    primaryColor,
+    fetchAttendance,
+    updateIndividualStatus,
+  ]);
+
+  const ledgerTotals = useMemo(() => ({
+    allowances: payrolls.reduce((sum, p) => sum + parseFloat(p.allowances || 0), 0),
+    bonuses: payrolls.reduce((sum, p) => sum + parseFloat(p.bonuses || 0), 0),
+    paye: payrolls.reduce((sum, p) => sum + parseFloat(p.paye || 0), 0),
+  }), [payrolls]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -1035,7 +1045,7 @@ const PayrollBatchDetails = ({
       className="flex flex-col gap-0 bg-white rounded border border-muted shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500"
       style={{
         ["--app-primary"]: primaryColor,
-        ["--app-secondary"]: gradientEnd,
+        ["--app-secondary"]: secondaryColor,
       }}
     >
       {/* Header */}
@@ -1133,26 +1143,20 @@ const PayrollBatchDetails = ({
         <div className="p-6 border-r border-muted flex flex-col gap-1">
           <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Allowances</span>
           <span className="text-lg font-black font-mono text-emerald-600">
-            {formatCurrency(
-              payrolls.reduce((sum, p) => sum + parseFloat(p.allowances || 0), 0)
-            )}
+            {formatCurrency(ledgerTotals.allowances)}
           </span>
         </div>
         <div className="p-6 border-r border-muted flex flex-col gap-1">
           <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Bonus</span>
           <span className="text-lg font-black font-mono text-emerald-600">
-            {formatCurrency(
-              payrolls.reduce((sum, p) => sum + parseFloat(p.bonuses || 0), 0)
-            )}
+            {formatCurrency(ledgerTotals.bonuses)}
           </span>
         </div>
         {payeEnabled ? (
           <div className="p-6 border-r border-muted flex flex-col gap-1">
             <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Total PAYE</span>
             <span className="text-lg font-black font-mono text-amber-700">
-              {formatCurrency(
-                payrolls.reduce((sum, p) => sum + parseFloat(p.paye || 0), 0)
-              )}
+              {formatCurrency(ledgerTotals.paye)}
             </span>
           </div>
         ) : null}

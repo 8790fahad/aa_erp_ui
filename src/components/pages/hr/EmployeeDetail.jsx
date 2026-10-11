@@ -786,7 +786,7 @@ const EmployeeDetail = () => {
                     title: "Deductions", 
                     className: "text-center font-medium text-destructive tabular-nums",
                     custom: true,
-                    component: (item) => <div className="text-center font-bold font-mono">-{formatCurrency(item.deductions + Number(item.loanRepayment || 0))}</div>
+                    component: (item) => <div className="text-center font-bold font-mono">-{formatCurrency(item.deductions)}</div>
                   },
                   { 
                     title: "Net Disbursed", 

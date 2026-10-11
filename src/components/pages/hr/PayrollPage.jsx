@@ -142,12 +142,20 @@ const PayrollPage = () => {
           When payment is released, each employee is sent their payment slip
           (using the email on their linked user account).
         </p>
-        {tab === "run" && canViewTab("Run Payroll") && <RunPayrollTab />}
-        {tab === "history" && canViewTab("Payroll History") && (
-          <PayrollHistory mode="history" />
+        {canViewTab("Run Payroll") && (
+          <div className={tab === "run" ? "" : "hidden"}>
+            <RunPayrollTab />
+          </div>
         )}
-        {tab === "payment" && canViewTab("Payroll Payment") && (
-          <PayrollHistory mode="payment" />
+        {canViewTab("Payroll History") && (
+          <div className={tab === "history" ? "" : "hidden"}>
+            <PayrollHistory mode="history" />
+          </div>
+        )}
+        {canViewTab("Payroll Payment") && (
+          <div className={tab === "payment" ? "" : "hidden"}>
+            <PayrollHistory mode="payment" />
+          </div>
         )}
       </div>
     </div>

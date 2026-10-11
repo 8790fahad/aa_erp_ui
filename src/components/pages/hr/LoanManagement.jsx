@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
+import { useLocation } from "react-router-dom";
 import { _fetchApi, _postApi, _putApi } from "@/redux/actions/api";
 import { toast } from "sonner";
 import {
@@ -120,6 +121,8 @@ const loanBalance = (loan) =>
   loanDue(loan) - parseFloat(loan?.amountPaid || 0);
 
 const LoanManagement = () => {
+  const { pathname } = useLocation();
+  const isInvestmentPage = pathname.includes("/investments");
   const { user, activeBusiness } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id || user?.facilityId;
   const {
@@ -138,7 +141,6 @@ const LoanManagement = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
-  const [personFilter, setPersonFilter] = useState("all");
   const [pickerFilter, setPickerFilter] = useState("associate");
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -165,6 +167,16 @@ const LoanManagement = () => {
   const [investmentAccount, setInvestmentAccount] = useState(null);
   const [entryOpen, setEntryOpen] = useState(true);
   const [savingInvestment, setSavingInvestment] = useState(false);
+  const [showNewInvestment, setShowNewInvestment] = useState(false);
+  const [newInvestmentMode, setNewInvestmentMode] = useState("new");
+  const [newInvestmentPerson, setNewInvestmentPerson] = useState(null);
+  const [receiptAmount, setReceiptAmount] = useState("");
+  const [receiptDate, setReceiptDate] = useState(
+    () => new Date().toISOString().slice(0, 10),
+  );
+  const [receiptMode, setReceiptMode] = useState("");
+  const [receiptAccount, setReceiptAccount] = useState("");
+  const [savingReceipt, setSavingReceipt] = useState(false);
 
   const [chartAccounts, setChartAccounts] = useState([]);
   const [selectedReceivable, setSelectedReceivable] = useState(null);
@@ -300,7 +312,7 @@ const LoanManagement = () => {
 
   const fetchEmployees = () => {
     _fetchApi(
-      `/api/hr/employees?facilityId=${facilityId}&limit=1000`,
+      `/api/hr/employees?facilityId=${facilityId}&limit=1000&includeInvestment=1`,
       (data) => {
         if (data.success) setEmployees(data.data.employees || []);
       },
@@ -493,7 +505,148 @@ const LoanManagement = () => {
     );
   };
 
+  const resetNewInvestmentForm = () => {
+    setNewInvestmentMode("new");
+    setNewInvestmentPerson(null);
+    setAssociateForm({ firstName: "", lastName: "", contactInfo: "" });
+    setInvestmentAmount("");
+    setInvestmentDate(new Date().toISOString().slice(0, 10));
+    setInvestmentAccount(null);
+  };
+
+  const openNewInvestment = () => {
+    setAssociatePanelOpen(false);
+    setInvestmentPerson(null);
+    resetNewInvestmentForm();
+    setShowNewInvestment(true);
+    fetchEmployees();
+    fetchChartAccounts();
+  };
+
+  const closeNewInvestment = () => {
+    setShowNewInvestment(false);
+    resetNewInvestmentForm();
+    setSavingInvestment(false);
+    setSavingAssociate(false);
+  };
+
+  const applyPostedInvestment = (person, posted) => {
+    if (!person?.id) return;
+    setEmployees((rows) => {
+      const exists = rows.some((row) => row.id === person.id);
+      const next = posted ? { ...person, ...posted } : person;
+      if (exists) {
+        return rows.map((row) => (row.id === person.id ? { ...row, ...next } : row));
+      }
+      return [next, ...rows];
+    });
+  };
+
+  const postNewInvestmentBalance = (person, onDone) => {
+    const amount = parseFloat(parseFormattedNumber(investmentAmount));
+    const head =
+      investmentAccount?.head ||
+      investmentAccount?.code ||
+      investmentAccount?.account_code;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return toast.error("Enter the investment amount");
+    }
+    if (!head) {
+      return toast.error("Select the investment account");
+    }
+    if (!investmentDate) {
+      return toast.error("Enter the date");
+    }
+    setSavingInvestment(true);
+    _postApi(
+      `/api/hr/employees/${person.id}/investment-opening-balance`,
+      {
+        facilityId,
+        amount,
+        asOfDate: investmentDate,
+        investmentHead: head,
+        userId: user?.id,
+      },
+      (data) => {
+        setSavingInvestment(false);
+        if (!data.success) {
+          toast.error(data.message || "Could not post the investment");
+          return;
+        }
+        applyPostedInvestment(person, data.data);
+        toast.success(data.message || "Investment created");
+        if (onDone) onDone(data);
+      },
+      (err) => {
+        setSavingInvestment(false);
+        toast.error(err?.message || "Could not post the investment");
+      },
+    );
+  };
+
+  const createNewInvestment = () => {
+    const amount = parseFloat(parseFormattedNumber(investmentAmount));
+    const head =
+      investmentAccount?.head ||
+      investmentAccount?.code ||
+      investmentAccount?.account_code;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return toast.error("Enter the investment amount");
+    }
+    if (!head) {
+      return toast.error("Select the investment account");
+    }
+    if (!investmentDate) {
+      return toast.error("Enter the date");
+    }
+
+    if (newInvestmentMode === "existing") {
+      if (!newInvestmentPerson?.id) {
+        return toast.error("Select the beneficiary");
+      }
+      postNewInvestmentBalance(newInvestmentPerson, closeNewInvestment);
+      return;
+    }
+
+    const firstName = associateForm.firstName.trim();
+    const lastName = associateForm.lastName.trim();
+    const contactInfo = associateForm.contactInfo.trim();
+    if (!firstName || !lastName) {
+      return toast.error("Enter the beneficiary's first and last name");
+    }
+    if (!contactInfo) return toast.error("Enter a phone number");
+
+    setSavingAssociate(true);
+    _postApi(
+      "/api/hr/employees",
+      {
+        firstName,
+        lastName,
+        contactInfo,
+        contractType: "Business Associate",
+        designation: "Business Associate",
+        gender: "Other",
+        facilityId,
+        createdBy: user?.id,
+      },
+      (data) => {
+        setSavingAssociate(false);
+        if (!data.success || !data.data?.id) {
+          toast.error(data.message || "Could not add the beneficiary");
+          return;
+        }
+        applyPostedInvestment(data.data);
+        postNewInvestmentBalance(data.data, closeNewInvestment);
+      },
+      () => {
+        setSavingAssociate(false);
+        toast.error("Could not add the beneficiary");
+      },
+    );
+  };
+
   const openInvestmentBalance = (person) => {
+    setShowNewInvestment(false);
     setAssociatePanelOpen(true);
     setInvestmentPerson(person);
     setInvestmentAmount(principalInputValue(person.investmentOpeningBalance));
@@ -509,6 +662,19 @@ const LoanManagement = () => {
         )
       : null;
     setInvestmentAccount(found || null);
+    setReceiptAmount("");
+    setReceiptDate(new Date().toISOString().slice(0, 10));
+    setReceiptMode("");
+    setReceiptAccount("");
+  };
+
+  const openInvestmentReceipt = (person) => {
+    openInvestmentBalance(person);
+    window.setTimeout(() => {
+      document.getElementById("investment-receive")?.scrollIntoView({
+        block: "start",
+      });
+    }, 80);
   };
 
   useEffect(() => {
@@ -567,6 +733,81 @@ const LoanManagement = () => {
       (err) => {
         setSavingInvestment(false);
         toast.error(err?.message || "Could not post the opening balance");
+      },
+    );
+  };
+
+  const receiveInvestmentPayment = () => {
+    if (!investmentPerson?.id) return;
+    const amount = parseFormattedNumber(receiptAmount);
+    const outstanding = investmentCurrentBalance(investmentPerson);
+    if (!amount || amount <= 0) {
+      toast.error("Enter the amount received");
+      return;
+    }
+    if (amount > outstanding + 0.009) {
+      toast.error("Amount cannot exceed the current balance");
+      return;
+    }
+    if (!receiptDate) {
+      toast.error("Enter the date");
+      return;
+    }
+    if (!receiptMode || !receiptAccount) {
+      toast.error(
+        receiptMode === "cash"
+          ? "Select the cash account"
+          : receiptMode === "bank"
+            ? "Select the bank account"
+            : "Select where the money was paid into",
+      );
+      return;
+    }
+    setSavingReceipt(true);
+    _postApi(
+      `/api/hr/employees/${investmentPerson.id}/investment-receipt`,
+      {
+        facilityId,
+        amount,
+        transaction_date: receiptDate,
+        accountCode: receiptAccount,
+        userId: user?.id,
+      },
+      (data) => {
+        setSavingReceipt(false);
+        if (!data.success) {
+          toast.error(data.message || "Could not record the payment");
+          return;
+        }
+        toast.success(data.message || "Payment received");
+        const nextBalance = data.data?.investmentCurrentBalance;
+        setEmployees((rows) =>
+          rows.map((row) =>
+            row.id === investmentPerson.id
+              ? {
+                  ...row,
+                  investmentCurrentBalance:
+                    nextBalance != null ? nextBalance : row.investmentCurrentBalance,
+                }
+              : row,
+          ),
+        );
+        setInvestmentPerson((person) =>
+          person
+            ? {
+                ...person,
+                investmentCurrentBalance:
+                  nextBalance != null ? nextBalance : person.investmentCurrentBalance,
+              }
+            : person,
+        );
+        setReceiptAmount("");
+        setReceiptMode("");
+        setReceiptAccount("");
+      },
+      (err) => {
+        setSavingReceipt(false);
+        toast.error(err?.message || "Could not record the payment");
       },
     );
   };
@@ -971,6 +1212,11 @@ const LoanManagement = () => {
   };
 
   const businessAssociates = employees.filter(isBusinessAssociate);
+  const associatesWithoutInvestment = businessAssociates.filter((person) => {
+    const principal = investmentPrincipal(person);
+    const current = investmentCurrentBalance(person);
+    return principal <= 0.009 && Math.abs(current) <= 0.009;
+  });
 
   const openLoanForAssociate = (person) => {
     setAssociatePanelOpen(false);
@@ -1024,27 +1270,17 @@ const LoanManagement = () => {
       .toLowerCase()
       .includes(String(term || "").toLowerCase());
 
-  const filteredInvestments = (
-    personFilter === "investment" ? businessAssociates.map(toInvestmentRow) : investmentLoanRows
-  ).filter((row) => {
-    if (personFilter === "employee") return false;
-    const matchesSearch = nameMatches(row.employee, searchTerm);
-    const matchesStatus = selectedStatus ? selectedStatus === "Investment" : true;
+  const filteredInvestments = investmentLoanRows.filter((row) =>
+    nameMatches(row.employee, searchTerm),
+  );
+
+  const filteredStaffLoans = loans.filter((loan) => {
+    const matchesSearch = nameMatches(loan.employee, searchTerm);
+    const matchesStatus = selectedStatus ? loan.status === selectedStatus : true;
     return matchesSearch && matchesStatus;
   });
 
-  const filteredStaffLoans = loans.filter((loan) => {
-    if (personFilter === "investment") return false;
-    const matchesSearch = nameMatches(loan.employee, searchTerm);
-    const matchesStatus = selectedStatus ? loan.status === selectedStatus : true;
-    const matchesPerson = matchesPersonFilter(loan.employee, personFilter);
-    return matchesSearch && matchesStatus && matchesPerson;
-  });
-
-  const filteredLoans =
-    personFilter === "investment"
-      ? filteredInvestments
-      : [...filteredInvestments, ...filteredStaffLoans];
+  const filteredLoans = isInvestmentPage ? filteredInvestments : filteredStaffLoans;
 
   const rowAmount = (row) => Number(row.amount) || 0;
   const rowBalance = (row) =>
@@ -1119,11 +1355,18 @@ const LoanManagement = () => {
         {/* Header Section - Old Style */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Loan Management</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage staff loans, investments, disbursements, and collections</p>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              {isInvestmentPage ? "Investments" : "Loan Management"}
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              {isInvestmentPage
+                ? "Business associate investments and opening balances"
+                : "Manage staff loans, disbursements, and collections"}
+            </p>
           </div>
           
           <div className="flex items-center gap-3">
+            {!isInvestmentPage && (
             <div className="flex items-center -space-x-2 mr-4">
                <div className="flex items-center justify-center w-8 h-8 rounded-full border-2 border-white bg-amber-100 text-amber-700 text-xs font-bold z-30" title="Pending">
                  {loans.filter(l => l.status === 'Pending').length}
@@ -1135,6 +1378,8 @@ const LoanManagement = () => {
                  All
                </div>
             </div>
+            )}
+            {!isInvestmentPage && (
             <Button
               type="button"
               variant="outline"
@@ -1144,18 +1389,19 @@ const LoanManagement = () => {
               <Settings className="w-4 h-4 mr-2" />
               Settings
             </Button>
+            )}
+            {isInvestmentPage && (
             <Button
               type="button"
-              variant="outline"
-              onClick={() => {
-                setAssociatePanelOpen(true);
-                fetchEmployees();
-              }}
-              className="border-slate-200 bg-white text-[var(--aa-navy)] shadow-sm hover:bg-slate-50"
+              onClick={openNewInvestment}
+              className="text-white shadow-sm transition-all hover:opacity-90"
+              style={brandButtonStyle}
             >
-              <User className="w-4 h-4 mr-2" />
-              Investment
+              <Plus className="w-4 h-4 mr-2" />
+              New Investment
             </Button>
+            )}
+            {!isInvestmentPage && (
             <Button 
               type="button"
               onClick={() => {
@@ -1173,6 +1419,7 @@ const LoanManagement = () => {
               <Plus className="w-4 h-4 mr-2" />
               New Loan Request
             </Button>
+            )}
           </div>
         </div>
 
@@ -1192,6 +1439,7 @@ const LoanManagement = () => {
           </div>
           
           <div className="flex gap-3 w-full sm:w-auto">
+            {!isInvestmentPage && (
             <div className="relative">
               <select
                 value={selectedStatus}
@@ -1209,24 +1457,11 @@ const LoanManagement = () => {
                 <Filter className="h-3.5 w-3.5" />
               </div>
             </div>
-            <div className="relative">
-              <select
-                value={personFilter}
-                onChange={(e) => setPersonFilter(e.target.value)}
-                className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2 pl-4 pr-10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--app-primary)] focus:bg-white transition-all cursor-pointer"
-              >
-                <option value="all">Employees & associates</option>
-                <option value="employee">Employees</option>
-                <option value="investment">Investment</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                <Filter className="h-3.5 w-3.5" />
-              </div>
-            </div>
+            )}
             
-            {(searchTerm || selectedStatus || personFilter !== "all") && (
+            {(searchTerm || selectedStatus) && (
               <button 
-                onClick={() => { setSearchTerm(""); setSelectedStatus(""); setPersonFilter("all"); }}
+                onClick={() => { setSearchTerm(""); setSelectedStatus(""); }}
                 className="text-sm text-gray-500 hover:text-gray-700 px-2 transition-colors"
               >
                 Clear
@@ -1239,7 +1474,7 @@ const LoanManagement = () => {
           <div className="flex flex-wrap gap-8">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                {personFilter === "investment" ? "Total principal" : "Total amount"}
+                {isInvestmentPage ? "Total principal" : "Total amount"}
               </p>
               <p className="text-lg font-bold text-gray-900">
                 {formatCurrency(listTotalAmount)}
@@ -1247,7 +1482,7 @@ const LoanManagement = () => {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                {personFilter === "investment" ? "Total current balance" : "Total balance"}
+                {isInvestmentPage ? "Total current balance" : "Total balance"}
               </p>
               <p className="text-lg font-bold text-orange-600">
                 {formatCurrency(listTotalBalance)}
@@ -1278,7 +1513,7 @@ const LoanManagement = () => {
                     Reference
                   </th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Loan Details
+                    {isInvestmentPage ? "Details" : "Loan Details"}
                   </th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Financial Balance
@@ -1305,8 +1540,19 @@ const LoanManagement = () => {
                     <td colSpan="6" className="px-6 py-16 text-center text-gray-500">
                       <Banknote className="h-12 w-12 mx-auto text-gray-300 mb-3" />
                       <p className="text-lg font-medium text-gray-900">
-                        {personFilter === "investment" ? "No investments found" : "No loan records found"}
+                        {isInvestmentPage ? "No investments found" : "No loan records found"}
                       </p>
+                      {isInvestmentPage && (
+                        <Button
+                          type="button"
+                          onClick={openNewInvestment}
+                          className="mt-4 text-white shadow-sm transition-all hover:opacity-90"
+                          style={brandButtonStyle}
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          New Investment
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -1360,17 +1606,33 @@ const LoanManagement = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                         <div className="flex items-center justify-end gap-2">
+                           {item.isInvestment ? (
+                           <DropdownMenu>
+                             <DropdownMenuTrigger asChild>
+                               <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                                 <MoreVertical size={18} />
+                               </button>
+                             </DropdownMenuTrigger>
+                             <DropdownMenuContent align="end">
+                               <DropdownMenuItem onClick={() => openInvestmentBalance(item.employee)}>
+                                 <Edit className="w-4 h-4 mr-2" />
+                                 Edit
+                               </DropdownMenuItem>
+                               <DropdownMenuItem onClick={() => openInvestmentReceipt(item.employee)}>
+                                 <HandCoins className="w-4 h-4 mr-2" />
+                                 Receive
+                               </DropdownMenuItem>
+                             </DropdownMenuContent>
+                           </DropdownMenu>
+                           ) : (
                            <button 
-                             onClick={() =>
-                               item.isInvestment
-                                 ? openInvestmentBalance(item.employee)
-                                 : handleViewLoan(item)
-                             }
+                             onClick={() => handleViewLoan(item)}
                              className="p-2 text-gray-400 hover:text-[color:var(--app-primary)] hover:bg-[color:var(--app-primary)]/10 rounded-lg transition-all"
-                             title={item.isInvestment ? "Edit opening balance" : "View Ledger"}
+                             title="View Ledger"
                            >
                              <Eye size={18} />
                            </button>
+                           )}
                            {item.status === 'Pending' && (
                              <button 
                                onClick={() => handleUpdateStatus(item, "Approved")}
@@ -1499,6 +1761,283 @@ const LoanManagement = () => {
         </SheetContent>
       </Sheet>
 
+      <Sheet
+        open={showNewInvestment}
+        onOpenChange={(open) => {
+          if (!open) closeNewInvestment();
+        }}
+      >
+        <SheetContent side="right" className={sheetContentClass}>
+          <SheetHeader className={sheetHeaderClass}>
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 rounded-md bg-white/10 p-2">
+                <Banknote className="h-4 w-4 text-white/90" />
+              </div>
+              <div className="min-w-0">
+                <SheetTitle className="text-lg font-semibold leading-tight text-white">
+                  New Investment
+                </SheetTitle>
+                <SheetDescription className="mt-0.5 text-xs text-white/70">
+                  Register a beneficiary and post their opening investment in one step.
+                </SheetDescription>
+              </div>
+            </div>
+          </SheetHeader>
+
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-white px-5 py-5">
+              <div className="space-y-1.5">
+                <label className={labelClass}>Beneficiary</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: "new", label: "New person" },
+                    { value: "existing", label: "Existing" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        setNewInvestmentMode(option.value);
+                        if (option.value === "new") setNewInvestmentPerson(null);
+                      }}
+                      className={`rounded-md border py-1.5 text-[11px] font-semibold ${
+                        newInvestmentMode === option.value
+                          ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {newInvestmentMode === "new" ? (
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label className={labelClass}>
+                        First name <span className="text-red-600">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={associateForm.firstName}
+                        onChange={(e) =>
+                          setAssociateForm((prev) => ({
+                            ...prev,
+                            firstName: e.target.value,
+                          }))
+                        }
+                        placeholder="First name"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className={labelClass}>
+                        Last name <span className="text-red-600">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={associateForm.lastName}
+                        onChange={(e) =>
+                          setAssociateForm((prev) => ({
+                            ...prev,
+                            lastName: e.target.value,
+                          }))
+                        }
+                        placeholder="Last name"
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={labelClass}>
+                      Phone number <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={associateForm.contactInfo}
+                      onChange={(e) =>
+                        setAssociateForm((prev) => ({
+                          ...prev,
+                          contactInfo: e.target.value,
+                        }))
+                      }
+                      placeholder="Phone number"
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <label className={labelClass}>
+                    Select associate <span className="text-red-600">*</span>
+                  </label>
+                  <TypeaheadCustom
+                    options={associatesWithoutInvestment}
+                    labelKey={(person) =>
+                      `${person.firstName} ${person.lastName}${
+                        person.employeeId ? ` (${person.employeeId})` : ""
+                      }`
+                    }
+                    onChange={(items) => setNewInvestmentPerson(items[0] || null)}
+                    placeholder="Search registered associates…"
+                    selected={newInvestmentPerson ? [newInvestmentPerson] : []}
+                    inputProps={{ required: true }}
+                  />
+                  {associatesWithoutInvestment.length === 0 ? (
+                    <p className={hintClass}>
+                      Everyone already has an investment. Add a new person instead.
+                    </p>
+                  ) : (
+                    <p className={hintClass}>
+                      Only associates without an opening balance are listed.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className={labelClass}>
+                  Principal amount <span className="text-red-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  required
+                  value={formatNumberWithCommas(investmentAmount)}
+                  onChange={(e) =>
+                    setInvestmentAmount(parseFormattedNumber(e.target.value))
+                  }
+                  placeholder="0.00"
+                  className={`${inputClass} tabular-nums`}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className={labelClass}>
+                  Date <span className="text-red-600">*</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={investmentDate}
+                  onChange={(e) => setInvestmentDate(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className={labelClass}>
+                  Investment account <span className="text-red-600">*</span>
+                </label>
+                <TypeaheadCustom
+                  options={chartAccounts}
+                  labelKey={(account) =>
+                    `${account.head || account.code || ""} ${account.description || account.account_name || ""}`.trim()
+                  }
+                  onChange={(items) => setInvestmentAccount(items[0] || null)}
+                  placeholder="Select investment account"
+                  selected={investmentAccount ? [investmentAccount] : []}
+                  inputProps={{ required: true }}
+                />
+              </div>
+
+              <Collapsible
+                open={entryOpen}
+                onOpenChange={setEntryOpen}
+                className="overflow-hidden rounded-md border border-slate-200"
+              >
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className={`flex w-full items-center justify-between gap-2 bg-slate-50 px-3 py-2 text-left hover:bg-slate-100 ${
+                      entryOpen ? "border-b border-slate-200" : ""
+                    }`}
+                    aria-expanded={entryOpen}
+                  >
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Entry
+                    </span>
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${
+                        entryOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        <th className="px-3 py-2 text-left">Account</th>
+                        <th className="px-3 py-2 text-right">Debit</th>
+                        <th className="px-3 py-2 text-right">Credit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm">
+                      <tr>
+                        <td className="px-3 py-2 text-slate-900">
+                          {investmentAccount
+                            ? `${investmentAccount.head || investmentAccount.code || ""} — ${investmentAccount.description || investmentAccount.account_name || investmentAccount.name || "Investment"}`.replace(/^\s—\s/, "")
+                            : "Select an investment account"}
+                        </td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
+                          {formatCurrency(parseFloat(parseFormattedNumber(investmentAmount)) || 0)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-slate-400">—</td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-2 text-slate-900">
+                          {(() => {
+                            const code = String(activeBusiness?.opening_balance_equity || "");
+                            const equity = chartAccounts.find(
+                              (account) => accountHead(account) === code,
+                            );
+                            if (!equity) {
+                              return code
+                                ? `${code} — Opening Balance Equity`
+                                : "Opening Balance Equity";
+                            }
+                            return `${equity.head || equity.code || code} — ${equity.description || equity.account_name || equity.name || "Opening Balance Equity"}`;
+                          })()}
+                        </td>
+                        <td className="px-3 py-2 text-right text-slate-400">—</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
+                          {formatCurrency(parseFloat(parseFormattedNumber(investmentAmount)) || 0)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+
+            <div className={sheetFooterClass}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeNewInvestment}
+                disabled={savingAssociate || savingInvestment}
+                className="rounded-md"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={savingAssociate || savingInvestment}
+                onClick={createNewInvestment}
+                className="rounded-md bg-[var(--aa-navy)] text-white hover:bg-[var(--aa-navy-hover)]"
+              >
+                {savingAssociate || savingInvestment
+                  ? "Saving…"
+                  : "Create investment"}
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       <Sheet open={associatePanelOpen} onOpenChange={setAssociatePanelOpen}>
         <SheetContent side="right" className={sheetContentClass}>
           <SheetHeader className={sheetHeaderClass}>
@@ -1511,12 +2050,13 @@ const LoanManagement = () => {
                   Investments
                 </SheetTitle>
                 <SheetDescription className="mt-0.5 text-xs text-white/70">
-                  Register someone who is not on payroll. Record their investment opening balance, or give them a loan they bring back.
+                  Register someone who is not on payroll. Edit their opening balance, or record a payment they bring back.
                 </SheetDescription>
               </div>
             </div>
           </SheetHeader>
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-white px-5 py-5">
+            {!investmentPerson ? (
             <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Register
@@ -1568,68 +2108,78 @@ const LoanManagement = () => {
                 {savingAssociate ? "Saving…" : "Register"}
               </button>
             </div>
+            ) : null}
 
             {investmentPerson ? (
-              <div className="space-y-2 rounded-lg border border-slate-200 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {Number(investmentPerson.investmentOpeningBalance) > 0
-                    ? "Edit opening balance"
-                    : "Investment opening balance"}
-                </p>
-                <p className="text-sm font-semibold text-slate-900">
-                  {investmentPerson.firstName} {investmentPerson.lastName}
-                </p>
-                {investmentPerson.employeeId ? (
-                  <p className="text-xs text-slate-500">
-                    #{investmentPerson.employeeId}
+              <div className="space-y-5">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {investmentPerson.firstName} {investmentPerson.lastName}
                   </p>
-                ) : null}
-                <p className={hintClass}>
-                  Current balance is what the investment account shows now. The entry below is what Post opening balance will save.
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1.5">
-                    <label className={labelClass}>Principal amount</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={formatNumberWithCommas(investmentAmount)}
-                      onChange={(e) =>
-                        setInvestmentAmount(parseFormattedNumber(e.target.value))
-                      }
-                      placeholder="0.00"
-                      className={`${inputClass} tabular-nums`}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className={labelClass}>Current balance</label>
-                    <div
-                      className={`${inputClass} flex items-center bg-slate-50 font-semibold tabular-nums text-slate-900`}
-                    >
+                  <p className="text-xs text-slate-500">
+                    {investmentPerson.employeeId ? `#${investmentPerson.employeeId}` : ""}
+                    {investmentPerson.employeeId ? " · " : ""}
+                    Current balance{" "}
+                    <span className="font-semibold tabular-nums text-slate-900">
                       {formatCurrency(
                         investmentCurrentBalance(
                           employees.find((row) => row.id === investmentPerson.id) ||
                             investmentPerson,
                         ),
                       )}
-                    </div>
-                  </div>
+                    </span>
+                  </p>
                 </div>
-                <input
-                  type="date"
-                  value={investmentDate}
-                  onChange={(e) => setInvestmentDate(e.target.value)}
-                  className={inputClass}
-                />
-                <TypeaheadCustom
-                  options={chartAccounts}
-                  labelKey={(account) =>
-                    `${account.head || account.code || ""} ${account.description || account.account_name || ""}`.trim()
-                  }
-                  onChange={(items) => setInvestmentAccount(items[0] || null)}
-                  placeholder="Investment account…"
-                  selected={investmentAccount ? [investmentAccount] : []}
-                />
+
+                <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {Number(investmentPerson.investmentOpeningBalance) > 0
+                    ? "Edit opening balance"
+                    : "Investment opening balance"}
+                </p>
+                <div className="space-y-1.5">
+                  <label className={labelClass}>
+                    Principal amount <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    required
+                    value={formatNumberWithCommas(investmentAmount)}
+                    onChange={(e) =>
+                      setInvestmentAmount(parseFormattedNumber(e.target.value))
+                    }
+                    placeholder="0.00"
+                    className={`${inputClass} tabular-nums`}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelClass}>
+                    Date <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={investmentDate}
+                    onChange={(e) => setInvestmentDate(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelClass}>
+                    Investment account <span className="text-red-600">*</span>
+                  </label>
+                  <TypeaheadCustom
+                    options={chartAccounts}
+                    labelKey={(account) =>
+                      `${account.head || account.code || ""} ${account.description || account.account_name || ""}`.trim()
+                    }
+                    onChange={(items) => setInvestmentAccount(items[0] || null)}
+                    placeholder="Select investment account"
+                    selected={investmentAccount ? [investmentAccount] : []}
+                    inputProps={{ required: true }}
+                  />
+                </div>
                 <Collapsible
                   open={entryOpen}
                   onOpenChange={setEntryOpen}
@@ -1715,9 +2265,155 @@ const LoanManagement = () => {
                     Cancel
                   </button>
                 </div>
+                </div>
+
+                {(() => {
+                  const outstanding = investmentCurrentBalance(
+                    employees.find((row) => row.id === investmentPerson.id) ||
+                      investmentPerson,
+                  );
+                  const receiptAccounts =
+                    receiptMode === "cash"
+                      ? cashAccounts.map((account) => ({
+                          code: String(account.head || account.code || ""),
+                          label: `${account.head || account.code || ""} ${account.description || account.account_name || ""}`.trim(),
+                        }))
+                      : receiptMode === "bank"
+                        ? bankAccounts.map((account) => ({
+                            code: String(
+                              account.account_code || account.head || account.code || "",
+                            ),
+                            label: `${account.account_code || account.head || account.code || ""} ${account.account_name || account.name || "Bank account"}`.trim(),
+                          }))
+                        : [];
+                  return (
+                    <div
+                      id="investment-receive"
+                      className="space-y-3 rounded-lg border border-slate-200 p-3"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Receive payment
+                      </p>
+                      <p className={hintClass}>
+                        Money they bring back. Current balance {formatCurrency(outstanding)}.
+                      </p>
+                      <div className="space-y-1.5">
+                        <label className={labelClass}>
+                          Amount <span className="text-red-600">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          required
+                          value={formatNumberWithCommas(receiptAmount)}
+                          onChange={(e) =>
+                            setReceiptAmount(parseFormattedNumber(e.target.value))
+                          }
+                          placeholder="0.00"
+                          className={`${inputClass} tabular-nums`}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className={labelClass}>
+                          Date <span className="text-red-600">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          value={receiptDate}
+                          onChange={(e) => setReceiptDate(e.target.value)}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className={labelClass}>
+                          Paid into <span className="text-red-600">*</span>
+                        </label>
+                        <select
+                          required
+                          value={receiptMode}
+                          onChange={(e) => {
+                            setReceiptMode(e.target.value);
+                            setReceiptAccount("");
+                          }}
+                          className={inputClass}
+                        >
+                          <option value="">Select</option>
+                          <option value="cash">Cash</option>
+                          <option value="bank">Bank</option>
+                        </select>
+                      </div>
+                      {receiptMode ? (
+                        <div className="space-y-1.5">
+                          <label className={labelClass}>
+                            {receiptMode === "cash" ? "Cash account" : "Bank account"}{" "}
+                            <span className="text-red-600">*</span>
+                          </label>
+                          <select
+                            required
+                            value={receiptAccount}
+                            onChange={(e) => setReceiptAccount(e.target.value)}
+                            className={inputClass}
+                          >
+                            <option value="">
+                              {receiptMode === "cash"
+                                ? "Select cash account"
+                                : "Select bank account"}
+                            </option>
+                            {receiptAccounts
+                              .filter((account) => account.code)
+                              .map((account) => (
+                                <option key={account.code} value={account.code}>
+                                  {account.label}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      ) : null}
+                      {receiptAccount ? (
+                        <div className="overflow-hidden rounded-md border border-slate-200 text-sm">
+                          <div className="flex items-start justify-between gap-3 px-3 py-2">
+                            <span className="text-slate-900">
+                              {receiptAccounts.find((account) => account.code === receiptAccount)?.label ||
+                                "Cash or bank"}
+                            </span>
+                            <span className="shrink-0 font-semibold tabular-nums text-slate-900">
+                              Dr {formatCurrency(parseFormattedNumber(receiptAmount) || 0)}
+                            </span>
+                          </div>
+                          <div className="flex items-start justify-between gap-3 border-t border-slate-100 px-3 py-2">
+                            <span className="text-slate-900">
+                              {(() => {
+                                const head = investmentPerson.investmentAccountHead;
+                                const saved = chartAccounts.find(
+                                  (account) =>
+                                    String(account.head || account.code) === String(head),
+                                );
+                                if (!saved) return head || "Investment account";
+                                return `${saved.head || saved.code || head} — ${saved.description || saved.account_name || "Investment"}`;
+                              })()}
+                            </span>
+                            <span className="shrink-0 font-semibold tabular-nums text-slate-900">
+                              Cr {formatCurrency(parseFormattedNumber(receiptAmount) || 0)}
+                            </span>
+                          </div>
+                        </div>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={savingReceipt || outstanding <= 0}
+                        onClick={receiveInvestmentPayment}
+                        className="h-9 rounded-md bg-[var(--aa-navy)] px-3 text-sm font-semibold text-white disabled:opacity-60"
+                      >
+                        {savingReceipt ? "Saving…" : "Receive payment"}
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             ) : null}
 
+            {!investmentPerson ? (
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Registered ({businessAssociates.length})
@@ -1760,6 +2456,13 @@ const LoanManagement = () => {
                         </button>
                         <button
                           type="button"
+                          onClick={() => openInvestmentReceipt(person)}
+                          className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
+                        >
+                          Receive payment
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => openLoanForAssociate(person)}
                           className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-[var(--aa-navy)] hover:bg-slate-50"
                         >
@@ -1771,6 +2474,7 @@ const LoanManagement = () => {
                 </ul>
               )}
             </div>
+            ) : null}
           </div>
         </SheetContent>
       </Sheet>

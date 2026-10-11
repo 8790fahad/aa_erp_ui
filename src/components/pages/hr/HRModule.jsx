@@ -39,6 +39,7 @@ const HRModule = () => {
     const path = location.pathname;
     if (path.includes("/employees")) return "employees";
     if (path.endsWith("/bonus")) return "bonus";
+    if (path.endsWith("/investments")) return "investments";
     if (path.endsWith("/loans")) return "loans";
     if (path.endsWith("/leaves")) return "leaves";
     if (path.endsWith("/payroll")) return "payroll";
@@ -55,6 +56,7 @@ const HRModule = () => {
     { id: "employees", label: "Employees", icon: Users },
     { id: "bonus", label: "Bonus", icon: Gift },
     { id: "loans", label: "Loans", icon: Banknote },
+    { id: "investments", label: "Investments", icon: Banknote },
     { id: "leaves", label: "Leave Management", icon: Calendar },
     { id: "payroll", label: "Payroll", icon: DollarSign },
     { id: "attendance", label: "Attendance", icon: Clock },
@@ -223,6 +225,7 @@ const HRModule = () => {
         />
         <Route path="bonus" element={<Bonus />} />
         <Route path="loans" element={<LoanManagement />} />
+        <Route path="investments" element={<LoanManagement />} />
         <Route path="leaves" element={<LeaveManagement />} />
         <Route path="payroll" element={<PayrollPage />} />
         <Route path="attendance" element={<AttendanceManagement />} />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useSelector } from "react-redux";
 import { _fetchApi, apiURL } from "@/redux/actions/api";
 import { toast } from "sonner";
@@ -92,7 +92,7 @@ const PayrollHistory = ({ mode = "history" }) => {
     fetchBatches();
   };
 
-  const batchColumns = [
+  const batchColumns = useMemo(() => [
     {
       value: "period", title: "Payroll Period", custom: true,
       component: (item) => (
@@ -138,12 +138,13 @@ const PayrollHistory = ({ mode = "history" }) => {
           size="sm"
           className="h-8 text-xs font-bold gap-1.5 rounded-lg border-slate-200 hover:bg-slate-50"
           onClick={() => loadBatchDetails(item.month, item.year)}
+          disabled={detailsLoading}
         >
-          <Eye className="size-3.5" /> View Details
+          <Eye className="size-3.5" /> {detailsLoading ? "Loading..." : "View Details"}
         </Button>
       ),
     },
-  ];
+  ], [detailsLoading]);
 
   // ── Batch Details View (reusable component) ─────────────────────────────
   if (selectedBatch) {
@@ -191,7 +192,7 @@ const PayrollHistory = ({ mode = "history" }) => {
           <CustomTable1
             data={batches}
             fields={batchColumns}
-            loading={loading}
+            loading={loading || detailsLoading}
             message="No payroll history found."
           />
         </div>

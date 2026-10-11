@@ -998,6 +998,20 @@ export const modules = [
   },
 
   {
+    title: "Investments",
+    url: "/app/admin/hr/investments",
+    icon: Landmark,
+    functionality: ["Investments"],
+    access: [
+      "services",
+      "retailers",
+      "recycling",
+      "manufacturing",
+      "contractors",
+    ],
+  },
+
+  {
     title: "Admin",
     url: "#",
     icon: UserRoundPen,
@@ -1113,6 +1127,7 @@ export const appTypeAccess = {
     "Account",
     "Asset Register",
     "Payroll",
+    "Investments",
     "Admin",
   ],
   services: [
@@ -1133,6 +1148,7 @@ export const appTypeAccess = {
     "Admin",
     "Payments",
     "Payroll",
+    "Investments",
   ],
   recycling: [
     "Dashboard",
@@ -1150,6 +1166,7 @@ export const appTypeAccess = {
     "Settings",
     "Admin",
     "Payroll",
+    "Investments",
     "Payments",
   ],
   retailers: [
@@ -1168,6 +1185,7 @@ export const appTypeAccess = {
     "Admin",
     "HR Management",
     "Payroll",
+    "Investments",
     "Payments",
   ],
   manufacturing: [
@@ -1190,6 +1208,7 @@ export const appTypeAccess = {
     "Admin",
     "HR Management",
     "Payroll",
+    "Investments",
     "Payments",
   ],
 };

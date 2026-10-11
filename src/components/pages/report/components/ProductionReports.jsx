@@ -414,6 +414,7 @@ const ProductionReports = () => {
                           <SelectItem value="FIFO">FIFO (First In, First Out)</SelectItem>
                           <SelectItem value="LIFO">LIFO (Last In, First Out)</SelectItem>
                           <SelectItem value="AVERAGE">Average Cost</SelectItem>
+                          <SelectItem value="BATCH">Batch by Batch</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

@@ -396,6 +396,7 @@ function InvoicePreview() {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const facilityId = activeBusiness?.id;
   const [invoiceData, setInvoiceData] = useState(null);
+  const [invoiceByCode, setInvoiceByCode] = useState({});
   const [batchInvoices, setBatchInvoices] = useState([]);
   const [packs, setPacks] = useState([]);
   const [activePack, setActivePack] = useState(null);
@@ -415,10 +416,65 @@ function InvoicePreview() {
       return;
     }
 
+    if (isInvoiceBatch && printAll) {
+      setIsLoading(true);
+      setHasError(false);
+      setInvoiceData(null);
+      setInvoiceByCode({});
+      setPacks([]);
+      setActivePack(null);
+      setBatchInvoices([]);
+      let pending = uniqueSaleCodes.length;
+      const byCode = {};
+      const allPacks = [];
+      const finish = () => {
+        pending -= 1;
+        if (pending > 0) return;
+        const first = uniqueSaleCodes.map((code) => byCode[code]).find(Boolean);
+        setInvoiceByCode({ ...byCode });
+        setInvoiceData(first || null);
+        setPacks(allPacks);
+        setIsLoading(false);
+        if (!first) {
+          setHasError(true);
+          toast.error("Unable to load the selected invoices");
+        }
+      };
+      uniqueSaleCodes.forEach((code) => {
+        _fetchApi(
+          `/api/v1/transactions/get-sale?sale_code=${encodeURIComponent(
+            code,
+          )}&facility_id=${facilityId}`,
+          (response) => {
+            if (response.success && response.data) {
+              byCode[code] = response.data;
+            }
+            const params = new URLSearchParams({
+              facilityId,
+              saleCode: code,
+            });
+            _fetchApi(
+              `/api/v1/sale-workflows/fulfillments?${params.toString()}`,
+              (packRes) => {
+                if (packRes.success) {
+                  allPacks.push(...(packRes.results || []));
+                }
+                finish();
+              },
+              finish,
+            );
+          },
+          finish,
+        );
+      });
+      return;
+    }
+
     if (isInvoiceBatch) {
       setIsLoading(true);
       setHasError(false);
       setInvoiceData(null);
+      setInvoiceByCode({});
       setPacks([]);
       setActivePack(null);
       let pending = uniqueSaleCodes.length;
@@ -473,6 +529,7 @@ function InvoicePreview() {
     setHasError(false);
     setActivePack(null);
     setBatchInvoices([]);
+    setInvoiceByCode({});
     _fetchApi(
       `/api/v1/transactions/get-sale?sale_code=${encodeURIComponent(
         previewSaleCode,
@@ -585,16 +642,21 @@ function InvoicePreview() {
   ]);
 
   const printAllCopies = useMemo(() => {
-    if (!printAll || !invoiceData || !packs.length) return [];
+    if (!printAll || !packs.length) return [];
     return packs.flatMap((pack) => {
+      const saleData =
+        invoiceByCode[pack.sale_code] || invoiceData;
+      if (!saleData) return [];
       const lines =
         Array.isArray(pack.lines) && pack.lines.length ? pack.lines : [null];
       return lines.map((line) => ({
         pack,
         line,
-        key: line?.id ? `${pack.id}-${line.id}` : String(pack.id),
+        key: line?.id
+          ? `${pack.sale_code || ""}-${pack.id}-${line.id}`
+          : `${pack.sale_code || ""}-${pack.id}`,
         data: buildBranchInvoiceView(
-          invoiceData,
+          saleData,
           pack.branch_id,
           pack.pack_code,
           pack.branch_name || null,
@@ -602,7 +664,7 @@ function InvoicePreview() {
         ),
       }));
     });
-  }, [printAll, invoiceData, packs]);
+  }, [printAll, invoiceData, invoiceByCode, packs]);
 
   const batchCopies = useMemo(() => {
     if (!isInvoiceBatch) return [];
@@ -808,7 +870,7 @@ function InvoicePreview() {
     );
   }
 
-  if (isInvoiceBatch) {
+  if (isInvoiceBatch && !printAll) {
     const failedCount = batchInvoices.filter(
       (row) => row.error || !row.data,
     ).length;
@@ -1149,7 +1211,11 @@ function InvoicePreview() {
               {isDispatchDoc
                 ? `${dispatchDocLabel.toLowerCase()}${printAllCopies.length === 1 ? "" : "s"}`
                 : `branch cop${printAllCopies.length === 1 ? "y" : "ies"}`}{" "}
-              for {saleCode} —{" "}
+              for{" "}
+              {uniqueSaleCodes.length > 1
+                ? `${uniqueSaleCodes.length} invoices`
+                : saleCode}{" "}
+              —{" "}
               {showThermalDeliveryOrder
                 ? "continuous 80mm roll with cut marks between products"
                 : isTerminalReceipt
@@ -1183,7 +1249,14 @@ function InvoicePreview() {
                 <div key={key || pack.id} className="branch-invoice-copy mb-4">
                   <div className="no-print mb-2 text-center">
                     <div className="text-sm font-medium text-violet-900">
-                      Copy {idx + 1} of {printAllCopies.length} · {branchLabel}
+                      Copy {idx + 1} of {printAllCopies.length}
+                      {pack.sale_code ? (
+                        <>
+                          {" "}
+                          · <span className="font-mono">{pack.sale_code}</span>
+                        </>
+                      ) : null}{" "}
+                      · {branchLabel}
                       {productLabel ? ` · ${productLabel}` : ""}{" "}
                       · <span className="font-mono">{pack.pack_code}</span>
                     </div>
@@ -1240,7 +1313,14 @@ function InvoicePreview() {
                 <div key={key || pack.id} className="branch-invoice-copy mb-4">
                   <div className="no-print mb-2 text-center">
                     <div className="text-sm font-medium text-violet-900">
-                      Copy {idx + 1} of {printAllCopies.length} · {branchLabel}
+                      Copy {idx + 1} of {printAllCopies.length}
+                      {pack.sale_code ? (
+                        <>
+                          {" "}
+                          · <span className="font-mono">{pack.sale_code}</span>
+                        </>
+                      ) : null}{" "}
+                      · {branchLabel}
                       {productLabel ? ` · ${productLabel}` : ""}{" "}
                       · <span className="font-mono">{pack.pack_code}</span>
                     </div>
@@ -1284,7 +1364,14 @@ function InvoicePreview() {
               <div key={key || pack.id} className="branch-invoice-copy mb-8">
                 <div className="no-print max-w-4xl mx-auto px-4 mb-2 text-center">
                   <div className="text-sm font-medium text-violet-900">
-                    Copy {idx + 1} of {printAllCopies.length} · {branchLabel}
+                    Copy {idx + 1} of {printAllCopies.length}
+                    {pack.sale_code ? (
+                      <>
+                        {" "}
+                        · <span className="font-mono">{pack.sale_code}</span>
+                      </>
+                    ) : null}{" "}
+                    · {branchLabel}
                     {productLabel ? ` · ${productLabel}` : ""} ·{" "}
                     <span className="font-mono">{pack.pack_code}</span>
                   </div>

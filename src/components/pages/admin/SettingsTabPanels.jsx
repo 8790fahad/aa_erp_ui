@@ -1726,6 +1726,7 @@ export default function SettingsTabPanels({
               <InventoryValMethod
                 code={activeBusiness.inv_ev_m}
                 title="Inventory Valuation"
+                description="Normal uses weighted average or FIFO. Batch by Batch uses each lot's purchase cost."
               />
             </Col>
             <Col md={12}>

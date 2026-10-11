@@ -126,6 +126,7 @@ const CostingReport = ({ facilityId }) => {
                 <SelectItem value="FIFO">FIFO</SelectItem>
                 <SelectItem value="LIFO">LIFO</SelectItem>
                 <SelectItem value="WAC">Weighted Average Cost</SelectItem>
+                <SelectItem value="BATCH">Batch by Batch</SelectItem>
               </SelectContent>
             </Select>
           </div>

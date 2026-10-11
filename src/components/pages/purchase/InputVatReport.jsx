@@ -26,8 +26,6 @@ import {
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
 
-const PAGE_SIZE = 100;
-
 function num(v) {
   return parseFloat(v) || 0;
 }
@@ -68,6 +66,8 @@ function fetchInputVatPage({
   search,
   page,
   pageSize,
+  all = false,
+  includeCount = true,
 }) {
   return new Promise((resolve, reject) => {
     const params = new URLSearchParams({
@@ -78,6 +78,8 @@ function fetchInputVatPage({
       page: String(page),
       pageSize: String(pageSize),
     });
+    if (all) params.set("all", "1");
+    if (!includeCount) params.set("includeCount", "0");
     if (search) params.set("search", search);
 
     _fetchApi(
@@ -98,24 +100,14 @@ function fetchInputVatPage({
 }
 
 async function fetchAllInputVatLines(args) {
-  let page = 1;
-  let all = [];
-  let totalCount = Infinity;
-  while (all.length < totalCount) {
-    const batch = await fetchInputVatPage({
-      ...args,
-      page,
-      pageSize: PAGE_SIZE,
-    });
-    all = all.concat(batch.rows);
-    totalCount = Number.isFinite(batch.totalCount)
-      ? batch.totalCount
-      : all.length;
-    if (!batch.rows.length) break;
-    page += 1;
-    if (page > 50) break;
-  }
-  return all;
+  const batch = await fetchInputVatPage({
+    ...args,
+    page: 1,
+    pageSize: 500,
+    all: true,
+    includeCount: false,
+  });
+  return batch.rows;
 }
 
 export default function InputVatReport() {
@@ -174,7 +166,9 @@ export default function InputVatReport() {
 
   useEffect(() => {
     runFetch();
-  }, [runFetch]);
+    // Search is applied from Run Report so typing does not re-query bills.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBusiness?.id, userId, fromDate, toDate]);
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams);

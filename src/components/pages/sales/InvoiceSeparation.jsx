@@ -359,50 +359,131 @@ export default function InvoiceSeparation() {
     );
   };
 
-  const printAllInvoices = () => {
-    if (!activeBusiness?.id || !selected || packs.length === 0) return;
-    setPrintingAll(true);
-
-    let remaining = packs.length;
-    let failed = false;
-
-    const finish = () => {
-      remaining -= 1;
-      if (remaining > 0) return;
-      setPrintingAll(false);
-      fetchPacks();
-      if (failed) {
-        toast.error("Some copies could not be marked printed");
-      }
+  const printPreviewUrl = useCallback(
+    (codes) => {
+      const unique = [...new Set((codes || []).filter(Boolean))];
       const receiptType = String(
         activeBusiness?.default_receipt_type || "pdf",
       )
         .trim()
         .toLowerCase();
       const thermalQs = receiptType === "terminal" ? "&thermal=1" : "";
-      navigate(
-        `/app/sales/invoice-preview?sale_code=${encodeURIComponent(
-          selected.sale_code,
-        )}&doc=gin&print_all=1&per_product=1&auto_print=1${thermalQs}`,
-      );
-    };
+      const params = new URLSearchParams({
+        doc: "gin",
+        print_all: "1",
+        per_product: "1",
+        auto_print: "1",
+      });
+      if (unique.length === 1) params.set("sale_code", unique[0]);
+      else params.set("sale_codes", unique.join(","));
+      return `/app/sales/invoice-preview?${params.toString()}${thermalQs}`;
+    },
+    [activeBusiness?.default_receipt_type],
+  );
 
-    packs.forEach((pack) => {
-      _postApi(
-        "/api/v1/sale-workflows/fulfillment/print",
-        {
-          facilityId: activeBusiness.id,
-          id: pack.id,
-          packCode: pack.pack_code,
-          updated_by: user?.id,
-        },
+  const markPacksPrinted = useCallback(
+    (packList, done) => {
+      const uniquePacks = [];
+      const seen = new Set();
+      for (const pack of packList || []) {
+        const key = pack?.id || pack?.pack_code;
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        uniquePacks.push(pack);
+      }
+      if (!uniquePacks.length) {
+        done(false);
+        return;
+      }
+      let remaining = uniquePacks.length;
+      let failed = false;
+      uniquePacks.forEach((pack) => {
+        _postApi(
+          "/api/v1/sale-workflows/fulfillment/print",
+          {
+            facilityId: activeBusiness.id,
+            id: pack.id,
+            packCode: pack.pack_code,
+            updated_by: user?.id,
+          },
+          (res) => {
+            if (!res.success) failed = true;
+            remaining -= 1;
+            if (remaining <= 0) done(failed);
+          },
+          () => {
+            failed = true;
+            remaining -= 1;
+            if (remaining <= 0) done(failed);
+          },
+        );
+      });
+    },
+    [activeBusiness?.id, user?.id],
+  );
+
+  const openPrintAllPreview = useCallback(
+    (codes, packList) => {
+      const unique = [...new Set((codes || []).filter(Boolean))];
+      if (!unique.length) {
+        setPrintingAll(false);
+        toast.error("No invoices to print");
+        return;
+      }
+      markPacksPrinted(packList, (failed) => {
+        setPrintingAll(false);
+        fetchPacks();
+        if (failed) {
+          toast.error("Some copies could not be marked printed");
+        }
+        navigate(printPreviewUrl(unique));
+      });
+    },
+    [fetchPacks, markPacksPrinted, navigate, printPreviewUrl],
+  );
+
+  const printAllInvoices = () => {
+    if (!activeBusiness?.id || !selected || packs.length === 0) return;
+    setPrintingAll(true);
+    openPrintAllPreview([selected.sale_code], packs);
+  };
+
+  const printAllQueueInvoices = () => {
+    if (!activeBusiness?.id) return;
+    const list = [...pendingRows, ...historyRows];
+    const codes = [
+      ...new Set(list.map((row) => row.sale_code).filter(Boolean)),
+    ];
+    if (!codes.length) {
+      toast.error("No invoices in Invoice Separation to print");
+      return;
+    }
+    setPrintingAll(true);
+    const knownPacks = historyRows.flatMap((row) => row.packs || []);
+    const pendingCodes = pendingRows
+      .map((row) => row.sale_code)
+      .filter(Boolean);
+    if (!pendingCodes.length) {
+      openPrintAllPreview(codes, knownPacks);
+      return;
+    }
+    let remaining = pendingCodes.length;
+    const packList = [...knownPacks];
+    pendingCodes.forEach((code) => {
+      const params = new URLSearchParams({
+        facilityId: activeBusiness.id,
+        saleCode: code,
+      });
+      _fetchApi(
+        `/api/v1/sale-workflows/fulfillments?${params.toString()}`,
         (res) => {
-          if (!res.success) failed = true;
-          finish();
+          if (res.success) packList.push(...(res.results || []));
+          remaining -= 1;
+          if (remaining <= 0) openPrintAllPreview(codes, packList);
         },
         () => {
-          failed = true;
-          finish();
+          remaining -= 1;
+          if (remaining <= 0) openPrintAllPreview(codes, packList);
         },
       );
     });
@@ -500,11 +581,29 @@ export default function InvoiceSeparation() {
               </h1>
               <p className="text-gray-600 mt-1">
                 Print one {dispatchDocLabel} for each product (Sales Invoice is
-                printed at Verification Points), then mark separated. Credit
+                printed at Verification Points), then mark separated. Use Print
+                all to print every invoice in Awaiting and History. Credit
                 invoices appear here only after approval at Verification Points.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={
+                  printingAll ||
+                  pendingRows.length + historyRows.length === 0
+                }
+                onClick={printAllQueueInvoices}
+                className="flex items-center gap-2"
+              >
+                <Printer className="w-4 h-4" />
+                {printingAll
+                  ? "Opening…"
+                  : `Print all ${dispatchDocLabel}s (${
+                      pendingRows.length + historyRows.length
+                    })`}
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -723,7 +822,7 @@ export default function InvoiceSeparation() {
                         Open Verification Points (Credit)
                       </Link>
                     ) : null}
-                    {canSeparate && packs.length > 1 ? (
+                    {canSeparate && packs.length > 0 ? (
                       <Button
                         type="button"
                         variant="outline"
@@ -734,7 +833,7 @@ export default function InvoiceSeparation() {
                         <Printer className="w-4 h-4" />
                         {printingAll
                           ? "Opening…"
-                          : `Print all ${dispatchDocLabel}s (${packs.length})`}
+                          : `Print all ${dispatchDocLabel}s (${productPrints.length || packs.length})`}
                       </Button>
                     ) : null}
                     {canSeparate ? (
@@ -749,7 +848,7 @@ export default function InvoiceSeparation() {
                         {separating ? "Separating…" : "Mark Separated"}
                       </Button>
                     ) : null}
-                    {isHistoryRecord && packs.length > 1 ? (
+                    {isHistoryRecord && packs.length > 0 ? (
                       <Button
                         type="button"
                         variant="outline"
@@ -758,7 +857,8 @@ export default function InvoiceSeparation() {
                         className="flex items-center gap-2"
                       >
                         <Printer className="w-4 h-4" />
-                        Reprint all {dispatchDocLabel}s ({packs.length})
+                        Reprint all {dispatchDocLabel}s (
+                        {productPrints.length || packs.length})
                       </Button>
                     ) : null}
                   </div>
@@ -792,8 +892,8 @@ export default function InvoiceSeparation() {
                   </p>
 
                   {!needsCreditApproval &&
-                  productPrints.length > 1 &&
-                  canSeparate ? (
+                  productPrints.length > 0 &&
+                  (canSeparate || isHistoryRecord) ? (
                     <div className="mb-3">
                       <Button
                         type="button"
@@ -806,7 +906,9 @@ export default function InvoiceSeparation() {
                         <Printer className="w-3.5 h-3.5 mr-1" />
                         {printingAll
                           ? "Opening…"
-                          : `Print all ${productPrints.length} ${dispatchDocLabel}s`}
+                          : `${isHistoryRecord ? "Reprint" : "Print"} all ${
+                              productPrints.length
+                            } ${dispatchDocLabel}s`}
                       </Button>
                     </div>
                   ) : null}

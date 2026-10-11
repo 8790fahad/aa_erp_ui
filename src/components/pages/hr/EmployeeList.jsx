@@ -73,7 +73,7 @@ const EmployeeList = ({
   useEffect(() => {
     fetchEmployees();
     fetchDepartments();
-  }, [currentPage, searchTerm, selectedDepartment, selectedStatus, refreshTrigger]);
+  }, [currentPage, selectedDepartment, selectedStatus, refreshTrigger]);
 
   const fetchEmployees = () => {
     setLoading(true);
@@ -81,6 +81,7 @@ const EmployeeList = ({
       page: currentPage,
       limit: 50, // Increase limit for local filtering
       facilityId: activeBusiness?.id || user?.facilityId,
+      includeInvestment: "0",
     });
 
     _fetchApi(

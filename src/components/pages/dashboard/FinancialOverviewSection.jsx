@@ -1123,9 +1123,12 @@ export default function FinancialOverviewSection({
 
       <div className={`${CARD_CLASS} p-4 sm:p-5`}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-gray-900">
-            Profit &amp; Loss
-          </h3>
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-sm font-semibold text-gray-900">
+              Profit &amp; Loss
+            </h3>
+            <span className="text-xs text-gray-500">Monthly</span>
+          </div>
           <div className="flex items-center gap-3">
             <div className="inline-flex items-center bg-gray-100 rounded-lg p-0.5 text-xs font-medium">
               <button
@@ -1185,8 +1188,8 @@ export default function FinancialOverviewSection({
                   tick={{ fontSize: 11, fill: "#6b7280" }}
                   axisLine={{ stroke: "#111827", strokeWidth: 1 }}
                   tickLine={false}
-                  interval="preserveStartEnd"
-                  minTickGap={24}
+                  interval={trend.length > 18 ? "preserveStartEnd" : 0}
+                  minTickGap={8}
                 />
                 <YAxis
                   tick={{ fontSize: 11, fill: "#9ca3af" }}
@@ -1262,8 +1265,8 @@ export default function FinancialOverviewSection({
                   tick={{ fontSize: 11, fill: "#6b7280" }}
                   axisLine={false}
                   tickLine={false}
-                  interval="preserveStartEnd"
-                  minTickGap={24}
+                  interval={trend.length > 18 ? "preserveStartEnd" : 0}
+                  minTickGap={8}
                 />
                 <YAxis
                   tick={{ fontSize: 11, fill: "#9ca3af" }}
