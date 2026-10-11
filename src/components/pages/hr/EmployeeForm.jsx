@@ -14,8 +14,41 @@ import { Input, Label } from "reactstrap/lib";
 import { accountTypes } from "@/lib/utils";
 import CustomButton from "@/common/Custom/CustomButton";
 import BankTypeahead from "../../common/BankTypeahead";
+import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
+import "react-bootstrap-typeahead/css/Typeahead.css";
 import { formatNumberWithCommas } from "@/utils/numberUtils";
 import { getAaBrandColors } from "@/lib/aaBrand";
+
+const emptyComponentRow = () => ({ name: "", amount: "", accountCode: "" });
+
+const parseComponentMap = (raw) => {
+  let map = raw;
+  if (typeof raw === "string") {
+    try {
+      map = JSON.parse(raw);
+    } catch {
+      map = {};
+    }
+  }
+  if (!map || typeof map !== "object") return [emptyComponentRow()];
+  const rows = Object.entries(map).map(([name, value]) => {
+    if (value && typeof value === "object") {
+      return {
+        name,
+        amount: String(value.amount ?? value.value ?? ""),
+        accountCode: String(value.accountCode || value.accountHead || ""),
+      };
+    }
+    return { name, amount: String(value ?? ""), accountCode: "" };
+  });
+  return rows.length ? rows : [emptyComponentRow()];
+};
+
+const accountSelected = (chart, code) => {
+  if (!code) return [];
+  const found = (chart || []).find((a) => String(a.head) === String(code));
+  return [found || { head: code, description: code }];
+};
 
 const readPayeFlag = (employee, key) => {
   const fromProfile = employee?.payeProfile?.[key];
@@ -82,8 +115,9 @@ const EmployeeForm = ({
     hireDate: "",
     contractType: "Permanent",
     basicSalary: "",
-    allowances: [{ name: "", amount: "" }],
-    deductions: [{ name: "", amount: "" }],
+    salaryAccountCode: "",
+    allowances: [emptyComponentRow()],
+    deductions: [emptyComponentRow()],
     appliesRent: true,
     appliesNHF: true,
     appliesNHIS: true,
@@ -113,12 +147,14 @@ const EmployeeForm = ({
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [creatingRole, setCreatingRole] = useState(false);
   const [autoFilledFields, setAutoFilledFields] = useState({});
+  const [chartOfAccount, setChartOfAccount] = useState([]);
 
   // Load lookup lists on mount; users load when the staff picker opens
   useEffect(() => {
     loadDepartments();
     loadRoles();
     getBankList();
+    loadChartOfAccounts();
   }, [activeBusiness?.id]);
 
   useEffect(() => {
@@ -153,22 +189,6 @@ const EmployeeForm = ({
   useEffect(() => {
     if (employee) {
       const structure = employee.salaryStructure || {};
-      const parseMap = (raw) => {
-        let map = raw;
-        if (typeof raw === "string") {
-          try {
-            map = JSON.parse(raw);
-          } catch {
-            map = {};
-          }
-        }
-        if (!map || typeof map !== "object") return [{ name: "", amount: "" }];
-        const rows = Object.entries(map).map(([name, amount]) => ({
-          name,
-          amount: String(amount ?? ""),
-        }));
-        return rows.length ? rows : [{ name: "", amount: "" }];
-      };
 
       setFormData({
         userId: employee.userId || "",
@@ -195,8 +215,9 @@ const EmployeeForm = ({
         basicSalary: structure.basicSalary
           ? String(structure.basicSalary)
           : "",
-        allowances: parseMap(structure.allowances),
-        deductions: parseMap(structure.deductions),
+        salaryAccountCode: structure.accountCode || "",
+        allowances: parseComponentMap(structure.allowances),
+        deductions: parseComponentMap(structure.deductions),
         appliesRent: readPayeFlag(employee, "appliesRent"),
         appliesNHF: readPayeFlag(employee, "appliesNHF"),
         appliesNHIS: readPayeFlag(employee, "appliesNHIS"),
@@ -440,6 +461,23 @@ const EmployeeForm = ({
       );
     });
 
+  const loadChartOfAccounts = () => {
+    if (!activeBusiness?.id && !activeBusiness?.business_name) return;
+    _postApi(
+      `/account/chart-of-account?query_type=select`,
+      {
+        facilityId: activeBusiness?.id,
+        store: activeBusiness?.business_name,
+      },
+      (data) => {
+        if (data.success) setChartOfAccount(data.results || []);
+      },
+      (err) => {
+        console.error("Error fetching chart of accounts:", err);
+      },
+    );
+  };
+
   // Fetch bank list
   const getBankList = () => {
     if (!activeBusiness?.id) return;
@@ -464,6 +502,7 @@ const EmployeeForm = ({
         contractType: value,
         designation: prev.designation || "Business Associate",
         basicSalary: "",
+        salaryAccountCode: "",
       }));
       setRoleQuery((current) => current || "Business Associate");
       setDeptQuery((current) => current || "Business Associates");
@@ -564,6 +603,19 @@ const EmployeeForm = ({
     if (!isAssociate && (!basic || basic <= 0)) {
       newErrors.basicSalary = "Basic salary is required for payroll";
     }
+    if (!isAssociate && !String(formData.salaryAccountCode || "").trim()) {
+      newErrors.salaryAccountCode = "Select a salary account head";
+    }
+    (formData.allowances || []).forEach((row, i) => {
+      if (String(row.name || "").trim() && !String(row.accountCode || "").trim()) {
+        newErrors[`allowanceHead_${i}`] = "Select an account head";
+      }
+    });
+    (formData.deductions || []).forEach((row, i) => {
+      if (String(row.name || "").trim() && !String(row.accountCode || "").trim()) {
+        newErrors[`deductionHead_${i}`] = "Select an account head";
+      }
+    });
     if (
       formData.employeeId.trim() &&
       !/^[A-Za-z0-9._-]+$/.test(formData.employeeId.trim())
@@ -587,7 +639,7 @@ const EmployeeForm = ({
   const addComponentRow = (field) => {
     setFormData((prev) => ({
       ...prev,
-      [field]: [...(prev[field] || []), { name: "", amount: "" }],
+      [field]: [...(prev[field] || []), emptyComponentRow()],
     }));
   };
 
@@ -595,7 +647,7 @@ const EmployeeForm = ({
     setFormData((prev) => {
       const rows = [...(prev[field] || [])];
       if (rows.length <= 1) {
-        return { ...prev, [field]: [{ name: "", amount: "" }] };
+        return { ...prev, [field]: [emptyComponentRow()] };
       }
       rows.splice(index, 1);
       return { ...prev, [field]: rows };
@@ -618,6 +670,7 @@ const EmployeeForm = ({
           .map((r) => ({
             name: String(r.name).trim(),
             amount: parseFloat(String(r.amount).replace(/,/g, "")) || 0,
+            accountCode: String(r.accountCode || "").trim(),
           }));
 
       await onSave({
@@ -626,6 +679,7 @@ const EmployeeForm = ({
         designation,
         employeeId: formData.employeeId.trim(),
         basicSalary: parseFloat(String(formData.basicSalary).replace(/,/g, "")) || 0,
+        accountCode: formData.salaryAccountCode,
         allowances: cleanRows(formData.allowances),
         deductions: cleanRows(formData.deductions),
       });
@@ -1212,6 +1266,36 @@ const EmployeeForm = ({
               )}
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Salary Account Head *
+              </label>
+              <TypeaheadCustom
+                options={chartOfAccount}
+                placeholder="Select account head..."
+                labelKey={(i) => `${i.description} (${i.head})`}
+                onChange={(selectedItems) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    salaryAccountCode: selectedItems[0]?.head || "",
+                  }));
+                  if (errors.salaryAccountCode) {
+                    setErrors((prev) => ({
+                      ...prev,
+                      salaryAccountCode: undefined,
+                    }));
+                  }
+                }}
+                fixed
+                selected={accountSelected(chartOfAccount, formData.salaryAccountCode)}
+              />
+              {errors.salaryAccountCode && (
+                <p className="text-red-500 text-sm mt-1">
+                  {errors.salaryAccountCode}
+                </p>
+              )}
+            </div>
+
             <div className="md:col-span-2 space-y-3">
               <div className="flex items-center justify-between">
                 <label className="block text-sm font-medium text-gray-700">
@@ -1227,41 +1311,69 @@ const EmployeeForm = ({
                 </button>
               </div>
               {(formData.allowances || []).map((row, index) => (
-                <div key={`allow-${index}`} className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Name (e.g. Housing)"
-                    value={row.name}
-                    onChange={(e) =>
-                      updateComponentRow("allowances", index, "name", e.target.value)
-                    }
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="Amount"
-                    value={
-                      row.amount === ""
-                        ? ""
-                        : formatNumberWithCommas(row.amount)
-                    }
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/,/g, "");
-                      if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
-                        updateComponentRow("allowances", index, "amount", raw);
+                <div key={`allow-${index}`} className="space-y-1">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_8rem_minmax(14rem,1.2fr)_auto] gap-2 items-start">
+                    <input
+                      type="text"
+                      placeholder="Name (e.g. Housing)"
+                      value={row.name}
+                      onChange={(e) =>
+                        updateComponentRow("allowances", index, "name", e.target.value)
                       }
-                    }}
-                    className="w-36 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeComponentRow("allowances", index)}
-                    className="px-2 text-gray-400 hover:text-red-500"
-                    aria-label="Remove allowance"
-                  >
-                    <X size={16} />
-                  </button>
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Amount"
+                      value={
+                        row.amount === ""
+                          ? ""
+                          : formatNumberWithCommas(row.amount)
+                      }
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/,/g, "");
+                        if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
+                          updateComponentRow("allowances", index, "amount", raw);
+                        }
+                      }}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                    <TypeaheadCustom
+                      options={chartOfAccount}
+                      placeholder="Account head..."
+                      labelKey={(i) => `${i.description} (${i.head})`}
+                      onChange={(selectedItems) => {
+                        updateComponentRow(
+                          "allowances",
+                          index,
+                          "accountCode",
+                          selectedItems[0]?.head || "",
+                        );
+                        if (errors[`allowanceHead_${index}`]) {
+                          setErrors((prev) => ({
+                            ...prev,
+                            [`allowanceHead_${index}`]: undefined,
+                          }));
+                        }
+                      }}
+                      fixed
+                      selected={accountSelected(chartOfAccount, row.accountCode)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeComponentRow("allowances", index)}
+                      className="px-2 py-2 text-gray-400 hover:text-red-500"
+                      aria-label="Remove allowance"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  {errors[`allowanceHead_${index}`] ? (
+                    <p className="text-red-500 text-xs">
+                      {errors[`allowanceHead_${index}`]}
+                    </p>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -1281,41 +1393,69 @@ const EmployeeForm = ({
                 </button>
               </div>
               {(formData.deductions || []).map((row, index) => (
-                <div key={`deduct-${index}`} className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Name (e.g. Cooperative)"
-                    value={row.name}
-                    onChange={(e) =>
-                      updateComponentRow("deductions", index, "name", e.target.value)
-                    }
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="Amount"
-                    value={
-                      row.amount === ""
-                        ? ""
-                        : formatNumberWithCommas(row.amount)
-                    }
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/,/g, "");
-                      if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
-                        updateComponentRow("deductions", index, "amount", raw);
+                <div key={`deduct-${index}`} className="space-y-1">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_8rem_minmax(14rem,1.2fr)_auto] gap-2 items-start">
+                    <input
+                      type="text"
+                      placeholder="Name (e.g. Cooperative)"
+                      value={row.name}
+                      onChange={(e) =>
+                        updateComponentRow("deductions", index, "name", e.target.value)
                       }
-                    }}
-                    className="w-36 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeComponentRow("deductions", index)}
-                    className="px-2 text-gray-400 hover:text-red-500"
-                    aria-label="Remove deduction"
-                  >
-                    <X size={16} />
-                  </button>
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Amount"
+                      value={
+                        row.amount === ""
+                          ? ""
+                          : formatNumberWithCommas(row.amount)
+                      }
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/,/g, "");
+                        if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
+                          updateComponentRow("deductions", index, "amount", raw);
+                        }
+                      }}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                    <TypeaheadCustom
+                      options={chartOfAccount}
+                      placeholder="Account head..."
+                      labelKey={(i) => `${i.description} (${i.head})`}
+                      onChange={(selectedItems) => {
+                        updateComponentRow(
+                          "deductions",
+                          index,
+                          "accountCode",
+                          selectedItems[0]?.head || "",
+                        );
+                        if (errors[`deductionHead_${index}`]) {
+                          setErrors((prev) => ({
+                            ...prev,
+                            [`deductionHead_${index}`]: undefined,
+                          }));
+                        }
+                      }}
+                      fixed
+                      selected={accountSelected(chartOfAccount, row.accountCode)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeComponentRow("deductions", index)}
+                      className="px-2 py-2 text-gray-400 hover:text-red-500"
+                      aria-label="Remove deduction"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  {errors[`deductionHead_${index}`] ? (
+                    <p className="text-red-500 text-xs">
+                      {errors[`deductionHead_${index}`]}
+                    </p>
+                  ) : null}
                 </div>
               ))}
             </div>

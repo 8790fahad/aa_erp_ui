@@ -620,64 +620,6 @@ export default function InvoiceSeparation() {
     openPrintAllPreview([selected.sale_code], toPrint);
   };
 
-  const printAllQueueInvoices = () => {
-    if (!activeBusiness?.id) return;
-    const list =
-      canReprintGoodsIssue && canViewHistory
-        ? [...pendingRows, ...historyRows]
-        : [...pendingRows];
-    const codes = [
-      ...new Set(list.map((row) => row.sale_code).filter(Boolean)),
-    ];
-    if (!codes.length) {
-      toast.error("No invoices in Invoice Separation to print");
-      return;
-    }
-    setPrintingAll(true);
-    const knownPacks =
-      canReprintGoodsIssue && canViewHistory
-        ? historyRows.flatMap((row) => row.packs || [])
-        : [];
-    const pendingCodes = pendingRows
-      .map((row) => row.sale_code)
-      .filter(Boolean);
-    const finishQueue = (allPacks) => {
-      const toPrint = canReprintGoodsIssue
-        ? allPacks
-        : allPacks.filter((pack) => !isPackPrinted(pack));
-      if (!toPrint.length) {
-        setPrintingAll(false);
-        denyReprint();
-        return;
-      }
-      openPrintAllPreview(codes, toPrint);
-    };
-    if (!pendingCodes.length) {
-      finishQueue(knownPacks);
-      return;
-    }
-    let remaining = pendingCodes.length;
-    const packList = [...knownPacks];
-    pendingCodes.forEach((code) => {
-      const params = new URLSearchParams({
-        facilityId: activeBusiness.id,
-        saleCode: code,
-      });
-      _fetchApi(
-        `/api/v1/sale-workflows/fulfillments?${params.toString()}`,
-        (res) => {
-          if (res.success) packList.push(...(res.results || []));
-          remaining -= 1;
-          if (remaining <= 0) finishQueue(packList);
-        },
-        () => {
-          remaining -= 1;
-          if (remaining <= 0) finishQueue(packList);
-        },
-      );
-    });
-  };
-
   const markSeparated = () => {
     if (!activeBusiness?.id || !selected) return;
     if (!packs.length) {
@@ -739,23 +681,6 @@ export default function InvoiceSeparation() {
               <Button
                 type="button"
                 variant="outline"
-                disabled={
-                  printingAll ||
-                  pendingRows.length + historyRows.length === 0
-                }
-                onClick={printAllQueueInvoices}
-                className="flex items-center gap-2"
-              >
-                <Printer className="w-4 h-4" />
-                {printingAll
-                  ? "Opening…"
-                  : `Print all ${dispatchDocLabel}s (${
-                      pendingRows.length + historyRows.length
-                    })`}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
                 onClick={() => {
                   fetchList();
                   fetchPacks();
@@ -765,20 +690,6 @@ export default function InvoiceSeparation() {
                 <RefreshCw className="w-4 h-4" />
                 Refresh
               </Button>
-              <Link
-                to="/app/sales/warehouse-requests"
-                className="inline-flex items-center rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
-              >
-                Warehouse
-              </Link>
-              {/* Sales Process is not used from Invoice Separation
-              <Link
-                to="/app/sales/process"
-                className="inline-flex items-center rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
-              >
-                Sales Process
-              </Link>
-              */}
             </div>
           </div>
         </div>

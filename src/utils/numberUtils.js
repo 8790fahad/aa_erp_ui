@@ -188,18 +188,26 @@ export const numberToWords = (num) => {
 /**
  * Calculates total earnings from allowances and basic salary
  */
+const resolvePayComponentAmount = (val, basic) => {
+  if (val == null) return 0;
+  if (typeof val === "object") {
+    return resolvePayComponentAmount(val.amount ?? val.value ?? val.rate ?? 0, basic);
+  }
+  const text = String(val);
+  if (text.includes("%")) {
+    return (parseFloat(text.replace("%", "")) / 100) * (parseFloat(basic) || 0) || 0;
+  }
+  return parseFloat(text) || 0;
+};
+
 export const calculateTotalEarnings = (allowances, basic) => {
   let total = parseFloat(basic) || 0;
   if (!allowances) return total;
   
   const parsedAllowances = typeof allowances === "string" ? JSON.parse(allowances) : allowances;
   
-  Object.values(parsedAllowances).forEach((val) => {
-    if (val && val.toString().includes("%")) {
-      total += (parseFloat(val.toString().replace("%", "")) / 100) * (parseFloat(basic) || 0);
-    } else {
-      total += parseFloat(val) || 0;
-    }
+  Object.values(parsedAllowances || {}).forEach((val) => {
+    total += resolvePayComponentAmount(val, basic);
   });
   return total;
 };
@@ -211,12 +219,8 @@ export const calculateTotalDeductions = (deductions, basic, payeRate = 0, pensio
   let total = 0;
   if (deductions) {
     const parsedDeductions = typeof deductions === "string" ? JSON.parse(deductions) : deductions;
-    Object.values(parsedDeductions).forEach((val) => {
-      if (val && val.toString().includes("%")) {
-        total += (parseFloat(val.toString().replace("%", "")) / 100) * (parseFloat(basic) || 0);
-      } else {
-        total += parseFloat(val) || 0;
-      }
+    Object.values(parsedDeductions || {}).forEach((val) => {
+      total += resolvePayComponentAmount(val, basic);
     });
   }
   // Statutory (currently treated as absolute money values as requested)
