@@ -211,6 +211,7 @@ const LoanManagement = () => {
   const [paymentMode, setPaymentMode] = useState("bank");
   const [selectedBank, setSelectedBank] = useState(null);
   const [selectedCash, setSelectedCash] = useState(null);
+  const [selectedOther, setSelectedOther] = useState(null);
   const [repaymentAmount, setRepaymentAmount] = useState("");
   const [repaymentProfit, setRepaymentProfit] = useState("");
   const [paymentRef, setPaymentRef] = useState("");
@@ -222,6 +223,7 @@ const LoanManagement = () => {
     setPaymentMode("bank");
     setSelectedBank(null);
     setSelectedCash(null);
+    setSelectedOther(null);
     setPaymentRef("");
     setChequeNumber("");
   };
@@ -234,13 +236,21 @@ const LoanManagement = () => {
       null;
     const cashHead =
       selectedCash?.head || selectedCash?.code || selectedCash?.account_code || null;
-    return { bankHead, cashHead };
+    const otherHead =
+      selectedOther?.head ||
+      selectedOther?.code ||
+      selectedOther?.account_code ||
+      null;
+    return { bankHead, cashHead, otherHead };
   };
 
   const applyLoanPaymentSelection = (loan) => {
     const mode = loan?.paymentMode || "bank";
     setPaymentMode(mode);
     setChequeNumber(loan?.chequeNumber || "");
+    setSelectedBank(null);
+    setSelectedCash(null);
+    setSelectedOther(null);
     if (mode === "cash") {
       const cash =
         cashAccounts.find(
@@ -250,7 +260,15 @@ const LoanManagement = () => {
             a.account_code === loan.cashHead
         ) || null;
       setSelectedCash(cash);
-      setSelectedBank(null);
+    } else if (mode === "others") {
+      const other =
+        chartAccounts.find(
+          (a) =>
+            a.head === loan.bankHead ||
+            a.code === loan.bankHead ||
+            a.account_code === loan.bankHead
+        ) || (loan.bankHead ? { head: loan.bankHead, description: loan.bankHead } : null);
+      setSelectedOther(other);
     } else {
       const bank =
         bankAccounts.find(
@@ -260,7 +278,20 @@ const LoanManagement = () => {
             a.code === loan.bankHead
         ) || null;
       setSelectedBank(bank);
+    }
+  };
+
+  const selectPaymentMode = (m) => {
+    setPaymentMode(m);
+    if (m === "cash") {
+      setSelectedBank(null);
+      setSelectedOther(null);
+    } else if (m === "others") {
+      setSelectedBank(null);
       setSelectedCash(null);
+    } else {
+      setSelectedCash(null);
+      setSelectedOther(null);
     }
   };
 
@@ -853,12 +884,15 @@ const LoanManagement = () => {
       return toast.error("Select the loan receivable account");
     }
 
-    const { bankHead, cashHead } = resolvePaymentHeads();
+    const { bankHead, cashHead, otherHead } = resolvePaymentHeads();
     if (paymentMode === "cash" && !cashHead) {
       return toast.error("Select the cash account to pay from");
     }
     if ((paymentMode === "bank" || paymentMode === "cheque") && !bankHead) {
       return toast.error("Select the bank account to pay from");
+    }
+    if (paymentMode === "others" && !otherHead) {
+      return toast.error("Select the account head to pay from");
     }
     if (paymentMode === "cheque" && !String(chequeNumber || "").trim()) {
       return toast.error("Enter the cheque number");
@@ -894,7 +928,12 @@ const LoanManagement = () => {
       employeeId: selectedEmployee.id,
       receivableHead,
       paymentMode,
-      bankHead: paymentMode === "cash" ? null : bankHead,
+      bankHead:
+        paymentMode === "cash"
+          ? null
+          : paymentMode === "others"
+            ? otherHead
+            : bankHead,
       cashHead: paymentMode === "cash" ? cashHead : null,
       chequeNumber: paymentMode === "cheque" ? String(chequeNumber).trim() : null,
       postDisbursement: !editMode,
@@ -985,9 +1024,20 @@ const LoanManagement = () => {
 
   const handleApproveLoan = (e) => {
     e.preventDefault();
-    const { bankHead, cashHead } = resolvePaymentHeads();
-    const paymentHead = paymentMode === "cash" ? cashHead : bankHead;
-    if (!paymentHead) return toast.error(`Please select a ${paymentMode} account`);
+    const { bankHead, cashHead, otherHead } = resolvePaymentHeads();
+    const paymentHead =
+      paymentMode === "cash"
+        ? cashHead
+        : paymentMode === "others"
+          ? otherHead
+          : bankHead;
+    if (!paymentHead) {
+      return toast.error(
+        paymentMode === "others"
+          ? "Select the account head to pay from"
+          : `Please select a ${paymentMode} account`
+      );
+    }
     if (paymentMode === "cheque" && !String(chequeNumber || "").trim()) {
       return toast.error("Enter the cheque number");
     }
@@ -998,8 +1048,8 @@ const LoanManagement = () => {
       { 
         status: "Approved", 
         paymentMode,
-        bankHead: (paymentMode === 'bank' || paymentMode === 'cheque') ? paymentHead : null,
-        cashHead: paymentMode === 'cash' ? paymentHead : null,
+        bankHead: paymentMode === "cash" ? null : paymentHead,
+        cashHead: paymentMode === "cash" ? paymentHead : null,
         reference: paymentRef,
         chequeNumber: paymentMode === 'cheque' ? chequeNumber : null,
         startMonth:
@@ -1037,9 +1087,20 @@ const LoanManagement = () => {
       );
     }
 
-    const { bankHead, cashHead } = resolvePaymentHeads();
-    const paymentHead = paymentMode === "cash" ? cashHead : bankHead;
-    if (!paymentHead) return toast.error(`Select target ${paymentMode} account`);
+    const { bankHead, cashHead, otherHead } = resolvePaymentHeads();
+    const paymentHead =
+      paymentMode === "cash"
+        ? cashHead
+        : paymentMode === "others"
+          ? otherHead
+          : bankHead;
+    if (!paymentHead) {
+      return toast.error(
+        paymentMode === "others"
+          ? "Select the account head to receive into"
+          : `Select target ${paymentMode} account`
+      );
+    }
     if (paymentMode === "cheque" && !String(chequeNumber || "").trim()) {
       return toast.error("Enter the cheque number");
     }
@@ -1063,8 +1124,8 @@ const LoanManagement = () => {
         profitHead: profit > 0 ? profitHead : null,
         paymentMethod: "Manual",
         paymentMode,
-        bankHead: (paymentMode === 'bank' || paymentMode === 'cheque') ? paymentHead : null,
-        cashHead: paymentMode === 'cash' ? paymentHead : null,
+        bankHead: paymentMode === "cash" ? null : paymentHead,
+        cashHead: paymentMode === "cash" ? paymentHead : null,
         chequeNumber: paymentMode === 'cheque' ? String(chequeNumber).trim() : null,
         userId: user?.id,
         facilityId
@@ -1116,6 +1177,7 @@ const LoanManagement = () => {
     setPaymentMode("bank");
     setSelectedBank(null);
     setSelectedCash(null);
+    setSelectedOther(null);
     setChequeNumber("");
     setSavingSchedule(false);
     _fetchApi(`/api/hr/loans/${loan.id}?facilityId=${facilityId}`, (data) => {
@@ -2766,16 +2828,12 @@ const LoanManagement = () => {
                   <label className={labelClass}>Mode of Payment</label>
                   <p className={hintClass}>How we disburse the loan (pay staff)</p>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {["bank", "cheque", "cash"].map((m) => (
+                <div className="grid grid-cols-4 gap-2">
+                  {["bank", "cheque", "cash", "others"].map((m) => (
                     <button
                       key={m}
                       type="button"
-                      onClick={() => {
-                        setPaymentMode(m);
-                        if (m === "cash") setSelectedBank(null);
-                        else setSelectedCash(null);
-                      }}
+                      onClick={() => selectPaymentMode(m)}
                       className={`rounded-md border py-2 text-[10px] font-semibold uppercase tracking-wide transition-all ${
                         paymentMode === m
                           ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white"
@@ -2791,7 +2849,9 @@ const LoanManagement = () => {
                   <label className={labelClass}>
                     {paymentMode === "cash"
                       ? "Pay From (Cash Account)"
-                      : "Pay From (Bank Account)"}
+                      : paymentMode === "others"
+                        ? "Pay From (Chart of Accounts)"
+                        : "Pay From (Bank Account)"}
                   </label>
                   {["bank", "cheque"].includes(paymentMode) ? (
                     <Select
@@ -2830,6 +2890,16 @@ const LoanManagement = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                  ) : paymentMode === "others" ? (
+                    <TypeaheadCustom
+                      options={chartAccounts}
+                      labelKey={(account) =>
+                        `${account.head || account.code || ""} ${account.description || account.account_name || ""}`.trim()
+                      }
+                      onChange={(items) => setSelectedOther(items[0] || null)}
+                      placeholder="Search account head..."
+                      selected={selectedOther ? [selectedOther] : []}
+                    />
                   ) : (
                     <TypeaheadCustom
                       options={cashAccounts}
@@ -2922,16 +2992,26 @@ const LoanManagement = () => {
                       <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-b border-slate-100 px-3 py-2.5">
                         <div className="min-w-0">
                           <p className="truncate text-xs font-semibold text-slate-800">
-                            Cr · {paymentMode === "cash" ? "Cash" : "Bank"}
+                            Cr ·{" "}
+                            {paymentMode === "cash"
+                              ? "Cash"
+                              : paymentMode === "others"
+                                ? "Account Head"
+                                : "Bank"}
                           </p>
                           <p className="truncate font-mono text-[10px] text-slate-500">
                             {paymentMode === "cash"
                               ? selectedCash?.head ||
                                 selectedCash?.code ||
                                 "Select cash account…"
-                              : selectedBank?.account_code ||
-                                selectedBank?.head ||
-                                "Select bank account…"}
+                              : paymentMode === "others"
+                                ? selectedOther?.head ||
+                                  selectedOther?.code ||
+                                  selectedOther?.account_code ||
+                                  "Select account head…"
+                                : selectedBank?.account_code ||
+                                  selectedBank?.head ||
+                                  "Select bank account…"}
                           </p>
                         </div>
                         <span className="w-24 text-right text-xs text-slate-300">—</span>
@@ -3017,16 +3097,12 @@ const LoanManagement = () => {
               <div className="space-y-4">
                 <div className="space-y-1">
                   <Label className="text-xs font-bold text-gray-700">Mode of Payment</Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['bank', 'cheque', 'cash'].map(m => (
+                  <div className="grid grid-cols-4 gap-2">
+                    {['bank', 'cheque', 'cash', 'others'].map(m => (
                       <button
                         key={m}
                         type="button"
-                        onClick={() => {
-                          setPaymentMode(m);
-                          if (m === "cash") setSelectedBank(null);
-                          else setSelectedCash(null);
-                        }}
+                        onClick={() => selectPaymentMode(m)}
                         className={`py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest border transition-all ${paymentMode === m ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}
                       >
                         {m}
@@ -3035,7 +3111,7 @@ const LoanManagement = () => {
                   </div>
                 </div>
 
-                {(paymentMode === "bank" || paymentMode === "cheque" || paymentMode === "cash") && (
+                {(paymentMode === "bank" || paymentMode === "cheque" || paymentMode === "cash" || paymentMode === "others") && (
                   <div className="space-y-4">
                     <div className="space-y-1">
                       {["bank", "cheque"].includes(paymentMode) ? (
@@ -3066,6 +3142,21 @@ const LoanManagement = () => {
                               ))}
                             </SelectContent>
                           </Select>
+                        </>
+                      ) : paymentMode === "others" ? (
+                        <>
+                          <Label className="text-xs font-bold text-gray-700 block mb-1">
+                            Pay From (Chart of Accounts)
+                          </Label>
+                          <TypeaheadCustom
+                            options={chartAccounts}
+                            labelKey={(account) =>
+                              `${account.head || account.code || ""} ${account.description || account.account_name || ""}`.trim()
+                            }
+                            onChange={(items) => setSelectedOther(items[0] || null)}
+                            placeholder="Search account head..."
+                            selected={selectedOther ? [selectedOther] : []}
+                          />
                         </>
                       ) : (
                         <>
@@ -3422,12 +3513,12 @@ const LoanManagement = () => {
                            </div>
                            <div className="space-y-1.5">
                               <label className={labelClass}>Mode</label>
-                              <div className="grid grid-cols-3 gap-1">
-                                {['bank', 'cheque', 'cash'].map(m => (
+                              <div className="grid grid-cols-4 gap-1">
+                                {['bank', 'cheque', 'cash', 'others'].map(m => (
                                   <button
                                     key={m}
                                     type="button"
-                                    onClick={() => setPaymentMode(m)}
+                                    onClick={() => selectPaymentMode(m)}
                                     className={`rounded-md border py-2 text-[9px] font-semibold uppercase tracking-wide transition-all ${paymentMode === m ? 'border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-100'}`}
                                   >
                                     {m}
@@ -3435,7 +3526,7 @@ const LoanManagement = () => {
                                 ))}
                               </div>
                            </div>
-                           {(paymentMode === "bank" || paymentMode === "cheque" || paymentMode === "cash") && (
+                           {(paymentMode === "bank" || paymentMode === "cheque" || paymentMode === "cash" || paymentMode === "others") && (
                              <div className="space-y-1.5">
                                {["bank", "cheque"].includes(paymentMode) ? (
                                  <>
@@ -3474,6 +3565,21 @@ const LoanManagement = () => {
                                        ))}
                                      </SelectContent>
                                    </Select>
+                                 </>
+                               ) : paymentMode === "others" ? (
+                                 <>
+                                   <label className={labelClass}>
+                                     Account Head
+                                   </label>
+                                   <TypeaheadCustom
+                                     options={chartAccounts}
+                                     labelKey={(account) =>
+                                       `${account.head || account.code || ""} ${account.description || account.account_name || ""}`.trim()
+                                     }
+                                     onChange={(items) => setSelectedOther(items[0] || null)}
+                                     placeholder="Search account head..."
+                                     selected={selectedOther ? [selectedOther] : []}
+                                   />
                                  </>
                                ) : (
                                  <>
@@ -3560,16 +3666,26 @@ const LoanManagement = () => {
                                  <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-b border-slate-100 px-3 py-2.5">
                                    <div className="min-w-0">
                                      <p className="truncate text-xs font-semibold text-slate-800">
-                                       Dr · {paymentMode === "cash" ? "Cash" : "Bank"}
+                                       Dr ·{" "}
+                                       {paymentMode === "cash"
+                                         ? "Cash"
+                                         : paymentMode === "others"
+                                           ? "Account Head"
+                                           : "Bank"}
                                      </p>
                                      <p className="truncate font-mono text-[10px] text-slate-500">
                                        {paymentMode === "cash"
                                          ? selectedCash?.head ||
                                            selectedCash?.code ||
                                            "Select cash account…"
-                                         : selectedBank?.account_code ||
-                                           selectedBank?.head ||
-                                           "Select bank account…"}
+                                         : paymentMode === "others"
+                                           ? selectedOther?.head ||
+                                             selectedOther?.code ||
+                                             selectedOther?.account_code ||
+                                             "Select account head…"
+                                           : selectedBank?.account_code ||
+                                             selectedBank?.head ||
+                                             "Select bank account…"}
                                      </p>
                                    </div>
                                    <span className="w-24 text-right text-xs font-semibold tabular-nums text-slate-900">

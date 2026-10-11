@@ -19,6 +19,8 @@ import "react-bootstrap-typeahead/css/Typeahead.css";
 import { formatNumberWithCommas } from "@/utils/numberUtils";
 import { getAaBrandColors } from "@/lib/aaBrand";
 
+const DEFAULT_SALARY_ACCOUNT_HEAD = "800101";
+
 const emptyComponentRow = () => ({ name: "", amount: "", accountCode: "" });
 
 const parseComponentMap = (raw) => {
@@ -115,7 +117,7 @@ const EmployeeForm = ({
     hireDate: "",
     contractType: "Permanent",
     basicSalary: "",
-    salaryAccountCode: "",
+    salaryAccountCode: DEFAULT_SALARY_ACCOUNT_HEAD,
     allowances: [emptyComponentRow()],
     deductions: [emptyComponentRow()],
     appliesRent: true,
@@ -215,7 +217,7 @@ const EmployeeForm = ({
         basicSalary: structure.basicSalary
           ? String(structure.basicSalary)
           : "",
-        salaryAccountCode: structure.accountCode || "",
+        salaryAccountCode: structure.accountCode || DEFAULT_SALARY_ACCOUNT_HEAD,
         allowances: parseComponentMap(structure.allowances),
         deductions: parseComponentMap(structure.deductions),
         appliesRent: readPayeFlag(employee, "appliesRent"),
@@ -679,7 +681,8 @@ const EmployeeForm = ({
         designation,
         employeeId: formData.employeeId.trim(),
         basicSalary: parseFloat(String(formData.basicSalary).replace(/,/g, "")) || 0,
-        accountCode: formData.salaryAccountCode,
+        accountCode:
+          formData.salaryAccountCode || DEFAULT_SALARY_ACCOUNT_HEAD,
         allowances: cleanRows(formData.allowances),
         deductions: cleanRows(formData.deductions),
       });
