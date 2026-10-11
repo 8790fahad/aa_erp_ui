@@ -3,7 +3,6 @@ import { useSelector } from "react-redux";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  CheckCircle2,
   FileStack,
   History,
   Printer,
@@ -60,7 +59,6 @@ export default function InvoiceSeparation() {
   const [activeTab, setActiveTab] = useState(tabFromUrl);
   const [loading, setLoading] = useState(false);
   const [packsLoading, setPacksLoading] = useState(false);
-  const [separating, setSeparating] = useState(false);
   const [printingId, setPrintingId] = useState(null);
   const [printingAll, setPrintingAll] = useState(false);
   const [pendingRows, setPendingRows] = useState([]);
@@ -388,15 +386,6 @@ export default function InvoiceSeparation() {
     );
   };
 
-  const goToHistoryIfAllowed = (saleCode) => {
-    if (!canViewHistory || !saleCode) return;
-    setActiveTab("history");
-    const next = new URLSearchParams(searchParams);
-    next.set("tab", "history");
-    next.set("sale_code", saleCode);
-    setSearchParams(next, { replace: true });
-  };
-
   const completeSeparation = (saleCode, packCount, done) => {
     if (!activeBusiness?.id || !saleCode) {
       done?.({ success: false });
@@ -412,7 +401,6 @@ export default function InvoiceSeparation() {
       },
       (res) => {
         if (res?.success) {
-          goToHistoryIfAllowed(saleCode);
           fetchList();
         }
         done?.(res);
@@ -441,11 +429,26 @@ export default function InvoiceSeparation() {
 
   const openBranchInvoice = (pack, line) => {
     if (!activeBusiness?.id || !pack) return;
-    if (isPackPrinted(pack) && !canReprintGoodsIssue) {
+    const alreadyPrinted = isPackPrinted(pack);
+    if (alreadyPrinted && !canReprintGoodsIssue && !canSeparate) {
       denyReprint();
       return;
     }
-    const firstPrint = !isPackPrinted(pack);
+    const afterPreview = () => {
+      setPrintingId(null);
+      fetchPacks();
+      if (canSeparate) {
+        completeSeparation(pack.sale_code || selected?.sale_code, packs.length);
+      }
+    };
+    const showPreview = () => {
+      openPrintPreview(pack, line);
+      afterPreview();
+    };
+    if (alreadyPrinted && !canReprintGoodsIssue) {
+      showPreview();
+      return;
+    }
     setPrintingId(line?.id || pack.id);
     _postApi(
       "/api/v1/sale-workflows/fulfillment/print",
@@ -457,27 +460,21 @@ export default function InvoiceSeparation() {
       },
       (res) => {
         if (!res.success) {
+          if (canSeparate) {
+            showPreview();
+            return;
+          }
           setPrintingId(null);
           toast.error(res.message || "Could not open branch invoice");
           return;
         }
-        const finish = () => {
-          setPrintingId(null);
-          fetchPacks();
-          openPrintPreview(pack, line);
-        };
-        if (firstPrint && canSeparate) {
-          completeSeparation(pack.sale_code || selected?.sale_code, packs.length, (res) => {
-            if (res?.success) {
-              toast.success(res.message || "Printed and marked separated");
-            }
-            finish();
-          });
-          return;
-        }
-        finish();
+        showPreview();
       },
       () => {
+        if (canSeparate) {
+          showPreview();
+          return;
+        }
         setPrintingId(null);
         toast.error("Could not open branch invoice");
       },
@@ -555,86 +552,43 @@ export default function InvoiceSeparation() {
         toast.error("No invoices to print");
         return;
       }
-      markPacksPrinted(packList, (failed) => {
+      const toMark = packList.filter((pack) => !isPackPrinted(pack));
+      const pendingCodes = unique.filter((code) =>
+        pendingRows.some((row) => row.sale_code === code),
+      );
+      const finish = (failed) => {
+        navigate(printPreviewUrl(unique));
+        setPrintingAll(false);
+        fetchPacks();
         if (failed) {
-          setPrintingAll(false);
-          fetchPacks();
           toast.error("Some copies could not be marked printed");
-          navigate(printPreviewUrl(unique));
-          return;
         }
-        const pendingCodes = unique.filter((code) =>
-          pendingRows.some((row) => row.sale_code === code),
-        );
-        const finish = () => {
-          setPrintingAll(false);
-          fetchPacks();
-          if (pendingCodes.length) {
-            toast.success(
-              pendingCodes.length === 1
-                ? "Printed and marked separated"
-                : `Printed and marked ${pendingCodes.length} invoices separated`,
-            );
-          }
-          navigate(printPreviewUrl(unique));
-        };
-        if (!pendingCodes.length) {
-          finish();
-          return;
-        }
-        let left = pendingCodes.length;
         pendingCodes.forEach((code) => {
           const count = packList.filter((pack) => pack.sale_code === code).length;
-          completeSeparation(code, count || packs.length, () => {
-            left -= 1;
-            if (left <= 0) finish();
-          });
+          completeSeparation(code, count || packs.length);
         });
-      });
+      };
+      if (!toMark.length) {
+        finish(false);
+        return;
+      }
+      markPacksPrinted(toMark, finish);
     },
     [fetchPacks, markPacksPrinted, navigate, pendingRows, packs.length, printPreviewUrl],
   );
 
   const printAllInvoices = () => {
     if (!activeBusiness?.id || !selected || packs.length === 0) return;
-    const toPrint = canReprintGoodsIssue
-      ? packs
-      : packs.filter((pack) => !isPackPrinted(pack));
+    const toPrint =
+      canSeparate || canReprintGoodsIssue
+        ? packs
+        : packs.filter((pack) => !isPackPrinted(pack));
     if (!toPrint.length) {
-      if (canSeparate && selected.sale_code) {
-        setPrintingAll(true);
-        completeSeparation(selected.sale_code, packs.length, (res) => {
-          setPrintingAll(false);
-          if (res?.success) {
-            toast.success(res.message || "Marked separated");
-          } else {
-            toast.error(res?.message || "Could not mark separated");
-          }
-        });
-        return;
-      }
       denyReprint();
       return;
     }
     setPrintingAll(true);
     openPrintAllPreview([selected.sale_code], toPrint);
-  };
-
-  const markSeparated = () => {
-    if (!activeBusiness?.id || !selected) return;
-    if (!packs.length) {
-      toast.error("No store copies to separate");
-      return;
-    }
-    setSeparating(true);
-    completeSeparation(selected.sale_code, packs.length, (res) => {
-      setSeparating(false);
-      if (res?.success) {
-        toast.success(res.message || "Marked separated");
-      } else {
-        toast.error(res?.message || "Could not mark separated");
-      }
-    });
   };
 
   const productPrints = packs.flatMap((pack) => {
@@ -671,10 +625,10 @@ export default function InvoiceSeparation() {
               </h1>
               <p className="text-gray-600 mt-1">
                 Print one {dispatchDocLabel} for each product (Sales Invoice is
-                printed at Verification Points), then mark separated. After a
-                copy is printed, reprint needs Reprint Goods Issue Note
-                permission. Credit invoices appear here only after approval at
-                Verification Points.
+                printed at Verification Points). Printing marks the sale
+                separated. After a copy is printed, reprint needs Reprint Goods
+                Issue Note permission. Credit invoices appear here only after
+                approval at Verification Points.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -898,18 +852,6 @@ export default function InvoiceSeparation() {
                           : `Print all ${dispatchDocLabel}s (${productPrints.length || packs.length})`}
                       </Button>
                     ) : null}
-                    {canSeparate ? (
-                      <Button
-                        type="button"
-                        disabled={separating || packs.length === 0}
-                        onClick={markSeparated}
-                        style={{ backgroundColor: "var(--aa-navy)" }}
-                        className="flex items-center gap-2"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        {separating ? "Separating…" : "Mark Separated"}
-                      </Button>
-                    ) : null}
                     {isHistoryRecord && packs.length > 0 && canReprintGoodsIssue ? (
                       <Button
                         type="button"
@@ -949,31 +891,9 @@ export default function InvoiceSeparation() {
                                     .toLowerCase() === "a5"
                                 ? `one A5 ${dispatchDocLabel} per product`
                                 : `one A4 ${dispatchDocLabel} per product`
-                          }, then mark separated.`
+                          }. Printing marks it separated.`
                         : "One evidence copy is created for each product on this invoice."}
                   </p>
-
-                  {!needsCreditApproval &&
-                  productPrints.length > 0 &&
-                  (canSeparate || (isHistoryRecord && canReprintGoodsIssue)) ? (
-                    <div className="mb-3">
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={printingAll}
-                        onClick={printAllInvoices}
-                        className="h-8"
-                        style={{ backgroundColor: "var(--aa-navy)" }}
-                      >
-                        <Printer className="w-3.5 h-3.5 mr-1" />
-                        {printingAll
-                          ? "Opening…"
-                          : `${isHistoryRecord ? "Reprint" : "Print"} all ${
-                              productPrints.length
-                            } ${dispatchDocLabel}s`}
-                      </Button>
-                    </div>
-                  ) : null}
 
                   {packsLoading ? (
                     <Skeleton className="h-24 w-full" />
@@ -1046,7 +966,9 @@ export default function InvoiceSeparation() {
                               variant="outline"
                               disabled={
                                 printingId === printKey ||
-                                (isPackPrinted(pack) && !canReprintGoodsIssue)
+                                (isPackPrinted(pack) &&
+                                  !canReprintGoodsIssue &&
+                                  !canSeparate)
                               }
                               onClick={() => openBranchInvoice(pack, line)}
                               className="h-8"
@@ -1055,8 +977,8 @@ export default function InvoiceSeparation() {
                               {printingId === printKey
                                 ? "Opening…"
                                 : isPackPrinted(pack)
-                                  ? canReprintGoodsIssue
-                                    ? `Reprint ${dispatchDocLabel}`
+                                  ? canReprintGoodsIssue || canSeparate
+                                    ? `Print ${dispatchDocLabel}`
                                     : "Already printed"
                                   : `Print ${dispatchDocLabel}`}
                             </Button>
@@ -1071,9 +993,7 @@ export default function InvoiceSeparation() {
                   <p className="text-xs text-gray-500">
                     Printing the copies also marks this sale separated and
                     moves it to Warehouse Requests
-                    {canViewHistory ? " (and History)" : ""}. Use{" "}
-                    <strong>Mark Separated</strong> only if the copies are
-                    already printed.
+                    {canViewHistory ? " (and History)" : ""}.
                   </p>
                 ) : null}
 
