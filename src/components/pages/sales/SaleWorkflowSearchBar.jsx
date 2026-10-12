@@ -68,12 +68,22 @@ export default function SaleWorkflowSearchBar({
 
       const needle = code.toLowerCase();
       const list = rows || [];
+      const fourDigit = /^\d{4}$/.test(needle);
+      const codeMatches = (value) => {
+        const text = String(value || "").toLowerCase();
+        if (!text) return false;
+        if (text === needle) return true;
+        if (fourDigit && (text === `inv-${needle}` || text.endsWith(`-${needle}`))) {
+          return true;
+        }
+        return false;
+      };
 
       const exactCodeMatch = list.find(
         (r) =>
-          String(getRowCode(r) || "").toLowerCase() === needle ||
-          String(r.sale_code || "").toLowerCase() === needle ||
-          String(r.pack_code || "").toLowerCase() === needle,
+          codeMatches(getRowCode(r)) ||
+          codeMatches(r.sale_code) ||
+          codeMatches(r.pack_code),
       );
       if (exactCodeMatch) {
         onSelect?.(exactCodeMatch, code);
@@ -138,7 +148,8 @@ export default function SaleWorkflowSearchBar({
   useEffect(() => {
     if (!remote && !onResolve) return undefined;
     const code = query.trim();
-    if (code.length !== 7 && code.length !== 8) {
+    const fourDigitInvoice = /^\d{4}$/.test(code);
+    if (code.length !== 7 && code.length !== 8 && !fourDigitInvoice) {
       lastAutoCode.current = "";
       return undefined;
     }

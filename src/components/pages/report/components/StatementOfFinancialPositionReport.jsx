@@ -12,7 +12,6 @@ import {
   FileSpreadsheet,
   FileDown,
   ChevronDown,
-  ChevronRight,
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -31,30 +30,81 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { toast } from "sonner";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
+
+function hasSofpAmount(row) {
+  return (
+    Math.abs(parseFloat(row?.current) || 0) > 0.005 ||
+    Math.abs(parseFloat(row?.prior) || 0) > 0.005
+  );
+}
+
+/** Number only the lines that have a balance, in statement order. */
+export function stampSofpNotes(rows) {
+  let noteRef = 1;
+  const walk = (row) => {
+    if (!row || typeof row !== "object") return row;
+    const next = { ...row };
+    if (Array.isArray(row.children)) next.children = row.children.map(walk);
+    if (row.type === "line" && String(row.note || "").toUpperCase() === "P&L") {
+      next._note = "P&L";
+    } else if (row.type === "line" && hasSofpAmount(row)) {
+      next._note = noteRef++;
+    } else {
+      next._note = "";
+    }
+    return next;
+  };
+  return (rows || []).map(walk);
+}
+
+export function collectSofpNoteRows(rows) {
+  const notes = [];
+  const walk = (row) => {
+    if (!row) return;
+    if (
+      row.type === "line" &&
+      row._note !== "" &&
+      row._note != null &&
+      row._note !== "P&L"
+    ) {
+      notes.push({
+        _note: row._note,
+        accountCode: String(row.note || "").trim(),
+        accountName: sofpAccountTitle(row),
+        current: row.current,
+      });
+    }
+    for (const ch of row.children || []) walk(ch);
+  };
+  for (const row of rows || []) walk(row);
+  return notes;
+}
+
+export const SOFP_NOTES_PATH =
+  "/app/reports/accounting-reports/aa_erp-statement-of-financial-position-notes";
+
+export function buildSofpNotesUrl({ asOfDate, asOfDatePrior, note, accountCode }) {
+  const params = new URLSearchParams();
+  if (asOfDate) params.set("asOf", asOfDate);
+  if (asOfDatePrior) params.set("prior", asOfDatePrior);
+  if (note != null && note !== "") params.set("note", String(note));
+  if (accountCode) params.set("account", String(accountCode));
+  const q = params.toString();
+  return q ? `${SOFP_NOTES_PATH}?${q}` : SOFP_NOTES_PATH;
+}
+
 function collectNoteCodes(rows) {
   if (!Array.isArray(rows)) return [];
-  const set = new Set();
-  const add = (note) => {
-    if (note != null && String(note).trim() !== "") {
-      set.add(String(note).trim());
-    }
-  };
-  function walk(row) {
+  const notes = [];
+  const walk = (row) => {
     if (!row) return;
-    if (row.type === "group") {
-      add(row.note);
-      for (const ch of row.children || []) walk(ch);
-    } else if (row.type === "line" || row.type === "subtotal") {
-      add(row.note);
+    if (row._note !== "" && row._note != null && row._note !== "P&L") {
+      notes.push(String(row._note));
     }
-  }
+    for (const ch of row.children || []) walk(ch);
+  };
   for (const row of rows) walk(row);
-  return Array.from(set).sort((a, b) => {
-    const na = Number(a);
-    const nb = Number(b);
-    if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
-    return a.localeCompare(b, undefined, { numeric: true });
-  });
+  return notes;
 }
 
 /** UK-style footer when notes are narrative codes */
@@ -62,10 +112,10 @@ function notesFooterSentence(noteCodes) {
   if (noteCodes.length >= 2) {
     const first = noteCodes[0];
     const last = noteCodes[noteCodes.length - 1];
-    return `The accounting policies and the notes identified by codes ${first} to ${last} form part of these financial statements.`;
+    return `The accounting policies and the notes ${first} to ${last} form part of these financial statements.`;
   }
   if (noteCodes.length === 1) {
-    return `The accounting policies and the note identified by code ${noteCodes[0]} form part of these financial statements.`;
+    return `The accounting policies and note ${noteCodes[0]} form part of these financial statements.`;
   }
   return "The accounting policies and the accompanying notes form part of these financial statements.";
 }
@@ -89,25 +139,52 @@ function formatCell(value) {
   return formatNaira(v);
 }
 
+function sofpGroupCode(row) {
+  return String(row?.parentCode ?? row?.note ?? "").trim();
+}
+
+function sofpGroupName(row) {
+  const code = sofpGroupCode(row);
+  const label = String(row?.label || "").trim();
+  if (code && label.toLowerCase().startsWith(`${code.toLowerCase()} - `)) {
+    return label.slice(code.length + 3).trim().toLowerCase();
+  }
+  return label.toLowerCase();
+}
+
+/** Face of SoFP: account name without repeating the code (code is the note's account). */
+export function sofpAccountTitle(row) {
+  const code = sofpGroupCode(row);
+  const label = String(row?.label || "").trim();
+  if (code && label.toLowerCase().startsWith(`${code.toLowerCase()} - `)) {
+    return label.slice(code.length + 3).trim() || label;
+  }
+  return label;
+}
+
+const SOFP_NATURE_OR_SECTION_NAMES = new Set([
+  "assets",
+  "liabilities",
+  "equity",
+  "current assets",
+  "current liabilities",
+]);
+
 function shouldHideTopLevelNatureGroup(row) {
-  const code = row?.parentCode != null ? String(row.parentCode).trim() : "";
-  // Hide system "nature headers" like:
-  // 100001 - Assets, 200001 - Liabilities, 300001 - Equity
-  if (code === "100001" || code === "200001" || code === "300001") return true;
-  const label = String(row?.label || "").toLowerCase();
-  return (
-    label === "100001 - assets" ||
-    label === "200001 - liabilities" ||
-    label === "300001 - equity"
-  );
+  const code = sofpGroupCode(row);
+  const name = sofpGroupName(row);
+  if (/^[1-9]$/.test(code)) return true;
+  if (code === "100001" || code === "200001" || code === "300001") {
+    return SOFP_NATURE_OR_SECTION_NAMES.has(name);
+  }
+  return SOFP_NATURE_OR_SECTION_NAMES.has(name);
 }
 
 /** Excel export: nested segment groups (same structure as API rows) */
 function writeSofpSegmentRow(ws, row, r, depth, borderThin) {
-  const indent = "  ".repeat(depth);
   if (row.type === "line") {
-    ws.getCell(r, 1).value = `${indent}${row.label || ""}`;
-    ws.getCell(r, 2).value = row.note || "";
+    ws.getCell(r, 1).value = sofpAccountTitle(row);
+    ws.getCell(r, 2).value = row._note || "";
     ws.getCell(r, 3).value =
       row.current === null || row.current === undefined ? "" : Number(row.current);
     ws.getCell(r, 4).value =
@@ -129,12 +206,10 @@ function writeSofpSegmentRow(ws, row, r, depth, borderThin) {
       }
       return next;
     }
-    ws.getCell(r, 1).value = `${indent}${row.label || ""}`;
-    ws.getCell(r, 2).value = row.note || "";
-    ws.getCell(r, 3).value =
-      row.current === null || row.current === undefined ? "" : Number(row.current);
-    ws.getCell(r, 4).value =
-      row.prior === null || row.prior === undefined ? "" : Number(row.prior);
+    ws.getCell(r, 1).value = sofpAccountTitle(row);
+    ws.getCell(r, 2).value = "";
+    ws.getCell(r, 3).value = "";
+    ws.getCell(r, 4).value = "";
     ws.getRow(r).font = { bold: true };
     [1, 2, 3, 4].forEach((col) => {
       ws.getCell(r, col).border = borderThin;
@@ -145,7 +220,7 @@ function writeSofpSegmentRow(ws, row, r, depth, borderThin) {
     ws.getCell(r, 4).alignment = { horizontal: "right" };
     let next = r + 1;
     for (const ch of row.children || []) {
-      next = writeSofpSegmentRow(ws, ch, next, depth + 1, borderThin);
+      next = writeSofpSegmentRow(ws, ch, next, 0, borderThin);
     }
     return next;
   }
@@ -174,45 +249,35 @@ export default function StatementOfFinancialPositionReport() {
   const [error, setError] = useState("");
   const [pdfExporting, setPdfExporting] = useState(false);
   const reportExportRef = useRef(null);
-  /** Collapsed when false; undefined / true = expanded (matches GL default: show detail) */
-  const [expandedGroups, setExpandedGroups] = useState({});
 
-  const toggleGroup = useCallback((parentCode) => {
-    setExpandedGroups((prev) => {
-      const curOpen = prev[parentCode] !== false;
-      return { ...prev, [parentCode]: !curOpen };
-    });
-  }, []);
-
-  const collectGroupCodes = useCallback((rows) => {
-    const codes = [];
-    const walk = (node) => {
-      if (!node) return;
-      if (node.type === "group" && node.parentCode) {
-        codes.push(String(node.parentCode));
-      }
-      (node.children || []).forEach(walk);
-    };
-    (rows || []).forEach(walk);
-    return codes;
-  }, []);
-
-  useEffect(() => {
-    if (!data?.rows?.length) {
-      setExpandedGroups({});
-      return;
-    }
-    const firstTopLevelGroup = data.rows.find((r) => r?.type === "group")?.parentCode;
-    const allGroupCodes = collectGroupCodes(data.rows);
-    const nextState = {};
-    allGroupCodes.forEach((code) => {
-      nextState[code] = false;
-    });
-    if (firstTopLevelGroup) {
-      nextState[String(firstTopLevelGroup)] = true;
-    }
-    setExpandedGroups(nextState);
-  }, [data?.rows, collectGroupCodes]);
+  const renderAcctNoteLink = (code, _name, display) => {
+    const accountCode = String(code || "").trim();
+    const label = display === 0 || display ? String(display) : accountCode;
+    if (!accountCode) return "";
+    if (accountCode.toUpperCase() === "P&L") return accountCode;
+    if (!label) return "";
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          navigate(
+            buildSofpNotesUrl({
+              asOfDate,
+              asOfDatePrior,
+              note: label,
+              accountCode,
+            }),
+            { state: { asOfDate, asOfDatePrior } },
+          );
+        }}
+        className="text-blue-700 underline font-medium hover:text-blue-900 print:text-gray-600 print:no-underline"
+        title="View ledger note"
+      >
+        {label}
+      </button>
+    );
+  };
 
   useEffect(() => {
     const currentYear = moment().format("YYYY");
@@ -324,7 +389,8 @@ export default function StatementOfFinancialPositionReport() {
 
   const business = activeBusiness || {};
 
-  const noteCodes = useMemo(() => collectNoteCodes(data?.rows), [data]);
+  const faceRows = useMemo(() => stampSofpNotes(data?.rows), [data]);
+  const noteCodes = useMemo(() => collectNoteCodes(faceRows), [faceRows]);
 
   const handleExportExcel = useCallback(async () => {
     if (!data?.rows?.length) {
@@ -363,7 +429,7 @@ export default function StatementOfFinancialPositionReport() {
       const curLabel = `${yc} (${data.currencyLabel || "₦"})`;
       const priLabel = `${yp} (${data.currencyLabel || "₦"})`;
 
-      const head = ["Account", "Acct. #", curLabel, priLabel];
+      const head = ["Account", "Note", curLabel, priLabel];
       head.forEach((h, i) => {
         const c = ws.getCell(r, i + 1);
         c.value = h;
@@ -383,7 +449,7 @@ export default function StatementOfFinancialPositionReport() {
       });
       r++;
 
-      for (const row of data.rows) {
+      for (const row of faceRows) {
         if (row.type === "spacer") {
           r++;
           continue;
@@ -407,7 +473,8 @@ export default function StatementOfFinancialPositionReport() {
         }
         if (row.type === "line" || row.type === "subtotal") {
           ws.getCell(r, 1).value = row.label;
-          ws.getCell(r, 2).value = row.note || "";
+          ws.getCell(r, 2).value =
+            row.type === "subtotal" ? "" : row._note || "";
           ws.getCell(r, 3).value =
             row.current === null || row.current === undefined
               ? ""
@@ -456,7 +523,7 @@ export default function StatementOfFinancialPositionReport() {
       console.error(e);
       toast.error("Could not export Excel");
     }
-  }, [data, businessName, asOfDate, asOfDatePrior, noteCodes]);
+  }, [data, faceRows, businessName, asOfDate, asOfDatePrior, noteCodes]);
 
   const handleExportPdf = useCallback(async () => {
     const el = reportExportRef.current;
@@ -495,22 +562,18 @@ export default function StatementOfFinancialPositionReport() {
 
   const meta = data?.meta;
 
-  function renderSegmentNode(row, keyPrefix, depth = 0, ancestorCollapsed = false) {
-    const rowHidden = ancestorCollapsed ? "hidden print:table-row" : "";
+  function renderSegmentNode(row, keyPrefix) {
     if (row.type === "line") {
       return (
         <tr
           key={keyPrefix}
-          className={`border-b border-gray-200 bg-white hover:bg-gray-50/80 ${rowHidden}`}
+          className="border-b border-gray-200 bg-white hover:bg-gray-50/80"
         >
-          <td
-            className="py-1.5 pr-2 border-r border-gray-200 text-gray-800"
-            style={{ paddingLeft: 8 + depth * 12 }}
-          >
-            {row.label}
+          <td className="px-3 py-1.5 pr-2 border-r border-gray-200 text-gray-800">
+            {sofpAccountTitle(row)}
           </td>
           <td className="px-2 py-1.5 text-center text-gray-600 border-r border-gray-200 text-xs">
-            {row.note || ""}
+            {renderAcctNoteLink(row.note, sofpAccountTitle(row), row._note)}
           </td>
           <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-200">
             {formatCell(row.current)}
@@ -527,76 +590,25 @@ export default function StatementOfFinancialPositionReport() {
           <Fragment key={keyPrefix}>
             {row.children?.map((ch, ci) => (
               <Fragment key={`${keyPrefix}-h-${ci}`}>
-                {renderSegmentNode(
-                  ch,
-                  `${keyPrefix}-h-${ci}`,
-                  depth,
-                  ancestorCollapsed
-                )}
+                {renderSegmentNode(ch, `${keyPrefix}-h-${ci}`)}
               </Fragment>
             ))}
           </Fragment>
         );
       }
-      const open = expandedGroups[row.parentCode] !== false;
-      const hideSubtree = ancestorCollapsed || !open;
       return (
         <Fragment key={keyPrefix}>
-          <tr
-            className={`bg-gray-50 border-t border-gray-300 cursor-pointer hover:bg-gray-100/90 ${rowHidden}`}
-            onClick={() => toggleGroup(row.parentCode)}
-            role="button"
-            tabIndex={0}
-            aria-expanded={open}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                toggleGroup(row.parentCode);
-              }
-            }}
-          >
-            <td
-              className="py-2 pr-2 border-r border-gray-200 align-top"
-              style={{ paddingLeft: 4 + depth * 12 }}
-            >
-              <div className="flex items-start gap-1 min-w-0">
-                <span
-                  className="inline-flex h-5 w-4 shrink-0 items-center justify-center text-gray-600 mt-0.5 -ml-0.5"
-                  aria-hidden
-                >
-                  {open ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                </span>
-                <div className="min-w-0">
-                  <span className="font-semibold text-gray-900">{row.label}</span>
-                  <span className="block text-xs text-gray-500 mt-0.5">
-                    {row.accountCount} account
-                    {row.accountCount !== 1 ? "s" : ""}
-                  </span>
-                </div>
-              </div>
+          <tr className="bg-gray-50 border-t border-gray-200">
+            <td className="px-3 py-1.5 pr-2 border-r border-gray-200 font-semibold text-gray-900">
+              {sofpAccountTitle(row)}
             </td>
-            <td className="px-2 py-2 text-center text-xs text-gray-600 border-r border-gray-200 align-top">
-              {row.note || ""}
-            </td>
-            <td className="px-3 py-2 text-right font-semibold tabular-nums border-r border-gray-200 align-top">
-              {formatCell(row.current)}
-            </td>
-            <td className="px-3 py-2 text-right font-semibold tabular-nums bg-gray-50/50 align-top">
-              {formatCell(row.prior)}
-            </td>
+            <td className="px-2 py-1.5 border-r border-gray-200" />
+            <td className="px-3 py-1.5 border-r border-gray-200" />
+            <td className="px-3 py-1.5 bg-gray-50/50" />
           </tr>
           {row.children?.map((ch, ci) => (
             <Fragment key={`${keyPrefix}-n-${ci}`}>
-              {renderSegmentNode(
-                ch,
-                `${keyPrefix}-n-${ci}`,
-                depth + 1,
-                hideSubtree
-              )}
+              {renderSegmentNode(ch, `${keyPrefix}-n-${ci}`)}
             </Fragment>
           ))}
         </Fragment>
@@ -842,7 +854,7 @@ export default function StatementOfFinancialPositionReport() {
                         Account
                       </th>
                       <th className="px-2 py-2.5 text-center text-xs font-bold text-white uppercase border-r border-gray-500 w-24">
-                        Acct. #
+                        Note
                       </th>
                       <th className="px-3 py-2.5 text-right text-xs font-bold text-white uppercase border-r border-gray-500 min-w-[8rem]">
                         {yearCurrent} ({data.currencyLabel || "₦"})
@@ -853,7 +865,7 @@ export default function StatementOfFinancialPositionReport() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.rows.map((row, idx) => {
+                    {faceRows.map((row, idx) => {
                       if (row.type === "spacer") {
                         return (
                           <tr key={`${idx}-sp`}>
@@ -891,8 +903,6 @@ export default function StatementOfFinancialPositionReport() {
                             {renderSegmentNode(
                               row,
                               `seg-${idx}-${row.parentCode}`,
-                              0,
-                              false
                             )}
                           </Fragment>
                         );
@@ -919,13 +929,15 @@ export default function StatementOfFinancialPositionReport() {
                               className={`px-3 py-1.5 pr-2 border-r border-gray-200 text-gray-900 ${
                                 isSub || row.emphasize
                                   ? "font-semibold break-words leading-snug"
-                                  : "pl-8"
+                                  : ""
                               }`}
                             >
-                              {row.label}
+                              {isSub ? row.label : sofpAccountTitle(row)}
                             </td>
                             <td className="px-2 py-1.5 text-center text-gray-600 border-r border-gray-200 text-xs">
-                              {row.note || ""}
+                              {isSub
+                                ? row.note || ""
+                                : renderAcctNoteLink(row.note, sofpAccountTitle(row), row._note)}
                             </td>
                             <td className="px-3 py-1.5 text-right tabular-nums border-r border-gray-200">
                               {formatCell(row.current)}

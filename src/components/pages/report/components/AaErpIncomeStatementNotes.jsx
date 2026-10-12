@@ -18,7 +18,7 @@ export default function AaErpIncomeStatementNotes() {
   const facilityId = activeBusiness?.id;
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const notesExportRef = useRef(null);
   const { defaultFromDate, defaultToDate } = useFinancialYear();
 
@@ -70,27 +70,40 @@ export default function AaErpIncomeStatementNotes() {
   }, [facilityId, fromDate, toDate]);
 
   useEffect(() => {
-    if (!reportData && fromDate && toDate && facilityId) {
+    if (fromDate && toDate && facilityId) {
       fetchNotesData();
     }
-  }, [reportData, fromDate, toDate, facilityId, fetchNotesData]);
-
-  useEffect(() => {
-    if (!highlightNoteRef || loading) return;
-    const timer = window.setTimeout(() => {
-      const el = document.getElementById(`income-statement-note-${highlightNoteRef}`);
-      el?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 200);
-    return () => window.clearTimeout(timer);
-  }, [highlightNoteRef, loading, reportData]);
+  }, [fromDate, toDate, facilityId, fetchNotesData]);
 
   const allNotes = Array.isArray(reportData?.notes) ? reportData.notes : [];
+  const visibleNotes = highlightNoteRef
+    ? allNotes.filter((note) => String(note.noteRef) === String(highlightNoteRef))
+    : allNotes;
   const currentYearLabel = toDate ? moment(toDate).format("YYYY") : "";
+
+  const handleNoteFilterChange = (value) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set("note", value);
+    else next.delete("note");
+    setSearchParams(next, { replace: true });
+  };
 
   const backToStatement = () => {
     navigate("/app/reports/accounting-reports/aa_erp-income-statement", {
       state: { fromDate, toDate },
     });
+  };
+
+  const openAccountLedger = (code, name) => {
+    const accountCode = String(code || "").trim();
+    if (!accountCode) return;
+    navigate(
+      `/app/reports/account-ledger-report?accounts=${encodeURIComponent(
+        accountCode,
+      )}&from=${fromDate}&to=${toDate}&name=${encodeURIComponent(
+        name || accountCode,
+      )}`,
+    );
   };
 
   const handleExportPdf = async () => {
@@ -142,6 +155,26 @@ export default function AaErpIncomeStatementNotes() {
               )}
             </div>
             <div className="flex shrink-0 flex-nowrap items-center gap-2 sm:gap-3">
+              {allNotes.length > 0 && (
+                <label className="flex items-center gap-2 text-sm text-gray-700 whitespace-nowrap">
+                  <span className="font-medium">Filter by note</span>
+                  <select
+                    value={highlightNoteRef}
+                    onChange={(e) => handleNoteFilterChange(e.target.value)}
+                    className="h-10 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[14rem]"
+                  >
+                    <option value="">All notes</option>
+                    {allNotes.map((note) => (
+                      <option key={`filter-note-${note.noteRef}`} value={String(note.noteRef)}>
+                        Note {note.noteRef}
+                        {note.title || note.description
+                          ? ` — ${note.title || note.description}`
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -167,7 +200,7 @@ export default function AaErpIncomeStatementNotes() {
                 variant="outline"
                 size="lg"
                 className="h-10 shrink-0 border-gray-300"
-                disabled={!allNotes.length || loading || pdfExporting}
+                disabled={!visibleNotes.length || loading || pdfExporting}
                 onClick={handleExportPdf}
               >
                 {pdfExporting ? (
@@ -209,7 +242,21 @@ export default function AaErpIncomeStatementNotes() {
           </div>
         )}
 
-        {!loading && allNotes.length > 0 && (
+        {!loading && allNotes.length > 0 && visibleNotes.length === 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-12 text-center text-gray-600">
+            No data for Note {highlightNoteRef}. Choose another note or{" "}
+            <button
+              type="button"
+              onClick={() => handleNoteFilterChange("")}
+              className="text-blue-700 underline font-medium"
+            >
+              show all notes
+            </button>
+            .
+          </div>
+        )}
+
+        {!loading && visibleNotes.length > 0 && (
           <div className="mb-1">
             <BusinessDocumentHeader
               business={activeBusiness}
@@ -220,12 +267,13 @@ export default function AaErpIncomeStatementNotes() {
               className="mb-2"
             />
             <IncomeStatementNotesSection
-              notes={allNotes}
+              notes={visibleNotes}
               fromDate={fromDate}
               toDate={toDate}
               currentYearLabel={currentYearLabel}
               exportRef={notesExportRef}
-              highlightNoteRef={highlightNoteRef}
+              highlightNoteRef=""
+              onAccountClick={openAccountLedger}
             />
           </div>
         )}

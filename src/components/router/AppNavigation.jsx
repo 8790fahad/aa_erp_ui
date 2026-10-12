@@ -180,6 +180,7 @@ import AaErpGeneralLedger from "../pages/report/components/AaErpGeneralLedger";
 import AaErpTrialBalance from "../pages/report/components/AaErpTrialBalance";
 import AaErpBalanceSheet from "../pages/report/components/AaErpBalanceSheet";
 import StatementOfFinancialPositionReport from "../pages/report/components/StatementOfFinancialPositionReport";
+import StatementOfFinancialPositionNotes from "../pages/report/components/StatementOfFinancialPositionNotes";
 import InventoryValuationReport from "../pages/report/components/InventoryValuationReport";
 import AaErpIncomeStatement from "../pages/report/components/AaErpIncomeStatement";
 import AaErpIncomeStatementNotes from "../pages/report/components/AaErpIncomeStatementNotes";
@@ -1130,6 +1131,10 @@ const routeModules = {
           {
             path: "aa_erp-statement-of-financial-position",
             element: <StatementOfFinancialPositionReport />,
+          },
+          {
+            path: "aa_erp-statement-of-financial-position-notes",
+            element: <StatementOfFinancialPositionNotes />,
           },
           {
             path: "aa_erp-income-statement",

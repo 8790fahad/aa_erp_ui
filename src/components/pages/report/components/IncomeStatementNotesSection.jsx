@@ -1,4 +1,4 @@
-import { formatNumber1, formatNaira } from "@/components/router/utilities";
+import { formatNaira } from "@/components/router/utilities";
 
 const formatCurrency = formatNaira;
 
@@ -12,6 +12,145 @@ const formatDate = (dateString) => {
   });
 };
 
+const emptyCell = "—";
+
+const headRowClass = "bg-gray-600 border-b border-gray-700";
+const headCellClass = "px-2 py-2 font-bold text-white uppercase tracking-wide";
+
+function AccountCodeLink({ code, name, onAccountClick }) {
+  const value = String(code || "").trim();
+  if (!value) return emptyCell;
+  if (!onAccountClick) return value;
+  return (
+    <button
+      type="button"
+      onClick={() => onAccountClick(value, name || value)}
+      className="font-mono text-blue-700 underline font-medium hover:text-blue-900"
+      title="Open account ledger"
+    >
+      {value}
+    </button>
+  );
+}
+
+function NoteAccountSummaryTable({ items = [], currentYearLabel, onAccountClick }) {
+  if (!items.length) return null;
+
+  const totalDebit = items.reduce((s, i) => s + (i.debit || 0), 0);
+  const totalCredit = items.reduce((s, i) => s + (i.credit || 0), 0);
+  const totalNet = items.reduce((s, i) => s + (i.amount || 0), 0);
+
+  return (
+    <table className="w-full text-xs border-collapse mb-3">
+      <thead>
+        <tr className={headRowClass}>
+          <th className={`${headCellClass} text-left w-24`}>Code</th>
+          <th className={`${headCellClass} text-left`}>Account</th>
+          <th className={`${headCellClass} text-right min-w-[5.5rem]`}>Dr (₦)</th>
+          <th className={`${headCellClass} text-right min-w-[5.5rem]`}>Cr (₦)</th>
+          <th className={`${headCellClass} text-right min-w-[5.5rem]`}>
+            Net ({currentYearLabel})
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item, idx) => (
+          <tr key={`${item.accountCode || idx}`} className="border-b border-gray-100">
+            <td className="px-2 py-1 text-gray-700">
+              <AccountCodeLink
+                code={item.accountCode}
+                name={item.name}
+                onAccountClick={onAccountClick}
+              />
+            </td>
+            <td className="px-2 py-1 text-gray-900">{item.name || emptyCell}</td>
+            <td className="px-2 py-1 text-right tabular-nums">
+              {item.debit ? formatCurrency(item.debit) : emptyCell}
+            </td>
+            <td className="px-2 py-1 text-right tabular-nums">
+              {item.credit ? formatCurrency(item.credit) : emptyCell}
+            </td>
+            <td className="px-2 py-1 text-right tabular-nums font-medium">
+              {formatCurrency(item.amount || 0)}
+            </td>
+          </tr>
+        ))}
+        <tr className="bg-gray-50 font-semibold border-t border-gray-200">
+          <td className="px-2 py-1.5" colSpan={2}>
+            Account totals
+          </td>
+          <td className="px-2 py-1.5 text-right tabular-nums">{formatCurrency(totalDebit)}</td>
+          <td className="px-2 py-1.5 text-right tabular-nums">{formatCurrency(totalCredit)}</td>
+          <td className="px-2 py-1.5 text-right tabular-nums">{formatCurrency(totalNet)}</td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+function NoteJournalEntriesTable({ entries = [], onAccountClick }) {
+  if (!entries.length) return null;
+
+  const totalDebit = entries.reduce((s, e) => s + (e.debit || 0), 0);
+  const totalCredit = entries.reduce((s, e) => s + (e.credit || 0), 0);
+
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">
+        Journal entries
+      </p>
+      <table className="w-full text-xs border-collapse">
+        <thead>
+          <tr className={headRowClass}>
+            <th className={`${headCellClass} text-left w-[4.5rem]`}>Date</th>
+            <th className={`${headCellClass} text-left w-20`}>Ref</th>
+            <th className={`${headCellClass} text-left w-16`}>Code</th>
+            <th className={`${headCellClass} text-left`}>Description</th>
+            <th className={`${headCellClass} text-right min-w-[5rem]`}>Dr (₦)</th>
+            <th className={`${headCellClass} text-right min-w-[5rem]`}>Cr (₦)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry, idx) => (
+            <tr
+              key={`${entry.ref}-${entry.accountCode}-${entry.date}-${idx}`}
+              className="border-b border-gray-100"
+            >
+              <td className="px-2 py-1 text-gray-700 whitespace-nowrap">
+                {formatDate(entry.date)}
+              </td>
+              <td className="px-2 py-1 text-gray-700">{entry.ref || emptyCell}</td>
+              <td className="px-2 py-1 text-gray-700">
+                <AccountCodeLink
+                  code={entry.accountCode}
+                  name={entry.accountName}
+                  onAccountClick={onAccountClick}
+                />
+              </td>
+              <td className="px-2 py-1 text-gray-900">
+                {entry.description || entry.accountName || emptyCell}
+              </td>
+              <td className="px-2 py-1 text-right tabular-nums">
+                {entry.debit ? formatCurrency(entry.debit) : emptyCell}
+              </td>
+              <td className="px-2 py-1 text-right tabular-nums">
+                {entry.credit ? formatCurrency(entry.credit) : emptyCell}
+              </td>
+            </tr>
+          ))}
+          <tr className="bg-gray-50 font-semibold border-t border-gray-200">
+            <td className="px-2 py-1.5" colSpan={4}>
+              Total
+            </td>
+            <td className="px-2 py-1.5 text-right tabular-nums">{formatCurrency(totalDebit)}</td>
+            <td className="px-2 py-1.5 text-right tabular-nums">{formatCurrency(totalCredit)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /**
  * Notes block for income statement (used on dedicated notes page).
  */
@@ -22,6 +161,7 @@ export default function IncomeStatementNotesSection({
   currentYearLabel,
   exportRef,
   highlightNoteRef,
+  onAccountClick,
 }) {
   if (!notes.length) return null;
 
@@ -45,6 +185,9 @@ export default function IncomeStatementNotesSection({
             highlightNoteRef != null &&
             highlightNoteRef !== "" &&
             String(note.noteRef) === String(highlightNoteRef);
+          const hasDetail =
+            (note.items || []).length > 0 || (note.entries || []).length > 0;
+
           return (
             <div
               id={`income-statement-note-${note.noteRef}`}
@@ -64,38 +207,18 @@ export default function IncomeStatementNotesSection({
                   {formatCurrency(note.total || 0)}
                 </span>
               </div>
-              {(note.items || []).length > 0 ? (
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="px-2 py-1.5 text-left font-semibold text-gray-600 w-24">
-                        Code
-                      </th>
-                      <th className="px-2 py-1.5 text-left font-semibold text-gray-600">
-                        Account
-                      </th>
-                      <th className="px-2 py-1.5 text-right font-semibold text-gray-600 min-w-[7rem]">
-                        {currentYearLabel} (₦)
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(note.items || []).map((item, idx) => (
-                      <tr
-                        key={`${note.noteRef}-${item.accountCode || idx}`}
-                        className="border-b border-gray-100"
-                      >
-                        <td className="px-2 py-1 text-gray-700">
-                          {item.accountCode || "—"}
-                        </td>
-                        <td className="px-2 py-1 text-gray-900">{item.name || "—"}</td>
-                        <td className="px-2 py-1 text-right tabular-nums">
-                          {formatCurrency(item.amount || 0)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {hasDetail ? (
+                <>
+                  <NoteAccountSummaryTable
+                    items={note.items}
+                    currentYearLabel={currentYearLabel || "Period"}
+                    onAccountClick={onAccountClick}
+                  />
+                  <NoteJournalEntriesTable
+                    entries={note.entries}
+                    onAccountClick={onAccountClick}
+                  />
+                </>
               ) : (
                 <p className="text-xs text-gray-500 italic">No line-item detail.</p>
               )}

@@ -416,7 +416,7 @@ export default function WarehouseRequests() {
                 facilityId={activeBusiness?.id}
                 onResolve={fetchOne}
                 onQueryChange={handleSearchQueryChange}
-                placeholder="Enter or scan invoice number"
+                placeholder="Enter or scan invoice number, or the 4 digits"
               />
             </div>
             {!searchActive ? (
