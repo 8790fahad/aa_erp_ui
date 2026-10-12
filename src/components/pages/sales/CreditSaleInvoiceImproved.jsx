@@ -42,6 +42,12 @@ export default function CreditSaleInvoice({
   onPrintModeChange,
   printInColor: printInColorProp = null,
   onPrintInColorChange,
+  /** First print says Print and the parent closes the page. Later visits say Reprint. */
+  reprintMode = false,
+  printCount = 0,
+  documentNumber = "",
+  onReprintGoodsIssue,
+  onAfterPrint,
 }) {
   const query = useQuery();
   const invoiceRef = useRef(null);
@@ -1172,6 +1178,9 @@ export default function CreditSaleInvoice({
       console.error("Print failed:", error);
       toast.error("Unable to print invoice. Please try again.");
     },
+    onAfterPrint: () => {
+      if (typeof onAfterPrint === "function") onAfterPrint();
+    },
   });
 
   const handlePrint = useCallback(() => {
@@ -1287,6 +1296,24 @@ export default function CreditSaleInvoice({
   ]);
 
   const resolvedTaxes = fetchedInvoice ? customerCopyTaxes : propTaxes;
+  const shownPrintCount = Number(printCount) || (reprintMode ? 1 : 0);
+  const printButtonLabel = shownPrintCount > 0
+    ? showDeliveryOrder && !showInvoiceSection
+      ? `Reprint ${dispatchDocTitle}`
+      : "Reprint"
+    : `Print${
+        showInvoiceSection &&
+        showVatOnSalesInvoice &&
+        (Number(exclusiveTaxTotal) > 0 ||
+          Number(totalTax) > 0 ||
+          (resolvedTaxes && resolvedTaxes.length > 0))
+          ? customerPrintMode === "amount"
+            ? " (Amount)"
+            : " (VAT)"
+          : showDeliveryOrder
+            ? ` ${dispatchDocTitle}`
+            : ""
+      }`;
 
   const renderSkeletonFrame = () => (
     <div className="bg-gray-50 p-4">
@@ -1512,23 +1539,27 @@ export default function CreditSaleInvoice({
                 </button>
               </div>
             ) : null}
+            {showPrintButton && shownPrintCount > 0 ? (
+              <span className="text-sm font-medium text-slate-700">
+                {documentNumber || invoiceReference} · printed {shownPrintCount}{" "}
+                {shownPrintCount === 1 ? "time" : "times"}
+              </span>
+            ) : null}
+            {showPrintButton && shownPrintCount > 0 && showInvoiceSection && typeof onReprintGoodsIssue === "function" ? (
+              <button
+                type="button"
+                onClick={onReprintGoodsIssue}
+                className="px-3 py-0.5 text-sm bg-white text-[var(--aa-navy)] border border-[var(--aa-navy)] rounded flex items-center gap-1 hover:bg-slate-50 transition-colors"
+              >
+                <Printer size={14} /> Reprint {dispatchDocTitle}
+              </button>
+            ) : null}
             {showPrintButton && (
               <button
                 onClick={handlePrint}
                 className="px-3 py-0.5 text-sm bg-[var(--aa-navy)] text-white rounded flex items-center gap-1 hover:bg-blue-700 transition-colors"
               >
-                <Printer size={14} /> Print
-                {showInvoiceSection &&
-                showVatOnSalesInvoice &&
-                (Number(exclusiveTaxTotal) > 0 ||
-                  Number(totalTax) > 0 ||
-                  (resolvedTaxes && resolvedTaxes.length > 0))
-                  ? customerPrintMode === "amount"
-                    ? " (Amount)"
-                    : " (VAT)"
-                  : showDeliveryOrder
-                    ? ` ${dispatchDocTitle}`
-                    : ""}
+                <Printer size={14} /> {printButtonLabel}
               </button>
             )}
             {showCustomerCopyActions && onConfirm && (
@@ -2772,4 +2803,9 @@ CreditSaleInvoice.propTypes = {
   onPrintModeChange: PropTypes.func,
   printInColor: PropTypes.bool,
   onPrintInColorChange: PropTypes.func,
+  reprintMode: PropTypes.bool,
+  printCount: PropTypes.number,
+  documentNumber: PropTypes.string,
+  onReprintGoodsIssue: PropTypes.func,
+  onAfterPrint: PropTypes.func,
 };

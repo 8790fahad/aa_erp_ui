@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import CreditSaleInvoiceImproved from "./CreditSaleInvoiceImproved";
 import ThermalReceipt, {
@@ -11,7 +11,7 @@ import ThermalDeliveryOrder, {
 } from "./ThermalDeliveryOrder";
 import useQuery from "@/hooks/useQuery";
 import { useSelector } from "react-redux";
-import { _fetchApi } from "@/redux/actions/api";
+import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { Button } from "reactstrap";
 import { Printer } from "lucide-react";
 
@@ -394,7 +394,9 @@ function InvoicePreview() {
   const isInvoiceDoc = !isDispatchDoc;
   const documentMode = isDispatchDoc ? "dispatch" : "invoice";
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
+  const user = useSelector((state) => state.auth.user);
   const facilityId = activeBusiness?.id;
+  const closedAfterPrintRef = useRef(false);
   const [invoiceData, setInvoiceData] = useState(null);
   const [invoiceByCode, setInvoiceByCode] = useState({});
   const [batchInvoices, setBatchInvoices] = useState([]);
@@ -772,8 +774,75 @@ function InvoicePreview() {
     printThermalDeliveryOrder();
   };
 
+  const [localInvoicePrintCount, setInvoicePrintCount] = useState(0);
+  const [localGoodsIssuePrintCount, setGoodsIssuePrintCount] = useState(0);
+  const invoicePrintCount = Math.max(
+    localInvoicePrintCount,
+    Number(resolvedInvoiceData?.invoice_print_count) || 0,
+  );
+  const goodsIssuePrintCount = Math.max(
+    localGoodsIssuePrintCount,
+    Number(resolvedInvoiceData?.goods_issue_print_count) || 0,
+  );
+  const invoiceAlreadyPrinted = invoicePrintCount > 0;
+  const goodsIssueAlreadyPrinted = goodsIssuePrintCount > 0;
+
+  const applyPrintCounts = (response) => {
+    if (!response) return;
+    if (response.invoice_print_count != null) {
+      setInvoicePrintCount(Number(response.invoice_print_count) || 0);
+    }
+    if (response.goods_issue_print_count != null) {
+      setGoodsIssuePrintCount(Number(response.goods_issue_print_count) || 0);
+    }
+  };
+
+  const recordPrint = useCallback(
+    (document, done) => {
+      if (!facilityId || !previewSaleCode) {
+        done?.();
+        return;
+      }
+      _postApi(
+        "/api/v1/sale-workflows/record-print",
+        {
+          facilityId,
+          saleCode: previewSaleCode,
+          document,
+          updated_by: user?.id,
+        },
+        (response) => {
+          applyPrintCounts(response);
+          done?.(response);
+        },
+        () => done?.(),
+      );
+    },
+    [facilityId, previewSaleCode, user?.id],
+  );
+
+  const closeAfterFirstInvoicePrint = useCallback(() => {
+    if (!isInvoiceDoc || invoiceAlreadyPrinted || closedAfterPrintRef.current) {
+      return;
+    }
+    closedAfterPrintRef.current = true;
+    recordPrint("invoice", () => navigate(-1));
+  }, [invoiceAlreadyPrinted, isInvoiceDoc, navigate, recordPrint]);
+
+  const openGoodsIssueReprint = useCallback(() => {
+    if (!previewSaleCode) return;
+    const params = new URLSearchParams({
+      sale_code: previewSaleCode,
+      doc: "gin",
+      print_all: "1",
+      per_product: "1",
+    });
+    navigate(`/app/sales/invoice-preview?${params.toString()}`);
+  }, [navigate, previewSaleCode]);
+
   useEffect(() => {
     if (!autoPrint || didAutoPrint || isLoading) return;
+    if (isInvoiceDoc && invoiceAlreadyPrinted) return;
     if (printAll && printAllCopies.length === 0) return;
     if (isInvoiceBatch && batchCopies.length === 0) return;
     if (!printAll && !isInvoiceBatch && !resolvedInvoiceData) return;
@@ -794,6 +863,8 @@ function InvoicePreview() {
     autoPrint,
     didAutoPrint,
     isLoading,
+    isInvoiceDoc,
+    invoiceAlreadyPrinted,
     isTerminalReceipt,
     printAll,
     printAllCopies.length,
@@ -801,6 +872,18 @@ function InvoicePreview() {
     batchCopies.length,
     resolvedInvoiceData,
     showThermalDeliveryOrder,
+  ]);
+
+  useEffect(() => {
+    if (!autoPrint || !isInvoiceDoc || invoiceAlreadyPrinted) return undefined;
+    const onAfterPrint = () => closeAfterFirstInvoicePrint();
+    window.addEventListener("afterprint", onAfterPrint);
+    return () => window.removeEventListener("afterprint", onAfterPrint);
+  }, [
+    autoPrint,
+    closeAfterFirstInvoicePrint,
+    invoiceAlreadyPrinted,
+    isInvoiceDoc,
   ]);
 
   const handleCancel = () => {
@@ -818,6 +901,7 @@ function InvoicePreview() {
   };
 
   const handlePrintAll = () => {
+    recordPrint(isDispatchDoc ? "goods_issue" : "invoice");
     if (showThermalDeliveryOrder) {
       toast.message("Printing slip to content height", {
         description: `Set Scale to Actual size / 100%. Paper size should match the short ${dispatchDocLabel} — not 72 × 210 mm.`,
@@ -1203,9 +1287,23 @@ function InvoicePreview() {
           <div className="rounded-md border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900 flex-1">
             <strong>
               {isDispatchDoc
-                ? `Print all ${dispatchDocLabel}s`
-                : "Print all branch copies"}
+                ? goodsIssuePrintCount > 0
+                  ? `Reprint ${dispatchDocLabel} · GIN-${saleCode || previewSaleCode}`
+                  : `Print all ${dispatchDocLabel}s`
+                : invoicePrintCount > 0
+                  ? `Reprint invoice · ${saleCode || previewSaleCode}`
+                  : "Print all branch copies"}
             </strong>
+            {((isDispatchDoc && goodsIssuePrintCount > 0) ||
+              (!isDispatchDoc && invoicePrintCount > 0)) && (
+              <span className="block text-xs font-semibold text-violet-800 mt-0.5">
+                Printed{" "}
+                {isDispatchDoc ? goodsIssuePrintCount : invoicePrintCount}{" "}
+                {(isDispatchDoc ? goodsIssuePrintCount : invoicePrintCount) === 1
+                  ? "time"
+                  : "times"}
+              </span>
+            )}
             <span className="block text-xs text-violet-700 mt-0.5">
               {printAllCopies.length}{" "}
               {isDispatchDoc
@@ -1226,7 +1324,9 @@ function InvoicePreview() {
           <div className="flex gap-2">
             <Button color="primary" onClick={handlePrintAll}>
               <Printer className="inline w-4 h-4 mr-2" />
-              Print all
+              {(isDispatchDoc ? goodsIssuePrintCount : invoicePrintCount) > 0
+                ? "Reprint"
+                : "Print all"}
             </Button>
             <Button color="secondary" outline onClick={handleCancel}>
               Close
@@ -1272,6 +1372,7 @@ function InvoicePreview() {
                         <div className="print-receipt-only bg-white">
                           <ThermalDeliveryOrder
                             preview
+                            printCount={goodsIssuePrintCount}
                             documentType={deliveryDocumentType}
                             importantNote={importantNoteText}
                             poweredBy={poweredByText}
@@ -1482,11 +1583,19 @@ function InvoicePreview() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {isInvoiceDoc && invoiceAlreadyPrinted ? (
+                <Button color="secondary" outline onClick={openGoodsIssueReprint}>
+                  <Printer className="inline w-4 h-4 mr-2" />
+                  Reprint {dispatchDocLabel}
+                </Button>
+              ) : null}
               <Button color="primary" onClick={handlePrintThermal}>
                 <Printer className="inline w-4 h-4 mr-2" />
                 {isCollectionReceipt
                   ? "Print collection receipt"
-                  : "Print receipt"}
+                  : invoiceAlreadyPrinted
+                    ? "Reprint receipt"
+                    : "Print receipt"}
               </Button>
               <Button color="secondary" outline onClick={handleCancel}>
                 Close
@@ -1571,6 +1680,25 @@ function InvoicePreview() {
             warehouseDualSignature={Boolean(packCode || branchIdFilter)}
             documentMode={documentMode}
             paperSize={paperSize}
+            reprintMode={
+              isInvoiceDoc ? invoiceAlreadyPrinted : goodsIssueAlreadyPrinted
+            }
+            printCount={isInvoiceDoc ? invoicePrintCount : goodsIssuePrintCount}
+            documentNumber={
+              isInvoiceDoc
+                ? previewSaleCode
+                : `GIN-${previewSaleCode || ""}`
+            }
+            onReprintGoodsIssue={
+              isInvoiceDoc && invoiceAlreadyPrinted
+                ? openGoodsIssueReprint
+                : undefined
+            }
+            onAfterPrint={
+              isInvoiceDoc
+                ? closeAfterFirstInvoicePrint
+                : () => recordPrint("goods_issue")
+            }
             onCancel={handleCancel}
             onCustomerCopySaved={fetchInvoice}
           />
@@ -1590,9 +1718,15 @@ function InvoicePreview() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Button color="primary" onClick={handlePrintThermalDeliveryOrder}>
+              <Button
+                color="primary"
+                onClick={() => {
+                  handlePrintThermalDeliveryOrder();
+                  recordPrint("goods_issue");
+                }}
+              >
                 <Printer className="inline w-4 h-4 mr-2" />
-                Print {dispatchDocLabel}
+                {goodsIssueAlreadyPrinted ? "Reprint" : "Print"} {dispatchDocLabel}
               </Button>
               <Button color="secondary" outline onClick={handleCancel}>
                 Close
@@ -1609,6 +1743,7 @@ function InvoicePreview() {
               <div className="p-0.5 bg-gray-100">
                 <ThermalDeliveryOrder
                   preview
+                  printCount={goodsIssuePrintCount}
                   documentType={deliveryDocumentType}
                   importantNote={importantNoteText}
                   poweredBy={poweredByText}

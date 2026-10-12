@@ -71,6 +71,7 @@ export default function ThermalDeliveryOrder({
   importantNote = "",
   poweredBy,
   preparedBy = "",
+  printCount = 0,
 }) {
   const [feedbackQr, setFeedbackQr] = useState("");
   const [feedbackLabelImg, setFeedbackLabelImg] = useState("");
@@ -357,6 +358,12 @@ export default function ThermalDeliveryOrder({
 
         <div className="tr-center tr-bold">{docTitle}</div>
         <div>No: {docNumber}</div>
+        {Number(printCount) > 0 ? (
+          <div className="tr-bold">
+            Printed {Number(printCount)}{" "}
+            {Number(printCount) === 1 ? "time" : "times"}
+          </div>
+        ) : null}
         <div>
           Date:{" "}
           {moment(

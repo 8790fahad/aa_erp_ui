@@ -9,6 +9,7 @@ import {
   Search,
   FileText,
   GitBranch,
+  Printer,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
@@ -33,6 +34,17 @@ import {
 } from "@/components/pages/account/memoDateFilter";
 
 const STAGE_LEGEND = [...PROCESS_STAGES, CREDIT_PROCESS_STAGE];
+
+const GOODS_ISSUE_STATUSES = new Set([
+  "payment_confirmed",
+  "invoice_separation",
+  "credit_approved",
+  "final_invoice",
+  "warehouse_picking",
+  "dual_signature",
+  "goods_released",
+  "completed",
+]);
 
 const todayDate = () => moment().format("YYYY-MM-DD");
 
@@ -489,7 +501,7 @@ export default function InvoiceList() {
                     <col />
                     <col className="w-[9.5rem]" />
                     <col className="w-[8rem]" />
-                    <col className="w-[5.5rem]" />
+                    <col className="w-[7rem]" />
                   </colgroup>
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50/90 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -619,6 +631,37 @@ export default function InvoiceList() {
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
+                              {GOODS_ISSUE_STATUSES.has(
+                                String(item.workflow_status || ""),
+                              ) ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    const receiptType = String(
+                                      activeBusiness?.default_receipt_type || "pdf",
+                                    )
+                                      .trim()
+                                      .toLowerCase();
+                                    const params = new URLSearchParams({
+                                      sale_code: item.invoice_ref || "",
+                                      doc: "gin",
+                                      print_all: "1",
+                                      per_product: "1",
+                                      auto_print: "1",
+                                    });
+                                    const thermal =
+                                      receiptType === "terminal" ? "&thermal=1" : "";
+                                    navigate(
+                                      `/app/sales/invoice-preview?${params.toString()}${thermal}`,
+                                    );
+                                  }}
+                                  className="h-7 w-7 p-0 text-slate-500 hover:bg-white/70 hover:text-[var(--aa-navy)]"
+                                  title="Print goods issue note"
+                                >
+                                  <Printer className="h-4 w-4" />
+                                </Button>
+                              ) : null}
                               {item.workflow_status ? (
                                 <Button
                                   variant="ghost"

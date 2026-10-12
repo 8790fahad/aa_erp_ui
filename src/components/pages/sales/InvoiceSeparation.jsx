@@ -69,8 +69,6 @@ export default function InvoiceSeparation() {
   const [selectedCode, setSelectedCode] = useState(saleFromUrl);
   const [packs, setPacks] = useState([]);
   const [searchQuery, setSearchQuery] = useState(saleFromUrl);
-  /** List stays hidden until staff search / scan an invoice (same as Warehouse). */
-  const [searchActive, setSearchActive] = useState(Boolean(saleFromUrl));
 
   const rows = activeTab === "history" ? historyRows : pendingRows;
 
@@ -82,12 +80,10 @@ export default function InvoiceSeparation() {
         if (saleFromUrl) {
           if (pending.some((r) => r.sale_code === saleFromUrl)) {
             setActiveTab("pending");
-            setSearchActive(true);
             return saleFromUrl;
           }
           if (canViewHistory && history.some((r) => r.sale_code === saleFromUrl)) {
             setActiveTab("history");
-            setSearchActive(true);
             return saleFromUrl;
           }
         }
@@ -243,28 +239,21 @@ export default function InvoiceSeparation() {
       if (!q) return historyRows;
       return matches(historyRows);
     }
-    if (!searchActive) return [];
-    if (!q) {
-      return selectedCode
-        ? rows.filter((r) => r.sale_code === selectedCode)
-        : [];
-    }
+    if (!q) return rows;
     return matches(rows);
-  }, [rows, historyRows, searchQuery, searchActive, selectedCode, activeTab]);
+  }, [rows, historyRows, searchQuery, activeTab]);
 
   const handleSearchQueryChange = useCallback(
     (value) => {
       const next = String(value || "");
       setSearchQuery(next);
       if (next.trim()) {
-        setSearchActive(true);
         const q = next.trim().toLowerCase();
         // Keep selection when scan/select fills the same code; clear when filtering.
         setSelectedCode((prev) =>
           prev && String(prev).toLowerCase() === q ? prev : "",
         );
       } else {
-        setSearchActive(false);
         setSelectedCode("");
         setSearchParams((params) => {
           const nextParams = new URLSearchParams(params);
@@ -280,7 +269,6 @@ export default function InvoiceSeparation() {
     (row, code) => {
       const saleCode = row?.sale_code || code;
       if (!saleCode) return;
-      setSearchActive(true);
       const inHistory = historyRows.some((r) => r.sale_code === saleCode);
       const inPending = pendingRows.some((r) => r.sale_code === saleCode);
       if (canViewHistory && inHistory && !inPending) setActiveTab("history");
@@ -701,18 +689,7 @@ export default function InvoiceSeparation() {
                 placeholder="Search or scan invoice, customer…"
               />
             </div>
-            {!searchActive && activeTab !== "history" ? (
-              <div className="p-8 text-center text-gray-500 text-sm space-y-2">
-                <FileStack className="mx-auto h-10 w-10 text-gray-300" />
-                <p className="font-medium text-gray-600">
-                  Search for an invoice to begin
-                </p>
-                <p>
-                  Enter or scan the invoice / customer. Matching invoices appear
-                  here after you search.
-                </p>
-              </div>
-            ) : loading ? (
+            {loading ? (
               <div className="p-4 space-y-3">
                 {[1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-16 w-full" />
@@ -724,7 +701,9 @@ export default function InvoiceSeparation() {
                   ? searchQuery.trim()
                     ? "No separated invoices match this search."
                     : `No separated invoices on ${moment(historyDate).format("DD MMM YYYY")}.`
-                  : "No invoices waiting match this search."}
+                  : searchQuery.trim()
+                    ? "No invoices waiting match this search."
+                    : "No invoices waiting for separation."}
               </div>
             ) : (
               <ul className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
@@ -787,9 +766,7 @@ export default function InvoiceSeparation() {
               <div className="h-full flex flex-col items-center justify-center text-gray-500 gap-2 py-16 px-6 text-center">
                 <FileStack className="w-12 h-12 text-gray-300" />
                 <p className="font-medium text-gray-600">
-                  {activeTab === "history" || searchActive
-                    ? "Click an invoice to open separation"
-                    : "Search an invoice first"}
+                  Click an invoice to open separation
                 </p>
                 <p className="text-sm">
                   Print store copies after you open the invoice. Printing
