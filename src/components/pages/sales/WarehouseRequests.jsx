@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { toast } from "sonner";
 import {
@@ -18,18 +18,29 @@ import {
   getFulfillmentStatusMeta,
 } from "@/lib/saleWorkflowStatus.js";
 import SaleWorkflowSearchBar from "./SaleWorkflowSearchBar";
+import {
+  canAccessPrivileges,
+  getUserFunctionalities,
+} from "@/lib/access";
+
+const HISTORY_PRIVILEGE = "Warehouse Collection History";
 
 export default function WarehouseRequests() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
+  const canViewHistory = canAccessPrivileges(
+    [HISTORY_PRIVILEGE],
+    getUserFunctionalities(user, activeBusiness),
+  );
   const [loading, setLoading] = useState(false);
   const [collecting, setCollecting] = useState(null);
+  const [pendingCount, setPendingCount] = useState(0);
   const [rows, setRows] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [branchFilter, setBranchFilter] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
   const [listTab, setListTab] = useState("pending");
   /** List stays hidden until staff search / scan an invoice. */
   const [searchActive, setSearchActive] = useState(false);
+  const activeCode = useRef("");
 
   const userBranchIds = useMemo(() => {
     if (Array.isArray(user?.branchIds) && user.branchIds.length > 0) {
@@ -56,12 +67,11 @@ export default function WarehouseRequests() {
     return userBranchIds.map((id) => ({ id, name: `Warehouse ${id}` }));
   }, [user?.branches, userBranchIds]);
 
-  const fetchList = useCallback(() => {
+  const fetchPendingCount = useCallback(() => {
     if (!activeBusiness?.id) return;
-    setLoading(true);
     const params = new URLSearchParams({
       facilityId: activeBusiness.id,
-      historyDate: moment().format("YYYY-MM-DD"),
+      countOnly: "1",
     });
     if (user?.id) params.set("userId", String(user.id));
     if (branchFilter !== "all") {
@@ -69,29 +79,92 @@ export default function WarehouseRequests() {
     } else if (userBranchIds.length) {
       params.set("branchId", userBranchIds.join(","));
     }
-
     _fetchApi(
       `/api/v1/sale-workflows/warehouse-requests?${params.toString()}`,
       (res) => {
-        setLoading(false);
-        if (res.success) {
-          const list = res.results || [];
-          setRows(list);
-          setSelectedId((prev) =>
-            prev && list.some((r) => r.id === prev) ? prev : null,
-          );
-        } else {
-          toast.error(res.message || "Failed to load warehouse requests");
-          setRows([]);
-        }
+        if (res?.success) setPendingCount(Number(res.count) || 0);
       },
-      () => {
-        setLoading(false);
-        toast.error("Failed to load warehouse requests");
-        setRows([]);
-      },
+      () => {},
     );
   }, [activeBusiness?.id, branchFilter, user?.id, userBranchIds]);
+
+  useEffect(() => {
+    fetchPendingCount();
+  }, [fetchPendingCount]);
+
+  const fetchOne = useCallback(
+    (saleCode) => {
+      const code = String(saleCode || "").trim();
+      if (!activeBusiness?.id || !code) return;
+      activeCode.current = code;
+      setSearchActive(true);
+      setLoading(true);
+      const params = new URLSearchParams({
+        facilityId: activeBusiness.id,
+        saleCode: code,
+      });
+      if (user?.id) params.set("userId", String(user.id));
+      if (branchFilter !== "all") {
+        params.set("branchId", String(branchFilter));
+      } else if (userBranchIds.length) {
+        params.set("branchId", userBranchIds.join(","));
+      }
+
+      _fetchApi(
+        `/api/v1/sale-workflows/warehouse-requests?${params.toString()}`,
+        (res) => {
+          setLoading(false);
+          const list = res.success ? res.results || [] : [];
+          if (!res.success || !list.length) {
+            toast.error(
+              res.message || `No warehouse invoice found for ${code}`,
+            );
+            setRows([]);
+            setSelectedId(null);
+            return;
+          }
+          const pending = list.find(
+            (row) => String(row.status || "").toLowerCase() !== "collected",
+          );
+          if (!pending && !canViewHistory) {
+            toast.error(
+              "This invoice is already collected. History permission is required to open it.",
+            );
+            setRows([]);
+            setSelectedId(null);
+            setListTab("pending");
+            return;
+          }
+          const visible = canViewHistory
+            ? list
+            : list.filter(
+                (row) =>
+                  String(row.status || "").toLowerCase() !== "collected",
+              );
+          setRows(visible);
+          setListTab(pending ? "pending" : "history");
+          setSelectedId((pending || visible[0])?.id ?? null);
+        },
+        () => {
+          setLoading(false);
+          toast.error(`No warehouse invoice found for ${code}`);
+          setRows([]);
+          setSelectedId(null);
+        },
+      );
+    },
+    [activeBusiness?.id, branchFilter, canViewHistory, user?.id, userBranchIds],
+  );
+
+  useEffect(() => {
+    if (canViewHistory || listTab !== "history") return;
+    setListTab("pending");
+  }, [canViewHistory, listTab]);
+
+  useEffect(() => {
+    if (!activeCode.current) return;
+    fetchOne(activeCode.current);
+  }, [branchFilter, fetchOne]);
 
   const pendingRows = useMemo(
     () =>
@@ -158,84 +231,14 @@ export default function WarehouseRequests() {
     });
   }, [selected]);
 
-  useEffect(() => {
-    fetchList();
-  }, [fetchList]);
-
-  const visibleRows = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const matches = (list) =>
-      list.filter(
-        (r) =>
-          String(r.sale_code || "")
-            .toLowerCase()
-            .includes(q) ||
-          String(r.pack_code || "")
-            .toLowerCase()
-            .includes(q) ||
-          String(r.customer_name || r.workflow?.customer_name || "")
-            .toLowerCase()
-            .includes(q) ||
-          String(r.branch_name || "")
-            .toLowerCase()
-            .includes(q),
-      );
-    if (listTab === "history") {
-      if (!q) return collectedRows;
-      return matches(collectedRows);
-    }
-    if (!searchActive) return [];
-    if (!q) {
-      return selectedId ? pendingRows.filter((r) => r.id === selectedId) : [];
-    }
-    return matches(pendingRows);
-  }, [
-    searchActive,
-    pendingRows,
-    collectedRows,
-    searchQuery,
-    listTab,
-    selectedId,
-  ]);
+  const visibleRows = listTab === "history" ? collectedRows : pendingRows;
 
   const handleSearchQueryChange = useCallback((value) => {
-    const next = String(value || "");
-    setSearchQuery(next);
-    if (next.trim()) {
-      setSearchActive(true);
-      setSelectedId(null);
-    } else {
-      setSearchActive(false);
-      setSelectedId(null);
-    }
-  }, []);
-
-  const handleSearchSelect = useCallback((row) => {
-    setSearchActive(true);
-    if (row?.id != null) {
-      if (String(row.status || "").toLowerCase() === "collected") {
-        setListTab("history");
-      } else {
-        setListTab("pending");
-      }
-      setSelectedId(row.id);
-      return;
-    }
-    if (row?.sale_code) {
-      setRows((prev) => {
-        const match = prev.find((r) => r.sale_code === row.sale_code);
-        if (match) {
-          if (String(match.status || "").toLowerCase() === "collected") {
-            setListTab("history");
-          } else {
-            setListTab("pending");
-          }
-          setSelectedId(match.id);
-          return prev;
-        }
-        return prev;
-      });
-    }
+    if (String(value || "").trim()) return;
+    activeCode.current = "";
+    setSearchActive(false);
+    setSelectedId(null);
+    setRows([]);
   }, []);
 
   /** This branch pack already has the invoice lines. No second sale fetch. */
@@ -303,8 +306,9 @@ export default function WarehouseRequests() {
           if (res.workflow?.status === "dual_signature") {
             toast.success("All branch invoices collected — dual signature");
           }
-          fetchList();
-          if (fullyCollected) setListTab("history");
+          fetchPendingCount();
+          if (activeCode.current) fetchOne(activeCode.current);
+          if (fullyCollected && canViewHistory) setListTab("history");
         } else {
           toast.error(res.message || "Could not mark collected");
         }
@@ -352,7 +356,10 @@ export default function WarehouseRequests() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={fetchList}
+                onClick={() => {
+                  fetchPendingCount();
+                  if (activeCode.current) fetchOne(activeCode.current);
+                }}
                 className="flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -383,8 +390,9 @@ export default function WarehouseRequests() {
                       : "text-slate-600 hover:text-slate-800"
                   }`}
                 >
-                  Pending ({pendingRows.length})
+                  Pending ({pendingCount})
                 </button>
+                {canViewHistory ? (
                 <button
                   type="button"
                   onClick={() => setListTab("history")}
@@ -397,6 +405,7 @@ export default function WarehouseRequests() {
                   <History className="h-3.5 w-3.5" />
                   History ({collectedRows.length})
                 </button>
+                ) : null}
               </div>
               <div className="font-semibold text-gray-800">
                 {listTab === "history"
@@ -405,22 +414,21 @@ export default function WarehouseRequests() {
               </div>
               <SaleWorkflowSearchBar
                 facilityId={activeBusiness?.id}
-                rows={rows}
-                getRowCode={(r) => r.pack_code || r.sale_code}
-                onSelect={handleSearchSelect}
+                onResolve={fetchOne}
                 onQueryChange={handleSearchQueryChange}
-                placeholder="Search or scan invoice, pack, customer…"
+                placeholder="Enter or scan invoice number"
               />
             </div>
-            {!searchActive && listTab !== "history" ? (
+            {!searchActive ? (
               <div className="p-8 text-center text-gray-500 text-sm space-y-2">
                 <Package className="mx-auto h-10 w-10 text-gray-300" />
                 <p className="font-medium text-gray-600">
-                  Search for an invoice to begin
+                  Enter or scan an invoice number
                 </p>
                 <p>
-                  Enter or scan the invoice / pack / customer. Matching
-                  invoices appear here after you search.
+                  {pendingCount > 0
+                    ? `${pendingCount} waiting. Enter or scan a number to open one.`
+                    : "Only that invoice is loaded."}
                 </p>
               </div>
             ) : loading ? (
@@ -431,11 +439,7 @@ export default function WarehouseRequests() {
               </div>
             ) : visibleRows.length === 0 ? (
               <div className="p-8 text-center text-gray-500 text-sm">
-                {listTab === "history"
-                  ? searchQuery.trim()
-                    ? "No collected invoices match this search."
-                    : `No invoices collected on ${moment().format("DD MMM YYYY")}.`
-                  : "No warehouse invoices match this search."}
+                No warehouse invoice found for that number.
               </div>
             ) : (
               <ul className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">

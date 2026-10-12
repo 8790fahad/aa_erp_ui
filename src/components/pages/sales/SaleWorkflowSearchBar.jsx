@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ScanLine, Search } from "lucide-react";
 import { toast } from "sonner";
 import useScanDetection from "@/hooks/useScanDetection";
@@ -15,9 +15,13 @@ export default function SaleWorkflowSearchBar({
   onQueryChange,
   placeholder = "Search or scan sale / customer…",
   className = "",
+  remote = false,
+  initialQuery = "",
+  onResolve,
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery || "");
   const inputRef = useRef(null);
+  const lastAutoCode = useRef("");
 
   const setQueryValue = useCallback(
     (value) => {
@@ -31,6 +35,36 @@ export default function SaleWorkflowSearchBar({
     (raw, { fromScan = false } = {}) => {
       const code = String(raw || "").trim();
       if (!code) return;
+
+      if (onResolve) {
+        onResolve(code);
+        setQueryValue(code);
+        return;
+      }
+
+      if (remote) {
+        if (!facilityId) {
+          toast.error(`No match for ${code}`);
+          return;
+        }
+        _fetchApi(
+          `/api/v1/sale-workflows/one?facilityId=${encodeURIComponent(
+            facilityId,
+          )}&saleCode=${encodeURIComponent(code)}`,
+          (res) => {
+            const found = res?.results || res?.result;
+            if (res?.success && found) {
+              onSelect?.(found, found.sale_code || code);
+              setQueryValue(found.sale_code || code);
+              toast.success(`Opened ${found.sale_code || code}`);
+            } else {
+              toast.error(res?.message || `No invoice found for ${code}`);
+            }
+          },
+          () => toast.error(`No invoice found for ${code}`),
+        );
+        return;
+      }
 
       const needle = code.toLowerCase();
       const list = rows || [];
@@ -98,8 +132,23 @@ export default function SaleWorkflowSearchBar({
         () => toast.error(`No sale found for ${code}`),
       );
     },
-    [facilityId, getRowCode, onSelect, rows, setQueryValue],
+    [facilityId, getRowCode, onResolve, onSelect, remote, rows, setQueryValue],
   );
+
+  useEffect(() => {
+    if (!remote && !onResolve) return undefined;
+    const code = query.trim();
+    if (code.length !== 7 && code.length !== 8) {
+      lastAutoCode.current = "";
+      return undefined;
+    }
+    if (lastAutoCode.current === code) return undefined;
+    const timer = setTimeout(() => {
+      lastAutoCode.current = code;
+      resolveAndSelect(code);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [onResolve, query, remote, resolveAndSelect]);
 
   const handleBarcodeScan = useCallback(
     (code) => {

@@ -109,6 +109,7 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "Edit Invoice",
   "Reprint Goods Issue Note",
   "Invoice Separation History",
+  "Warehouse Collection History",
   "Edit",
   "Change",
   "Deposit Summary",

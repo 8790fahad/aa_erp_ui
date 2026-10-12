@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -28,6 +28,18 @@ import {
 
 const REPRINT_GOODS_ISSUE_PRIVILEGE = "Reprint Goods Issue Note";
 const HISTORY_PRIVILEGE = "Invoice Separation History";
+const HISTORY_STATUSES = new Set([
+  "warehouse_picking",
+  "dual_signature",
+  "goods_released",
+  "completed",
+]);
+const QUEUE_STATUSES = new Set([
+  "payment_confirmed",
+  "invoice_separation",
+  "credit_approved",
+  "final_invoice",
+]);
 
 function isPackPrinted(pack) {
   if (!pack) return false;
@@ -61,127 +73,97 @@ export default function InvoiceSeparation() {
   const [packsLoading, setPacksLoading] = useState(false);
   const [printingId, setPrintingId] = useState(null);
   const [printingAll, setPrintingAll] = useState(false);
+  const [awaitingCount, setAwaitingCount] = useState(0);
   const [pendingRows, setPendingRows] = useState([]);
   const [historyRows, setHistoryRows] = useState([]);
-  const [historyDate, setHistoryDate] = useState(() =>
-    moment().format("YYYY-MM-DD"),
-  );
   const [selectedCode, setSelectedCode] = useState(saleFromUrl);
   const [packs, setPacks] = useState([]);
   const [searchQuery, setSearchQuery] = useState(saleFromUrl);
+  const loadedCode = useRef("");
 
   const rows = activeTab === "history" ? historyRows : pendingRows;
 
-  const applyDashboardLists = useCallback(
-    (pending, history) => {
-      setPendingRows(pending);
-      setHistoryRows(history);
-      setSelectedCode((prev) => {
-        if (saleFromUrl) {
-          if (pending.some((r) => r.sale_code === saleFromUrl)) {
-            setActiveTab("pending");
-            return saleFromUrl;
-          }
-          if (canViewHistory && history.some((r) => r.sale_code === saleFromUrl)) {
-            setActiveTab("history");
-            return saleFromUrl;
-          }
-        }
-        if (prev) {
-          if (pending.some((r) => r.sale_code === prev)) return prev;
-          if (canViewHistory && history.some((r) => r.sale_code === prev)) {
-            return prev;
-          }
-        }
-        // Do not auto-open the first invoice — wait for search / scan.
-        return "";
-      });
+  const placeWorkflow = useCallback(
+    (row) => {
+      const saleCode = row?.sale_code;
+      if (!saleCode) return;
+      const isHistory = HISTORY_STATUSES.has(String(row.status || ""));
+      loadedCode.current = saleCode;
+      if (isHistory && canViewHistory) {
+        setHistoryRows([row]);
+        setPendingRows((prev) => prev.filter((item) => item.sale_code !== saleCode));
+        setActiveTab("history");
+        setSelectedCode(saleCode);
+      } else if (isHistory) {
+        setPendingRows([]);
+        setSelectedCode("");
+        toast.message(`${saleCode} is already separated.`);
+      } else {
+        setPendingRows([row]);
+        setActiveTab("pending");
+        setSelectedCode(saleCode);
+      }
+      setSearchQuery(saleCode);
     },
-    [saleFromUrl, canViewHistory],
+    [canViewHistory],
   );
 
-  const fetchListFallback = useCallback(() => {
+  const fetchAwaitingCount = useCallback(() => {
     if (!activeBusiness?.id) return;
-    const facilityId = activeBusiness.id;
-    const pendingStatus =
-      "payment_confirmed,invoice_separation,credit_approved,final_invoice";
-    const historyStatus =
-      "warehouse_picking,dual_signature,goods_released,completed";
-    const historyQuery = new URLSearchParams({
-      facilityId,
-      status: historyStatus,
-      historyDate,
-      limit: "500",
-    });
-
-    let pendingDone = false;
-    let historyDone = false;
-    let pending = [];
-    let history = [];
-
-    const finish = () => {
-      if (!pendingDone || !historyDone) return;
-      setLoading(false);
-      applyDashboardLists(pending, history);
-    };
-
+    const status = [...QUEUE_STATUSES].join(",");
     _fetchApi(
-      `/api/v1/sale-workflows?facilityId=${facilityId}&status=${pendingStatus}`,
+      `/api/v1/sale-workflows?facilityId=${encodeURIComponent(
+        activeBusiness.id,
+      )}&status=${status}&countOnly=1`,
       (res) => {
-        pendingDone = true;
-        if (res.success) pending = res.results || [];
-        finish();
+        if (res?.success) setAwaitingCount(Number(res.count) || 0);
       },
-      () => {
-        pendingDone = true;
-        finish();
-      },
+      () => {},
     );
-
-    _fetchApi(
-      `/api/v1/sale-workflows?${historyQuery.toString()}`,
-      (res) => {
-        historyDone = true;
-        if (res.success) history = res.results || [];
-        finish();
-      },
-      () => {
-        historyDone = true;
-        finish();
-      },
-    );
-  }, [activeBusiness?.id, applyDashboardLists, historyDate]);
-
-  const fetchList = useCallback(() => {
-    if (!activeBusiness?.id) return;
-    setLoading(true);
-    const params = new URLSearchParams({
-      facilityId: activeBusiness.id,
-      historyDate,
-    });
-    _fetchApi(
-      `/api/v1/sale-workflows/separation-dashboard?${params.toString()}`,
-      (res) => {
-        if (res.success) {
-          setLoading(false);
-          applyDashboardLists(
-            res.results?.pending || [],
-            res.results?.history || [],
-          );
-          return;
-        }
-        // Older API builds don't have separation-dashboard yet — fall back.
-        fetchListFallback();
-      },
-      () => {
-        fetchListFallback();
-      },
-    );
-  }, [activeBusiness?.id, applyDashboardLists, fetchListFallback, historyDate]);
+  }, [activeBusiness?.id]);
 
   useEffect(() => {
-    fetchList();
-  }, [fetchList]);
+    fetchAwaitingCount();
+  }, [fetchAwaitingCount]);
+
+  const fetchOne = useCallback(
+    (saleCode) => {
+      const code = String(saleCode || "").trim();
+      if (!activeBusiness?.id || !code) return;
+      loadedCode.current = code;
+      setLoading(true);
+      _fetchApi(
+        `/api/v1/sale-workflows/one?facilityId=${encodeURIComponent(
+          activeBusiness.id,
+        )}&saleCode=${encodeURIComponent(code)}`,
+        (res) => {
+          setLoading(false);
+          const row = res?.results || res?.result;
+          if (!res?.success || !row) {
+            loadedCode.current = "";
+            setPendingRows([]);
+            setHistoryRows([]);
+            setSelectedCode("");
+            toast.error(res?.message || `No invoice found for ${code}`);
+            return;
+          }
+          placeWorkflow(row);
+        },
+        () => {
+          setLoading(false);
+          loadedCode.current = "";
+          toast.error(`No invoice found for ${code}`);
+        },
+      );
+    },
+    [activeBusiness?.id, placeWorkflow],
+  );
+
+  useEffect(() => {
+    if (!activeBusiness?.id || !saleFromUrl) return;
+    if (loadedCode.current === saleFromUrl) return;
+    fetchOne(saleFromUrl);
+  }, [activeBusiness?.id, saleFromUrl, fetchOne]);
 
   const selected = useMemo(
     () =>
@@ -220,47 +202,24 @@ export default function InvoiceSeparation() {
     [selected?.history],
   );
 
-  const visibleRows = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const matches = (list) =>
-      list.filter(
-        (r) =>
-          String(r.sale_code || "")
-            .toLowerCase()
-            .includes(q) ||
-          String(r.customer_name || "")
-            .toLowerCase()
-            .includes(q) ||
-          String(r.customer_no || "")
-            .toLowerCase()
-            .includes(q),
-      );
-    if (activeTab === "history") {
-      if (!q) return historyRows;
-      return matches(historyRows);
-    }
-    if (!q) return rows;
-    return matches(rows);
-  }, [rows, historyRows, searchQuery, activeTab]);
+  const visibleRows = rows;
 
   const handleSearchQueryChange = useCallback(
     (value) => {
       const next = String(value || "");
       setSearchQuery(next);
-      if (next.trim()) {
-        const q = next.trim().toLowerCase();
-        // Keep selection when scan/select fills the same code; clear when filtering.
-        setSelectedCode((prev) =>
-          prev && String(prev).toLowerCase() === q ? prev : "",
-        );
-      } else {
-        setSelectedCode("");
-        setSearchParams((params) => {
-          const nextParams = new URLSearchParams(params);
-          nextParams.delete("sale_code");
-          return nextParams;
-        }, { replace: true });
-      }
+      if (next.trim()) return;
+      loadedCode.current = "";
+      setSelectedCode("");
+      setPendingRows([]);
+      setHistoryRows([]);
+      setPacks([]);
+      setActiveTab("pending");
+      setSearchParams((params) => {
+        const nextParams = new URLSearchParams(params);
+        nextParams.delete("sale_code");
+        return nextParams;
+      }, { replace: true });
     },
     [setSearchParams],
   );
@@ -268,21 +227,14 @@ export default function InvoiceSeparation() {
   const handleSearchSelect = useCallback(
     (row, code) => {
       const saleCode = row?.sale_code || code;
-      if (!saleCode) return;
-      const inHistory = historyRows.some((r) => r.sale_code === saleCode);
-      const inPending = pendingRows.some((r) => r.sale_code === saleCode);
-      if (canViewHistory && inHistory && !inPending) setActiveTab("history");
-      else setActiveTab("pending");
-      if (!inPending && !inHistory && row) {
-        setPendingRows((prev) => [{ ...row, sale_code: saleCode }, ...prev]);
-        setActiveTab("pending");
-      }
-      setSelectedCode(saleCode);
+      if (!saleCode || !row) return;
+      placeWorkflow(row);
       const next = new URLSearchParams(searchParams);
       next.set("sale_code", saleCode);
+      next.delete("tab");
       setSearchParams(next, { replace: true });
     },
-    [canViewHistory, historyRows, pendingRows, searchParams, setSearchParams],
+    [placeWorkflow, searchParams, setSearchParams],
   );
 
   useEffect(() => {
@@ -389,7 +341,8 @@ export default function InvoiceSeparation() {
       },
       (res) => {
         if (res?.success) {
-          fetchList();
+          fetchAwaitingCount();
+          fetchOne(saleCode);
         }
         done?.(res);
       },
@@ -615,8 +568,8 @@ export default function InvoiceSeparation() {
                 Print one {dispatchDocLabel} for each product (Sales Invoice is
                 printed at Verification Points). Printing marks the sale
                 separated. After a copy is printed, reprint needs Reprint Goods
-                Issue Note permission. Credit invoices appear here only after
-                approval at Verification Points.
+                Issue Note permission.                 Enter or scan one invoice number. Credit invoices open here
+                only after approval at Verification Points.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -624,7 +577,8 @@ export default function InvoiceSeparation() {
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  fetchList();
+                  fetchAwaitingCount();
+                  if (selectedCode) fetchOne(selectedCode);
                   fetchPacks();
                 }}
                 className="flex items-center gap-2"
@@ -649,7 +603,7 @@ export default function InvoiceSeparation() {
                       : "text-slate-600 hover:text-slate-800"
                   }`}
                 >
-                  Awaiting ({pendingRows.length})
+                  Awaiting ({awaitingCount})
                 </button>
                 {canViewHistory ? (
                 <button
@@ -666,27 +620,13 @@ export default function InvoiceSeparation() {
                 </button>
                 ) : null}
               </div>
-              {activeTab === "history" ? (
-                <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                  Date
-                  <input
-                    type="date"
-                    value={historyDate}
-                    onChange={(e) =>
-                      setHistoryDate(
-                        e.target.value || moment().format("YYYY-MM-DD"),
-                      )
-                    }
-                    className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
-                  />
-                </label>
-              ) : null}
               <SaleWorkflowSearchBar
                 facilityId={activeBusiness?.id}
-                rows={[...pendingRows, ...historyRows]}
+                remote
+                initialQuery={saleFromUrl}
                 onSelect={handleSearchSelect}
                 onQueryChange={handleSearchQueryChange}
-                placeholder="Search or scan invoice, customer…"
+                placeholder="Enter or scan invoice number"
               />
             </div>
             {loading ? (
@@ -697,12 +637,10 @@ export default function InvoiceSeparation() {
               </div>
             ) : visibleRows.length === 0 ? (
               <div className="p-8 text-center text-gray-500 text-sm">
-                {activeTab === "history"
-                  ? searchQuery.trim()
-                    ? "No separated invoices match this search."
-                    : `No separated invoices on ${moment(historyDate).format("DD MMM YYYY")}.`
-                  : searchQuery.trim()
-                    ? "No invoices waiting match this search."
+                {searchQuery.trim()
+                  ? "No invoice found. Press Enter or scan the invoice number."
+                  : awaitingCount > 0
+                    ? `${awaitingCount} invoice${awaitingCount === 1 ? "" : "s"} waiting. Enter or scan a number to open one.`
                     : "No invoices waiting for separation."}
               </div>
             ) : (

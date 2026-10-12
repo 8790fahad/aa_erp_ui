@@ -558,6 +558,12 @@ export const modules = [
           "Sales",
           "Inventory",
         ],
+        subFunctionalities: [
+          {
+            title: "History",
+            functionality: ["Warehouse Collection History"],
+          },
+        ],
         access: [
           "services",
           "retailers",
