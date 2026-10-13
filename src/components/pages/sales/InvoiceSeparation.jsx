@@ -852,7 +852,7 @@ export default function InvoiceSeparation() {
                               </span>
                             </div>
 
-                            <table className="w-full text-sm mb-3">
+                            <table className={`w-full text-sm ${productPrints.length > 1 ? "" : "mb-3"}`}>
                               <thead>
                                 <tr className="text-left text-xs text-gray-500 border-b">
                                   <th className="py-1 font-medium">Item</th>
@@ -875,6 +875,7 @@ export default function InvoiceSeparation() {
                               </tbody>
                             </table>
 
+                            {productPrints.length > 1 ? null : (
                             <Button
                               type="button"
                               size="sm"
@@ -897,6 +898,7 @@ export default function InvoiceSeparation() {
                                     : "Already printed"
                                   : `Print ${dispatchDocLabel}`}
                             </Button>
+                            )}
                           </li>
                         );
                       })}
