@@ -142,6 +142,13 @@ const LoanManagement = () => {
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [investmentPage, setInvestmentPage] = useState(1);
+  const [investmentPages, setInvestmentPages] = useState(1);
+  const [investmentTotal, setInvestmentTotal] = useState(0);
+  const [investmentTotals, setInvestmentTotals] = useState({
+    principal: 0,
+    currentBalance: 0,
+  });
   const [selectedStatus, setSelectedStatus] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -302,18 +309,28 @@ const LoanManagement = () => {
 
   useEffect(() => {
     if (facilityId) {
-      fetchLoans();
-      fetchEmployees();
+      if (!isInvestmentPage) {
+        fetchLoans();
+        fetchEmployees();
+      }
       fetchChartAccounts();
       fetchLoanSetups();
       fetchBankAccounts();
       fetchCashAccounts();
     }
-  }, [facilityId]);
+  }, [facilityId, isInvestmentPage]);
 
   useEffect(() => {
-    if (associatePanelOpen && facilityId) fetchEmployees();
-  }, [associatePanelOpen, facilityId]);
+    if (!isInvestmentPage || !facilityId) return;
+    const handle = setTimeout(() => {
+      fetchInvestments(investmentPage, searchTerm);
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [isInvestmentPage, facilityId, investmentPage, searchTerm]);
+
+  useEffect(() => {
+    if ((associatePanelOpen || showNewInvestment) && facilityId) fetchEmployees();
+  }, [associatePanelOpen, showNewInvestment, facilityId]);
 
   useEffect(() => {
     if (!showForm || !facilityId || editMode) {
@@ -351,11 +368,43 @@ const LoanManagement = () => {
 
   const fetchEmployees = () => {
     _fetchApi(
-      `/api/hr/employees?facilityId=${facilityId}&limit=1000&includeInvestment=1`,
+      `/api/hr/employees?facilityId=${facilityId}&limit=100&includeInvestment=0`,
       (data) => {
         if (data.success) setEmployees(data.data.employees || []);
       },
       (error) => console.error("Error fetching employees:", error)
+    );
+  };
+
+  const fetchInvestments = (page = investmentPage, search = searchTerm) => {
+    setLoading(true);
+    const params = new URLSearchParams({
+      facilityId,
+      investors: "1",
+      page: String(page),
+      limit: "15",
+      search: String(search || "").trim(),
+    });
+    _fetchApi(
+      `/api/hr/employees?${params.toString()}`,
+      (data) => {
+        setLoading(false);
+        if (!data.success) {
+          toast.error(data.message || "Could not load investments");
+          return;
+        }
+        setEmployees(data.data.employees || []);
+        const pagination = data.data.pagination || {};
+        setInvestmentPages(pagination.pages || 1);
+        setInvestmentTotal(pagination.total || 0);
+        setInvestmentTotals(
+          data.data.totals || { principal: 0, currentBalance: 0 },
+        );
+      },
+      () => {
+        setLoading(false);
+        toast.error("Could not load investments");
+      },
     );
   };
 
@@ -578,6 +627,7 @@ const LoanManagement = () => {
         toast.success("Investment registered");
         setAssociateForm({ firstName: "", lastName: "", contactInfo: "" });
         fetchEmployees();
+        if (isInvestmentPage) fetchInvestments(investmentPage, searchTerm);
       },
       () => {
         setSavingAssociate(false);
@@ -676,6 +726,7 @@ const LoanManagement = () => {
         }
         applyPostedInvestment(person, data.data);
         toast.success(data.message || "Investment created");
+        if (isInvestmentPage) fetchInvestments(investmentPage, searchTerm);
         if (onDone) onDone(data);
       },
       (err) => {
@@ -841,6 +892,7 @@ const LoanManagement = () => {
         toast.success(
           data.message || "Investment opening balance updated",
         );
+        if (isInvestmentPage) fetchInvestments(investmentPage, searchTerm);
         setEmployees((rows) =>
           rows.map((row) =>
             row.id === investmentPerson.id ? { ...row, ...data.data } : row,
@@ -910,6 +962,7 @@ const LoanManagement = () => {
           return;
         }
         toast.success(data.message || "Payment received");
+        if (isInvestmentPage) fetchInvestments(investmentPage, searchTerm);
         const nextBalance = data.data?.investmentCurrentBalance;
         setEmployees((rows) =>
           rows.map((row) =>
@@ -1426,9 +1479,7 @@ const LoanManagement = () => {
       .toLowerCase()
       .includes(String(term || "").toLowerCase());
 
-  const filteredInvestments = investmentLoanRows.filter((row) =>
-    nameMatches(row.employee, searchTerm),
-  );
+  const filteredInvestments = investmentLoanRows;
 
   const filteredStaffLoans = loans.filter((loan) => {
     const matchesSearch = nameMatches(loan.employee, searchTerm);
@@ -1442,8 +1493,12 @@ const LoanManagement = () => {
   const rowBalance = (row) =>
     row.isInvestment ? investmentCurrentBalance(row.employee) : loanBalance(row);
 
-  const listTotalAmount = filteredLoans.reduce((sum, row) => sum + rowAmount(row), 0);
-  const listTotalBalance = filteredLoans.reduce((sum, row) => sum + rowBalance(row), 0);
+  const listTotalAmount = isInvestmentPage
+    ? Number(investmentTotals.principal) || 0
+    : filteredLoans.reduce((sum, row) => sum + rowAmount(row), 0);
+  const listTotalBalance = isInvestmentPage
+    ? Number(investmentTotals.currentBalance) || 0
+    : filteredLoans.reduce((sum, row) => sum + rowBalance(row), 0);
 
   const downloadList = () => {
     if (!filteredLoans.length) {
@@ -1713,7 +1768,10 @@ const LoanManagement = () => {
               className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[color:var(--app-primary)] focus:border-transparent transition-all bg-gray-50 focus:bg-white"
               placeholder="Search by employee name..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                if (isInvestmentPage) setInvestmentPage(1);
+              }}
             />
           </div>
           
@@ -1740,7 +1798,7 @@ const LoanManagement = () => {
             
             {(searchTerm || selectedStatus) && (
               <button 
-                onClick={() => { setSearchTerm(""); setSelectedStatus(""); }}
+                onClick={() => { setSearchTerm(""); setSelectedStatus(""); setInvestmentPage(1); }}
                 className="text-sm text-gray-500 hover:text-gray-700 px-2 transition-colors"
               >
                 Clear
@@ -1977,6 +2035,37 @@ const LoanManagement = () => {
               )}
             </table>
           </div>
+          {isInvestmentPage && investmentTotal > 0 && (
+            <div className="flex flex-col gap-3 border-t border-gray-100 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-gray-500">
+                Page {investmentPage} of {investmentPages} · {investmentTotal} investments
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={investmentPage <= 1 || loading}
+                  onClick={() => setInvestmentPage((page) => Math.max(page - 1, 1))}
+                >
+                  <ChevronLeft className="mr-1 h-4 w-4" />
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={investmentPage >= investmentPages || loading}
+                  onClick={() =>
+                    setInvestmentPage((page) =>
+                      Math.min(page + 1, investmentPages),
+                    )
+                  }
+                >
+                  Next
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
