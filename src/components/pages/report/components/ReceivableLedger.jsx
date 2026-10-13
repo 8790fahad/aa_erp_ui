@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, X, Printer, Download } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { _postApi, _fetchApi } from "@/redux/actions/api";
+import { _postApi } from "@/redux/actions/api";
 import { formatNumber1, formatNaira } from "@/components/router/utilities";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import {
 import ExcelJS from "exceljs";
 import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
-import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
+import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 
 const ReceivableLedger = () => {
@@ -29,7 +29,6 @@ const ReceivableLedger = () => {
   const [loading, setLoading] = useState(false);
   const [ledgerData, setLedgerData] = useState(null);
   const [error, setError] = useState("");
-  const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const printRef = useRef(null);
   const preselectedAppliedRef = useRef(false);
@@ -53,56 +52,22 @@ const ReceivableLedger = () => {
     setToDate(end);
   }, [searchParams]);
 
-  // Load customers using getCustomersList from customer.js controller
+  // Preselect customer from Receivable Report drill-down. No customer list is loaded.
   useEffect(() => {
-    if (!facilityId) return;
-
-    _fetchApi(
-      `/api/v1/get-customers-list/${facilityId}`,
-      (response) => {
-        if (response.success) {
-          const customersList = response.results || response.data || [];
-          const mapped = customersList.map((customer) => ({
-            id: customer.customerNo || customer.id,
-            name: customer.fullname || customer.name,
-            customerNo: customer.customerNo,
-            address: customer.address || "",
-          }));
-          setCustomers(mapped);
-        }
-      },
-      (err) => {
-        console.error("Error loading customers:", err);
-      },
-    );
-  }, [facilityId]);
-
-  // Preselect customer from Receivable Report drill-down
-  useEffect(() => {
-    if (preselectedAppliedRef.current || !customers.length) return;
+    if (preselectedAppliedRef.current) return;
     const customerNo =
       searchParams.get("customerNo") || searchParams.get("customerId");
     if (!customerNo) return;
-    const match = customers.find(
-      (c) =>
-        String(c.customerNo || c.id).toLowerCase() ===
-        String(customerNo).toLowerCase(),
-    );
-    if (match) {
-      setSelectedCustomer(match);
-      preselectedAppliedRef.current = true;
-    } else {
-      // Customer may not be in list yet — still seed selection from query
-      const name = searchParams.get("customerName") || customerNo;
-      setSelectedCustomer({
-        id: customerNo,
-        name,
-        customerNo,
-        address: "",
-      });
-      preselectedAppliedRef.current = true;
-    }
-  }, [customers, searchParams]);
+    const name = searchParams.get("customerName") || customerNo;
+    setSelectedCustomer({
+      id: customerNo,
+      name,
+      fullname: name,
+      customerNo,
+      address: "",
+    });
+    preselectedAppliedRef.current = true;
+  }, [searchParams]);
 
   const fetchReceivableLedgerData = useCallback(async () => {
     if (!facilityId || !fromDate || !toDate || !selectedCustomer) {
@@ -482,20 +447,25 @@ const ReceivableLedger = () => {
           <div className="bg-gray-100 rounded-lg no-print">
             <div className="flex items-center gap-3 flex-wrap py-2">
               {/* Customer Selection */}
-              <div className="w-full md:w-auto">
-                <TypeaheadCustom
+              <div className="w-full md:w-80">
+                <SearchCustomerInput
                   autoFocus
-                  options={customers}
-                  placeholder="Select customer..."
-                  labelKey={(customer) =>
-                    `${customer.name} (${customer.customerNo || customer.id})`
-                  }
-                  onChange={(selectedItems) => {
-                    const selected =
-                      selectedItems.length > 0 ? selectedItems[0] : null;
-                    setSelectedCustomer(selected);
+                  placeholder="Type at least 3 characters"
+                  selected={selectedCustomer}
+                  onChange={(row) => {
+                    if (!row) {
+                      setSelectedCustomer(null);
+                      return;
+                    }
+                    const name = row.fullname || row.name || row.customerNo;
+                    setSelectedCustomer({
+                      id: row.customerNo || row.id,
+                      name,
+                      fullname: name,
+                      customerNo: row.customerNo,
+                      address: row.address || "",
+                    });
                   }}
-                  selected={selectedCustomer ? [selectedCustomer] : []}
                 />
               </div>
 

@@ -15,7 +15,8 @@ import {
 import ExcelJS from "exceljs";
 import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
-import TypeaheadCustom from "@/common/Custom/TypeaheadCustom";
+import { AsyncTypeahead } from "react-bootstrap-typeahead";
+import "react-bootstrap-typeahead/css/Typeahead.css";
 import BusinessDocumentHeader from "@/components/common/BusinessDocumentHeader";
 
 const toNumber = (value) => {
@@ -67,9 +68,12 @@ const PayableLedger = () => {
   const [loading, setLoading] = useState(false);
   const [ledgerData, setLedgerData] = useState(null);
   const [error, setError] = useState("");
-  const [suppliers, setSuppliers] = useState([]);
+  const [supplierOptions, setSupplierOptions] = useState([]);
+  const [supplierSearchLoading, setSupplierSearchLoading] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const printRef = useRef(null);
+  const supplierSearchId = useRef(0);
+  const preselectedAppliedRef = useRef(false);
 
   // Initialize dates - default to current month-to-date (or asAt from query)
   useEffect(() => {
@@ -85,54 +89,61 @@ const PayableLedger = () => {
     setToDate(asAt || todayStr);
   }, [searchParams]);
 
-  // Load suppliers from suppliersinfo model
+  // Prefill supplier from a report link. No supplier list is loaded.
   useEffect(() => {
-    if (!facilityId) return;
-
-    _fetchApi(
-      `/api/suppliers?facilityId=${facilityId}&limit=1000`,
-      (response) => {
-        if (response.success) {
-          const suppliersList = response.data?.suppliers || response.data || [];
-          setSuppliers(
-            suppliersList.map((supplier) => ({
-              id: supplier.supplier_number || supplier.id,
-              name: supplier.supplier_name || supplier.name,
-              supplier_number: supplier.supplier_number,
-            })),
-          );
-        }
-      },
-      (err) => {
-        console.error("Error loading suppliers:", err);
-      },
-    );
-  }, [facilityId]);
-
-  // Prefill supplier from query string
-  useEffect(() => {
+    if (preselectedAppliedRef.current) return;
     const supplierId =
       searchParams.get("supplierId") || searchParams.get("supplierNo");
     if (!supplierId) return;
+    const name = searchParams.get("supplierName") || supplierId;
+    setSelectedSupplier({
+      id: supplierId,
+      name,
+      supplier_name: name,
+      supplier_number: supplierId,
+    });
+    preselectedAppliedRef.current = true;
+  }, [searchParams]);
 
-    const match = suppliers.find(
-      (s) =>
-        String(s.id || s.supplier_number).toLowerCase() ===
-        String(supplierId).toLowerCase(),
-    );
-    if (match) {
-      setSelectedSupplier(match);
-      return;
-    }
-    if (!suppliers.length) {
-      const name = searchParams.get("supplierName") || supplierId;
-      setSelectedSupplier({
-        id: supplierId,
-        name,
-        supplier_number: supplierId,
+  const searchSuppliers = useCallback(
+    (query) => {
+      const q = String(query || "").trim();
+      if (!facilityId || q.length < 3) {
+        setSupplierOptions([]);
+        setSupplierSearchLoading(false);
+        return;
+      }
+      const requestId = ++supplierSearchId.current;
+      setSupplierSearchLoading(true);
+      const params = new URLSearchParams({
+        facilityId,
+        search: q,
+        limit: "25",
       });
-    }
-  }, [suppliers, searchParams]);
+      _fetchApi(
+        `/api/suppliers?${params.toString()}`,
+        (response) => {
+          if (requestId !== supplierSearchId.current) return;
+          const list = response?.data?.suppliers || [];
+          setSupplierOptions(
+            list.map((supplier) => ({
+              id: supplier.supplier_number || supplier.id,
+              name: supplier.supplier_name || supplier.name,
+              supplier_name: supplier.supplier_name || supplier.name,
+              supplier_number: supplier.supplier_number,
+            })),
+          );
+          setSupplierSearchLoading(false);
+        },
+        () => {
+          if (requestId !== supplierSearchId.current) return;
+          setSupplierOptions([]);
+          setSupplierSearchLoading(false);
+        },
+      );
+    },
+    [facilityId],
+  );
 
   const fetchPayableLedgerData = useCallback(async () => {
     if (!facilityId || !fromDate || !toDate || !selectedSupplier) {
@@ -499,21 +510,41 @@ const PayableLedger = () => {
           <div className="bg-gray-100 rounded-lg no-print">
             <div className="flex items-center gap-3 flex-wrap py-2">
               {/* Supplier Selection */}
-              <div className="w-full md:w-auto">
-                <TypeaheadCustom
-                  options={suppliers}
-                  placeholder="Select supplier..."
+              <div className="w-full md:w-80">
+                <AsyncTypeahead
+                  id="payable-ledger-supplier"
+                  autoFocus
+                  isLoading={supplierSearchLoading}
+                  options={supplierOptions}
+                  placeholder="Type at least 3 characters"
+                  promptText="Type at least 3 characters"
+                  searchText="Searching…"
+                  emptyLabel="No suppliers found"
                   labelKey={(supplier) =>
-                    `${supplier.name} (${
-                      supplier.supplier_number || supplier.id
-                    })`
+                    supplier?.name || supplier?.supplier_name || ""
                   }
-                  onChange={(selectedItems) => {
-                    const selected =
-                      selectedItems.length > 0 ? selectedItems[0] : null;
-                    setSelectedSupplier(selected);
-                  }}
+                  minLength={3}
+                  delay={250}
+                  useCache
+                  filterBy={() => true}
+                  clearButton
                   selected={selectedSupplier ? [selectedSupplier] : []}
+                  onSearch={searchSuppliers}
+                  onChange={(selectedItems) => {
+                    setSelectedSupplier(
+                      selectedItems.length > 0 ? selectedItems[0] : null,
+                    );
+                  }}
+                  renderMenuItemChildren={(supplier) => (
+                    <div className="py-1">
+                      <div className="font-semibold text-slate-800">
+                        {supplier.name || supplier.supplier_name}
+                      </div>
+                      <small className="text-slate-600 text-xs">
+                        {supplier.supplier_number || supplier.id}
+                      </small>
+                    </div>
+                  )}
                 />
               </div>
 

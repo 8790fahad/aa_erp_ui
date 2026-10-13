@@ -15,7 +15,7 @@ import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { Button } from "reactstrap";
 import { Printer } from "lucide-react";
 
-/** Prefer live facility phone/address over stale invoice snapshot. */
+/** Prefer live facility phone/address/logo over a stale invoice snapshot. */
 function resolvePrintBusiness(invoiceBusiness, activeBusiness, facilityId) {
   if (invoiceBusiness?.business_name) {
     return {
@@ -25,6 +25,8 @@ function resolvePrintBusiness(invoiceBusiness, activeBusiness, facilityId) {
         activeBusiness?.business_phone || invoiceBusiness.business_phone,
       business_address:
         activeBusiness?.business_address || invoiceBusiness.business_address,
+      business_logo:
+        invoiceBusiness.business_logo || activeBusiness?.business_logo || null,
     };
   }
   return activeBusiness;
@@ -1146,7 +1148,11 @@ function InvoicePreview() {
                 <div className="invoice-print-section">
                   <CreditSaleInvoiceImproved
                     invoiceData={data}
-                    business={data.business}
+                    business={resolvePrintBusiness(
+                      data.business,
+                      activeBusiness,
+                      facilityId,
+                    )}
                     customer={data.customer}
                     date={data.date}
                     customPricing={data.customPricing}
@@ -1493,7 +1499,11 @@ function InvoicePreview() {
                   <div className="invoice-print-section">
                     <CreditSaleInvoiceImproved
                       invoiceData={data}
-                      business={data.business}
+                      business={resolvePrintBusiness(
+                        data.business,
+                        activeBusiness,
+                        facilityId,
+                      )}
                       customer={data.customer}
                       date={data.date}
                       customPricing={data.customPricing}
@@ -1666,7 +1676,11 @@ function InvoicePreview() {
         <div className="invoice-print-section">
           <CreditSaleInvoiceImproved
             invoiceData={resolvedInvoiceData}
-            business={resolvedInvoiceData.business}
+            business={resolvePrintBusiness(
+              resolvedInvoiceData.business,
+              activeBusiness,
+              facilityId,
+            )}
             customer={resolvedInvoiceData.customer}
             date={resolvedInvoiceData.date}
             customPricing={resolvedInvoiceData.customPricing}
