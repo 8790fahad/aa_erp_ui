@@ -166,6 +166,11 @@ const LoanManagement = () => {
     () => new Date().toISOString().slice(0, 10),
   );
   const [investmentAccount, setInvestmentAccount] = useState(null);
+  const [investmentPayMode, setInvestmentPayMode] = useState("equity");
+  const [investmentPayBank, setInvestmentPayBank] = useState(null);
+  const [investmentPayCash, setInvestmentPayCash] = useState(null);
+  const [investmentPayOther, setInvestmentPayOther] = useState(null);
+  const [investmentCheque, setInvestmentCheque] = useState("");
   const [entryOpen, setEntryOpen] = useState(true);
   const [savingInvestment, setSavingInvestment] = useState(false);
   const [showNewInvestment, setShowNewInvestment] = useState(false);
@@ -356,6 +361,40 @@ const LoanManagement = () => {
 
   const accountHead = (account) =>
     String(account?.head || account?.code || account?.account_code || "");
+
+  const investmentCreditAccount = () => {
+    if (investmentPayMode === "cash") return investmentPayCash;
+    if (investmentPayMode === "others") return investmentPayOther;
+    if (investmentPayMode === "bank" || investmentPayMode === "cheque") {
+      return investmentPayBank;
+    }
+    const code = String(activeBusiness?.opening_balance_equity || "");
+    return (
+      chartAccounts.find((account) => accountHead(account) === code) ||
+      (code ? { head: code, description: "Opening Balance Equity" } : null)
+    );
+  };
+
+  const investmentCreditHead = () => accountHead(investmentCreditAccount());
+
+  const investmentCreditLabel = () => {
+    const account = investmentCreditAccount();
+    if (!account) {
+      if (investmentPayMode === "others") return "Select an account head";
+      if (investmentPayMode === "cash") return "Select a cash account";
+      if (investmentPayMode === "bank" || investmentPayMode === "cheque") {
+        return "Select a bank account";
+      }
+      return "Opening Balance Equity";
+    }
+    const code = accountHead(account);
+    const name =
+      account.description ||
+      account.account_name ||
+      account.name ||
+      (investmentPayMode === "equity" ? "Opening Balance Equity" : "Account");
+    return code ? `${code} — ${name}` : name;
+  };
 
   const findSetupAccount = (field, accounts = chartAccounts, setups = loanSetups) => {
     const named = setups.find((setup) => setup.name === DEFAULT_RECEIVABLE_SETUP);
@@ -554,6 +593,11 @@ const LoanManagement = () => {
     setInvestmentAmount("");
     setInvestmentDate(new Date().toISOString().slice(0, 10));
     setInvestmentAccount(null);
+    setInvestmentPayMode("equity");
+    setInvestmentPayBank(null);
+    setInvestmentPayCash(null);
+    setInvestmentPayOther(null);
+    setInvestmentCheque("");
   };
 
   const openNewInvestment = () => {
@@ -599,6 +643,17 @@ const LoanManagement = () => {
     if (!investmentDate) {
       return toast.error("Enter the date");
     }
+    const creditHead = investmentCreditHead();
+    if (investmentPayMode !== "equity" && !creditHead) {
+      return toast.error(
+        investmentPayMode === "others"
+          ? "Select the account head to credit"
+          : "Select the account for this mode of payment",
+      );
+    }
+    if (investmentPayMode === "cheque" && !String(investmentCheque || "").trim()) {
+      return toast.error("Enter the cheque number");
+    }
     setSavingInvestment(true);
     _postApi(
       `/api/hr/employees/${person.id}/investment-opening-balance`,
@@ -607,6 +662,10 @@ const LoanManagement = () => {
         amount,
         asOfDate: investmentDate,
         investmentHead: head,
+        creditHead: creditHead || undefined,
+        paymentMode: investmentPayMode,
+        chequeNumber:
+          investmentPayMode === "cheque" ? String(investmentCheque).trim() : null,
         userId: user?.id,
       },
       (data) => {
@@ -748,6 +807,17 @@ const LoanManagement = () => {
     if (!head) {
       return toast.error("Select the investment account");
     }
+    const creditHead = investmentCreditHead();
+    if (investmentPayMode !== "equity" && !creditHead) {
+      return toast.error(
+        investmentPayMode === "others"
+          ? "Select the account head to credit"
+          : "Select the account for this mode of payment",
+      );
+    }
+    if (investmentPayMode === "cheque" && !String(investmentCheque || "").trim()) {
+      return toast.error("Enter the cheque number");
+    }
     setSavingInvestment(true);
     _postApi(
       `/api/hr/employees/${investmentPerson.id}/investment-opening-balance`,
@@ -756,6 +826,10 @@ const LoanManagement = () => {
         amount,
         asOfDate: investmentDate,
         investmentHead: head,
+        creditHead: creditHead || undefined,
+        paymentMode: investmentPayMode,
+        chequeNumber:
+          investmentPayMode === "cheque" ? String(investmentCheque).trim() : null,
         userId: user?.id,
       },
       (data) => {
@@ -1430,6 +1504,129 @@ const LoanManagement = () => {
     toast.success("List downloaded");
   };
 
+  const renderInvestmentPayment = () => (
+    <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50/80 p-3">
+      <div>
+        <label className={labelClass}>Mode of Payment</label>
+        <p className={hintClass}>Where the credit is posted</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {[
+          ["equity", "Opening"],
+          ["bank", "Bank"],
+          ["cheque", "Cheque"],
+          ["cash", "Cash"],
+          ["others", "Others"],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => {
+              setInvestmentPayMode(value);
+              if (value !== "cheque") setInvestmentCheque("");
+            }}
+            className={`rounded-md border py-1.5 text-[10px] font-semibold uppercase tracking-wide ${
+              investmentPayMode === value
+                ? "border-[var(--aa-navy)] bg-[var(--aa-navy)] text-white"
+                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {investmentPayMode === "equity" ? (
+        <p className={hintClass}>Credits Opening Balance Equity.</p>
+      ) : investmentPayMode === "others" ? (
+        <div className="space-y-1.5">
+          <label className={labelClass}>
+            Account head <span className="text-red-600">*</span>
+          </label>
+          <TypeaheadCustom
+            options={chartAccounts}
+            labelKey={(account) =>
+              `${account.head || account.code || ""} ${account.description || account.account_name || ""}`.trim()
+            }
+            onChange={(items) => setInvestmentPayOther(items[0] || null)}
+            placeholder="Select the account head"
+            selected={investmentPayOther ? [investmentPayOther] : []}
+          />
+        </div>
+      ) : investmentPayMode === "cash" ? (
+        <div className="space-y-1.5">
+          <label className={labelClass}>
+            Cash account <span className="text-red-600">*</span>
+          </label>
+          <TypeaheadCustom
+            options={cashAccounts}
+            labelKey={(account) =>
+              `${account.head || account.code || ""} - ${account.description || account.name || "Cash"}`
+            }
+            onChange={(items) => setInvestmentPayCash(items[0] || null)}
+            placeholder="Select cash account"
+            selected={investmentPayCash ? [investmentPayCash] : []}
+          />
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <label className={labelClass}>
+            Bank account <span className="text-red-600">*</span>
+          </label>
+          <Select
+            value={
+              investmentPayBank?.id?.toString() ||
+              investmentPayBank?.account_code?.toString() ||
+              investmentPayBank?.head?.toString() ||
+              ""
+            }
+            onValueChange={(value) => {
+              const account = bankAccounts.find(
+                (acc) =>
+                  acc.id?.toString() === value ||
+                  acc.account_code === value ||
+                  acc.head === value,
+              );
+              setInvestmentPayBank(account || null);
+            }}
+          >
+            <SelectTrigger className="h-10 w-full rounded-md border-slate-300 bg-white text-sm">
+              <SelectValue placeholder="Select bank account..." />
+            </SelectTrigger>
+            <SelectContent className="z-[300]">
+              {bankAccounts.map((account) => (
+                <SelectItem
+                  key={account.id || account.account_code || account.head}
+                  value={(
+                    account.id ||
+                    account.account_code ||
+                    account.head
+                  ).toString()}
+                >
+                  {account.account_code || account.head}{" "}
+                  {account.account_name || account.name || "Bank Account"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      {investmentPayMode === "cheque" ? (
+        <div className="space-y-1.5">
+          <label className={labelClass}>
+            Cheque number <span className="text-red-600">*</span>
+          </label>
+          <input
+            type="text"
+            value={investmentCheque}
+            onChange={(e) => setInvestmentCheque(e.target.value)}
+            placeholder="e.g. 00452189"
+            className={inputClass}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50/50 pb-12" style={appColorStyle}>
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -2009,6 +2206,8 @@ const LoanManagement = () => {
                 />
               </div>
 
+              {renderInvestmentPayment()}
+
               <div className="space-y-1.5">
                 <label className={labelClass}>
                   Investment account <span className="text-red-600">*</span>
@@ -2071,18 +2270,7 @@ const LoanManagement = () => {
                       </tr>
                       <tr>
                         <td className="px-3 py-2 text-slate-900">
-                          {(() => {
-                            const code = String(activeBusiness?.opening_balance_equity || "");
-                            const equity = chartAccounts.find(
-                              (account) => accountHead(account) === code,
-                            );
-                            if (!equity) {
-                              return code
-                                ? `${code} — Opening Balance Equity`
-                                : "Opening Balance Equity";
-                            }
-                            return `${equity.head || equity.code || code} — ${equity.description || equity.account_name || equity.name || "Opening Balance Equity"}`;
-                          })()}
+                          {investmentCreditLabel()}
                         </td>
                         <td className="px-3 py-2 text-right text-slate-400">—</td>
                         <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
@@ -2247,6 +2435,7 @@ const LoanManagement = () => {
                     className={inputClass}
                   />
                 </div>
+                {renderInvestmentPayment()}
                 <div className="space-y-1.5">
                   <label className={labelClass}>
                     Investment account <span className="text-red-600">*</span>
@@ -2308,14 +2497,7 @@ const LoanManagement = () => {
                       </tr>
                       <tr>
                         <td className="px-3 py-2 text-slate-900">
-                          {(() => {
-                            const code = String(activeBusiness?.opening_balance_equity || "");
-                            const equity = chartAccounts.find(
-                              (account) => accountHead(account) === code,
-                            );
-                            if (!equity) return code ? `${code} — Opening Balance Equity` : "Opening Balance Equity";
-                            return `${equity.head || equity.code || code} — ${equity.description || equity.account_name || equity.name || "Opening Balance Equity"}`;
-                          })()}
+                          {investmentCreditLabel()}
                         </td>
                         <td className="px-3 py-2 text-right text-slate-400">—</td>
                         <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
