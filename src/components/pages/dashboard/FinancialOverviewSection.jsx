@@ -957,13 +957,10 @@ export default function FinancialOverviewSection({
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [overview, setOverview] = useState(null);
-  const [period, setPeriod] = useState(() => {
-    const to = new Date();
-    const from = new Date();
-    from.setMonth(from.getMonth() - 5);
-    from.setDate(1);
-    return { from, to };
-  });
+  const [period, setPeriod] = useState(() => ({
+    from: moment().startOf("month").toDate(),
+    to: new Date(),
+  }));
   const [recvView, setRecvView] = useState("total"); // total | aging
   const [payView, setPayView] = useState("total"); // total | aging
   const [billsMode, setBillsMode] = useState("purchases"); // purchases | expenses

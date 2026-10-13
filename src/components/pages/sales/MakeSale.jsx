@@ -411,7 +411,7 @@ import {
 } from "lucide-react";
 import useScanDetection from "@/hooks/useScanDetection";
 import { Button, Table } from "reactstrap";
-import { Typeahead } from "react-bootstrap-typeahead";
+import { AsyncTypeahead } from "react-bootstrap-typeahead";
 import SearchCustomerInput from "@/components/pages/customer/components/SearchCustomerInput";
 import CustomerRegistartion from "@/components/pages/customer/CustomerRegistration";
 import {
@@ -1166,6 +1166,10 @@ function MakeSale() {
   // Lets a row's qty be cleared while typing; on blur it falls back to 1.
   const [lineQtyDrafts, setLineQtyDrafts] = useState({});
   const [readyForSalesItems, setReadyForSalesItems] = useState([]);
+  const [lineProductOptions, setLineProductOptions] = useState([]);
+  const [lineServiceOptions, setLineServiceOptions] = useState([]);
+  const [lineSearchLoading, setLineSearchLoading] = useState(false);
+  const lineSearchReq = useRef({ products: 0, services: 0 });
   // Multiple branches can be selected; one credit sale is created per branch.
   // The first selected branch is the "primary" one that drives stock loading,
   // item selection and the line/card display.
@@ -1802,15 +1806,6 @@ function MakeSale() {
     return formattedInteger;
   };
 
-  // Debug: Log cart data whenever it changes
-  useEffect(() => {
-    console.log("=== CART DATA ===");
-    console.log("Cart Items Count:", cart.length);
-    console.log("Cart Data (Stringified):", JSON.stringify(cart, null, 2));
-    console.log("Cart Data (Object):", cart);
-    console.log("================");
-  }, [cart]);
-
   // Fetch available discounts
   const fetchDiscounts = useCallback(() => {
     _postApi(
@@ -2054,13 +2049,6 @@ function MakeSale() {
     [assignedBranches],
   );
 
-  // Chart of Accounts Data
-  const [chartCode, setChartCode] = useState({});
-  const [modeCodeData, setModeCodeData] = useState({});
-  const [accountReceivable, setAccountReceivable] = useState({});
-  const [finishedGoods, setFinishedGoods] = useState({});
-  const [costOfGoodsSold, setCostOfGoodsSold] = useState({});
-
   // Data Fetching Functions
   const fetchBranches = useCallback(() => {
     if (!activeBusiness?.id) return;
@@ -2095,21 +2083,11 @@ function MakeSale() {
           const items = (response.results || [])
             .map((it) => {
               const bid = it.branchId ?? it.branch_id;
-              const match =
-                bid != null
-                  ? branches.find((b) => String(b.id) === String(bid))
-                  : null;
-              const locationName =
-                it.location_name ||
-                (match
-                  ? match.branch_name || match.storeName || String(bid)
-                  : "") ||
-                "";
+              const locationName = it.location_name || it.branch_name || "";
               return {
                 ...it,
                 branchId: bid != null && bid !== "" ? Number(bid) : null,
                 location_name: locationName,
-                // Prefer real branch location over store-type text ("for sales")
                 branch_name: locationName || it.branch_name || null,
                 sales_stopped: isSalesStopped(it),
               };
@@ -2133,7 +2111,7 @@ function MakeSale() {
         setLoadingProducts(false);
       },
     );
-  }, [activeBusiness?.id, branches]);
+  }, [activeBusiness?.id]);
 
   const getServiceProducts = useCallback(() => {
     if (!activeBusiness?.id) return;
@@ -2158,6 +2136,76 @@ function MakeSale() {
       },
     );
   }, [activeBusiness?.id]);
+
+  const mapCatalogRow = useCallback((it, isService) => {
+    const bid = it.branchId ?? it.branch_id;
+    const locationName = it.location_name || it.branch_name || "";
+    return {
+      ...it,
+      id: it.id,
+      name: it.item_name || it.name,
+      branchId:
+        !isService && bid != null && String(bid).trim() !== ""
+          ? Number(bid)
+          : it.branchId ?? null,
+      location_name: locationName,
+      branch_name: locationName || it.branch_name || null,
+      price: parseFloat(it.selling_price) || 0,
+      selling_price: parseFloat(it.selling_price) || 0,
+      sku: it.sku || it.item_code || it.product_id,
+      sales_stopped: isSalesStopped(it),
+    };
+  }, []);
+
+  const fetchLineMatches = useCallback(
+    (tab, query) =>
+      new Promise((resolve) => {
+        const q = String(query || "").trim();
+        if (!activeBusiness?.id || q.length < 1) {
+          resolve([]);
+          return;
+        }
+        const encoded = encodeURIComponent(q);
+        const path =
+          tab === "services"
+            ? `/account/get-service-products/${activeBusiness.id}?includeStopped=1&search=${encoded}&limit=30`
+            : `/account/get-ready-for-sales/${activeBusiness.id}?includeStopped=1&search=${encoded}&limit=30`;
+        _fetchApi(
+          path,
+          (response) => {
+            resolve(
+              (response?.results || []).map((it) =>
+                mapCatalogRow(it, tab === "services"),
+              ),
+            );
+          },
+          () => resolve([]),
+        );
+      }),
+    [activeBusiness?.id, mapCatalogRow],
+  );
+
+  const searchLineItems = useCallback(
+    (tab, query) => {
+      const q = String(query || "").trim();
+      const bucket = tab === "services" ? "services" : "products";
+      if (!activeBusiness?.id || q.length < 1) {
+        if (bucket === "services") setLineServiceOptions([]);
+        else setLineProductOptions([]);
+        setLineSearchLoading(false);
+        return;
+      }
+      const reqId = ++lineSearchReq.current[bucket];
+      setLineSearchLoading(true);
+      fetchLineMatches(tab, q).then((rows) => {
+        if (lineSearchReq.current[bucket] !== reqId) return;
+        if (bucket === "services") setLineServiceOptions(rows);
+        else setLineProductOptions(rows);
+        setLineSearchLoading(false);
+      });
+    },
+    [activeBusiness?.id, fetchLineMatches],
+  );
 
   const getTaxes = useCallback(() => {
     if (!activeBusiness?.id) return;
@@ -2255,45 +2303,6 @@ function MakeSale() {
       return changed ? next : prev;
     });
   }, [lineTaxOptions, defaultLineTaxId]);
-
-  const getChartOfAccounts = useCallback(() => {
-    if (!activeBusiness?.id) return;
-
-    _fetchApi(
-      `/account/chart-of-accounts/${activeBusiness.id}`,
-      (response) => {
-        if (response.success) {
-          const accounts = response.results || [];
-
-          // Find specific account codes
-          const cashAccount = accounts.find((acc) =>
-            acc.description?.toLowerCase().includes("cash"),
-          );
-          const accountReceivableAcc = accounts.find((acc) =>
-            acc.description?.toLowerCase().includes("receivable"),
-          );
-          const finishedGoodsAcc = accounts.find((acc) =>
-            acc.description?.toLowerCase().includes("finished goods"),
-          );
-          const costOfGoodsSoldAcc = accounts.find((acc) =>
-            acc.description?.toLowerCase().includes("cost of goods sold"),
-          );
-
-          setChartCode({
-            cash: cashAccount?.account_code || "1001001",
-            accountReceivable: accountReceivableAcc?.account_code || "1002001",
-            finishedGoods: finishedGoodsAcc?.account_code || "1003001",
-            costOfGoodsSold: costOfGoodsSoldAcc?.account_code || "4001001",
-          });
-
-          setAccountReceivable(accountReceivableAcc || {});
-          setFinishedGoods(finishedGoodsAcc || {});
-          setCostOfGoodsSold(costOfGoodsSoldAcc || {});
-        }
-      },
-      (err) => console.error("Error fetching chart of accounts:", err),
-    );
-  }, [activeBusiness?.id]);
 
   // Tax Calculation Functions
   const calculateTaxAmount = useCallback(
@@ -3588,19 +3597,21 @@ function MakeSale() {
     [activeBusiness?.id],
   );
 
-  // Effects
+  // Effects — lines view searches items as you type. Cards view still loads the catalog.
   useEffect(() => {
-    getReadyForSalesItems();
-    getServiceProducts();
+    if (invoiceViewMode === "cards") {
+      getReadyForSalesItems();
+      getServiceProducts();
+    } else {
+      setLoadingProducts(false);
+      setLoadingServices(false);
+    }
     getTaxes();
-    getChartOfAccounts();
-    dispatch(getCustomers());
   }, [
+    invoiceViewMode,
     getReadyForSalesItems,
     getServiceProducts,
     getTaxes,
-    getChartOfAccounts,
-    dispatch,
   ]);
 
   // Memoized Values
@@ -3706,12 +3717,6 @@ function MakeSale() {
           .includes(q),
     );
   }, [activeTab, sellableProducts, mockServices, searchTerm]);
-
-  // Line-item Typeahead options — do not reuse the POS grid searchTerm.
-  const filterItemsByTab = useCallback(
-    (tab) => (tab === "products" ? sellableProducts : mockServices),
-    [sellableProducts, mockServices],
-  );
 
   // Check minimum order amount when subtotal changes
   useEffect(() => {
@@ -4445,12 +4450,23 @@ function MakeSale() {
   );
 
   const applyScannedProduct = useCallback(
-    (rawCode) => {
-      const product = resolveProductFromScanCode(rawCode);
+    async (rawCode) => {
+      let product = resolveProductFromScanCode(rawCode);
       if (!product) {
         const code = normalizeScannedCode(rawCode);
-        toast.error(`No product found for "${code}"`);
-        return false;
+        const [products, services] = await Promise.all([
+          fetchLineMatches("products", code),
+          fetchLineMatches("services", code),
+        ]);
+        const pool = [...products, ...services];
+        product =
+          pool.find((item) => productMatchesScanCode(item, code)) ||
+          pool[0] ||
+          null;
+        if (!product) {
+          toast.error(`No product found for "${code}"`);
+          return false;
+        }
       }
 
       setLastScanPreview(normalizeScannedCode(rawCode));
@@ -4462,7 +4478,7 @@ function MakeSale() {
       addToCartNew(product);
       return true;
     },
-    [resolveProductFromScanCode, addToCartNew],
+    [resolveProductFromScanCode, addToCartNew, fetchLineMatches],
   );
 
   resolveProductFromScanRef.current = applyScannedProduct;
@@ -6388,10 +6404,22 @@ function MakeSale() {
                                   <option value="products">Product</option>
                                   <option value="services">Service</option>
                                 </select>
-                                <Typeahead
+                                <AsyncTypeahead
                                   key={`invoice-line-account-${i}-${cart.length}-${rowTab}`}
                                   id={`invoice-line-account-${i}`}
-                                  options={filterItemsByTab(rowTab)}
+                                  isLoading={lineSearchLoading}
+                                  minLength={1}
+                                  delay={250}
+                                  useCache={false}
+                                  promptText="Type to search items"
+                                  searchText="Searching…"
+                                  emptyLabel="No items found"
+                                  onSearch={(q) => searchLineItems(rowTab, q)}
+                                  options={
+                                    rowTab === "services"
+                                      ? lineServiceOptions
+                                      : lineProductOptions
+                                  }
                                   labelKey={(opt) => {
                                     const loc =
                                       opt.location_name ||
