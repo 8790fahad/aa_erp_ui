@@ -61,15 +61,20 @@ export function createUser(data = [], success = (f) => f, error = (f) => f) {
   };
 }
 
+const LOGIN_TIMEOUT_MS = 12000;
+
 export function login({ email, password }, cb = (f) => f, error = (f) => f) {
   return async (dispatch) => {
-    dispatch({ type: LOGGING_IN });
+    dispatch({ type: LOGGING_IN, payload: true });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
 
     try {
       const response = await fetch(`${apiURL}/api/${endpoint}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
+        signal: controller.signal,
       });
 
       const data = await response.json();
@@ -90,12 +95,16 @@ export function login({ email, password }, cb = (f) => f, error = (f) => f) {
         cb(data);
       }
     } catch (err) {
-      const msg = "Unable to connect to server, please try again";
+      const timedOut = err?.name === "AbortError";
+      const msg = timedOut
+        ? "The server took too long to answer. Please try again."
+        : "Unable to connect to server, please try again";
       error(msg);
       toast.error(msg);
       dispatch({ type: ERROR, payload: err });
     } finally {
-      dispatch({ type: LOGGING_IN });
+      clearTimeout(timer);
+      dispatch({ type: LOGGING_IN, payload: false });
     }
   };
 }

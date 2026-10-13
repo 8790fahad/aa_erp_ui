@@ -192,7 +192,10 @@ export default function authReducer(state = initialState, action) {
     case LOGGING_IN:
       return {
         ...state,
-        loggingIn: !state.loggingIn,
+        loggingIn:
+          typeof action.payload === "boolean"
+            ? action.payload
+            : !state.loggingIn,
       };
     case RESTORE_TOKEN:
       return {

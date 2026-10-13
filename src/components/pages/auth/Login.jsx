@@ -358,6 +358,11 @@ export default function Login() {
                   "Sign in"
                 )}
               </button>
+              {loading ? (
+                <p className="mt-2 text-center text-xs text-slate-500">
+                  Checking your account. This stops if the server does not answer within a few seconds.
+                </p>
+              ) : null}
 
               <p className="mt-auto pt-8 text-center text-[11px] tracking-wide text-slate-400">
                 This solution is powered by Nexifour Limited
@@ -425,14 +430,12 @@ export default function Login() {
       </p>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-
         .login-page {
-          font-family: 'Plus Jakarta Sans', 'Open Sans', sans-serif;
+          font-family: inherit;
           background: #eef1f4;
         }
         .login-page__title {
-          font-family: 'Plus Jakarta Sans', 'Open Sans', sans-serif;
+          font-family: inherit;
         }
         .login-page__bg {
           position: fixed;

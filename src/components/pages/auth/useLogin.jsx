@@ -67,6 +67,7 @@ const useLogin = () => {
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
 
+    setError({});
     try {
       await dispatch(
         login(
