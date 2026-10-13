@@ -1605,7 +1605,7 @@ export default function ProductList() {
         quantity,
         cost_price: cost,
         obdate: openingModal.date,
-        expiry_date: openingModal.expiry || null,
+        expiry_date: null,
         opening_balance_equity: activeBusiness.opening_balance_equity,
         created_by: user?.id,
       },
@@ -2316,39 +2316,23 @@ export default function ProductList() {
               />
             </label>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-sm font-medium text-gray-700">
-              As of
-              <input
-                type="date"
-                value={openingModal.date}
-                min={openingDateBounds.minDate}
-                max={openingDateBounds.maxDate}
-                onChange={(e) =>
-                  setOpeningModal((prev) => ({ ...prev, date: e.target.value }))
-                }
-                className="mt-1 h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
-              />
-            </label>
-            <label className="block text-sm font-medium text-gray-700">
-              Expiry
-              <input
-                type="date"
-                value={openingModal.expiry}
-                onChange={(e) =>
-                  setOpeningModal((prev) => ({
-                    ...prev,
-                    expiry: e.target.value,
-                  }))
-                }
-                className="mt-1 h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
-              />
-            </label>
-          </div>
+          <label className="block text-sm font-medium text-gray-700">
+            As of
+            <input
+              type="date"
+              value={openingModal.date}
+              min={openingDateBounds.minDate}
+              max={openingDateBounds.maxDate}
+              onChange={(e) =>
+                setOpeningModal((prev) => ({ ...prev, date: e.target.value }))
+              }
+              className="mt-1 h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
+            />
+          </label>
           <p className="mt-2 text-xs text-slate-500">
             As of date is from the start of the financial year (
             {openingDateBounds.minDate}) through tomorrow (
-            {openingDateBounds.maxDate}). Expiry is optional.
+            {openingDateBounds.maxDate}).
           </p>
         </Modal>
 
