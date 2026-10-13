@@ -348,6 +348,7 @@ function InvoicePreview() {
   const navigate = useNavigate();
   const query = useQuery();
   const saleCode = query.get("sale_code");
+  const customerNo = query.get("customer_no") || "";
   const saleCodesRaw = query.get("sale_codes") || "";
   const uniqueSaleCodes = [
     ...new Set(
@@ -446,7 +447,11 @@ function InvoicePreview() {
         _fetchApi(
           `/api/v1/transactions/get-sale?sale_code=${encodeURIComponent(
             code,
-          )}&facility_id=${facilityId}`,
+          )}&facility_id=${facilityId}${
+            customerNo
+              ? `&customer_no=${encodeURIComponent(customerNo)}`
+              : ""
+          }`,
           (response) => {
             if (response.success && response.data) {
               byCode[code] = response.data;
@@ -489,7 +494,11 @@ function InvoicePreview() {
         _fetchApi(
           `/api/v1/transactions/get-sale?sale_code=${encodeURIComponent(
             code,
-          )}&facility_id=${facilityId}`,
+          )}&facility_id=${facilityId}${
+            customerNo
+              ? `&customer_no=${encodeURIComponent(customerNo)}`
+              : ""
+          }`,
           (response) => {
             results[idx] = {
               code,
@@ -535,7 +544,9 @@ function InvoicePreview() {
     _fetchApi(
       `/api/v1/transactions/get-sale?sale_code=${encodeURIComponent(
         previewSaleCode,
-      )}&facility_id=${facilityId}`,
+      )}&facility_id=${facilityId}${
+        customerNo ? `&customer_no=${encodeURIComponent(customerNo)}` : ""
+      }`,
       (response) => {
         if (response.success) {
           setInvoiceData(response.data);
@@ -595,6 +606,7 @@ function InvoicePreview() {
     isInvoiceBatch,
     previewSaleCode,
     uniqueSaleCodes.join(","),
+    customerNo,
   ]);
 
   useEffect(() => {
