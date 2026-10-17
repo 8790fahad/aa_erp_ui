@@ -371,6 +371,8 @@ function InvoicePreview() {
   const lineIdFilter = query.get("line_id");
   const printAll = query.get("print_all") === "1" || query.get("print_all") === "true";
   const autoPrint = query.get("auto_print") === "1" || query.get("auto_print") === "true";
+  const reprintFromList =
+    query.get("reprint") === "1" || query.get("reprint") === "true";
   const vatTestDivisor = Number(query.get("vat_test_divisor") || 0);
   const forceThermal =
     query.get("thermal") === "1" ||
@@ -400,6 +402,7 @@ function InvoicePreview() {
   const user = useSelector((state) => state.auth.user);
   const facilityId = activeBusiness?.id;
   const closedAfterPrintRef = useRef(false);
+  const didAutoPrintRef = useRef(false);
   const [invoiceData, setInvoiceData] = useState(null);
   const [invoiceByCode, setInvoiceByCode] = useState({});
   const [batchInvoices, setBatchInvoices] = useState([]);
@@ -800,6 +803,21 @@ function InvoicePreview() {
   );
   const invoiceAlreadyPrinted = invoicePrintCount > 0;
   const goodsIssueAlreadyPrinted = goodsIssuePrintCount > 0;
+  const autoWillPrintInvoice =
+    autoPrint &&
+    isInvoiceDoc &&
+    (!invoiceAlreadyPrinted || reprintFromList);
+  const salesInvoiceUsesButtonPrint =
+    isInvoiceDoc && !isTerminalReceipt && !printAll && !isInvoiceBatch;
+  const blockInvoicePrint =
+    isInvoiceDoc &&
+    ((invoiceAlreadyPrinted && !reprintFromList) ||
+      (!salesInvoiceUsesButtonPrint &&
+        (autoWillPrintInvoice || didAutoPrint)));
+  const invoicePrintLockMessage =
+    isInvoiceDoc && invoiceAlreadyPrinted && !reprintFromList
+      ? "Already printed. Reprint this invoice from Invoice List."
+      : "";
 
   const applyPrintCounts = (response) => {
     if (!response) return;
@@ -836,12 +854,17 @@ function InvoicePreview() {
   );
 
   const closeAfterFirstInvoicePrint = useCallback(() => {
-    if (!isInvoiceDoc || invoiceAlreadyPrinted || closedAfterPrintRef.current) {
-      return;
-    }
+    if (!isInvoiceDoc || closedAfterPrintRef.current) return;
+    if (invoiceAlreadyPrinted && !reprintFromList) return;
     closedAfterPrintRef.current = true;
     recordPrint("invoice", () => navigate(-1));
-  }, [invoiceAlreadyPrinted, isInvoiceDoc, navigate, recordPrint]);
+  }, [
+    invoiceAlreadyPrinted,
+    isInvoiceDoc,
+    navigate,
+    recordPrint,
+    reprintFromList,
+  ]);
 
   const openGoodsIssueReprint = useCallback(() => {
     if (!previewSaleCode) return;
@@ -855,11 +878,12 @@ function InvoicePreview() {
   }, [navigate, previewSaleCode]);
 
   useEffect(() => {
-    if (!autoPrint || didAutoPrint || isLoading) return;
-    if (isInvoiceDoc && invoiceAlreadyPrinted) return;
+    if (!autoPrint || didAutoPrintRef.current || isLoading) return;
+    if (isInvoiceDoc && invoiceAlreadyPrinted && !reprintFromList) return;
     if (printAll && printAllCopies.length === 0) return;
     if (isInvoiceBatch && batchCopies.length === 0) return;
     if (!printAll && !isInvoiceBatch && !resolvedInvoiceData) return;
+    didAutoPrintRef.current = true;
     setDidAutoPrint(true);
     const t = setTimeout(() => {
       if (showThermalDeliveryOrder) {
@@ -868,28 +892,30 @@ function InvoicePreview() {
         printAllThermalReceipts();
       } else if (isTerminalReceipt) {
         printThermalReceipt("both");
-      } else {
+      } else if (!salesInvoiceUsesButtonPrint) {
         window.print();
       }
     }, 800);
     return () => clearTimeout(t);
   }, [
     autoPrint,
-    didAutoPrint,
     isLoading,
     isInvoiceDoc,
     invoiceAlreadyPrinted,
+    reprintFromList,
     isTerminalReceipt,
     printAll,
     printAllCopies.length,
     isInvoiceBatch,
     batchCopies.length,
     resolvedInvoiceData,
+    salesInvoiceUsesButtonPrint,
     showThermalDeliveryOrder,
   ]);
 
   useEffect(() => {
-    if (!autoPrint || !isInvoiceDoc || invoiceAlreadyPrinted) return undefined;
+    if (!autoPrint || !isInvoiceDoc) return undefined;
+    if (invoiceAlreadyPrinted && !reprintFromList) return undefined;
     const onAfterPrint = () => closeAfterFirstInvoicePrint();
     window.addEventListener("afterprint", onAfterPrint);
     return () => window.removeEventListener("afterprint", onAfterPrint);
@@ -898,6 +924,7 @@ function InvoicePreview() {
     closeAfterFirstInvoicePrint,
     invoiceAlreadyPrinted,
     isInvoiceDoc,
+    reprintFromList,
   ]);
 
   const handleCancel = () => {
@@ -915,6 +942,12 @@ function InvoicePreview() {
   };
 
   const handlePrintAll = () => {
+    if (isInvoiceDoc && invoiceAlreadyPrinted && !reprintFromList) {
+      toast.message("Already printed", {
+        description: "Reprint this invoice from Invoice List.",
+      });
+      return;
+    }
     recordPrint(isDispatchDoc ? "goods_issue" : "invoice");
     if (showThermalDeliveryOrder) {
       toast.message("Printing slip to content height", {
@@ -937,6 +970,12 @@ function InvoicePreview() {
   };
 
   const handlePrintThermal = () => {
+    if (isInvoiceDoc && invoiceAlreadyPrinted && !reprintFromList) {
+      toast.message("Already printed", {
+        description: "Reprint this invoice from Invoice List.",
+      });
+      return;
+    }
     toast.message("Check Paper size in the print dialog", {
       description:
         "If it says 72 × 210 mm you will get blank space. Choose the shorter size matching the receipt (or create Custom 72 × 120 mm). Use Actual size / 100%.",
@@ -1339,8 +1378,17 @@ function InvoicePreview() {
                   : `one ${paperLabel} page per product`}
             </span>
           </div>
-          <div className="flex gap-2">
-            <Button color="primary" onClick={handlePrintAll}>
+          <div className="flex gap-2 items-center">
+            {isInvoiceDoc && invoicePrintLockMessage ? (
+              <span className="text-xs text-slate-600 max-w-xs">
+                {invoicePrintLockMessage}
+              </span>
+            ) : null}
+            <Button
+              color="primary"
+              disabled={isInvoiceDoc && blockInvoicePrint}
+              onClick={handlePrintAll}
+            >
               <Printer className="inline w-4 h-4 mr-2" />
               {(isDispatchDoc ? goodsIssuePrintCount : invoicePrintCount) > 0
                 ? "Reprint"
@@ -1611,7 +1659,16 @@ function InvoicePreview() {
                   Reprint {dispatchDocLabel}
                 </Button>
               ) : null}
-              <Button color="primary" onClick={handlePrintThermal}>
+              {isInvoiceDoc && invoicePrintLockMessage ? (
+                <span className="text-xs text-slate-600 max-w-xs">
+                  {invoicePrintLockMessage}
+                </span>
+              ) : null}
+              <Button
+                color="primary"
+                disabled={isInvoiceDoc && blockInvoicePrint}
+                onClick={handlePrintThermal}
+              >
                 <Printer className="inline w-4 h-4 mr-2" />
                 {isCollectionReceipt
                   ? "Print collection receipt"
@@ -1709,6 +1766,10 @@ function InvoicePreview() {
             reprintMode={
               isInvoiceDoc ? invoiceAlreadyPrinted : goodsIssueAlreadyPrinted
             }
+            printOnce={isInvoiceDoc}
+            autoPrintOnce={autoWillPrintInvoice && salesInvoiceUsesButtonPrint}
+            disablePrint={isInvoiceDoc && blockInvoicePrint}
+            disablePrintReason={invoicePrintLockMessage}
             printCount={isInvoiceDoc ? invoicePrintCount : goodsIssuePrintCount}
             documentNumber={
               isInvoiceDoc

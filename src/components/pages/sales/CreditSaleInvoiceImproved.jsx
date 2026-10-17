@@ -45,6 +45,11 @@ export default function CreditSaleInvoice({
   /** First print says Print and the parent closes the page. Later visits say Reprint. */
   reprintMode = false,
   printCount = 0,
+  /** Sales invoice from Verification Points prints once. Invoice List sends reprint=1. */
+  printOnce = false,
+  autoPrintOnce = false,
+  disablePrint = false,
+  disablePrintReason = "",
   documentNumber = "",
   onReprintGoodsIssue,
   onAfterPrint,
@@ -96,6 +101,9 @@ export default function CreditSaleInvoice({
   const [fetchedInvoice, setFetchedInvoice] = useState(null);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [isSavingCustomerCopy, setIsSavingCustomerCopy] = useState(false);
+  const [printConsumed, setPrintConsumed] = useState(false);
+  const printConsumedRef = useRef(false);
+  const handlePrintRef = useRef(null);
   /** Customer print view: amount = VAT in unit price; vat = show VAT breakdown */
   const [customerPrintModeState, setCustomerPrintModeState] = useState(
     propInvoiceData?.is_vat_test_copy ? "vat" : "amount",
@@ -1176,6 +1184,8 @@ export default function CreditSaleInvoice({
     },
     onPrintError: (error) => {
       console.error("Print failed:", error);
+      printConsumedRef.current = false;
+      setPrintConsumed(false);
       toast.error("Unable to print invoice. Please try again.");
     },
     onAfterPrint: () => {
@@ -1184,18 +1194,40 @@ export default function CreditSaleInvoice({
   });
 
   const handlePrint = useCallback(() => {
+    if (disablePrint || printConsumedRef.current) {
+      if (disablePrintReason) {
+        toast.message("Already printed", { description: disablePrintReason });
+      }
+      return;
+    }
     if (!invoiceRef.current) {
       toast.error("Invoice content is not ready to print yet.");
       return;
+    }
+    if (printOnce) {
+      printConsumedRef.current = true;
+      setPrintConsumed(true);
     }
 
     try {
       handleReactToPrint(() => invoiceRef.current);
     } catch (error) {
       console.error("Print error:", error);
+      printConsumedRef.current = false;
+      setPrintConsumed(false);
       toast.error("Unable to print invoice. Please try again.");
     }
-  }, [handleReactToPrint]);
+  }, [disablePrint, disablePrintReason, handleReactToPrint, printOnce]);
+
+  handlePrintRef.current = handlePrint;
+
+  useEffect(() => {
+    if (!autoPrintOnce || disablePrint) return undefined;
+    const timer = setTimeout(() => {
+      handlePrintRef.current?.();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [autoPrintOnce, disablePrint]);
 
   const saveCustomerCopyDefault = useCallback(async () => {
     if (!activeBusiness?.id || !customer?.customerNo) {
@@ -1297,7 +1329,10 @@ export default function CreditSaleInvoice({
 
   const resolvedTaxes = fetchedInvoice ? customerCopyTaxes : propTaxes;
   const shownPrintCount = Number(printCount) || (reprintMode ? 1 : 0);
-  const printButtonLabel = shownPrintCount > 0
+  const printButtonLocked = disablePrint || printConsumed;
+  const printButtonLabel = printButtonLocked && shownPrintCount > 0 && showInvoiceSection
+    ? "Printed"
+    : shownPrintCount > 0
     ? showDeliveryOrder && !showInvoiceSection
       ? `Reprint ${dispatchDocTitle}`
       : "Reprint"
@@ -1545,6 +1580,11 @@ export default function CreditSaleInvoice({
                 {shownPrintCount === 1 ? "time" : "times"}
               </span>
             ) : null}
+            {showPrintButton && disablePrintReason ? (
+              <span className="text-xs text-slate-600 max-w-xs">
+                {disablePrintReason}
+              </span>
+            ) : null}
             {showPrintButton && shownPrintCount > 0 && showInvoiceSection && typeof onReprintGoodsIssue === "function" ? (
               <button
                 type="button"
@@ -1556,8 +1596,15 @@ export default function CreditSaleInvoice({
             ) : null}
             {showPrintButton && (
               <button
+                type="button"
                 onClick={handlePrint}
-                className="px-3 py-0.5 text-sm bg-[var(--aa-navy)] text-white rounded flex items-center gap-1 hover:bg-blue-700 transition-colors"
+                disabled={printButtonLocked}
+                title={disablePrintReason || undefined}
+                className={`px-3 py-0.5 text-sm bg-[var(--aa-navy)] text-white rounded flex items-center gap-1 transition-colors ${
+                  printButtonLocked
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:bg-blue-700"
+                }`}
               >
                 <Printer size={14} /> {printButtonLabel}
               </button>
@@ -2805,6 +2852,10 @@ CreditSaleInvoice.propTypes = {
   onPrintInColorChange: PropTypes.func,
   reprintMode: PropTypes.bool,
   printCount: PropTypes.number,
+  printOnce: PropTypes.bool,
+  autoPrintOnce: PropTypes.bool,
+  disablePrint: PropTypes.bool,
+  disablePrintReason: PropTypes.string,
   documentNumber: PropTypes.string,
   onReprintGoodsIssue: PropTypes.func,
   onAfterPrint: PropTypes.func,

@@ -108,30 +108,47 @@ export default function ApplySupplierDeposit({
     "";
 
   const loadSupplierOptions = useCallback(() => {
-    if (!facilityId) return;
+    if (!facilityId) return undefined;
+    let active = true;
     setLoadingSuppliers(true);
     const params = new URLSearchParams({
       facilityId: String(facilityId),
       vendorTypes: "inventory,expense,all",
       withBalance: "1",
     });
+    const finish = (rows) => {
+      if (!active) return;
+      active = false;
+      setLoadingSuppliers(false);
+      setSupplierOptions(rows);
+    };
+    const timer = setTimeout(() => {
+      if (!active) return;
+      active = false;
+      setLoadingSuppliers(false);
+      setSupplierOptions([]);
+      toast.error("Suppliers took too long to load");
+    }, 20000);
     _fetchApi(
       `/api/v1/suppliers-for-apply-deposit?${params.toString()}`,
       (res) => {
-        setLoadingSuppliers(false);
-        const rows = Array.isArray(res?.results) ? res.results : [];
-        setSupplierOptions(rows);
+        clearTimeout(timer);
+        finish(Array.isArray(res?.results) ? res.results : []);
       },
       () => {
-        setLoadingSuppliers(false);
-        setSupplierOptions([]);
+        clearTimeout(timer);
+        finish([]);
         toast.error("Failed to load suppliers");
       },
     );
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [facilityId]);
 
   useEffect(() => {
-    loadSupplierOptions();
+    return loadSupplierOptions();
   }, [loadSupplierOptions]);
 
   const supplierLabelKey = (s) => {
@@ -673,17 +690,13 @@ export default function ApplySupplierDeposit({
                   options={supplierOptions}
                   allowNew={false}
                   labelKey={supplierLabelKey}
-                  placeholder={
-                    loadingSuppliers
-                      ? "Loading suppliers…"
-                      : "Search credit note, deposit, or GIT…"
-                  }
+                  placeholder="Search credit note, deposit, or GIT…"
                   paginate={false}
                   maxResults={500}
                 />
                 <p className="mt-1 text-[11px] text-slate-500">
                   {loadingSuppliers
-                    ? "Loading…"
+                    ? "Loading suppliers with a balance…"
                     : supplierOptions.length === 0
                       ? "No suppliers with a credit note, deposit, or GIT"
                       : `${supplierOptions.length} supplier${

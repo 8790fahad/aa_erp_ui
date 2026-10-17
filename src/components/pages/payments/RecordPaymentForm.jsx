@@ -71,6 +71,15 @@ function invoiceRowKey(inv) {
   return String(inv.invoice_id ?? inv.invoice_ref ?? "");
 }
 
+function uiModeFromStored(mode) {
+  const value = String(mode || "").toLowerCase();
+  if (value === "cash" || value === "c") return "cash";
+  if (value.includes("cheque")) return "cheque";
+  if (value === "card") return "card";
+  if (value.includes("transfer") || value === "bank") return "bank";
+  return "cash";
+}
+
 function modeForCustomerDeposit(uiMode) {
   const m = String(uiMode || "").toLowerCase();
   if (m === "cash") return "cash";
@@ -137,6 +146,13 @@ export default function RecordPaymentForm() {
     activeBusiness?.base_currency ||
     "NGN";
 
+  const editReceipt = String(searchParams.get("receipt") || "").trim();
+  const isEdit = /^AD[-_]/i.test(editReceipt);
+  const editCashHeadRef = useRef("");
+  const editBankIdRef = useRef("");
+  const editLoadedRef = useRef(false);
+  const [editLoading, setEditLoading] = useState(false);
+
   const partyFromUrl = useMemo(() => {
     const customerNo = searchParams.get("customerNo") || "";
     if (!customerNo) return null;
@@ -199,8 +215,107 @@ export default function RecordPaymentForm() {
   }, [facilityId]);
 
   useEffect(() => {
+    if (isEdit) return;
     generatePaymentNumber();
-  }, [generatePaymentNumber]);
+  }, [generatePaymentNumber, isEdit]);
+
+  useEffect(() => {
+    if (!isEdit || !facilityId || editLoadedRef.current) return undefined;
+    editLoadedRef.current = true;
+    setEditLoading(true);
+    manualAllocationRef.current = true;
+    _fetchApi(
+      `/api/v1/get-customer-entries-by-receipt?facilityId=${encodeURIComponent(
+        facilityId,
+      )}&receiptNo=${encodeURIComponent(editReceipt)}`,
+      (resp) => {
+        setEditLoading(false);
+        const entries = Array.isArray(resp?.results) ? resp.results : [];
+        if (!entries.length) {
+          toast.error("Payment not found");
+          return;
+        }
+        if (
+          entries.some((entry) =>
+            /^INV[-_]/i.test(String(entry.link_id || "").trim()),
+          )
+        ) {
+          toast.error("This payment was applied to an invoice and can't be edited.");
+          return;
+        }
+        const total = entries.reduce(
+          (sum, entry) => sum + (Number(entry.cost) || 0),
+          0,
+        );
+        setAmountPaid(formatNumberWithCommas(total.toFixed(2)));
+        setPaymentNumber(editReceipt);
+        const first = entries[0];
+        if (first.created_at) {
+          setPaymentDate(moment(first.created_at).format("YYYY-MM-DD"));
+        }
+        setNotes(String(first.description || ""));
+        const cashEntry = entries.find(
+          (entry) => String(entry.mode_of_payment || "").toLowerCase() === "cash",
+        );
+        const transferEntry = entries.find((entry) => {
+          const mode = String(entry.mode_of_payment || "").toLowerCase();
+          return (
+            (mode.includes("transfer") || mode === "bank") &&
+            !mode.includes("cheque")
+          );
+        });
+        if (cashEntry && transferEntry) {
+          setModeOfPayment("cash+transfer");
+          setCashAmount(formatNumberWithCommas(String(cashEntry.cost || "")));
+          setTransferAmount(
+            formatNumberWithCommas(String(transferEntry.cost || "")),
+          );
+          editCashHeadRef.current = String(cashEntry.bank_account_id || "");
+          editBankIdRef.current = String(transferEntry.bank_account_id || "");
+        } else {
+          const mode = uiModeFromStored(first.mode_of_payment);
+          setModeOfPayment(mode);
+          if (mode === "cash") {
+            editCashHeadRef.current = String(first.bank_account_id || "");
+          } else {
+            editBankIdRef.current = String(first.bank_account_id || "");
+          }
+        }
+        const customerNo = first.customerNo;
+        const fromList = customerList.find(
+          (customer) => String(customer.customerNo) === String(customerNo),
+        );
+        setSelectedCustomer(
+          fromList || {
+            customerNo,
+            fullname: searchParams.get("customerName") || customerNo,
+          },
+        );
+      },
+      () => {
+        setEditLoading(false);
+        toast.error("Failed to load payment");
+      },
+    );
+    return undefined;
+  }, [isEdit, facilityId, editReceipt, searchParams]);
+
+  useEffect(() => {
+    if (!isEdit || !editCashHeadRef.current || !headList.length) return;
+    const head = headList.find(
+      (item) =>
+        String(item.head || item.code || "") === editCashHeadRef.current,
+    );
+    if (head) setAccountHead(head);
+  }, [isEdit, headList, setAccountHead]);
+
+  useEffect(() => {
+    if (!isEdit || !editBankIdRef.current || !accountList.length) return;
+    const bank = accountList.find(
+      (item) => String(item.id) === editBankIdRef.current,
+    );
+    if (bank) setBankAccount(bank);
+  }, [isEdit, accountList, setBankAccount]);
 
   const fetchOutstanding = useCallback(
     (customerNo) => {
@@ -239,11 +354,11 @@ export default function RecordPaymentForm() {
   );
 
   useEffect(() => {
-    if (!partyFromUrl?.customerNo) return;
+    if (!partyFromUrl?.customerNo || isEdit) return;
     setSelectedCustomer(partyFromUrl);
     manualAllocationRef.current = false;
     fetchOutstanding(partyFromUrl.customerNo);
-  }, [partyFromUrl, fetchOutstanding]);
+  }, [partyFromUrl, fetchOutstanding, isEdit]);
 
   const handleCustomerChange = (customer) => {
     if (!customer || !customer.customerNo) {
@@ -548,8 +663,10 @@ export default function RecordPaymentForm() {
     setSaving(true);
 
     _postApi(
-      "/api/v1/customer-advance-payment",
-      payload,
+      isEdit
+        ? "/api/v1/update-received-payment"
+        : "/api/v1/customer-advance-payment",
+      isEdit ? { ...payload, receipt_no: editReceipt, invoices: [] } : payload,
       (res) => {
         setSaving(false);
         isSubmittingRef.current = false;
@@ -566,10 +683,16 @@ export default function RecordPaymentForm() {
             "";
           const customerNo = payload.customer_no || "";
           toast.success(
-            referenceNumber
-              ? `Payment recorded (${referenceNumber})`
-              : "Payment recorded",
+            isEdit
+              ? `${editReceipt} updated`
+              : referenceNumber
+                ? `Payment recorded (${referenceNumber})`
+                : "Payment recorded",
           );
+          if (isEdit) {
+            goBack();
+            return;
+          }
           if (referenceNumber && customerNo) {
             navigate(
               `/app/customers/view-receipt/print?invoice_ref=${encodeURIComponent(
@@ -626,9 +749,16 @@ export default function RecordPaymentForm() {
       >
         <AlertDialogContent className="z-[200] border border-slate-200 bg-white text-slate-900 shadow-2xl sm:rounded-xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm deposit?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {isEdit ? "Update this deposit?" : "Confirm deposit?"}
+            </AlertDialogTitle>
             <AlertDialogDescription className="text-slate-600">
-              {pendingSave?.isPureDeposit ? (
+              {isEdit ? (
+                <>
+                  {editReceipt} will be updated to {currency}{" "}
+                  {formatNumber1(pendingSave?.amountPaidNum || 0)}. Continue?
+                </>
+              ) : pendingSave?.isPureDeposit ? (
                 <>
                   {currency} {formatNumber1(pendingSave.amountPaidNum || 0)} will
                   be recorded as customer deposit. Continue?
@@ -672,11 +802,12 @@ export default function RecordPaymentForm() {
               />
               <div>
                 <h1 className="text-xl font-semibold text-slate-900">
-                  Make Deposit
+                  {isEdit ? "Edit Deposit" : "Make Deposit"}
                 </h1>
                 <p className="text-xs text-slate-500">
-                  Record prepaid customer funds. Unpaid invoices are optional —
-                  credit balance (Credit Summary) is separate from deposit.
+                  {isEdit
+                    ? `Update ${editReceipt}. Applied and reversed payments stay unchanged.`
+                    : "Record prepaid customer funds. Unpaid invoices are optional — credit balance (Credit Summary) is separate from deposit."}
                 </p>
               </div>
             </div>
@@ -684,7 +815,7 @@ export default function RecordPaymentForm() {
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving || attachmentUploading}
+                disabled={saving || attachmentUploading || editLoading}
                 className="inline-flex items-center gap-1.5 rounded-md bg-[var(--aa-navy,#0f2744)] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 <Printer className="h-4 w-4" />
@@ -773,13 +904,13 @@ export default function RecordPaymentForm() {
                 type="text"
                 value={paymentNumber}
                 onChange={(e) => setPaymentNumber(e.target.value)}
-                disabled={saving}
+                disabled={saving || isEdit}
                 className={inputClass}
               />
               <button
                 type="button"
                 onClick={generatePaymentNumber}
-                disabled={saving}
+                disabled={saving || isEdit}
                 title="Generate new number"
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50"
               >
@@ -985,7 +1116,11 @@ export default function RecordPaymentForm() {
           </div>
         </div>
 
-        <div className="flex w-full flex-1 flex-col bg-white">
+        <div
+          className={`w-full flex-1 flex-col bg-white ${
+            isEdit ? "hidden" : "flex"
+          }`}
+        >
           <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-6 py-2.5">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Unpaid Invoices
@@ -1180,7 +1315,7 @@ export default function RecordPaymentForm() {
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving || attachmentUploading}
+              disabled={saving || attachmentUploading || editLoading}
               className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-navy,#0f2744)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {saving ? (
@@ -1193,7 +1328,7 @@ export default function RecordPaymentForm() {
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving || attachmentUploading}
+              disabled={saving || attachmentUploading || editLoading}
               className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {saving ? (
@@ -1201,6 +1336,8 @@ export default function RecordPaymentForm() {
                   <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white" />
                   Saving...
                 </>
+              ) : isEdit ? (
+                "Save changes"
               ) : (
                 "Save as Paid"
               )}

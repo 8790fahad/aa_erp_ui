@@ -8,6 +8,7 @@ import {
   CreditCard,
   HandCoins,
   MoreVerticalIcon,
+  Pencil,
   Printer,
 } from "lucide-react";
 import { _fetchApi } from "@/redux/actions/api";
@@ -266,6 +267,22 @@ export default function PaymentsMade() {
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
 
+  const editPayment = (item) => {
+    const receiptNo = String(item?.receipt_no || "").trim();
+    if (!/^SAP[-_]/i.test(receiptNo)) {
+      toast.message("This payment can't be edited", {
+        description: "Only a Pay Bills payment (SAP-) can be edited.",
+      });
+      return;
+    }
+    const params = new URLSearchParams({
+      receipt: receiptNo,
+      supplierNo: item.supplier_no || "",
+      supplierName: item.supplier_name || "",
+    });
+    navigate(`/app/payments/pay-bills/new?${params.toString()}`);
+  };
+
   const openReceipt = (item) => {
     const ref = item.receipt_no || "";
     navigate(
@@ -363,6 +380,10 @@ export default function PaymentsMade() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={() => editPayment(item)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => openReceipt(item)}>
                 <Printer className="mr-2 h-4 w-4" />
                 View receipt

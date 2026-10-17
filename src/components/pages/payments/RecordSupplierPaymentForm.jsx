@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import moment from "moment";
 import { toast } from "sonner";
@@ -74,6 +74,15 @@ function formatNumberWithCommas(value) {
   return formattedInt;
 }
 
+function uiModeFromStored(mode) {
+  const value = String(mode || "").toLowerCase();
+  if (value === "cash" || value === "c") return "cash";
+  if (value.includes("cheque")) return "cheque";
+  if (value === "card") return "card";
+  if (value.includes("transfer") || value === "bank") return "bank";
+  return "cash";
+}
+
 function invoiceRowKey(inv) {
   return String(inv.invoice_id ?? inv.invoice_ref ?? "");
 }
@@ -131,6 +140,14 @@ export default function RecordSupplierPaymentForm({
   embedded = false,
 } = {}) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editReceipt = String(searchParams.get("receipt") || "").trim();
+  const isEdit = /^SAP[-_]/i.test(editReceipt);
+  const editCashHeadRef = useRef("");
+  const editBankIdRef = useRef("");
+  const editLoadedRef = useRef(false);
+  const disconnectChosenRef = useRef(false);
+  const [editLoading, setEditLoading] = useState(false);
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const facilityId = activeBusiness?.id;
   const currency =
@@ -159,6 +176,9 @@ export default function RecordSupplierPaymentForm({
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [assignedBills, setAssignedBills] = useState([]);
+  const [releaseApplied, setReleaseApplied] = useState(false);
+  const [assignPromptOpen, setAssignPromptOpen] = useState(false);
   const [similarLines, setSimilarLines] = useState([]);
   const [pendingSave, setPendingSave] = useState(null);
   const [errors, setErrors] = useState({});
@@ -215,9 +235,103 @@ export default function RecordSupplierPaymentForm({
   }, [facilityId]);
 
   useEffect(() => {
+    if (isEdit) return;
     generatePaymentNumber();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facilityId]);
+  }, [facilityId, isEdit]);
+
+  useEffect(() => {
+    if (!isEdit || !facilityId || editLoadedRef.current) return undefined;
+    editLoadedRef.current = true;
+    manualAllocationRef.current = true;
+    setEditLoading(true);
+    _fetchApi(
+      `/api/v1/get-supplier-payment?facilityId=${encodeURIComponent(
+        facilityId,
+      )}&receiptNo=${encodeURIComponent(editReceipt)}`,
+      (resp) => {
+        setEditLoading(false);
+        const payment = resp?.payment;
+        if (!resp?.success || !payment) {
+          toast.error(resp?.error || "Payment not found");
+          return;
+        }
+        setPaymentNumber(editReceipt);
+        setAmountPaid(
+          formatNumberWithCommas(Number(payment.amount || 0).toFixed(2)),
+        );
+        if (payment.date) {
+          setPaymentDate(moment(payment.date).format("YYYY-MM-DD"));
+        }
+        setNotes(String(payment.description || ""));
+        const lines = Array.isArray(payment.bank_lines) ? payment.bank_lines : [];
+        const cashLine = lines.find(
+          (line) => String(line.mode || "").toLowerCase() === "cash",
+        );
+        const transferLine = lines.find((line) => {
+          const mode = String(line.mode || "").toLowerCase();
+          return mode === "bank" || mode.includes("transfer");
+        });
+        if (cashLine && transferLine) {
+          setModeOfPayment("cash+transfer");
+          setCashAmount(formatNumberWithCommas(String(cashLine.amount || "")));
+          setTransferAmount(
+            formatNumberWithCommas(String(transferLine.amount || "")),
+          );
+          editCashHeadRef.current = String(
+            cashLine.account_code || cashLine.bank_account_id || "",
+          );
+          editBankIdRef.current = String(transferLine.bank_account_id || "");
+        } else {
+          const mode = uiModeFromStored(payment.mode_of_payment);
+          setModeOfPayment(mode);
+          if (mode === "cash") {
+            editCashHeadRef.current = String(
+              payment.bank_account_id || lines[0]?.account_code || "",
+            );
+          } else {
+            editBankIdRef.current = String(
+              payment.bank_account_id || lines[0]?.bank_account_id || "",
+            );
+          }
+        }
+        setSelectedSupplier({
+          supplier_number: payment.supplier_number,
+          supplier_name:
+            payment.supplier_name ||
+            searchParams.get("supplierName") ||
+            payment.supplier_number,
+        });
+        const assignments = Array.isArray(payment.assignments)
+          ? payment.assignments.filter((row) => Number(row?.amount) > 0.009)
+          : [];
+        setAssignedBills(assignments);
+        if (assignments.length) setAssignPromptOpen(true);
+      },
+      () => {
+        setEditLoading(false);
+        toast.error("Failed to load payment");
+      },
+    );
+    return undefined;
+  }, [isEdit, facilityId, editReceipt, searchParams]);
+
+  useEffect(() => {
+    if (!isEdit || !editCashHeadRef.current || !headList.length) return;
+    const head = headList.find(
+      (item) =>
+        String(item.head || item.code || "") === editCashHeadRef.current,
+    );
+    if (head) setAccountHead(head);
+  }, [isEdit, headList, setAccountHead]);
+
+  useEffect(() => {
+    if (!isEdit || !editBankIdRef.current || !accountList.length) return;
+    const bank = accountList.find(
+      (item) => String(item.id) === editBankIdRef.current,
+    );
+    if (bank) setBankAccount(bank);
+  }, [isEdit, accountList, setBankAccount]);
 
   useEffect(() => {
     if (defaultMode) setModeOfPayment(defaultMode);
@@ -260,16 +374,19 @@ export default function RecordSupplierPaymentForm({
   }, [modeOfPayment, accountHead?.head, headList, setAccountHead]);
 
   const fetchOutstanding = useCallback(
-    (supplierNo) => {
+    (supplierNo, options = {}) => {
       if (!supplierNo || !facilityId) {
         setOutstandingInvoices([]);
         return;
       }
       setLoadingInvoices(true);
+      const release = options.releaseReceipt
+        ? `&releaseReceipt=${encodeURIComponent(options.releaseReceipt)}`
+        : "";
       _fetchApi(
         `/api/v1/get-outstanding-supplier-invoices?supplierNo=${encodeURIComponent(
           supplierNo,
-        )}&facilityId=${encodeURIComponent(facilityId)}`,
+        )}&facilityId=${encodeURIComponent(facilityId)}${release}`,
         (response) => {
           setLoadingInvoices(false);
           const invoices = Array.isArray(response?.results)
@@ -285,7 +402,23 @@ export default function RecordSupplierPaymentForm({
             return dateA - dateB;
           });
           setOutstandingInvoices(invoices);
-          setInvoicePayments({});
+          if (options.seedPayments) {
+            manualAllocationRef.current = true;
+            const next = {};
+            for (const inv of invoices) {
+              const seed = Number(options.seedPayments[inv.invoice_ref] || 0);
+              const due = parseFloat(inv.amount_due ?? inv.balance_due ?? 0) || 0;
+              const pay = Math.min(Math.max(0, seed), due);
+              if (pay > 0) {
+                next[invoiceRowKey(inv)] = formatNumberWithCommas(
+                  pay.toFixed(2),
+                );
+              }
+            }
+            setInvoicePayments(next);
+          } else {
+            setInvoicePayments({});
+          }
         },
         () => {
           setLoadingInvoices(false);
@@ -296,6 +429,26 @@ export default function RecordSupplierPaymentForm({
     },
     [facilityId],
   );
+
+  const disconnectAndApply = () => {
+    disconnectChosenRef.current = true;
+    const supplierNo = selectedSupplier?.supplier_number;
+    const seedPayments = {};
+    for (const row of assignedBills) {
+      if (row?.bill_ref) seedPayments[row.bill_ref] = Number(row.amount) || 0;
+    }
+    setAssignPromptOpen(false);
+    setReleaseApplied(true);
+    fetchOutstanding(supplierNo, {
+      releaseReceipt: editReceipt,
+      seedPayments,
+    });
+  };
+
+  const keepAssignment = () => {
+    setAssignPromptOpen(false);
+    setReleaseApplied(false);
+  };
 
   const handleSupplierChange = (supplier) => {
     if (!supplier || !supplier.supplier_number) {
@@ -587,6 +740,27 @@ export default function RecordSupplierPaymentForm({
       ).toFixed(2),
     );
 
+    if (isEdit) {
+      if (assignPromptOpen) {
+        toast.error("Choose whether to disconnect this payment from its bills");
+        return;
+      }
+      setSimilarLines([]);
+      setPendingSave({
+        payload: {
+          ...basePayload,
+          receipt_no: editReceipt,
+          disconnect: releaseApplied === true,
+          invoices: releaseApplied === true ? invoicesPayload : [],
+        },
+        advancePortion: releaseApplied === true ? advancePortion : 0,
+        amountPaidNum,
+        disconnect: releaseApplied === true,
+      });
+      setConfirmOpen(true);
+      return;
+    }
+
     const matches = await checkSimilarPayment({
       facilityId,
       supplierNumber: selectedSupplier.supplier_number,
@@ -609,7 +783,9 @@ export default function RecordSupplierPaymentForm({
     setSaving(true);
 
     _postApi(
-      "/api/v1/supplier-advance-payment",
+      isEdit
+        ? "/api/v1/update-supplier-payment"
+        : "/api/v1/supplier-advance-payment",
       payload,
       (res) => {
         setSaving(false);
@@ -626,10 +802,16 @@ export default function RecordSupplierPaymentForm({
             res.results?.reference_number ||
             "";
           toast.success(
-            referenceNumber
-              ? `Payment recorded (${referenceNumber})`
-              : "Payment recorded",
+            isEdit
+              ? `${editReceipt} updated`
+              : referenceNumber
+                ? `Payment recorded (${referenceNumber})`
+                : "Payment recorded",
           );
+          if (isEdit) {
+            navigate("/app/payments/pay-bills", { replace: true });
+            return;
+          }
           if (typeof onSaved === "function") onSaved(res);
           if (typeof onClose === "function") onClose();
           else navigate("/app/payments/pay-bills", { replace: true });
@@ -701,7 +883,11 @@ export default function RecordSupplierPaymentForm({
                   </>
                 ) : null}
                 <p>
-                  {pendingSave?.advancePortion > 0.02
+                  {isEdit
+                    ? pendingSave?.disconnect
+                      ? `${editReceipt} will be disconnected from its current bills and applied again for ${currency} ${formatNumber1(pendingSave?.amountPaidNum || 0)}. Continue?`
+                      : `${editReceipt} will be updated to ${currency} ${formatNumber1(pendingSave?.amountPaidNum || 0)}. The current bills stay applied. Continue?`
+                    : pendingSave?.advancePortion > 0.02
                     ? `Excess ${currency} ${formatNumber1(pendingSave.advancePortion)} will be kept as vendor advance / credit. Continue?`
                     : `Record payment of ${currency} ${formatNumber1(pendingSave?.amountPaidNum || 0)}. Continue?`}
                 </p>
@@ -724,6 +910,47 @@ export default function RecordSupplierPaymentForm({
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog
+        open={assignPromptOpen}
+        onOpenChange={(open) => {
+          if (!open && !disconnectChosenRef.current) keepAssignment();
+        }}
+      >
+        <AlertDialogContent className="z-[200] border border-slate-200 bg-white text-slate-900 shadow-2xl sm:rounded-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>This payment is already applied</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-slate-600">
+                <p>
+                  {editReceipt} is already applied to{" "}
+                  {assignedBills.length === 1 ? "this bill" : "these bills"}.
+                  Disconnect it if you want to apply the payment again.
+                </p>
+                <ul className="list-disc space-y-1 pl-5">
+                  {assignedBills.map((row) => (
+                    <li key={row.bill_ref}>
+                      {row.bill_ref} — {currency} {formatNumber1(row.amount || 0)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it applied</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                disconnectAndApply();
+              }}
+              className="bg-[var(--aa-accent)] text-white hover:opacity-90"
+            >
+              Disconnect and apply again
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className={embedded ? "flex flex-col bg-white" : "flex min-h-screen flex-col bg-white"}>
         <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -734,11 +961,18 @@ export default function RecordSupplierPaymentForm({
               />
               <div>
                 <h1 className="text-xl font-semibold text-slate-900">
-                  {embedded ? "Pay Bill" : "New Payment"}
+                  {isEdit ? "Edit Payment" : embedded ? "Pay Bill" : "New Payment"}
                 </h1>
                 <p className="text-xs text-slate-500">
-                  Apply this payment to unpaid bills. Paying more than the bills
-                  keeps the excess as vendor advance — same as Make Advance.
+                  {isEdit
+                    ? releaseApplied
+                      ? `${editReceipt} is disconnected. Apply it to the bills below, then save.`
+                      : assignedBills.length
+                        ? `${editReceipt} stays applied to ${assignedBills
+                            .map((row) => row.bill_ref)
+                            .join(", ")}.`
+                        : `Update ${editReceipt}. The same payment number is kept.`
+                    : "Apply this payment to unpaid bills. Paying more than the bills keeps the excess as vendor advance — same as Make Advance."}
                 </p>
               </div>
             </div>
@@ -822,13 +1056,13 @@ export default function RecordSupplierPaymentForm({
                 type="text"
                 value={paymentNumber}
                 onChange={(e) => setPaymentNumber(e.target.value)}
-                disabled={saving}
+                disabled={saving || isEdit}
                 className={inputClass}
               />
               <button
                 type="button"
                 onClick={generatePaymentNumber}
-                disabled={saving}
+                disabled={saving || isEdit}
                 title="Generate new number"
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50"
               >
@@ -1053,7 +1287,23 @@ export default function RecordSupplierPaymentForm({
           </div>
         </div>
 
-        <div className="flex w-full flex-1 flex-col bg-white">
+        <div
+          className={`w-full flex-1 flex-col bg-white ${
+            isEdit && !releaseApplied ? "hidden" : "flex"
+          }`}
+        >
+          {releaseApplied && assignedBills.length > 0 ? (
+            <div className="border-b border-amber-200 bg-amber-50 px-6 py-2.5 text-sm text-amber-900">
+              Disconnected from{" "}
+              {assignedBills
+                .map(
+                  (row) =>
+                    `${row.bill_ref} (${currency} ${formatNumber1(row.amount || 0)})`,
+                )
+                .join(", ")}
+              . Apply the payment below, then save. Nothing changes until you save.
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-6 py-2.5">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Unpaid Bills
@@ -1246,7 +1496,9 @@ export default function RecordSupplierPaymentForm({
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving || attachmentUploading}
+              disabled={
+                saving || attachmentUploading || editLoading || assignPromptOpen
+              }
               className="inline-flex items-center gap-2 rounded-md bg-[var(--aa-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--aa-accent-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {saving ? (
@@ -1254,6 +1506,8 @@ export default function RecordSupplierPaymentForm({
                   <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white" />
                   Saving...
                 </>
+              ) : isEdit ? (
+                "Save changes"
               ) : (
                 "Save as Paid"
               )}

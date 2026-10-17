@@ -411,6 +411,7 @@ export default function SalesManagement() {
         description: "Collect payment for this invoice at Verification Points.",
         to: "/app/payments/verification-points",
         label: "Open Verification Points",
+        disabled: true,
       };
     }
     if (s === "awaiting_discount_approval") {

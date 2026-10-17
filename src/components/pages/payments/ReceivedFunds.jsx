@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   Banknote,
   MoreVerticalIcon,
+  Pencil,
   Printer,
   RefreshCw,
   Search,
@@ -215,6 +216,23 @@ export default function ReceivedFunds() {
   const goNewPayment = () => navigate("/app/payments/receive-payment/new");
   const goApplyDeposit = () => navigate("/app/payments/apply-advance");
 
+  const editPayment = (item) => {
+    const receiptNo = String(item?.receipt_no || "").trim();
+    if (item?.direction !== "received" || !/^AD[-_]/i.test(receiptNo)) {
+      toast.message("This payment can't be edited", {
+        description:
+          "Only a received deposit (AD-) can be edited. Applied and reversed rows stay as they are.",
+      });
+      return;
+    }
+    const params = new URLSearchParams({
+      receipt: receiptNo,
+      customerNo: item.customer_no || "",
+      customerName: item.customer_name || "",
+    });
+    navigate(`/app/payments/receive-payment/new?${params.toString()}`);
+  };
+
   const printReceipt = (item) => {
     if (item?.direction === "applied" && item?.invoice_ref) {
       navigate(
@@ -358,6 +376,10 @@ export default function ReceivedFunds() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onClick={() => editPayment(item)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </DropdownMenuItem>
                 {item.direction === "applied" && item.invoice_ref ? (
                   <DropdownMenuItem onClick={() => printReceipt(item)}>
                     <Printer className="mr-2 h-4 w-4" />

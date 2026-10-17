@@ -537,7 +537,7 @@ export default function InvoiceList() {
                         >
                           <td className={`px-3 py-2 align-middle ${bg}`}>
                             <Link
-                              to={`/app/sales/invoice-preview?sale_code=${encodeURIComponent(item.invoice_ref || "")}${item.ref_number ? `&customer_no=${encodeURIComponent(item.ref_number)}` : ""}`}
+                              to={`/app/sales/invoice-preview?sale_code=${encodeURIComponent(item.invoice_ref || "")}&doc=invoice&reprint=1${item.ref_number ? `&customer_no=${encodeURIComponent(item.ref_number)}` : ""}`}
                               className="whitespace-nowrap font-mono text-[13px] font-semibold text-[var(--aa-navy)] hover:underline"
                             >
                               {item.invoice_ref || "—"}
@@ -623,7 +623,7 @@ export default function InvoiceList() {
                                 size="sm"
                                 onClick={() =>
                                   navigate(
-                                    `/app/sales/invoice-preview?sale_code=${encodeURIComponent(item.invoice_ref || "")}${item.ref_number ? `&customer_no=${encodeURIComponent(item.ref_number)}` : ""}`,
+                                    `/app/sales/invoice-preview?sale_code=${encodeURIComponent(item.invoice_ref || "")}&doc=invoice&reprint=1${item.ref_number ? `&customer_no=${encodeURIComponent(item.ref_number)}` : ""}`,
                                   )
                                 }
                                 className="h-7 w-7 p-0 text-slate-500 hover:bg-white/70 hover:text-[var(--aa-navy)]"
