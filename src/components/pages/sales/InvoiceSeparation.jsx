@@ -364,7 +364,7 @@ export default function InvoiceSeparation() {
               line.product_id || "",
             )}`
           : ""
-      }`,
+      }&auto_print=1`,
     );
   };
 
@@ -382,15 +382,11 @@ export default function InvoiceSeparation() {
         completeSeparation(pack.sale_code || selected?.sale_code, packs.length);
       }
     };
-    const showPreview = () => {
-      openPrintPreview(pack, line);
-      afterPreview();
-    };
-    if (alreadyPrinted && !canReprintGoodsIssue) {
-      showPreview();
-      return;
-    }
-    setPrintingId(line?.id || pack.id);
+    // Same as Verification: one click opens the page, and that page opens
+    // the print dialog. Marking the copy printed does not hold the click.
+    openPrintPreview(pack, line);
+    afterPreview();
+    if (alreadyPrinted && !canReprintGoodsIssue) return;
     _postApi(
       "/api/v1/sale-workflows/fulfillment/print",
       {
@@ -400,24 +396,12 @@ export default function InvoiceSeparation() {
         updated_by: user?.id,
       },
       (res) => {
-        if (!res.success) {
-          if (canSeparate) {
-            showPreview();
-            return;
-          }
-          setPrintingId(null);
-          toast.error(res.message || "Could not open branch invoice");
-          return;
+        if (!res?.success) {
+          toast.error(res?.message || "Could not mark this copy printed");
         }
-        showPreview();
       },
       () => {
-        if (canSeparate) {
-          showPreview();
-          return;
-        }
-        setPrintingId(null);
-        toast.error("Could not open branch invoice");
+        toast.error("Could not mark this copy printed");
       },
     );
   };
@@ -497,23 +481,17 @@ export default function InvoiceSeparation() {
       const pendingCodes = unique.filter((code) =>
         pendingRows.some((row) => row.sale_code === code),
       );
-      const finish = (failed) => {
-        navigate(printPreviewUrl(unique));
-        setPrintingAll(false);
-        fetchPacks();
-        if (failed) {
-          toast.error("Some copies could not be marked printed");
-        }
-        pendingCodes.forEach((code) => {
-          const count = packList.filter((pack) => pack.sale_code === code).length;
-          completeSeparation(code, count || packs.length);
-        });
-      };
-      if (!toMark.length) {
-        finish(false);
-        return;
-      }
-      markPacksPrinted(toMark, finish);
+      navigate(printPreviewUrl(unique));
+      setPrintingAll(false);
+      fetchPacks();
+      pendingCodes.forEach((code) => {
+        const count = packList.filter((pack) => pack.sale_code === code).length;
+        completeSeparation(code, count || packs.length);
+      });
+      if (!toMark.length) return;
+      markPacksPrinted(toMark, (failed) => {
+        if (failed) toast.error("Some copies could not be marked printed");
+      });
     },
     [fetchPacks, markPacksPrinted, navigate, pendingRows, packs.length, printPreviewUrl],
   );

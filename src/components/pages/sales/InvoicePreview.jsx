@@ -546,63 +546,65 @@ function InvoicePreview() {
     setActivePack(null);
     setBatchInvoices([]);
     setInvoiceByCode({});
+    const loadPacks = printAll || Boolean(packCode);
+    let pending = loadPacks ? 2 : 1;
+    const finishLoad = () => {
+      pending -= 1;
+      if (pending <= 0) setIsLoading(false);
+    };
     _fetchApi(
       `/api/v1/transactions/get-sale?sale_code=${encodeURIComponent(
         previewSaleCode,
       )}&facility_id=${facilityId}${
         customerNo ? `&customer_no=${encodeURIComponent(customerNo)}` : ""
-      }`,
+      }${isDispatchDoc ? "&omit_logo=1" : ""}`,
       (response) => {
         if (response.success) {
           setInvoiceData(response.data);
-          const loadPacks = printAll || Boolean(packCode);
-          if (loadPacks) {
-            const params = new URLSearchParams({
-              facilityId,
-              saleCode: previewSaleCode,
-            });
-            _fetchApi(
-              `/api/v1/sale-workflows/fulfillments?${params.toString()}`,
-              (packRes) => {
-                setIsLoading(false);
-                if (packRes.success) {
-                  const list = packRes.results || [];
-                  setPacks(list);
-                  if (packCode) {
-                    const match =
-                      list.find((p) => p.pack_code === packCode) ||
-                      list.find(
-                        (p) =>
-                          String(p.branch_id) === String(branchIdFilter),
-                      ) ||
-                      null;
-                    setActivePack(match);
-                  }
-                } else {
-                  setPacks([]);
-                }
-              },
-              () => {
-                setIsLoading(false);
-                setPacks([]);
-              },
-            );
-          } else {
-            setIsLoading(false);
-          }
         } else {
-          setIsLoading(false);
           setHasError(true);
           toast.error(response.message || "Failed to fetch invoice data");
         }
+        finishLoad();
       },
       (error) => {
-        setIsLoading(false);
         setHasError(true);
         console.error("Error fetching invoice data:", error);
         toast.error("Failed to fetch invoice data");
+        finishLoad();
       },
     );
+    if (loadPacks) {
+      const params = new URLSearchParams({
+        facilityId,
+        saleCode: previewSaleCode,
+      });
+      _fetchApi(
+        `/api/v1/sale-workflows/fulfillments?${params.toString()}`,
+        (packRes) => {
+          if (packRes.success) {
+            const list = packRes.results || [];
+            setPacks(list);
+            if (packCode) {
+              const match =
+                list.find((p) => p.pack_code === packCode) ||
+                list.find(
+                  (p) => String(p.branch_id) === String(branchIdFilter),
+                ) ||
+                null;
+              setActivePack(match);
+            }
+          } else {
+            setPacks([]);
+          }
+          finishLoad();
+        },
+        () => {
+          setPacks([]);
+          finishLoad();
+        },
+      );
+    }
   }, [
     facilityId,
     printAll,
@@ -612,6 +614,7 @@ function InvoicePreview() {
     previewSaleCode,
     uniqueSaleCodes.join(","),
     customerNo,
+    isDispatchDoc,
   ]);
 
   useEffect(() => {
@@ -809,6 +812,8 @@ function InvoicePreview() {
     (!invoiceAlreadyPrinted || reprintFromList);
   const salesInvoiceUsesButtonPrint =
     isInvoiceDoc && !isTerminalReceipt && !printAll && !isInvoiceBatch;
+  const dispatchUsesComponentPrint =
+    showMatchDispatchDocument && !printAll && !isInvoiceBatch;
   const blockInvoicePrint =
     isInvoiceDoc &&
     ((invoiceAlreadyPrinted && !reprintFromList) ||
@@ -866,6 +871,12 @@ function InvoicePreview() {
     reprintFromList,
   ]);
 
+  const leaveAutoDispatchPage = useCallback(() => {
+    if (!autoPrint || !isDispatchDoc || closedAfterPrintRef.current) return;
+    closedAfterPrintRef.current = true;
+    navigate(-1);
+  }, [autoPrint, isDispatchDoc, navigate]);
+
   const openGoodsIssueReprint = useCallback(() => {
     if (!previewSaleCode) return;
     const params = new URLSearchParams({
@@ -878,25 +889,43 @@ function InvoicePreview() {
   }, [navigate, previewSaleCode]);
 
   useEffect(() => {
-    if (!autoPrint || didAutoPrintRef.current || isLoading) return;
-    if (isInvoiceDoc && invoiceAlreadyPrinted && !reprintFromList) return;
-    if (printAll && printAllCopies.length === 0) return;
-    if (isInvoiceBatch && batchCopies.length === 0) return;
-    if (!printAll && !isInvoiceBatch && !resolvedInvoiceData) return;
-    didAutoPrintRef.current = true;
-    setDidAutoPrint(true);
-    const t = setTimeout(() => {
+    if (!autoPrint || isLoading) return undefined;
+    if (isInvoiceDoc && invoiceAlreadyPrinted && !reprintFromList) return undefined;
+    if (printAll && printAllCopies.length === 0) return undefined;
+    if (isInvoiceBatch && batchCopies.length === 0) return undefined;
+    if (!printAll && !isInvoiceBatch && !resolvedInvoiceData) return undefined;
+    if (didAutoPrintRef.current) return undefined;
+
+    // Mark done only when print actually starts. A cleanup that runs first
+    // (React Strict Mode, or data arriving) must be able to try again.
+    // The sales invoice uses the same idea inside the invoice component.
+    let attempts = 0;
+    const timer = setInterval(() => {
+      if (didAutoPrintRef.current) {
+        clearInterval(timer);
+        return;
+      }
+      attempts += 1;
       if (showThermalDeliveryOrder) {
-        printThermalDeliveryOrder();
+        const slip = document.querySelector(
+          ".thermal-do-root, .thermal-delivery-order-root",
+        );
+        if (!slip && attempts < 20) return;
+      }
+      didAutoPrintRef.current = true;
+      clearInterval(timer);
+      setDidAutoPrint(true);
+      if (showThermalDeliveryOrder) {
+        printThermalDeliveryOrder(leaveAutoDispatchPage);
       } else if (isTerminalReceipt && printAll) {
         printAllThermalReceipts();
       } else if (isTerminalReceipt) {
         printThermalReceipt("both");
-      } else if (!salesInvoiceUsesButtonPrint) {
+      } else if (!salesInvoiceUsesButtonPrint && !dispatchUsesComponentPrint) {
         window.print();
       }
-    }, 800);
-    return () => clearTimeout(t);
+    }, 50);
+    return () => clearInterval(timer);
   }, [
     autoPrint,
     isLoading,
@@ -910,8 +939,17 @@ function InvoicePreview() {
     batchCopies.length,
     resolvedInvoiceData,
     salesInvoiceUsesButtonPrint,
+    dispatchUsesComponentPrint,
     showThermalDeliveryOrder,
+    leaveAutoDispatchPage,
   ]);
+
+  useEffect(() => {
+    if (!autoPrint || !isDispatchDoc) return undefined;
+    const onAfterPrint = () => leaveAutoDispatchPage();
+    window.addEventListener("afterprint", onAfterPrint);
+    return () => window.removeEventListener("afterprint", onAfterPrint);
+  }, [autoPrint, isDispatchDoc, leaveAutoDispatchPage]);
 
   useEffect(() => {
     if (!autoPrint || !isInvoiceDoc) return undefined;
@@ -1767,7 +1805,10 @@ function InvoicePreview() {
               isInvoiceDoc ? invoiceAlreadyPrinted : goodsIssueAlreadyPrinted
             }
             printOnce={isInvoiceDoc}
-            autoPrintOnce={autoWillPrintInvoice && salesInvoiceUsesButtonPrint}
+            autoPrintOnce={
+              (autoWillPrintInvoice && salesInvoiceUsesButtonPrint) ||
+              (autoPrint && dispatchUsesComponentPrint)
+            }
             disablePrint={isInvoiceDoc && blockInvoicePrint}
             disablePrintReason={invoicePrintLockMessage}
             printCount={isInvoiceDoc ? invoicePrintCount : goodsIssuePrintCount}
@@ -1784,7 +1825,10 @@ function InvoicePreview() {
             onAfterPrint={
               isInvoiceDoc
                 ? closeAfterFirstInvoicePrint
-                : () => recordPrint("goods_issue")
+                : () => {
+                    recordPrint("goods_issue");
+                    leaveAutoDispatchPage();
+                  }
             }
             onCancel={handleCancel}
             onCustomerCopySaved={fetchInvoice}

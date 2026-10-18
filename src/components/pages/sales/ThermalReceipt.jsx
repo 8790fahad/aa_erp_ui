@@ -646,7 +646,85 @@ const THERMAL_TICKET_MM = 210;
  * Build and print a PDF: one page per receipt canvas, height = that receipt only.
  * Never slices through a receipt (avoids “Released by” on page 1 / “Received by” on page 2).
  */
-export async function printThermalCanvases(canvases) {
+/**
+ * Sales invoice print (react-to-print) leaves the page because print()
+ * does not return until Save or Cancel. A PDF frame often returns at once
+ * and never emits afterprint, so this also watches focus coming back.
+ */
+export function printWindowLikeInvoice(win, onDone) {
+  if (!win?.print) return;
+  if (typeof onDone !== "function") {
+    try {
+      win.focus();
+      win.print();
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+
+  let done = false;
+  let lostFocus = false;
+  let timer = null;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    window.removeEventListener("afterprint", finish);
+    window.removeEventListener("focus", onFocus);
+    try {
+      win.removeEventListener("afterprint", finish);
+      win.removeEventListener("focus", onFocus);
+    } catch {
+      /* frame already gone */
+    }
+    if (timer) clearInterval(timer);
+    onDone();
+  };
+  const onFocus = () => {
+    if (lostFocus) finish();
+  };
+
+  window.addEventListener("afterprint", finish);
+  try {
+    win.addEventListener("afterprint", finish);
+  } catch {
+    /* ignore */
+  }
+
+  const started = performance.now();
+  try {
+    win.focus();
+    win.print();
+  } catch {
+    finish();
+    return;
+  }
+
+  // Dialog was modal: print() just returned because the user closed it.
+  if (performance.now() - started > 400) {
+    finish();
+    return;
+  }
+
+  window.addEventListener("focus", onFocus);
+  try {
+    win.addEventListener("focus", onFocus);
+  } catch {
+    /* ignore */
+  }
+  timer = setInterval(() => {
+    let focused = true;
+    try {
+      focused = document.hasFocus();
+    } catch {
+      focused = true;
+    }
+    if (!focused) lostFocus = true;
+    else if (lostFocus) finish();
+  }, 200);
+}
+
+export async function printThermalCanvases(canvases, onDone) {
   const list = (Array.isArray(canvases) ? canvases : [canvases]).filter(
     Boolean,
   );
@@ -675,7 +753,6 @@ export async function printThermalCanvases(canvases) {
     pdf.addImage(img, "PNG", 0, 0, pageW, mmH, undefined, "FAST");
   });
 
-  pdf.autoPrint();
   const url = URL.createObjectURL(pdf.output("blob"));
 
   // Chrome prints a blank page from a 0×0 / opacity:0 iframe. Keep the PDF
@@ -693,12 +770,7 @@ export async function printThermalCanvases(canvases) {
   frame.style.cssText = `position:fixed;left:0;top:0;width:${printW}px;height:${printH}px;border:0;opacity:0.02;pointer-events:none;z-index:2147483646;`;
   frame.onload = () => {
     const goPrint = () => {
-      try {
-        frame.contentWindow?.focus();
-        frame.contentWindow?.print();
-      } catch {
-        /* ignore */
-      }
+      printWindowLikeInvoice(frame.contentWindow, onDone);
     };
     setTimeout(goPrint, 400);
     setTimeout(() => {

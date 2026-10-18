@@ -25,6 +25,12 @@ import {
   WorkflowStatusBadge,
 } from "@/lib/saleWorkflowStatus.js";
 import SaleWorkflowSearchBar from "./SaleWorkflowSearchBar";
+import { modules } from "@/components/sidebars/sidebarModules";
+import {
+  canAccessPrivileges,
+  getUserFunctionalities,
+  privilegeKeysForNavItem,
+} from "@/lib/access";
 
 const FILTERS = [
   { id: "active", label: "In progress" },
@@ -74,9 +80,22 @@ function paymentTypeLabel(type) {
   return "Cash";
 }
 
+function findNavItem(items, title) {
+  for (const item of items || []) {
+    if (item?.title === title) return item;
+    const nested = findNavItem(item.items, title);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 export default function SalesManagement() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const navigate = useNavigate();
+  const canOpenVerification = canAccessPrivileges(
+    privilegeKeysForNavItem(findNavItem(modules, "Verification Points")),
+    getUserFunctionalities(user, activeBusiness),
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const saleFromUrl = searchParams.get("sale_code") || "";
   const focusedSaleCode = saleFromUrl.trim();
@@ -411,7 +430,7 @@ export default function SalesManagement() {
         description: "Collect payment for this invoice at Verification Points.",
         to: "/app/payments/verification-points",
         label: "Open Verification Points",
-        disabled: true,
+        disabled: !canOpenVerification,
       };
     }
     if (s === "awaiting_discount_approval") {

@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import moment from "moment";
 import QRCode from "qrcode";
-import {
-  captureThermalNode,
-  printThermalCanvases,
-} from "./ThermalReceipt";
+import { printWindowLikeInvoice } from "./ThermalReceipt";
 
 function formatThermalNumber(value) {
   const n = Number(value);
@@ -71,7 +68,6 @@ export default function ThermalDeliveryOrder({
   importantNote = "",
   poweredBy,
   preparedBy = "",
-  printCount = 0,
 }) {
   const [feedbackQr, setFeedbackQr] = useState("");
   const [feedbackLabelImg, setFeedbackLabelImg] = useState("");
@@ -358,12 +354,6 @@ export default function ThermalDeliveryOrder({
 
         <div className="tr-center tr-bold">{docTitle}</div>
         <div>No: {docNumber}</div>
-        {Number(printCount) > 0 ? (
-          <div className="tr-bold">
-            Printed {Number(printCount)}{" "}
-            {Number(printCount) === 1 ? "time" : "times"}
-          </div>
-        ) : null}
         <div>
           Date:{" "}
           {moment(
@@ -614,7 +604,7 @@ const THERMAL_DO_IFRAME_CSS = `
 function waitForImages(root) {
   const imgs = Array.from(root.querySelectorAll("img"));
   if (imgs.length === 0) return Promise.resolve();
-  return Promise.all(
+  const loaded = Promise.all(
     imgs.map((img) =>
       img.complete
         ? Promise.resolve()
@@ -624,6 +614,8 @@ function waitForImages(root) {
           }),
     ),
   );
+  const cap = new Promise((resolve) => setTimeout(resolve, 300));
+  return Promise.race([loaded, cap]);
 }
 
 function cleanupDoPrintFrame(frame) {
@@ -636,8 +628,12 @@ function cleanupDoPrintFrame(frame) {
   }
 }
 
-/** Print on-page thermal Delivery Order / Goods Issue Note slip(s). */
-export function printThermalDeliveryOrder() {
+function slipWantsQr(node) {
+  return /GOODS ISSUE NOTE/i.test(node.textContent || "");
+}
+
+/** Print the slip as HTML. A picture/PDF capture was several seconds. */
+export function printThermalDeliveryOrder(onDone) {
   const nodes = Array.from(
     document.querySelectorAll(
       ".thermal-do-root.thermal-do-preview, .thermal-delivery-order-root",
@@ -653,19 +649,14 @@ export function printThermalDeliveryOrder() {
   }
 
   const run = async () => {
-    await Promise.all(sources.map((node) => waitForImages(node)));
-    await new Promise((r) => setTimeout(r, 200));
-
-    try {
-      const html2canvas = (await import("html2canvas")).default;
-      const canvases = [];
-      for (const node of sources) {
-        canvases.push(await captureThermalNode(node, html2canvas));
-      }
-      await printThermalCanvases(canvases);
-      return;
-    } catch (err) {
-      console.warn("thermal DO capture failed, HTML print:", err);
+    const qrReady = () =>
+      sources.every(
+        (node) =>
+          !slipWantsQr(node) || node.querySelector(".tr-feedback-qr img"),
+      );
+    const qrWaitStarted = performance.now();
+    while (!qrReady() && performance.now() - qrWaitStarted < 250) {
+      await new Promise((resolve) => setTimeout(resolve, 40));
     }
 
     let frame = document.getElementById("thermal-print-frame");
@@ -673,8 +664,10 @@ export function printThermalDeliveryOrder() {
     frame = document.createElement("iframe");
     frame.id = "thermal-print-frame";
     frame.setAttribute("title", "Thermal dispatch print");
+    const printW = Math.max(280, Math.round((THERMAL_WIDTH_MM * 96) / 25.4));
     document.body.appendChild(frame);
-    frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${THERMAL_WIDTH_MM}mm;height:4000px;min-height:4000px;border:0;opacity:1;pointer-events:none;z-index:-1;`;
+    // A 0-size frame prints blank. Keep a real box, nearly invisible.
+    frame.style.cssText = `position:fixed;left:0;top:0;width:${printW}px;height:800px;border:0;opacity:0.02;pointer-events:none;z-index:2147483646;`;
 
     const doc = frame.contentDocument || frame.contentWindow?.document;
     if (!doc) {
@@ -697,18 +690,34 @@ export function printThermalDeliveryOrder() {
     });
 
     await Promise.all(clones.map((clone) => waitForImages(clone)));
-    await new Promise((r) => setTimeout(r, 350));
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
     const mmHeights = clones.map((clone) =>
       Math.max(35, Math.ceil((clone.scrollHeight * 25.4) / 96) + 2),
     );
     const pageH = Math.max(...mmHeights);
+    frame.style.height = `${Math.max(420, Math.ceil((pageH * 96) / 25.4))}px`;
     const pageStyle = doc.createElement("style");
-    pageStyle.textContent = `@page { size: ${THERMAL_WIDTH_MM}mm ${pageH}mm; margin: 0; }
-        html, body { margin: 0; padding: 0; height: auto; }`;
+    pageStyle.textContent = [
+      `@page { size: ${THERMAL_WIDTH_MM}mm ${pageH}mm; margin: 0; }`,
+      ...mmHeights.map(
+        (height, index) =>
+          `@page slip${index} { size: ${THERMAL_WIDTH_MM}mm ${height}mm; margin: 0; }`,
+      ),
+      "html, body { margin: 0; padding: 0; height: auto; background: #fff; }",
+      ".thermal-do-root, .thermal-delivery-order-root { break-inside: avoid; page-break-inside: avoid; break-after: page; page-break-after: always; }",
+      ".thermal-do-root:last-child, .thermal-delivery-order-root:last-child { break-after: auto; page-break-after: auto; }",
+    ].join("\n");
     doc.head.appendChild(pageStyle);
-    frame.contentWindow?.focus();
-    frame.contentWindow?.print();
-    setTimeout(() => cleanupDoPrintFrame(frame), 1500);
+    clones.forEach((clone, index) => {
+      clone.style.page = `slip${index}`;
+    });
+    printWindowLikeInvoice(frame.contentWindow, () => {
+      onDone?.();
+      cleanupDoPrintFrame(frame);
+    });
+    setTimeout(() => cleanupDoPrintFrame(frame), 60_000);
   };
 
   void run();
