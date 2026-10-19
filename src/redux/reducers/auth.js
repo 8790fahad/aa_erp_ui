@@ -13,6 +13,7 @@ import {
   UPDATE_BUSINESS,
   UPDATE_USER,
   UPDATE_BUSINESS_SETTINGS,
+  HYDRATE_BUSINESS_MEDIA,
 } from "../actions/actionTypes";
 
 const initialState = {
@@ -95,6 +96,33 @@ export default function authReducer(state = initialState, action) {
         activeBusiness: activeFromTree?.id
           ? activeFromTree
           : businessesList[0] || state.activeBusiness || {},
+      });
+    }
+    case HYDRATE_BUSINESS_MEDIA: {
+      const mediaRows = Array.isArray(action.payload) ? action.payload : [];
+      if (!mediaRows.length) return state;
+      const mediaById = new Map(
+        mediaRows
+          .filter((row) => row?.id)
+          .map((row) => [row.id, row]),
+      );
+      const applyMedia = (business) => {
+        if (!business?.id || !mediaById.has(business.id)) return business;
+        const media = mediaById.get(business.id);
+        return {
+          ...business,
+          business_logo: media.business_logo ?? business.business_logo,
+          seal: media.seal ?? business.seal,
+        };
+      };
+      return Object.assign({}, state, {
+        activeBusiness: applyMedia(state.activeBusiness),
+        business: Array.isArray(state.business)
+          ? state.business.map(applyMedia)
+          : state.business,
+        businessesList: Array.isArray(state.businessesList)
+          ? state.businessesList.map(applyMedia)
+          : state.businessesList,
       });
     }
     case UPDATE_BUSINESS: {

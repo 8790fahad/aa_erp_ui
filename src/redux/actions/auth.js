@@ -7,6 +7,7 @@ import {
   CREATING_USER,
   ERROR_CREATING_USER,
   LOGGING_IN,
+  HYDRATE_BUSINESS_MEDIA,
 } from "./actionTypes";
 // import {
 //   pullTransactionChanges,
@@ -61,7 +62,28 @@ export function createUser(data = [], success = (f) => f, error = (f) => f) {
   };
 }
 
-const LOGIN_TIMEOUT_MS = 12000;
+const LOGIN_TIMEOUT_MS = 30000;
+
+function hydrateBusinessMedia(email) {
+  return async (dispatch) => {
+    if (!email) return;
+    try {
+      const token = localStorage.getItem("@@__token");
+      const response = await fetch(
+        `${apiURL}/api/v1/business-media?email=${encodeURIComponent(email)}`,
+        {
+          headers: token ? { Authorization: token } : {},
+        },
+      );
+      const data = await response.json();
+      if (data?.success && Array.isArray(data.results) && data.results.length) {
+        dispatch({ type: HYDRATE_BUSINESS_MEDIA, payload: data.results });
+      }
+    } catch (err) {
+      console.warn("[hydrateBusinessMedia]", err);
+    }
+  };
+}
 
 export function login({ email, password }, cb = (f) => f, error = (f) => f) {
   return async (dispatch) => {
@@ -92,6 +114,7 @@ export function login({ email, password }, cb = (f) => f, error = (f) => f) {
       } else {
         localStorage.setItem("@@__token", data.token);
         dispatch({ type: LOGIN, payload: data });
+        dispatch(hydrateBusinessMedia(data?.user?.email || email));
         cb(data);
       }
     } catch (err) {
@@ -176,6 +199,7 @@ export function initUser(navigate = null, callback = (f) => f) {
           );
         }
         dispatch({ type: LOGIN, payload: data });
+        dispatch(hydrateBusinessMedia(data?.user?.email));
         if (data.loginHoursLocked) {
           setSessionLocked(true, "hours");
         }
