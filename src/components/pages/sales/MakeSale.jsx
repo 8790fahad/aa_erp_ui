@@ -45,6 +45,30 @@ function salesLimitPeriodLabel(period) {
   return "sales";
 }
 
+const INVOICE_TERM_PRESETS = [
+  "Due on receipt",
+  "Net 15",
+  "Net 30",
+  "Net 60",
+];
+
+/** Days until due from terms text (Due on receipt → 0, Net 7 → 7). */
+function getInvoiceTermDays(terms) {
+  const raw = String(terms || "").trim();
+  if (!raw || /^due on receipt$/i.test(raw)) return 0;
+  const match = raw.match(/^net\s+(\d+)$/i);
+  if (match) {
+    const days = parseInt(match[1], 10);
+    return Number.isFinite(days) ? Math.max(0, days) : 30;
+  }
+  return 30;
+}
+
+function formatInvoiceTerms(days) {
+  const n = Math.max(0, Math.floor(Number(days) || 0));
+  return n === 0 ? "Due on receipt" : `Net ${n}`;
+}
+
 const PAYMENT_MODE_OPTIONS = [
   { id: "cash", label: "Cash" },
   { id: "transfer", label: "Transfer" },
@@ -1704,16 +1728,9 @@ function MakeSale() {
     }
   }, [cartAboveTransactionDate]);
 
-  // Automatically derive due date from invoice date + terms (e.g. Net 30)
+  // Derive due date from invoice date + terms (Due on receipt / Net N days)
   useEffect(() => {
-    const termDaysMap = {
-      "Due on receipt": 0,
-      "Net 15": 15,
-      "Net 30": 30,
-      "Net 60": 60,
-    };
-
-    const daysToAdd = termDaysMap[invoiceTerms] ?? 30;
+    const daysToAdd = getInvoiceTermDays(invoiceTerms);
     const baseDate = transactionDate || moment().format("YYYY-MM-DD");
 
     setDueDate(
@@ -2963,6 +2980,8 @@ function MakeSale() {
           customer_id: selectedCustomerRef.current?.customerNo,
           apply_prepayment: saleType !== "paid" && usePrepayment,
           transaction_date: transactionDate, // Add transaction date
+          due_date: dueDate,
+          invoice_terms: invoiceTerms,
           sale_branch_id: branchId,
           edit_sale_code: editingSaleCode || editSaleCodeFromUrl || undefined,
           // Payment is collected at Verification Points, not on create.
@@ -5017,18 +5036,55 @@ function MakeSale() {
                   />
                   {(hasCreditMode || hasPrepaidMode) && (
                     <>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <label className="text-sm text-slate-600">Terms</label>
                         <select
-                          value={invoiceTerms}
-                          onChange={(e) => setInvoiceTerms(e.target.value)}
+                          value={
+                            INVOICE_TERM_PRESETS.includes(invoiceTerms)
+                              ? invoiceTerms
+                              : "Custom"
+                          }
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === "Custom") {
+                              const current = getInvoiceTermDays(invoiceTerms);
+                              setInvoiceTerms(
+                                formatInvoiceTerms(current > 0 ? current : 1),
+                              );
+                              return;
+                            }
+                            setInvoiceTerms(value);
+                          }}
                           className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                         >
                           <option value="Due on receipt">Due on Receipt</option>
                           <option value="Net 15">Net 15</option>
                           <option value="Net 30">Net 30</option>
                           <option value="Net 60">Net 60</option>
+                          <option value="Custom">Custom days</option>
                         </select>
+                        <input
+                          type="number"
+                          min={0}
+                          max={3650}
+                          step={1}
+                          title="Number of days until payment is due"
+                          value={getInvoiceTermDays(invoiceTerms)}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw === "") {
+                              setInvoiceTerms("Due on receipt");
+                              return;
+                            }
+                            const days = Math.max(
+                              0,
+                              Math.min(3650, parseInt(raw, 10) || 0),
+                            );
+                            setInvoiceTerms(formatInvoiceTerms(days));
+                          }}
+                          className="h-9 w-20 rounded-md border border-slate-300 bg-white px-2 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
+                        />
+                        <span className="text-sm text-slate-500">days</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <label className="text-sm text-slate-600">
@@ -5037,7 +5093,22 @@ function MakeSale() {
                         <input
                           type="date"
                           value={dueDate}
-                          onChange={(e) => setDueDate(e.target.value)}
+                          min={transactionDate}
+                          onChange={(e) => {
+                            const nextDue = e.target.value;
+                            if (!nextDue) return;
+                            const base =
+                              transactionDate || moment().format("YYYY-MM-DD");
+                            const days = Math.max(
+                              0,
+                              moment(nextDue, "YYYY-MM-DD").diff(
+                                moment(base, "YYYY-MM-DD"),
+                                "days",
+                              ),
+                            );
+                            // Updating terms also refreshes dueDate via effect
+                            setInvoiceTerms(formatInvoiceTerms(days));
+                          }}
                           className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-[var(--aa-accent)] focus:ring-1 focus:ring-[var(--aa-accent)]"
                         />
                       </div>
