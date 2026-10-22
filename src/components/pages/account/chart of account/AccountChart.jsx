@@ -146,6 +146,8 @@ export default function AccountChart() {
   const [loading, setLoading] = useState(true);
   const [selectedAccounts, setSelectedAccounts] = useState(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [disableDialogAccount, setDisableDialogAccount] = useState(null);
+  const [disableSubmitting, setDisableSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState("list"); // list | tree | 3d
 
@@ -256,26 +258,59 @@ export default function AccountChart() {
     }
   };
 
-  const handleDisable = (node) => {
-    if (
-      !window.confirm(
-        "Disable this account? It will be hidden from lists but can be re-enabled later.",
-      )
-    )
+  const handleDisableRequest = (node) => {
+    if (!node || node._hasChildren) {
+      toast.error(
+        "Only child accounts can be disabled. Disable the accounts under this head first.",
+      );
       return;
+    }
+    setDisableDialogAccount(node);
+  };
 
+  const handleConfirmDisable = () => {
+    const node = disableDialogAccount;
+    if (!node || !activeBusiness?.id) return;
+    const code = node.code || node.head;
+    setDisableSubmitting(true);
     _postApi(
       `/account/account-category/disable`,
-      { code: node.code || node.head, facilityId: activeBusiness.id },
+      { code, facilityId: activeBusiness.id },
       (resp) => {
+        setDisableSubmitting(false);
         if (resp.success) {
-          toast.success("Account disabled successfully");
+          toast.success("Account disabled — it will no longer appear in selects");
+          setDisableDialogAccount(null);
           getAccounts();
         } else {
           toast.error(resp.message || "Disable failed");
         }
       },
-      () => toast.error("Disable failed"),
+      () => {
+        setDisableSubmitting(false);
+        toast.error("Disable failed");
+      },
+    );
+  };
+
+  const handleEnable = (node) => {
+    if (!node || !activeBusiness?.id) return;
+    if (node._hasChildren) {
+      toast.error("Only child accounts can be enabled from here.");
+      return;
+    }
+    _postApi(
+      `/account/account-category/enable`,
+      { code: node.code || node.head, facilityId: activeBusiness.id },
+      (resp) => {
+        if (resp.success) {
+          toast.success("Account enabled successfully");
+          getAccounts();
+        } else {
+          toast.error(resp.message || "Enable failed");
+        }
+      },
+      () => toast.error("Enable failed"),
     );
   };
 
@@ -947,7 +982,8 @@ export default function AccountChart() {
         <AccountList
           accounts={filteredAccounts}
           onEdit={(account) => setEditAccount(account)}
-          onDisable={handleDisable}
+          onDisable={handleDisableRequest}
+          onEnable={handleEnable}
           selectedAccounts={selectedAccounts}
           onToggleSelect={toggleAccountSelection}
           onToggleSelectAll={toggleSelectAll}
@@ -1011,6 +1047,59 @@ export default function AccountChart() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={!!disableDialogAccount}
+        onOpenChange={(open) => {
+          if (!open && !disableSubmitting) setDisableDialogAccount(null);
+        }}
+      >
+        <DialogContent className="max-w-md border-slate-200">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900">
+              Disable account
+            </DialogTitle>
+            <DialogDescription className="text-slate-500">
+              This child account will stay on the chart as inactive, but it will
+              be hidden from account selects across the app. You can re-enable it
+              later. Head accounts cannot be disabled.
+            </DialogDescription>
+          </DialogHeader>
+          {disableDialogAccount && (
+            <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              <span className="font-medium">
+                {disableDialogAccount.code || disableDialogAccount.head}
+              </span>
+              {(disableDialogAccount.description ||
+                disableDialogAccount.detail) && (
+                <span className="text-slate-500">
+                  {" "}
+                  —{" "}
+                  {disableDialogAccount.description ||
+                    disableDialogAccount.detail}
+                </span>
+              )}
+            </div>
+          )}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              className="border-slate-200"
+              disabled={disableSubmitting}
+              onClick={() => setDisableDialogAccount(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-600 text-white hover:bg-amber-700"
+              disabled={disableSubmitting}
+              onClick={handleConfirmDisable}
+            >
+              {disableSubmitting ? "Disabling…" : "Disable"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1020,6 +1109,7 @@ const AccountList = ({
   accounts,
   onEdit,
   onDisable,
+  onEnable,
   selectedAccounts,
   onToggleSelect,
   onToggleSelectAll,
@@ -1042,7 +1132,10 @@ const AccountList = ({
 
   const deriveStatus = (a) => {
     if (a.status) return String(a.status).toLowerCase();
-    if (a.is_active === 0 || a.isActive === false) return "inactive";
+    const flag = a.is_active ?? a.isActive;
+    if (flag === 0 || flag === false || flag === "0" || flag === "false") {
+      return "inactive";
+    }
     return "active";
   };
 
@@ -1319,13 +1412,27 @@ const AccountList = ({
               <DropdownMenuItem onClick={() => onRunReport(a.code || a.head)}>
                 Report
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-yellow-700 focus:text-yellow-800"
-                onClick={() => onDisable(a)}
-              >
-                Disable
-              </DropdownMenuItem>
+              {!a._hasChildren && (
+                <>
+                  <DropdownMenuSeparator />
+                  {deriveStatus(a) === "active" ||
+                  deriveStatus(a) === "activated" ? (
+                    <DropdownMenuItem
+                      className="text-amber-700 focus:text-amber-800"
+                      onClick={() => onDisable?.(a)}
+                    >
+                      Disable
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem
+                      className="text-emerald-700 focus:text-emerald-800"
+                      onClick={() => onEnable?.(a)}
+                    >
+                      Enable
+                    </DropdownMenuItem>
+                  )}
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         ),

@@ -15,7 +15,7 @@ import BankAccountsUpload from "@/components/pages/admin/BankAccountsUpload";
 import BankOpeningBalances from "@/components/pages/admin/BankOpeningBalances";
 import CustomTable1 from "@/common/Custom/CustomTable1";
 import CustomButton from "@/common/Custom/CustomButton";
-import { _fetchApi, _postApi } from "@/redux/actions/api";
+import { _fetchApi, _postApi, _deleteApi } from "@/redux/actions/api";
 import { Alert } from "reactstrap";
 import {
   DropdownMenu,
@@ -68,6 +68,7 @@ const BankSetup = ({ embedded = false }) => {
   const [setupTab, setSetupTab] = useState("accounts"); // accounts | opening-balances
   const [openingTargetId, setOpeningTargetId] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showDisableModal, setShowDisableModal] = useState(false);
   const [editingBank, setEditingBank] = useState(null);
   const [selectedBank, setSelectedBank] = useState(null);
   const [banks, setBanks] = useState([]);
@@ -244,32 +245,88 @@ const BankSetup = ({ embedded = false }) => {
   };
 
   const handleDelete = (bank) => {
+    if (!bank?.id || !activeBusiness?.id) return;
     setLoading2(true);
-    _postApi(
+    _deleteApi(
       `/api/bank-account/${bank.id}`,
       { facilityId: activeBusiness.id },
       (res) => {
-        if (res.success) {
+        setLoading2(false);
+        if (res?.success) {
           toast.success(res.message || "Bank account deleted successfully");
           setShowDeleteModal(false);
+          setSelectedBank(null);
           getBanks();
         } else {
-          toast.error(res.message || "Failed to delete");
-          setLoading2(false);
+          toast.error(res?.message || "Failed to delete");
         }
       },
       (err) => {
-        toast.error("An error occurred while deleting");
+        setLoading2(false);
+        toast.error(
+          err?.message ||
+            "Could not delete — check that the API is running, then try again",
+        );
+        console.error(err);
+      },
+    );
+  };
+
+  const handleDisable = (bank) => {
+    if (!bank?.id) return;
+    setLoading2(true);
+    _postApi(
+      `/api/bank-account/${bank.id}/disable`,
+      { facilityId: activeBusiness.id },
+      (res) => {
+        setLoading2(false);
+        if (res.success) {
+          toast.success(
+            res.message ||
+              "Bank account disabled — hidden from bank selects",
+          );
+          setShowDisableModal(false);
+          setSelectedBank(null);
+          getBanks();
+        } else {
+          toast.error(res.message || "Failed to disable");
+        }
+      },
+      (err) => {
+        toast.error("An error occurred while disabling");
         console.error(err);
         setLoading2(false);
       },
-      "DELETE",
+    );
+  };
+
+  const handleEnable = (bank) => {
+    if (!bank?.id) return;
+    setLoading2(true);
+    _postApi(
+      `/api/bank-account/${bank.id}/enable`,
+      { facilityId: activeBusiness.id },
+      (res) => {
+        setLoading2(false);
+        if (res.success) {
+          toast.success(res.message || "Bank account enabled successfully");
+          getBanks();
+        } else {
+          toast.error(res.message || "Failed to enable");
+        }
+      },
+      (err) => {
+        toast.error("An error occurred while enabling");
+        console.error(err);
+        setLoading2(false);
+      },
     );
   };
 
   const handleCancel = () => {
     setIsModalOpen(false);
     setShowDeleteModal(false);
+    setShowDisableModal(false);
     setEditingBank(null);
     setSelectedBank(null);
     setLoading2(false);
@@ -351,16 +408,22 @@ const BankSetup = ({ embedded = false }) => {
   };
 
   const handleShowDelete = (bank) => {
+    setLoading2(false);
     setSelectedBank(bank);
     setShowDeleteModal(true);
+  };
+
+  const handleShowDisable = (bank) => {
+    setLoading2(false);
+    setSelectedBank(bank);
+    setShowDisableModal(true);
   };
 
   const getBanks = useCallback(() => {
     setLoading(true);
     _fetchApi(
-      `/api/get/bank-accounts?facilityId=${activeBusiness.id}`,
+      `/api/get/bank-accounts?facilityId=${activeBusiness.id}&includeInactive=1`,
       (data) => {
-        console.log("[BankSetup] getBanks response:", data);
         if (data.success) {
           setBanks(data.results);
         } else {
@@ -585,19 +648,19 @@ const BankSetup = ({ embedded = false }) => {
       title: "Status",
       custom: true,
       component: (item) => {
-        const status = item.status || "active";
+        const status = String(item.status || "active").toLowerCase();
+        const isActive = status === "active";
         return (
           <div className="text-center">
-            {" "}
             <Badge
-              variant={status === "active" ? "default" : "secondary"}
+              variant={isActive ? "default" : "secondary"}
               className={
-                status === "active"
+                isActive
                   ? "bg-green-100 text-green-800 hover:bg-green-100 text-center"
-                  : "bg-gray-100 text-gray-800 hover:bg-gray-100 text-center"
+                  : "bg-amber-100 text-amber-900 hover:bg-amber-100 text-center"
               }
             >
-              {status.charAt(0).toUpperCase() + status.slice(1)}
+              {isActive ? "Active" : "Disabled"}
             </Badge>
           </div>
         );
@@ -620,39 +683,61 @@ const BankSetup = ({ embedded = false }) => {
     {
       title: "Action",
       custom: true,
-      component: (item) => (
-        <div className="text-center flex gap-1 justify-center">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="flex size-8 text-slate-500 data-[state=open]:bg-slate-100 dark:text-slate-400 dark:data-[state=open]:bg-slate-800"
-                size="icon"
-              >
-                <MoreVerticalIcon />
-                <span className="sr-only">Open menu</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={() => handleEdit(item)}>
-                Edit Account
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setOpeningTargetId(item.id);
-                  setSetupTab("opening-balances");
-                }}
-              >
-                Opening balance
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => handleShowDelete(item)}>
-                Delete Account
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ),
+      component: (item) => {
+        const isActive =
+          String(item.status || "active").toLowerCase() === "active";
+        return (
+          <div className="text-center flex gap-1 justify-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="flex size-8 text-slate-500 data-[state=open]:bg-slate-100 dark:text-slate-400 dark:data-[state=open]:bg-slate-800"
+                  size="icon"
+                >
+                  <MoreVerticalIcon />
+                  <span className="sr-only">Open menu</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onClick={() => handleEdit(item)}>
+                  Edit Account
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setOpeningTargetId(item.id);
+                    setSetupTab("opening-balances");
+                  }}
+                >
+                  Opening balance
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {isActive ? (
+                  <DropdownMenuItem
+                    className="text-amber-700 focus:text-amber-800"
+                    onClick={() => handleShowDisable(item)}
+                  >
+                    Disable
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    className="text-emerald-700 focus:text-emerald-800"
+                    onClick={() => handleEnable(item)}
+                  >
+                    Enable
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  className="text-red-700 focus:text-red-800"
+                  onClick={() => handleShowDelete(item)}
+                >
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        );
+      },
     },
   ];
 
@@ -1226,6 +1311,70 @@ const BankSetup = ({ embedded = false }) => {
         </div>
       )}
 
+      {/* Disable Confirmation Modal */}
+      {showDisableModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full overflow-hidden flex flex-col">
+            <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white p-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-bold">Disable bank account</h3>
+                  <p className="text-amber-100 text-sm mt-1">
+                    Hidden from bank selects; can be re-enabled later
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowDisableModal(false)}
+                  className="p-1.5 hover:bg-white/20 rounded transition-all"
+                  type="button"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              <p className="text-gray-700 mb-3">
+                Disable this account so it no longer appears anywhere banks are
+                selected?
+              </p>
+              <div className="p-3 bg-gray-100 rounded-lg space-y-2 text-sm">
+                <p>
+                  <strong>Account Name:</strong> {selectedBank?.account_name}
+                </p>
+                <p>
+                  <strong>Account Number:</strong>{" "}
+                  {selectedBank?.account_number}
+                </p>
+              </div>
+            </div>
+            <div className="border-t bg-gray-50 p-4 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDisableModal(false)}
+                className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDisable(selectedBank)}
+                disabled={loading2}
+                className="px-4 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {loading2 ? (
+                  <>
+                    <Loader className="animate-spin w-4 h-4" />
+                    Disabling...
+                  </>
+                ) : (
+                  "Disable"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -1245,6 +1394,7 @@ const BankSetup = ({ embedded = false }) => {
                 <button
                   onClick={() => setShowDeleteModal(false)}
                   className="p-1.5 hover:bg-white/20 rounded transition-all"
+                  type="button"
                 >
                   <X size={20} />
                 </button>
@@ -1256,7 +1406,9 @@ const BankSetup = ({ embedded = false }) => {
               <div className="p-6 flex-1 overflow-y-auto">
                 <div className="mb-6">
                   <p className="text-gray-700 mb-3">
-                    Are you sure you want to delete the following bank account?
+                    Permanently delete this bank account? If it has ledger or
+                    statement history, delete will be blocked — use Disable
+                    instead.
                   </p>
                   <div className="p-3 bg-gray-100 rounded-lg space-y-2">
                     <p>
@@ -1293,8 +1445,8 @@ const BankSetup = ({ embedded = false }) => {
                     </p>
                   </div>
                   <p className="text-red-600 text-sm mt-3">
-                    <strong>Warning:</strong> This action cannot be undone. All
-                    bank account data will be permanently deleted.
+                    <strong>Warning:</strong> Permanent delete removes the
+                    account. Prefer Disable if you may need it again.
                   </p>
                 </div>
               </div>
@@ -1302,16 +1454,15 @@ const BankSetup = ({ embedded = false }) => {
               {/* Modal Footer */}
               <div className="border-t bg-gray-50 p-4 flex justify-end gap-3">
                 <button
+                  type="button"
                   onClick={() => setShowDeleteModal(false)}
                   className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors font-medium"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    handleDelete(selectedBank);
-                    setShowDeleteModal(false);
-                  }}
+                  type="button"
+                  onClick={() => handleDelete(selectedBank)}
                   disabled={loading2}
                   className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
