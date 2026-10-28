@@ -124,6 +124,7 @@ export default function CreditorsReport() {
             balance: toNumber(item.balance ?? item.amount),
           };
         })
+        .filter((row) => Math.abs(row.balance) >= 0.05)
         .sort((a, b) =>
           String(a.partyName).localeCompare(String(b.partyName)),
         ),

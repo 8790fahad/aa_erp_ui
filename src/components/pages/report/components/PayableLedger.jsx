@@ -25,7 +25,8 @@ const toNumber = (value) => {
 };
 
 const formatNairaDrCr = (value) => {
-  const amount = toNumber(value);
+  const raw = toNumber(value);
+  const amount = Math.abs(raw) < 0.05 ? 0 : raw;
   const formatted = `₦${formatNumber1(Math.abs(amount))}`;
   if (amount > 0) return `${formatted} DR`;
   if (amount < 0) return `${formatted} CR`;
@@ -33,7 +34,8 @@ const formatNairaDrCr = (value) => {
 };
 
 const renderNairaDrCr = (value) => {
-  const amount = toNumber(value);
+  const raw = toNumber(value);
+  const amount = Math.abs(raw) < 0.05 ? 0 : raw;
   const formatted = `₦${formatNumber1(Math.abs(amount))}`;
 
   if (amount > 0) {
@@ -274,7 +276,7 @@ const PayableLedger = () => {
     }
     const opening = Number(ledgerData.openingBalance ?? ledgerData.balanceForward ?? 0);
     const hasRows =
-      (ledgerData.transactions?.length ?? 0) > 0 || Math.abs(opening) > 0.01;
+      (ledgerData.transactions?.length ?? 0) > 0 || Math.abs(opening) >= 0.05;
     if (!hasRows) {
       toast.error("No data to export");
       return;
@@ -481,7 +483,7 @@ const PayableLedger = () => {
   const hasPayableReportBody =
     Boolean(ledgerData) &&
     ((ledgerData.transactions?.length ?? 0) > 0 ||
-      Math.abs(balanceBroughtForwardAmt) > 0.01);
+      Math.abs(balanceBroughtForwardAmt) >= 0.05);
 
   return (
     <>

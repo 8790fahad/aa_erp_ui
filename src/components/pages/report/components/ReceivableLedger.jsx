@@ -324,7 +324,7 @@ const ReceivableLedger = () => {
     // Balance Forward
     const balanceForward =
       ledgerData.balanceForward || ledgerData.openingBalance || 0;
-    if (Math.abs(balanceForward) > 0.01) {
+    if (Math.abs(balanceForward) >= 0.05) {
       const begBalRow = worksheet.getRow(currentRow);
       begBalRow.getCell(1).value = ledgerData.balanceForwardDate
         ? formatDate(ledgerData.balanceForwardDate)
@@ -418,7 +418,7 @@ const ReceivableLedger = () => {
   const hasReceivableReportBody =
     Boolean(ledgerData) &&
     ((ledgerData.transactions?.length ?? 0) > 0 ||
-      Math.abs(balanceBroughtForwardAmt) > 0.01);
+      Math.abs(balanceBroughtForwardAmt) >= 0.05);
 
   return (
     <>

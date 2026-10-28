@@ -125,6 +125,7 @@ export default function DepositAdvanceReport({ variant = "deposit" } = {}) {
         partyName: item.party_name || item.party_id,
         balance: toNumber(item.balance),
       }))
+      .filter((row) => Math.abs(row.balance) >= 0.05)
       .sort((a, b) => b.balance - a.balance);
   }, [reportData]);
 

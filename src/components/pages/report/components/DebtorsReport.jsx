@@ -19,7 +19,8 @@ const toNumber = (value) => {
 };
 
 const formatNairaDrCr = (value) => {
-  const amount = toNumber(value);
+  const raw = toNumber(value);
+  const amount = Math.abs(raw) < 0.05 ? 0 : raw;
   const absAmount = Math.abs(amount);
   const formatted = `₦${formatNumber1(absAmount)}`;
   if (amount > 0) return `${formatted} DR`;
@@ -28,7 +29,8 @@ const formatNairaDrCr = (value) => {
 };
 
 const renderNairaDrCr = (value) => {
-  const amount = toNumber(value);
+  const raw = toNumber(value);
+  const amount = Math.abs(raw) < 0.05 ? 0 : raw;
   const absAmount = Math.abs(amount);
   const formatted = `₦${formatNumber1(absAmount)}`;
 
@@ -156,6 +158,7 @@ const DebtorsReport = () => {
           balance: toNumber(item.balance),
         };
       })
+      .filter((row) => Math.abs(row.balance) >= 0.05)
       .sort((a, b) =>
         String(a.partyName).localeCompare(String(b.partyName)),
       );

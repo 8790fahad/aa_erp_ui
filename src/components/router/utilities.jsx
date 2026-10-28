@@ -51,9 +51,11 @@ export function formatNaira(n = 0, options = {}) {
   if (typeof n !== "number" && typeof n !== "string") {
     return empty;
   }
-  const v = parseFloat(n);
+  let v = parseFloat(n);
   if (!Number.isFinite(v)) return empty;
-  if (!showZero && Math.abs(v) < 0.005) return empty;
+  // One or two kobo is VAT rounding left on a settled invoice, not money owed.
+  if (Math.abs(v) < 0.05) v = 0;
+  if (!showZero && v === 0) return empty;
   const formatted = `₦${formatNumber1(Math.abs(v))}`;
   if (v < 0) return `(${formatted})`;
   return formatted;
