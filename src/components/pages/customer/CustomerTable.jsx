@@ -30,6 +30,12 @@ import {
   parseNumberFromFormatted,
 } from "@/utilities";
 import { customerKindLabel, isWalkInCustomer, isUnlimitedCreditLimit } from "@/utils/customerKind";
+import {
+  canUseCustomerRowAction,
+  CUSTOMER_DEPOSIT_OPENING_BALANCE_PRIVILEGE,
+  CUSTOMER_OPENING_BALANCE_PRIVILEGE,
+  EDIT_CUSTOMER_PRIVILEGE,
+} from "@/lib/access";
 import { getFinancialYearForDate } from "@/utils/financialYear";
 import {
   Dialog,
@@ -77,6 +83,24 @@ export default function CustomerTable() {
   const [pageIndex, setPageIndex] = useState(0);
 
   const formatMoney = (amount) => `₦${formatNumber1(parseFloat(amount) || 0)}`;
+
+  const canEditCustomer = canUseCustomerRowAction(
+    user,
+    activeBusiness,
+    EDIT_CUSTOMER_PRIVILEGE,
+  );
+  const canOpeningBalance = canUseCustomerRowAction(
+    user,
+    activeBusiness,
+    CUSTOMER_OPENING_BALANCE_PRIVILEGE,
+  );
+  const canDepositOpeningBalance = canUseCustomerRowAction(
+    user,
+    activeBusiness,
+    CUSTOMER_DEPOSIT_OPENING_BALANCE_PRIVILEGE,
+  );
+  const hasRowActions =
+    canEditCustomer || canOpeningBalance || canDepositOpeningBalance;
 
   const formatDisplayPhone = (phone) => {
     const raw = String(phone || "").trim();
@@ -253,11 +277,24 @@ export default function CustomerTable() {
   };
 
   const openCustomer = (item) => {
+    if (!canEditCustomer) {
+      toast.error("You do not have permission to edit customers.");
+      return;
+    }
     setSelectedCustomer(item);
     setShowModal(true);
   };
 
   const openOpeningBalance = (item, kind = "receivable") => {
+    const deposit = kind === "deposit";
+    if (deposit ? !canDepositOpeningBalance : !canOpeningBalance) {
+      toast.error(
+        deposit
+          ? "You do not have permission to record a deposit opening balance."
+          : "You do not have permission to record an opening balance.",
+      );
+      return;
+    }
     if (!activeBusiness?.opening_balance_equity) {
       toast.error(
         "Set the Opening Balance Equity account in Admin settings before recording an opening balance.",
@@ -596,13 +633,19 @@ export default function CustomerTable() {
                               {customerInitials(item)}
                             </div>
                             <div>
-                              <button
-                                type="button"
-                                onClick={() => openCustomer(item)}
-                                className="text-[13.5px] font-semibold text-[#0d1440] hover:text-[#3457ff]"
-                              >
-                                {displayName}
-                              </button>
+                              {canEditCustomer ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openCustomer(item)}
+                                  className="text-[13.5px] font-semibold text-[#0d1440] hover:text-[#3457ff]"
+                                >
+                                  {displayName}
+                                </button>
+                              ) : (
+                                <div className="text-[13.5px] font-semibold text-[#0d1440]">
+                                  {displayName}
+                                </div>
+                              )}
                               <div className="mt-px font-mono text-[11.5px] font-medium text-[#a8acc4]">
                                 {item.customerNo}
                               </div>
@@ -709,32 +752,40 @@ export default function CustomerTable() {
                           </span>
                         </td>
                         <td className="py-[15px] pr-[18px]">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                type="button"
-                                className="flex h-[30px] w-[30px] items-center justify-center rounded-lg text-[#6a6f8f] hover:bg-[#f4f5fa] hover:text-[#151a33]"
-                              >
-                                <MoreVertical className="h-[17px] w-[17px]" />
-                                <span className="sr-only">Open menu</span>
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                              <DropdownMenuItem onClick={() => openCustomer(item)}>
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => openOpeningBalance(item, "receivable")}
-                              >
-                                Opening balance
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => openOpeningBalance(item, "deposit")}
-                              >
-                                Deposit opening balance
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {hasRowActions ? (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="flex h-[30px] w-[30px] items-center justify-center rounded-lg text-[#6a6f8f] hover:bg-[#f4f5fa] hover:text-[#151a33]"
+                                >
+                                  <MoreVertical className="h-[17px] w-[17px]" />
+                                  <span className="sr-only">Open menu</span>
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-56">
+                                {canEditCustomer ? (
+                                  <DropdownMenuItem onClick={() => openCustomer(item)}>
+                                    Edit
+                                  </DropdownMenuItem>
+                                ) : null}
+                                {canOpeningBalance ? (
+                                  <DropdownMenuItem
+                                    onClick={() => openOpeningBalance(item, "receivable")}
+                                  >
+                                    Opening balance
+                                  </DropdownMenuItem>
+                                ) : null}
+                                {canDepositOpeningBalance ? (
+                                  <DropdownMenuItem
+                                    onClick={() => openOpeningBalance(item, "deposit")}
+                                  >
+                                    Deposit opening balance
+                                  </DropdownMenuItem>
+                                ) : null}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          ) : null}
                         </td>
                       </tr>
                     );

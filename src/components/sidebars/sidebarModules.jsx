@@ -419,6 +419,11 @@ export const modules = [
         title: "Customers",
         url: "/app/customers",
         functionality: ["Customers", "Customer Register"],
+        subFunctionalities: [
+          { title: "Edit Customer" },
+          { title: "Opening balance" },
+          { title: "Deposit opening balance" },
+        ],
         access: [
           "services",
           "retailers",

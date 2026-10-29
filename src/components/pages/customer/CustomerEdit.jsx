@@ -15,6 +15,7 @@ import { parseCreditLimitValue } from "@/utils/customerKind";
 
 export default function CustomerEdit() {
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
+  const user = useSelector((state) => state.auth.user);
 
   const query = useQuery();
 
@@ -140,6 +141,8 @@ export default function CustomerEdit() {
     let obj = {
       ...form,
       query_type: "update",
+      facilityId,
+      created_by: user?.id,
       customer_type:
         form.customer_type === "walk-in" ? "walk-in" : form.customer_type || "customer",
       credit_limit: parseCreditLimitValue(form.credit_limit, {

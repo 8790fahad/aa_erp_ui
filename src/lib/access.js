@@ -112,6 +112,9 @@ export const EXPLICIT_ONLY_PRIVILEGES = [
   "Warehouse Collection History",
   "Edit",
   "Change",
+  "Edit Customer",
+  "Opening balance",
+  "Deposit opening balance",
   "Deposit Summary",
   "Credit Summary",
   "Deposit History",
@@ -160,6 +163,19 @@ export const RECONCILE_CASH_PRIVILEGE = "Cash";
 export const RECONCILE_CARD_PRIVILEGE = "POS";
 export const RECONCILE_CARD_PRIVILEGE_LEGACY = "Card";
 export const RECONCILE_TRANSFER_PRIVILEGE = "Transfer";
+export const EDIT_CUSTOMER_PRIVILEGE = "Edit Customer";
+export const CUSTOMER_OPENING_BALANCE_PRIVILEGE = "Opening balance";
+export const CUSTOMER_DEPOSIT_OPENING_BALANCE_PRIVILEGE =
+  "Deposit opening balance";
+
+/** Row actions on Active Customers. Owner and Administrator always pass. */
+export function canUseCustomerRowAction(user, activeBusiness, privilege) {
+  if (isBusinessOwner(user, activeBusiness)) return true;
+  return canAccessPrivileges(
+    [privilege],
+    getUserFunctionalities(user, activeBusiness),
+  );
+}
 
 const ALL_RECONCILIATION_MODES = ["cash", "card", "transfer"];
 
