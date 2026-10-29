@@ -1,0 +1,26 @@
+RewriteEngine On
+
+# Hashed Vite files under /assets/ can be cached for a year.
+RewriteRule ^assets/.+ - [E=ASSET_IMMUTABLE:1]
+
+RewriteCond %{REQUEST_FILENAME} -s [OR]
+RewriteCond %{REQUEST_FILENAME} -l [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^.*$ - [NC,L]
+RewriteRule ^.*$ index.html [NC,L]
+
+<IfModule mod_headers.c>
+  # The HTML shell and version file must be fetched again on every visit.
+  <FilesMatch "^(index\.html|version\.json)$">
+    Header always set Cache-Control "no-cache, no-store, must-revalidate"
+    Header always set Pragma "no-cache"
+    Header always set Expires "0"
+  </FilesMatch>
+  Header always set Cache-Control "public, max-age=31536000, immutable" env=ASSET_IMMUTABLE
+</IfModule>
+
+# Set proper MIME types for CSV files
+<IfModule mod_mime.c>
+  AddType text/csv csv
+</IfModule>
+

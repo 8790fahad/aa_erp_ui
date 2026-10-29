@@ -1,0 +1,11 @@
+sku,Product Name,Cost Price,COGS Account,Stock Quantity,Opening Balance Date,Reorder Level,Expiry Date,Inventory Account,Unit of Measurement,Taxable
+P001,Milk Powder,1800,5001,100,2025-12-01,20,2026-06-30,1200,Kg,Taxable
+P002,Sugar,1500,5002,200,2025-12-01,50,2026-12-31,1200,Kg,Taxable
+P003,Vegetable Oil,2200,5003,150,2025-12-01,30,2026-08-31,1200,Litre,Taxable
+P004,Rice,2000,5004,300,2025-12-01,60,2026-11-30,1200,Kg,Not Taxable
+P005,Tea,1200,5005,80,2025-12-01,10,2026-05-31,1200,Kg,Taxable
+
+
+
+
+
