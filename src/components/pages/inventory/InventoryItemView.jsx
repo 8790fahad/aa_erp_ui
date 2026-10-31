@@ -13,12 +13,14 @@ import {
   SortAsc,
   Download,
   Search,
+  Settings,
 } from "lucide-react";
+import { jsPDF } from "jspdf";
 import { formatNumber1 } from "@/components/router/utilities";
-import { _fetchApi } from "@/redux/actions/api";
+import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { toast } from "sonner";
-import { useSelector } from "react-redux";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import moment from "moment";
 import {
   Card,
@@ -45,6 +47,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import useQuery from "@/hooks/useQuery";
 import { isProductTaxable, normalizeTaxableStatus } from "@/utils/taxableStatus";
 
@@ -66,7 +76,8 @@ function txTime(tx) {
 }
 
 export default function InventoryItemView() {
-  const { activeBusiness } = useSelector((state) => state.auth);
+  const dispatch = useDispatch();
+  const { activeBusiness, user } = useSelector((state) => state.auth);
   const { id: productId } = useParams();
   const query = useQuery();
   const location = useLocation();
@@ -83,6 +94,8 @@ export default function InventoryItemView() {
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState([]);
   const [balanceBroughtForward, setBalanceBroughtForward] = useState(0);
+  const [pendingToCollect, setPendingToCollect] = useState(0);
+  const [pendingCollections, setPendingCollections] = useState([]);
   const [periodClosingBalance, setPeriodClosingBalance] = useState(0);
   const [filters, setFilters] = useState({
     type: "all",
@@ -96,6 +109,13 @@ export default function InventoryItemView() {
   const [dateDraft, setDateDraft] = useState({
     fromDate: fromDateFromUrl,
     toDate: toDateFromUrl,
+  });
+  const [autoSaveOpen, setAutoSaveOpen] = useState(false);
+  const [autoSaveSaving, setAutoSaveSaving] = useState(false);
+  const [autoSaveForm, setAutoSaveForm] = useState({
+    enabled: false,
+    time: "18:00",
+    timezone: "Africa/Lagos",
   });
 
   useEffect(() => {
@@ -150,6 +170,12 @@ export default function InventoryItemView() {
           setSummaryStats(resp.data?.summaryStats || null);
           setBalanceBroughtForward(
             Number(resp.data?.balanceBroughtForward || 0),
+          );
+          setPendingToCollect(Number(resp.data?.pendingToCollect || 0));
+          setPendingCollections(
+            Array.isArray(resp.data?.pendingCollections)
+              ? resp.data.pendingCollections
+              : [],
           );
         } else {
           toast.error("Failed to load item details.");
@@ -315,63 +341,261 @@ export default function InventoryItemView() {
     setFilteredHistory(display);
   }, [transactionHistory, filters, balanceBroughtForward]);
 
-  const exportToCSV = () => {
-    const headers = [
-      "Date",
-      "Type",
-      "Reference",
-      "Warehouse",
-      "Quantity In",
-      "Quantity Out",
-      "Balance",
-    ];
-    const bfDate = filters.fromDate
-      ? moment(filters.fromDate).format("DD/MM/YYYY")
-      : "";
-    const bfLine = [
-      `"${bfDate}"`,
-      `""`,
-      `"Balance brought forward"`,
-      `""`,
-      `""`,
-      `""`,
-      `"${Number(balanceBroughtForward) || 0}"`,
-    ].join(",");
-    const closingLine = [
-      `""`,
-      `""`,
-      `"Closing balance"`,
-      `""`,
-      `""`,
-      `""`,
-      `"${Number(periodClosingBalance) || 0}"`,
-    ].join(",");
-    const txLines = filteredHistory.map((tx) =>
-      [
-        `"${moment(tx.inserted_time || tx.createdAt).format("DD/MM/YYYY hh:mm A")}"`,
-        `"${tx.movement_type}"`,
-        `"${tx.reference_number || ""}"`,
-        `"${tx.warehouse_name || tx.branch_name || ""}"`,
-        `"${txQtyIn(tx)}"`,
-        `"${txQtyOut(tx)}"`,
-        `"${tx.running_balance ?? ""}"`,
-      ].join(","),
-    );
+  const totalQtyIn = filteredHistory.reduce((sum, tx) => sum + txQtyIn(tx), 0);
+  const totalQtyOut = filteredHistory.reduce((sum, tx) => sum + txQtyOut(tx), 0);
 
-    const csvContent = [headers.join(","), bfLine, ...txLines, closingLine].join(
-      "\n",
-    );
+  const exportToPdf = () => {
+    try {
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 10;
+      const rowH = 6.2;
+      const colW = [32, 26, 60, 55, 32, 32, 34];
+      const headers = ["Date", "Movement", "Reference", "Warehouse", "Qty In", "Qty Out", "Balance"];
+      const storeName =
+        filters.branchId && filters.branchId !== "all"
+          ? branches.find((b) => String(b.id) === String(filters.branchId))
+              ?.branch_name || "Store"
+          : "All stores";
+      const period =
+        filters.fromDate || filters.toDate
+          ? `${filters.fromDate ? moment(filters.fromDate).format("DD/MM/YYYY") : "Start"} - ${
+              filters.toDate ? moment(filters.toDate).format("DD/MM/YYYY") : "Today"
+            }`
+          : "All dates";
+      const unit = item?.unit_of_measure ? ` ${item.unit_of_measure}` : "";
+      const productName = item?.name || item?.item_name || "Item";
+      const businessName = activeBusiness?.business_name || activeBusiness?.name || "";
 
-    // Create download link
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `inventory_history_${item?.sku || 'item'}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const movementLabel = (tx) => {
+        if (tx.movement_type === "REVERSE") return "Reverse";
+        if (tx.movement_type === "RETURN") return "Return";
+        return tx.movement_type || "";
+      };
+
+      const rows = [
+        [
+          filters.fromDate ? moment(filters.fromDate).format("DD/MM/YYYY") : "",
+          "B/F",
+          "Balance brought forward",
+          "",
+          "",
+          "",
+          formatNumber1(balanceBroughtForward),
+        ],
+        ...filteredHistory.map((tx) => [
+          tx.createdAt || tx.inserted_time
+            ? moment(tx.createdAt || tx.inserted_time).format("DD/MM/YYYY")
+            : "",
+          movementLabel(tx),
+          tx.reference_number || "-",
+          tx.warehouse_name || tx.branch_name || "",
+          txQtyIn(tx) > 0 ? formatNumber1(txQtyIn(tx)) : "-",
+          txQtyOut(tx) > 0 ? formatNumber1(txQtyOut(tx)) : "-",
+          formatNumber1(tx.running_balance ?? 0),
+        ]),
+        [
+          "",
+          "",
+          "Total",
+          "",
+          formatNumber1(totalQtyIn),
+          formatNumber1(totalQtyOut),
+          formatNumber1(periodClosingBalance),
+        ],
+      ];
+
+      const summaryBoxes = [
+        {
+          label: "In",
+          value: `${formatNumber1(totalQtyIn)}${unit}`,
+          color: [22, 101, 52],
+        },
+        {
+          label: "Out",
+          value: `${formatNumber1(totalQtyOut)}${unit}`,
+          color: [153, 27, 27],
+        },
+        {
+          label: "Pending to collect",
+          value: `${formatNumber1(pendingToCollect)}${unit}`,
+          color: [146, 64, 14],
+        },
+        {
+          label: "Closing balance",
+          value: `${formatNumber1(periodClosingBalance)}${unit}`,
+          color: [15, 23, 42],
+        },
+      ];
+
+      const drawHeader = () => {
+        doc.setFillColor(15, 39, 68);
+        doc.rect(0, 0, pageWidth, 16, "F");
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text(businessName || "Inventory report", margin, 7);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.text(
+          `Stock movement  ·  ${productName}  ·  ${item?.sku || ""}`,
+          margin,
+          13,
+        );
+        doc.text(`${storeName}  ·  ${period}`, pageWidth - margin, 13, {
+          align: "right",
+        });
+
+        const boxY = 19;
+        const boxH = 14;
+        const gap = 3;
+        const boxW =
+          (pageWidth - margin * 2 - gap * (summaryBoxes.length - 1)) /
+          summaryBoxes.length;
+        summaryBoxes.forEach((box, i) => {
+          const x = margin + i * (boxW + gap);
+          doc.setFillColor(248, 250, 252);
+          doc.setDrawColor(226, 232, 240);
+          doc.rect(x, boxY, boxW, boxH, "FD");
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8);
+          doc.setTextColor(100, 116, 139);
+          doc.text(box.label.toUpperCase(), x + 3, boxY + 5);
+          doc.setFontSize(11);
+          doc.setTextColor(...box.color);
+          doc.text(box.value, x + 3, boxY + 11);
+        });
+        return boxY + boxH + 3;
+      };
+
+      const drawColumns = (y) => {
+        doc.setFillColor(241, 245, 249);
+        doc.rect(margin, y, pageWidth - margin * 2, rowH, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        let x = margin;
+        headers.forEach((label, i) => {
+          const right = i >= 4;
+          doc.text(label, right ? x + colW[i] - 1.5 : x + 1.5, y + 4.2, {
+            align: right ? "right" : "left",
+          });
+          x += colW[i];
+        });
+        return y + rowH;
+      };
+
+      let y = drawHeader();
+      y = drawColumns(y);
+
+      rows.forEach((cells, index) => {
+        if (y > pageHeight - 12) {
+          doc.addPage();
+          y = drawColumns(drawHeader());
+        }
+        const isTotal = index === rows.length - 1;
+        const isBroughtForward = index === 0;
+        if (isTotal) doc.setFillColor(241, 245, 249);
+        else if (isBroughtForward) doc.setFillColor(255, 251, 235);
+        else if (index % 2 === 0) doc.setFillColor(248, 250, 252);
+        else doc.setFillColor(255, 255, 255);
+        doc.rect(margin, y, pageWidth - margin * 2, rowH, "F");
+        doc.setFont("helvetica", isTotal || isBroughtForward ? "bold" : "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(15, 23, 42);
+        let x = margin;
+        cells.forEach((text, i) => {
+          const right = i >= 4;
+          const value = String(text ?? "");
+          doc.text(value, right ? x + colW[i] - 1.5 : x + 1.5, y + 4.2, {
+            align: right ? "right" : "left",
+            maxWidth: colW[i] - 3,
+          });
+          x += colW[i];
+        });
+        y += rowH;
+      });
+
+      const pageCount = doc.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page += 1) {
+        doc.setPage(page);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Page ${page} of ${pageCount}`, pageWidth - margin, pageHeight - 5, {
+          align: "right",
+        });
+      }
+
+      const sku = item?.sku || "item";
+      doc.save(`inventory-${sku}-${filters.fromDate || "all"}-${filters.toDate || "all"}.pdf`);
+      toast.success("PDF downloaded");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not download the PDF");
+    }
+  };
+
+  const openAutoSave = () => {
+    setAutoSaveForm({
+      enabled: Boolean(activeBusiness?.recon_auto_save_enabled),
+      time: activeBusiness?.recon_auto_save_time || "18:00",
+      timezone: activeBusiness?.recon_auto_save_timezone || "Africa/Lagos",
+    });
+    setAutoSaveOpen(true);
+  };
+
+  const saveAutoSaveSettings = () => {
+    if (!activeBusiness?.id || !user?.id) return;
+    if (!/^\d{2}:\d{2}$/.test(String(autoSaveForm.time || ""))) {
+      toast.error("Time must be HH:mm");
+      return;
+    }
+    const headsReady = [
+      activeBusiness?.recon_cash_account_code,
+      activeBusiness?.recon_safe_account_code,
+      activeBusiness?.recon_shortage_account_code,
+    ].every((code) => String(code || "").trim());
+    if (autoSaveForm.enabled && !headsReady) {
+      toast.error(
+        "Set Cash, Safe, and Shortage heads in Admin settings before automatic save",
+      );
+      return;
+    }
+    setAutoSaveSaving(true);
+    _postApi(
+      `/account/update-recon-auto-save/${activeBusiness.id}/${user.id}`,
+      {
+        recon_auto_save_enabled: Boolean(autoSaveForm.enabled),
+        recon_auto_save_time: autoSaveForm.time,
+        recon_auto_save_timezone: autoSaveForm.timezone || "Africa/Lagos",
+      },
+      (resp) => {
+        setAutoSaveSaving(false);
+        if (resp?.success) {
+          const saved = resp.results?.dataValues || resp.results || {};
+          dispatch({
+            type: "UPDATE_BUSINESS_SETTINGS",
+            payload: {
+              business: {
+                ...activeBusiness,
+                ...saved,
+                id: activeBusiness.id,
+              },
+            },
+          });
+          setAutoSaveOpen(false);
+          toast.success("Automatic save updated");
+        } else {
+          toast.error(resp?.message || "Could not save the schedule");
+        }
+      },
+      (err) => {
+        setAutoSaveSaving(false);
+        toast.error(err?.message || "Could not save the schedule");
+      },
+    );
   };
 
   if (loading) {
@@ -589,6 +813,13 @@ export default function InventoryItemView() {
                     </p>
                   </div>
                   <div>
+                    <p className="text-xs text-gray-500 mb-0.5">Pending to collect</p>
+                    <p className="text-lg font-semibold text-amber-700">
+                      {formatNumber1(pendingToCollect)}
+                      <span className="text-xs font-normal text-gray-500 ml-1">{item.unit_of_measure || 'units'}</span>
+                    </p>
+                  </div>
+                  <div>
                     <p className="text-xs text-gray-500 mb-0.5">Taxable</p>
                     <Badge variant={isProductTaxable(item.taxable) ? 'default' : 'outline'} className="text-xs">
                       {normalizeTaxableStatus(item.taxable, item.taxable || 'N/A')}
@@ -631,6 +862,58 @@ export default function InventoryItemView() {
               </CardContent>
             </Card>
 
+            {pendingCollections.length > 0 ? (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center justify-between">
+                    <span>Pending to collect</span>
+                    <span className="text-sm font-semibold text-amber-700">
+                      {formatNumber1(pendingToCollect)} {item.unit_of_measure || ""}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Invoice</TableHead>
+                        <TableHead className="text-xs">Customer</TableHead>
+                        <TableHead className="text-xs text-right">Sold</TableHead>
+                        <TableHead className="text-xs text-right">Collected</TableHead>
+                        <TableHead className="text-xs text-right">Waiting</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pendingCollections.map((row) => (
+                        <TableRow key={row.sale_code} className="text-xs">
+                          <TableCell className="py-1.5 font-medium">
+                            <Link
+                              to="/app/sales/warehouse-requests"
+                              className="text-blue-700 underline underline-offset-2"
+                            >
+                              {row.sale_code}
+                            </Link>
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            {row.customer_name || "—"}
+                          </TableCell>
+                          <TableCell className="py-1.5 text-right tabular-nums">
+                            {formatNumber1(row.qty_sold)}
+                          </TableCell>
+                          <TableCell className="py-1.5 text-right tabular-nums">
+                            {formatNumber1(row.qty_collected)}
+                          </TableCell>
+                          <TableCell className="py-1.5 text-right font-semibold tabular-nums text-amber-700">
+                            {formatNumber1(row.qty_pending)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            ) : null}
+
             {/* Transaction History Card */}
             <Card>
               <CardHeader className="pb-2">
@@ -641,13 +924,25 @@ export default function InventoryItemView() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline">{filteredHistory.length} records</Badge>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={exportToCSV}
-                      title="Export to CSV"
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={exportToPdf}
+                      title="Download PDF"
+                      className="h-8 px-2 text-xs"
                     >
                       <Download className="h-4 w-4" />
+                      PDF
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={openAutoSave}
+                      title="Set the time for automatic save"
+                      className="h-8 w-8 p-0"
+                    >
+                      <Settings className="h-4 w-4" />
                     </Button>
                   </div>
                 </CardTitle>
@@ -891,7 +1186,7 @@ export default function InventoryItemView() {
                       <TableRow className="text-xs bg-slate-50 hover:bg-slate-50">
                         <TableCell className="py-1.5" colSpan={4}>
                           <span className="font-semibold text-slate-800">
-                            Closing balance
+                            Total
                           </span>
                           {filters.fromDate || filters.toDate ? (
                             <span className="text-slate-500 font-normal">
@@ -900,10 +1195,29 @@ export default function InventoryItemView() {
                             </span>
                           ) : null}
                         </TableCell>
-                        <TableCell className="py-1.5 text-right text-gray-300">—</TableCell>
-                        <TableCell className="py-1.5 text-right text-gray-300">—</TableCell>
-                        <TableCell className="py-1.5 text-right font-bold tabular-nums text-slate-900">
-                          {formatNumber1(periodClosingBalance)}
+                        <TableCell className="py-1.5 text-right">
+                          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                            Total in
+                          </div>
+                          <div className="font-bold tabular-nums text-green-700">
+                            {formatNumber1(totalQtyIn)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-1.5 text-right">
+                          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                            Total out
+                          </div>
+                          <div className="font-bold tabular-nums text-red-700">
+                            {formatNumber1(totalQtyOut)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-1.5 text-right">
+                          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                            Closing
+                          </div>
+                          <div className="font-bold tabular-nums text-slate-900">
+                            {formatNumber1(periodClosingBalance)}
+                          </div>
                         </TableCell>
                       </TableRow>
                     </TableBody>
@@ -927,19 +1241,25 @@ export default function InventoryItemView() {
                 <div className="flex justify-between items-center py-1 border-b">
                   <span className="text-xs text-gray-600 flex items-center gap-1">
                     <TrendingUp className="h-3 w-3 text-green-500" />
-                    Total Received
+                    Total In
                   </span>
                   <span className="text-sm font-medium text-green-600">
-                    {formatNumber1(summaryStats?.totalReceived || 0)} {item.unit_of_measure || ''}
+                    {formatNumber1(totalQtyIn)} {item.unit_of_measure || ''}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-1 border-b">
                   <span className="text-xs text-gray-600 flex items-center gap-1">
                     <TrendingUp className="h-3 w-3 text-red-500 rotate-180" />
-                    Total Issued
+                    Total Out
                   </span>
                   <span className="text-sm font-medium text-red-600">
-                    {formatNumber1(summaryStats?.totalIssued || 0)} {item.unit_of_measure || ''}
+                    {formatNumber1(totalQtyOut)} {item.unit_of_measure || ''}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b">
+                  <span className="text-xs text-gray-600">Pending to collect</span>
+                  <span className="text-sm font-medium text-amber-700">
+                    {formatNumber1(pendingToCollect)} {item.unit_of_measure || ''}
                   </span>
                 </div>
                 {(filters.fromDate || filters.toDate) && (
@@ -1008,6 +1328,105 @@ export default function InventoryItemView() {
           </div>
         </div>
       </div>
+
+      <Dialog open={autoSaveOpen} onOpenChange={setAutoSaveOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Automatic save
+            </DialogTitle>
+            <DialogDescription>
+              After this time each day, open hand-ins are saved. Cash moves to
+              Safe only when the Cash, Safe, and Shortage heads are all set.
+              A ledger line is not posted if any of those heads is missing.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={autoSaveForm.enabled}
+                onChange={(e) =>
+                  setAutoSaveForm((prev) => ({
+                    ...prev,
+                    enabled: e.target.checked,
+                  }))
+                }
+              />
+              Save automatically
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block text-xs font-medium text-slate-600">
+                Time
+                <Input
+                  type="time"
+                  value={autoSaveForm.time}
+                  onChange={(e) =>
+                    setAutoSaveForm((prev) => ({
+                      ...prev,
+                      time: e.target.value,
+                    }))
+                  }
+                  className="mt-1 h-9"
+                />
+              </label>
+              <label className="block text-xs font-medium text-slate-600">
+                Timezone
+                <select
+                  value={autoSaveForm.timezone}
+                  onChange={(e) =>
+                    setAutoSaveForm((prev) => ({
+                      ...prev,
+                      timezone: e.target.value,
+                    }))
+                  }
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
+                >
+                  <option value="Africa/Lagos">Africa/Lagos</option>
+                  <option value="Africa/Accra">Africa/Accra</option>
+                  <option value="UTC">UTC</option>
+                </select>
+              </label>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              <p className="mb-1 font-semibold text-slate-800">Ledger heads</p>
+              {[
+                ["Cash", activeBusiness?.recon_cash_account_code],
+                ["Safe", activeBusiness?.recon_safe_account_code],
+                ["Shortage", activeBusiness?.recon_shortage_account_code],
+              ].map(([label, code]) => (
+                <p key={label}>
+                  {label}: {code ? String(code) : "Not set"}
+                </p>
+              ))}
+            </div>
+            {activeBusiness?.recon_auto_save_last_run ? (
+              <p className="text-xs text-slate-500">
+                Last automatic save: {activeBusiness.recon_auto_save_last_run}
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setAutoSaveOpen(false)}
+              disabled={autoSaveSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={saveAutoSaveSettings}
+              disabled={autoSaveSaving}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

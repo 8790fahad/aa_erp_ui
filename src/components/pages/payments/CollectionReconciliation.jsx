@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { Link, useSearchParams } from "react-router-dom";
 import moment from "moment";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import {
   Loader2,
   Percent,
   RefreshCw,
+  Settings,
   Vault,
 } from "lucide-react";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -129,10 +130,48 @@ function AccountTypeahead({
   );
 }
 
+function pendingCollectMethod(paymentType) {
+  const type = String(paymentType || "").toLowerCase();
+  if (type === "transfer" || type === "bank") return "Transfer";
+  if (type === "card") return "POS";
+  if (type === "split") return "Split";
+  if (type === "credit_split") return "Credit split";
+  if (type === "deposit" || type === "apply_deposit") return "Apply Deposit";
+  if (type === "cash") return "Cash";
+  return paymentType || "—";
+}
+
+function pendingCollectTab(paymentType) {
+  const type = String(paymentType || "").toLowerCase();
+  if (type === "transfer" || type === "bank") return "transfer";
+  if (type === "card") return "card";
+  if (type === "deposit" || type === "apply_deposit") return "deposit";
+  if (type === "credit" || type === "credit_split") return "credit";
+  return "cash";
+}
+
+function pendingCollectStatus(status) {
+  const value = String(status || "").toLowerCase();
+  if (value === "awaiting_payment") return "Awaiting payment";
+  if (value === "awaiting_cashier_confirm") return "Awaiting cashier";
+  if (value === "awaiting_payment_method") return "Choose method";
+  if (value === "awaiting_payment_mode_approval") return "Method approval";
+  if (value === "warehouse_picking") return "Warehouse collection";
+  if (value === "dual_signature") return "Dual signature";
+  return status || "—";
+}
+
+const EMPTY_PENDING_COLLECT = {
+  count: 0,
+  total: 0,
+  rows: [],
+};
+
 /**
  * Cashier supervisor hand-in confirmation — not bank reconciliation.
  */
 export default function CollectionReconciliation() {
+  const dispatch = useDispatch();
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -177,6 +216,7 @@ export default function CollectionReconciliation() {
   const [cashiers, setCashiers] = useState([]);
   const [cashierOptions, setCashierOptions] = useState([]);
   const [summary, setSummary] = useState(null);
+  const [pendingCollect, setPendingCollect] = useState(EMPTY_PENDING_COLLECT);
   const [drafts, setDrafts] = useState({});
   const [confirmingId, setConfirmingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
@@ -200,6 +240,13 @@ export default function CollectionReconciliation() {
   const [discountLoading, setDiscountLoading] = useState(false);
   const [discountSubmitting, setDiscountSubmitting] = useState("");
   const [discountSelected, setDiscountSelected] = useState(null);
+  const [autoSaveOpen, setAutoSaveOpen] = useState(false);
+  const [autoSaveSaving, setAutoSaveSaving] = useState(false);
+  const [autoSaveForm, setAutoSaveForm] = useState({
+    enabled: false,
+    time: "18:00",
+    timezone: "Africa/Lagos",
+  });
 
   const selectView = (view) => {
     setPageView(view);
@@ -303,6 +350,7 @@ export default function CollectionReconciliation() {
           setCashiers(list);
           setCashierOptions(options);
           setSummary(res.summary || null);
+          setPendingCollect(res.pending_to_collect || EMPTY_PENDING_COLLECT);
           setCashierFilter((prev) => {
             if (prev === "all") return prev;
             const stillThere = options.some(
@@ -333,6 +381,7 @@ export default function CollectionReconciliation() {
           setCashiers([]);
           setCashierOptions([]);
           setSummary(null);
+          setPendingCollect(EMPTY_PENDING_COLLECT);
         }
       },
       (err) => {
@@ -341,6 +390,7 @@ export default function CollectionReconciliation() {
         setCashiers([]);
         setCashierOptions([]);
         setSummary(null);
+        setPendingCollect(EMPTY_PENDING_COLLECT);
       },
     );
   }, [facilityId, date]);
@@ -690,6 +740,58 @@ export default function CollectionReconciliation() {
     });
   };
 
+  const saveAutoSaveSettings = () => {
+    if (!facilityId || !user?.id) return;
+    if (!/^\d{2}:\d{2}$/.test(String(autoSaveForm.time || ""))) {
+      toast.error("Time must be HH:mm");
+      return;
+    }
+    const headsReady = [
+      activeBusiness?.recon_cash_account_code,
+      activeBusiness?.recon_safe_account_code,
+      activeBusiness?.recon_shortage_account_code,
+    ].every((code) => String(code || "").trim());
+    if (autoSaveForm.enabled && !headsReady) {
+      toast.error(
+        "Set Cash, Safe, and Shortage heads in Admin settings before automatic save",
+      );
+      return;
+    }
+    setAutoSaveSaving(true);
+    _postApi(
+      `/account/update-recon-auto-save/${facilityId}/${user.id}`,
+      {
+        recon_auto_save_enabled: Boolean(autoSaveForm.enabled),
+        recon_auto_save_time: autoSaveForm.time,
+        recon_auto_save_timezone: autoSaveForm.timezone || "Africa/Lagos",
+      },
+      (resp) => {
+        setAutoSaveSaving(false);
+        if (resp?.success) {
+          const saved = resp.results?.dataValues || resp.results || {};
+          dispatch({
+            type: "UPDATE_BUSINESS_SETTINGS",
+            payload: {
+              business: {
+                ...activeBusiness,
+                ...saved,
+                id: activeBusiness.id,
+              },
+            },
+          });
+          setAutoSaveOpen(false);
+          toast.success("Automatic save updated");
+        } else {
+          toast.error(resp?.message || "Could not save the schedule");
+        }
+      },
+      (err) => {
+        setAutoSaveSaving(false);
+        toast.error(err?.message || "Could not save the schedule");
+      },
+    );
+  };
+
   const submitCashDialog = () => {
     if (!cashDialog?.row) return;
     const { row, received_card, received_transfer, expected_cash } = cashDialog;
@@ -699,25 +801,18 @@ export default function CollectionReconciliation() {
       cashDialog.shortage_input,
       cashDialog.lastEdited,
     );
-    const { toSafe, shortage } = split;
-    if (expected_cash > 0.05 && !cashDialog.cashFrom) {
-      toast.error("Select the cash (till) account");
-      return;
-    }
-    if (toSafe > 0.05 && !cashDialog.safe) {
-      toast.error("Select the Safe account");
+    const { toSafe } = split;
+    if (
+      cashDialog.needsCash &&
+      (!cashDialog.cashFrom || !cashDialog.safe || !cashDialog.shortageAccount)
+    ) {
+      toast.error(
+        "Cash, Safe, and Shortage heads must all be set before moving cash to Safe",
+      );
       return;
     }
     if (toSafe > 0.05 && cashDialog.cashFrom === cashDialog.safe) {
       toast.error("Cash and Safe accounts must be different");
-      return;
-    }
-    if (Math.abs(shortage) > 0.05 && !cashDialog.shortageAccount) {
-      toast.error(
-        shortage > 0
-          ? "Select an account for the shortage"
-          : "Select an account for the overage",
-      );
       return;
     }
     saveCashSafePrefs(facilityId, {
@@ -811,6 +906,16 @@ export default function CollectionReconciliation() {
     () =>
       [
         {
+          label: "Pending to collect",
+          value: Number(pendingCollect.total) || 0,
+          note: pendingCollect.count
+            ? `${pendingCollect.count} invoice${
+                pendingCollect.count === 1 ? "" : "s"
+              } still at Verification Points`
+            : "Nothing waiting to collect",
+          alert: pendingCollect.count > 0,
+        },
+        {
           label: "To retire",
           value: viewSummary.expected_total,
         },
@@ -846,7 +951,7 @@ export default function CollectionReconciliation() {
           raw: true,
         },
       ].filter(Boolean),
-    [viewSummary, showCash, showCard, showTransfer],
+    [viewSummary, showCash, showCard, showTransfer, pendingCollect],
   );
 
   return (
@@ -947,6 +1052,27 @@ export default function CollectionReconciliation() {
               Refresh
             </Button>
             ) : null}
+            {reconTabs.length ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setAutoSaveForm({
+                  enabled: Boolean(activeBusiness?.recon_auto_save_enabled),
+                  time: activeBusiness?.recon_auto_save_time || "18:00",
+                  timezone:
+                    activeBusiness?.recon_auto_save_timezone || "Africa/Lagos",
+                });
+                setAutoSaveOpen(true);
+              }}
+              title="Set the time for automatic save"
+              className="gap-1.5"
+            >
+              <Settings className="h-3.5 w-3.5" />
+              Automatic save
+            </Button>
+            ) : null}
           </div>
         </div>
 
@@ -1019,7 +1145,11 @@ export default function CollectionReconciliation() {
           {cards.map((c) => (
             <div
               key={c.label}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+              className={`rounded-xl border px-4 py-3 shadow-sm ${
+                c.alert
+                  ? "border-amber-300 bg-amber-50"
+                  : "border-slate-200 bg-white"
+              }`}
             >
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 {c.label}
@@ -1029,9 +1159,72 @@ export default function CollectionReconciliation() {
                   ? c.value ?? 0
                   : `₦${formatNumber1(Number(c.value) || 0)}`}
               </p>
+              {c.note ? (
+                <p className="mt-1 text-[11px] text-slate-500">{c.note}</p>
+              ) : null}
             </div>
           ))}
         </div>
+
+        {pendingCollect.rows?.length ? (
+          <div className="mb-5 overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2.5">
+              <p className="text-sm font-semibold text-slate-800">
+                Pending to collect
+              </p>
+              <Link
+                to="/app/payments/verification-points"
+                className="text-xs font-semibold text-[var(--aa-accent)] hover:underline"
+              >
+                Open Verification Points
+              </Link>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Invoice</th>
+                    <th className="px-3 py-2 font-semibold">Customer</th>
+                    <th className="px-3 py-2 font-semibold">Method</th>
+                    <th className="px-3 py-2 font-semibold text-right">Amount</th>
+                    <th className="px-3 py-2 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingCollect.rows.map((row) => (
+                    <tr
+                      key={row.sale_code}
+                      className="border-b border-slate-100"
+                    >
+                      <td className="px-3 py-2">
+                        <Link
+                          to={`/app/payments/verification-points?sale_code=${encodeURIComponent(
+                            row.sale_code,
+                          )}&tab=${pendingCollectTab(row.payment_type)}`}
+                          className="font-medium text-[var(--aa-accent)] hover:underline"
+                        >
+                          {row.sale_code}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">
+                        {row.customer_name || "—"}
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">
+                        {pendingCollectMethod(row.payment_type)}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        ₦{formatNumber1(row.amount)}
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">
+                        {pendingCollectStatus(row.status)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
 
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           {loading ? (
@@ -1044,9 +1237,9 @@ export default function CollectionReconciliation() {
             <div className="px-4 py-12 text-center text-sm text-slate-500">
               {filteredCashiers.length > 0
                 ? "Confirmed hand-ins for this date are on History."
-                : cashierOptions.length === 0
-                  ? "No Cashier users found for this business."
-                  : `No collections found for this date${
+                : pendingCollect.count > 0
+                  ? "These invoices are still pending to collect. They are not in the till yet, so there is nothing to hand in."
+                  : `Nothing pending to collect, and no hand-in for this date${
                       cashierFilter !== "all" ? " / cashier" : ""
                     }.`}
             </div>
@@ -1553,6 +1746,111 @@ export default function CollectionReconciliation() {
           </div>
         )}
 
+        <Dialog open={autoSaveOpen} onOpenChange={setAutoSaveOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                Automatic save
+              </DialogTitle>
+              <DialogDescription>
+                After this time each day, open hand-ins are saved on History.
+                Cash moves to Safe only when the Cash, Safe, and Shortage heads
+                are all set.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={autoSaveForm.enabled}
+                  onChange={(e) =>
+                    setAutoSaveForm((prev) => ({
+                      ...prev,
+                      enabled: e.target.checked,
+                    }))
+                  }
+                />
+                Save hand-ins automatically
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-xs font-medium text-slate-600">
+                  Time
+                  <Input
+                    type="time"
+                    value={autoSaveForm.time}
+                    onChange={(e) =>
+                      setAutoSaveForm((prev) => ({
+                        ...prev,
+                        time: e.target.value,
+                      }))
+                    }
+                    className="mt-1 h-9"
+                  />
+                </label>
+                <label className="block text-xs font-medium text-slate-600">
+                  Timezone
+                  <select
+                    value={autoSaveForm.timezone}
+                    onChange={(e) =>
+                      setAutoSaveForm((prev) => ({
+                        ...prev,
+                        timezone: e.target.value,
+                      }))
+                    }
+                    className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
+                  >
+                    <option value="Africa/Lagos">Africa/Lagos</option>
+                    <option value="Africa/Accra">Africa/Accra</option>
+                    <option value="UTC">UTC</option>
+                  </select>
+                </label>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                <p className="mb-1 font-semibold text-slate-800">
+                  Ledger heads
+                </p>
+                {[
+                  ["Cash", activeBusiness?.recon_cash_account_code],
+                  ["Safe", activeBusiness?.recon_safe_account_code],
+                  ["Shortage", activeBusiness?.recon_shortage_account_code],
+                ].map(([label, code]) => (
+                  <p key={label}>
+                    {label}: {code ? String(code) : "Not set"}
+                  </p>
+                ))}
+              </div>
+              {activeBusiness?.recon_auto_save_last_run ? (
+                <p className="text-xs text-slate-500">
+                  Last automatic save: {activeBusiness.recon_auto_save_last_run}
+                </p>
+              ) : null}
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAutoSaveOpen(false)}
+                disabled={autoSaveSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={saveAutoSaveSettings}
+                disabled={autoSaveSaving}
+              >
+                {autoSaveSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Save"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <Dialog
           open={!!cashDialog}
           onOpenChange={(open) => {
@@ -1666,10 +1964,7 @@ export default function CollectionReconciliation() {
                 {cashDialog.needsCash ? (
                 <div>
                   <Label className="mb-1.5 text-xs font-medium text-slate-600">
-                    From (cash / till){" "}
-                    {cashDialog.expected_cash > 0.05 ? (
-                      <span className="text-red-500">*</span>
-                    ) : null}
+                    From (cash / till) <span className="text-red-500">*</span>
                   </Label>
                   <AccountTypeahead
                     options={chartOfAccount}
@@ -1704,10 +1999,7 @@ export default function CollectionReconciliation() {
                     </div>
                     <div>
                       <Label className="mb-1.5 text-xs font-medium text-slate-600">
-                        To (Safe){" "}
-                        {liveTillSplit.toSafe > 0.05 ? (
-                          <span className="text-red-500">*</span>
-                        ) : null}
+                        To (Safe) <span className="text-red-500">*</span>
                       </Label>
                       <AccountTypeahead
                         options={chartOfAccount}
@@ -1740,10 +2032,7 @@ export default function CollectionReconciliation() {
                     </div>
                     <div>
                       <Label className="mb-1.5 text-xs font-medium text-slate-600">
-                        Shortage account (head){" "}
-                        {liveTillSplit.shortage > 0.05 ? (
-                          <span className="text-red-500">*</span>
-                        ) : null}
+                        Shortage account (head) <span className="text-red-500">*</span>
                       </Label>
                       <AccountTypeahead
                         options={chartOfAccount}
