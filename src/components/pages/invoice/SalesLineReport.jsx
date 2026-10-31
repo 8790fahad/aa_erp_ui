@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
@@ -20,6 +20,8 @@ import { toast } from "sonner";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { ReportSummaryCards } from "@/components/pages/production/reports/productionReportUi";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
@@ -82,6 +84,12 @@ function canonicalizeCategoryName(name) {
 
 function lineVat(row) {
   return num(row.vat_amount ?? row.vat);
+}
+
+function lineCost(row) {
+  const explicit = num(row.line_cost);
+  if (explicit) return explicit;
+  return num(row.unit_cost) * num(row.qty);
 }
 
 function applyVatDisplayRows(rows, vatDivisor, paymentModeFilter) {
@@ -241,6 +249,10 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
   const [vatLedgerLoading, setVatLedgerLoading] = useState(false);
   const [vatLedgerModalOpen, setVatLedgerModalOpen] = useState(false);
   const [selectedInvoiceNos, setSelectedInvoiceNos] = useState([]);
+  const [groupByProduct, setGroupByProduct] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [expandedProducts, setExpandedProducts] = useState(() => new Set());
+  const [invoiceModal, setInvoiceModal] = useState(null);
 
   const userId = user?.id || user?.user_id || "";
   const vatAccountCode = String(
@@ -535,6 +547,94 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
   const totalPages = Math.max(1, Math.ceil((totalCount || 0) / PAGE_SIZE));
   const pageFrom = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const pageTo = Math.min(page * PAGE_SIZE, totalCount || filteredRows.length);
+
+  const productSummary = useMemo(() => {
+    const map = new Map();
+    filteredRows.forEach((r) => {
+      const productCode = String(r.product_sku || r.product_code || "").trim();
+      const productName = String(r.product_name || productCode || "—").trim();
+      const key = `${productCode}||${productName}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          productCode: productCode || "—",
+          productName,
+          invoices: new Set(),
+          entries: [],
+          qty: 0,
+          amount: 0,
+          costAmount: 0,
+        });
+      }
+      const row = map.get(key);
+      row.entries.push(r);
+      row.qty += num(r.qty);
+      row.amount += num(r.line_total);
+      row.costAmount += lineCost(r);
+      if (r.invoice_no) row.invoices.add(r.invoice_no);
+    });
+    return Array.from(map.values())
+      .map((x) => ({
+        ...x,
+        invoiceCount: x.invoices.size,
+        unitCost: x.qty ? x.costAmount / x.qty : 0,
+      }))
+      .sort(
+        (a, b) =>
+          b.costAmount - a.costAmount ||
+          String(a.productName).localeCompare(String(b.productName)),
+      );
+  }, [filteredRows]);
+
+  const productCount = useMemo(
+    () => new Set(productSummary.map((p) => p.productCode)).size,
+    [productSummary],
+  );
+  const totalCost = useMemo(
+    () => filteredRows.reduce((s, r) => s + lineCost(r), 0),
+    [filteredRows],
+  );
+
+  const toggleProductExpanded = useCallback((key) => {
+    setExpandedProducts((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const openInvoiceModal = useCallback(
+    (title, productCode = null, productName = null) => {
+      const byInv = new Map();
+      filteredRows.forEach((r) => {
+        if (!r.invoice_no) return;
+        if (productCode != null) {
+          const code = String(r.product_sku || r.product_code || "").trim() || "—";
+          const name = String(r.product_name || code || "—").trim();
+          if (code !== productCode || name !== productName) return;
+        }
+        const existing = byInv.get(r.invoice_no) || {
+          invoice_no: r.invoice_no,
+          invoice_date: r.invoice_date,
+          customer_name: r.customer_name,
+          qty: 0,
+          amount: 0,
+        };
+        existing.qty += num(r.qty);
+        existing.amount += num(r.line_total);
+        byInv.set(r.invoice_no, existing);
+      });
+      setInvoiceModal({
+        title,
+        invoices: Array.from(byInv.values()).sort((a, b) =>
+          String(b.invoice_no).localeCompare(String(a.invoice_no), undefined, {
+            numeric: true,
+          }),
+        ),
+      });
+    },
+    [filteredRows],
+  );
 
   const uniqueInvoiceNos = useMemo(
     () =>
@@ -1006,6 +1106,31 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
           ],
         };
       default:
+        if (groupByProduct || showSummary) {
+          return {
+            headers: [
+              "Product",
+              "Code",
+              "Invoices",
+              "Qty Out",
+              "Unit Cost (₦)",
+              "Cost Total (₦)",
+              "Sales Total (₦)",
+            ],
+            rows: [
+              ...productSummary.map((row) => [
+                row.productName,
+                row.productCode,
+                row.invoiceCount,
+                row.qty,
+                row.unitCost,
+                row.costAmount,
+                row.amount,
+              ]),
+              ["Total", "", "", totalQty, "", totalCost, totalLineAmount],
+            ],
+          };
+        }
         return {
           headers: [
             "Invoice No.",
@@ -1054,6 +1179,10 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
     totalLineAmount,
     totalVatAmount,
     totalInclVat,
+    groupByProduct,
+    showSummary,
+    productSummary,
+    totalCost,
   ]);
 
   const loadVatExportTable = useCallback(async () => {
@@ -1643,6 +1772,325 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
       );
     }
 
+    if (groupByProduct) {
+      return (
+        <div className="px-4 pb-4">
+          <ReportSummaryCards
+            cards={[
+              { label: "Products", value: productCount },
+              {
+                label: "Invoices",
+                value: (
+                  <button
+                    type="button"
+                    className="hover:underline"
+                    onClick={() => openInvoiceModal("Invoices")}
+                  >
+                    {invoiceCount}
+                  </button>
+                ),
+              },
+              {
+                label: "Qty out",
+                value: formatNumber1(totalQty),
+                highlight: true,
+              },
+              {
+                label: "Cost total",
+                value: `₦${formatNumber1(totalCost)}`,
+              },
+              {
+                label: "Sales total",
+                value: `₦${formatNumber1(totalLineAmount)}`,
+              },
+            ]}
+          />
+          {productSummary.length === 0 ? (
+            <p className="py-10 text-center text-sm text-gray-500">
+              No sales lines found for this period.
+            </p>
+          ) : showSummary ? (
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="bg-slate-600 text-white">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">
+                      Product
+                    </th>
+                    <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide">
+                      Invoices
+                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide">
+                      Code
+                    </th>
+                    <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide">
+                      Qty Out
+                    </th>
+                    <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide">
+                      Unit Cost (₦)
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">
+                      Cost Total (₦)
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productSummary.map((product) => {
+                    const key = `${product.productCode}-${product.productName}`;
+                    const expanded = expandedProducts.has(key);
+                    return (
+                      <Fragment key={key}>
+                        <tr
+                          className="cursor-pointer border-t border-gray-100 hover:bg-slate-50"
+                          onClick={() => toggleProductExpanded(key)}
+                        >
+                          <td className="px-4 py-3 font-medium">
+                            <span className="inline-flex items-center gap-2">
+                              {expanded ? (
+                                <ChevronDown className="h-4 w-4 shrink-0 text-gray-500" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 shrink-0 text-gray-500" />
+                              )}
+                              {product.productCode && product.productCode !== "—"
+                                ? `${product.productCode} ${product.productName}`
+                                : product.productName}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-right tabular-nums">
+                            <button
+                              type="button"
+                              className="font-semibold text-orange-600 hover:underline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openInvoiceModal(
+                                  product.productName,
+                                  product.productCode,
+                                  product.productName,
+                                );
+                              }}
+                            >
+                              {product.invoiceCount}
+                            </button>
+                          </td>
+                          <td className="px-3 py-3 tabular-nums">
+                            {product.productCode || "—"}
+                          </td>
+                          <td className="px-3 py-3 text-right tabular-nums">
+                            {formatNumber1(product.qty)}
+                          </td>
+                          <td className="px-3 py-3 text-right tabular-nums">
+                            {formatNumber1(product.unitCost)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                            {formatNumber1(product.costAmount)}
+                          </td>
+                        </tr>
+                        {expanded ? (
+                          <tr className="bg-slate-50">
+                            <td colSpan={6} className="p-0">
+                              <table className="w-full border-collapse text-sm">
+                                <thead>
+                                  <tr className="bg-slate-100 text-gray-700">
+                                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase">
+                                      Invoice
+                                    </th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase">
+                                      Date
+                                    </th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase">
+                                      Customer
+                                    </th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase">
+                                      Qty Out
+                                    </th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase">
+                                      Unit Cost (₦)
+                                    </th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase">
+                                      Cost Total (₦)
+                                    </th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase">
+                                      Selling Price (₦)
+                                    </th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase">
+                                      Sales Total (₦)
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {product.entries.map((r, idx) => (
+                                    <tr
+                                      key={`${r.invoice_no}-${r.store_entry_id || idx}`}
+                                      className="border-t border-gray-100"
+                                    >
+                                      <td className="px-3 py-2 font-semibold">
+                                        {r.invoice_no ? (
+                                          <Link
+                                            to={invoicePreviewPath(r.invoice_no)}
+                                            className="text-blue-700 hover:underline"
+                                          >
+                                            {r.invoice_no}
+                                          </Link>
+                                        ) : (
+                                          "—"
+                                        )}
+                                      </td>
+                                      <td className="whitespace-nowrap px-3 py-2">
+                                        {r.invoice_date
+                                          ? moment(r.invoice_date).format("DD-MMM-YYYY")
+                                          : "—"}
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        {r.customer_name || "—"}
+                                      </td>
+                                      <td className="px-3 py-2 text-right tabular-nums">
+                                        {formatNumber1(r.qty || 0)}
+                                      </td>
+                                      <td className="px-3 py-2 text-right tabular-nums">
+                                        {formatNumber1(r.unit_cost || 0)}
+                                      </td>
+                                      <td className="px-3 py-2 text-right tabular-nums">
+                                        {formatNumber1(lineCost(r))}
+                                      </td>
+                                      <td className="px-3 py-2 text-right tabular-nums">
+                                        {formatNumber1(r.unit_price || 0)}
+                                      </td>
+                                      <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                                        {formatNumber1(r.line_total || 0)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
+                  <tr className="border-t-2 border-gray-200 bg-white font-semibold">
+                    <td className="px-4 py-3">Total</td>
+                    <td className="px-3 py-3" />
+                    <td className="px-3 py-3" />
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {formatNumber1(totalQty)}
+                    </td>
+                    <td className="px-3 py-3" />
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {formatNumber1(totalCost)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {productSummary.map((product) => (
+                <div
+                  key={`${product.productCode}-${product.productName}`}
+                  className="overflow-hidden rounded-lg border border-gray-200"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 bg-slate-700 px-4 py-2 text-white">
+                    <h3 className="text-sm font-semibold">
+                      {product.productCode} — {product.productName}
+                    </h3>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-orange-200 hover:underline"
+                      onClick={() =>
+                        openInvoiceModal(
+                          product.productName,
+                          product.productCode,
+                          product.productName,
+                        )
+                      }
+                    >
+                      {product.invoiceCount} invoice
+                      {product.invoiceCount === 1 ? "" : "s"}
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="bg-slate-100 text-gray-700">
+                          <th className="px-3 py-2 text-left text-xs font-semibold uppercase">
+                            Invoice
+                          </th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold uppercase">
+                            Date
+                          </th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold uppercase">
+                            Customer
+                          </th>
+                          <th className="px-3 py-2 text-right text-xs font-semibold uppercase">
+                            Qty Out
+                          </th>
+                          <th className="px-3 py-2 text-right text-xs font-semibold uppercase">
+                            Unit Cost (₦)
+                          </th>
+                          <th className="px-3 py-2 text-right text-xs font-semibold uppercase">
+                            Cost Total (₦)
+                          </th>
+                          <th className="px-3 py-2 text-right text-xs font-semibold uppercase">
+                            Selling Price (₦)
+                          </th>
+                          <th className="px-3 py-2 text-right text-xs font-semibold uppercase">
+                            Sales Total (₦)
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {product.entries.map((r, idx) => (
+                          <tr
+                            key={`${r.invoice_no}-${r.store_entry_id || idx}`}
+                            className="border-t border-gray-100"
+                          >
+                            <td className="px-3 py-2 font-semibold">
+                              {r.invoice_no ? (
+                                <Link
+                                  to={invoicePreviewPath(r.invoice_no)}
+                                  className="text-blue-700 hover:underline"
+                                >
+                                  {r.invoice_no}
+                                </Link>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2">
+                              {r.invoice_date
+                                ? moment(r.invoice_date).format("DD-MMM-YYYY")
+                                : "—"}
+                            </td>
+                            <td className="px-3 py-2">{r.customer_name || "—"}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatNumber1(r.qty || 0)}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatNumber1(r.unit_cost || 0)}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatNumber1(lineCost(r))}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatNumber1(r.unit_price || 0)}
+                            </td>
+                            <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                              {formatNumber1(r.line_total || 0)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
@@ -1887,6 +2335,42 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
             >
               {loading ? "Loading..." : "Run Report"}
             </Button>
+            {reportView === "detail" && !isVatReport ? (
+              <>
+                <div className="flex h-10 items-center gap-2">
+                  <Switch
+                    id="sales-by-product"
+                    checked={groupByProduct}
+                    onCheckedChange={(checked) => {
+                      setGroupByProduct(checked);
+                      if (!checked) setShowSummary(false);
+                    }}
+                  />
+                  <label
+                    htmlFor="sales-by-product"
+                    className="cursor-pointer whitespace-nowrap text-sm font-medium text-gray-700"
+                  >
+                    By product
+                  </label>
+                </div>
+                <div className="flex h-10 items-center gap-2">
+                  <Switch
+                    id="sales-summary"
+                    checked={showSummary}
+                    onCheckedChange={(checked) => {
+                      setShowSummary(checked);
+                      if (checked) setGroupByProduct(true);
+                    }}
+                  />
+                  <label
+                    htmlFor="sales-summary"
+                    className="cursor-pointer whitespace-nowrap text-sm font-medium text-gray-700"
+                  >
+                    Summary
+                  </label>
+                </div>
+              </>
+            ) : null}
             {reportView === "detail" ? (
               <>
                 <Button
@@ -2324,6 +2808,69 @@ export default function SalesLineReport({ variant = "sales" } = {}) {
           </DialogContent>
         </Dialog>
       ) : null}
+
+      <Dialog
+        open={Boolean(invoiceModal)}
+        onOpenChange={(open) => {
+          if (!open) setInvoiceModal(null);
+        }}
+      >
+        <DialogContent className="flex max-h-[80vh] max-w-2xl flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>{invoiceModal?.title || "Invoices"}</DialogTitle>
+            <DialogDescription>
+              {invoiceModal?.invoices?.length || 0} invoice
+              {(invoiceModal?.invoices?.length || 0) === 1 ? "" : "s"} — click a
+              number to view. Total ₦
+              {formatNumber1(
+                (invoiceModal?.invoices || []).reduce(
+                  (s, inv) => s + (parseFloat(inv.amount) || 0),
+                  0,
+                ),
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-auto rounded-md border">
+            <table className="w-full border-collapse text-sm">
+              <thead className="sticky top-0 bg-slate-100">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold">Invoice No.</th>
+                  <th className="px-3 py-2 text-left font-semibold">Date</th>
+                  <th className="px-3 py-2 text-left font-semibold">Customer</th>
+                  <th className="px-3 py-2 text-right font-semibold">Qty</th>
+                  <th className="px-3 py-2 text-right font-semibold">Amount (₦)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(invoiceModal?.invoices || []).map((inv) => (
+                  <tr key={inv.invoice_no} className="border-t">
+                    <td className="px-3 py-2 font-semibold">
+                      <Link
+                        to={invoicePreviewPath(inv.invoice_no)}
+                        className="text-blue-700 hover:underline"
+                      >
+                        {inv.invoice_no}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {inv.invoice_date
+                        ? moment(inv.invoice_date).format("DD-MMM-YYYY")
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2">{inv.customer_name || "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatNumber1(inv.qty)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatNumber1(inv.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
