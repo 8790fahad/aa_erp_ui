@@ -14,6 +14,7 @@ import {
   FileText,
   Target,
   Ban,
+  ClipboardList,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -457,6 +458,14 @@ export default function ProductList() {
   });
   const [savingOpening, setSavingOpening] = useState(false);
   const [openingWarehouses, setOpeningWarehouses] = useState([]);
+  const [inventoryReport, setInventoryReport] = useState({
+    open: false,
+    productName: "",
+    sku: "",
+    branchId: "",
+    fromDate: "",
+    toDate: "",
+  });
   const [togglingStopKey, setTogglingStopKey] = useState(null);
   const [branches, setBranches] = useState([]);
 
@@ -1627,6 +1636,57 @@ export default function ProductList() {
     );
   };
 
+  const openInventoryReport = (item) => {
+    if (!isGoodsItemType(item.item_type)) {
+      toast.error("The inventory report is only for goods.");
+      return;
+    }
+    const sku = item.sku || item.product_id || "";
+    if (!sku) {
+      toast.error("This product has no SKU, so the inventory report cannot open.");
+      return;
+    }
+    const today = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const toDate = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+    const fromDate = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-01`;
+    setInventoryReport({
+      open: true,
+      productName: item.name || item.item_name || "",
+      sku,
+      branchId: "",
+      fromDate,
+      toDate,
+    });
+  };
+
+  const runInventoryReport = () => {
+    if (!inventoryReport.sku) return;
+    if (!inventoryReport.branchId) {
+      toast.error("Select a store");
+      return;
+    }
+    if (
+      inventoryReport.fromDate &&
+      inventoryReport.toDate &&
+      inventoryReport.fromDate > inventoryReport.toDate
+    ) {
+      toast.error("From date must be on or before the to date");
+      return;
+    }
+    const params = new URLSearchParams({
+      type: "all",
+      branchId: inventoryReport.branchId,
+    });
+    if (inventoryReport.fromDate) params.set("fromDate", inventoryReport.fromDate);
+    if (inventoryReport.toDate) params.set("toDate", inventoryReport.toDate);
+    const sku = inventoryReport.sku;
+    setInventoryReport((prev) => ({ ...prev, open: false }));
+    navigate(
+      `/app/inventory/inventory-list/view/${encodeURIComponent(sku)}?${params.toString()}`,
+    );
+  };
+
   const renderRowActions = (item) => (
     <div className="flex items-center justify-end gap-0.5">
       <Button
@@ -1695,6 +1755,15 @@ export default function ProductList() {
             >
               <Package className="h-4 w-4" />
               Opening balance
+            </DropdownMenuItem>
+          ) : null}
+          {isGoodsItemType(item.item_type) ? (
+            <DropdownMenuItem
+              onClick={() => openInventoryReport(item)}
+              className="flex items-center gap-2"
+            >
+              <ClipboardList className="h-4 w-4" />
+              Inventory report
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuSeparator />
@@ -2334,6 +2403,89 @@ export default function ProductList() {
             {openingDateBounds.minDate}) through tomorrow (
             {openingDateBounds.maxDate}).
           </p>
+        </Modal>
+
+        <Modal
+          title={
+            <div className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-[var(--aa-navy)]" />
+              <span>Inventory report</span>
+            </div>
+          }
+          open={inventoryReport.open}
+          onCancel={() =>
+            setInventoryReport((prev) => ({ ...prev, open: false }))
+          }
+          onOk={runInventoryReport}
+          okText="Run"
+          cancelText="Cancel"
+          centered
+        >
+          <p className="mb-3 text-sm text-gray-600">
+            {inventoryReport.productName}
+            {inventoryReport.sku ? ` (${inventoryReport.sku})` : ""}
+          </p>
+          <p className="mb-3 text-xs leading-relaxed text-slate-500">
+            Choose the store and the dates. Run opens the stock movement
+            report for this product.
+          </p>
+          <label className="mb-3 block text-sm font-medium text-gray-700">
+            Store <span className="text-red-500">*</span>
+            <AntSelect
+              className="mt-1 w-full"
+              showSearch
+              placeholder={
+                branches.length ? "Select a store" : "Loading stores…"
+              }
+              optionFilterProp="label"
+              getPopupContainer={(node) => node.parentElement}
+              value={inventoryReport.branchId || undefined}
+              notFoundContent="No stores found"
+              options={branches.map((b) => {
+                const name = b.branch_name || b.storeName || `Store ${b.id}`;
+                const kind = String(b.store_type || "").trim();
+                return {
+                  value: String(b.id),
+                  label: kind ? `${name} (${kind})` : name,
+                };
+              })}
+              onChange={(value) =>
+                setInventoryReport((prev) => ({ ...prev, branchId: value }))
+              }
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-sm font-medium text-gray-700">
+              From
+              <input
+                type="date"
+                value={inventoryReport.fromDate}
+                max={inventoryReport.toDate || undefined}
+                onChange={(e) =>
+                  setInventoryReport((prev) => ({
+                    ...prev,
+                    fromDate: e.target.value,
+                  }))
+                }
+                className="mt-1 h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
+              />
+            </label>
+            <label className="block text-sm font-medium text-gray-700">
+              To
+              <input
+                type="date"
+                value={inventoryReport.toDate}
+                min={inventoryReport.fromDate || undefined}
+                onChange={(e) =>
+                  setInventoryReport((prev) => ({
+                    ...prev,
+                    toDate: e.target.value,
+                  }))
+                }
+                className="mt-1 h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
+              />
+            </label>
+          </div>
         </Modal>
 
         {/* Delete Confirmation Modal */}

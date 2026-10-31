@@ -72,6 +72,8 @@ export default function InventoryItemView() {
   const location = useLocation();
   const type = query.get("type");
   const branchIdFromUrl = query.get("branchId") || "";
+  const fromDateFromUrl = query.get("fromDate") || "";
+  const toDateFromUrl = query.get("toDate") || "";
   const navigate = useNavigate();
 
   const [item, setItem] = useState(null);
@@ -87,11 +89,14 @@ export default function InventoryItemView() {
     searchTerm: "",
     sortBy: "date",
     sortOrder: "desc",
-    fromDate: "",
-    toDate: "",
+    fromDate: fromDateFromUrl,
+    toDate: toDateFromUrl,
     branchId: branchIdFromUrl || "all",
   });
-  const [dateDraft, setDateDraft] = useState({ fromDate: "", toDate: "" });
+  const [dateDraft, setDateDraft] = useState({
+    fromDate: fromDateFromUrl,
+    toDate: toDateFromUrl,
+  });
 
   useEffect(() => {
     if (!activeBusiness?.id) return;
@@ -170,18 +175,34 @@ export default function InventoryItemView() {
     }));
   };
 
+  const writeDateQuery = (fromDate, toDate) => {
+    const params = new URLSearchParams(location.search);
+    if (fromDate) params.set("fromDate", fromDate);
+    else params.delete("fromDate");
+    if (toDate) params.set("toDate", toDate);
+    else params.delete("toDate");
+    const qs = params.toString();
+    navigate(`${location.pathname}${qs ? `?${qs}` : ""}`, { replace: true });
+  };
+
   const runDateFilter = () => {
     const next = {
       fromDate: dateDraft.fromDate,
       toDate: dateDraft.toDate,
     };
+    if (next.fromDate && next.toDate && next.fromDate > next.toDate) {
+      toast.error("From date must be on or before the to date");
+      return;
+    }
     setFilters((prev) => ({ ...prev, ...next }));
+    writeDateQuery(next.fromDate, next.toDate);
     fetchItemDetails(next);
   };
 
   const clearDates = () => {
     setDateDraft({ fromDate: "", toDate: "" });
     setFilters((prev) => ({ ...prev, fromDate: "", toDate: "" }));
+    writeDateQuery("", "");
     fetchItemDetails({ fromDate: "", toDate: "" });
   };
 
