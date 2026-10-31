@@ -130,43 +130,6 @@ function AccountTypeahead({
   );
 }
 
-function pendingCollectMethod(paymentType) {
-  const type = String(paymentType || "").toLowerCase();
-  if (type === "transfer" || type === "bank") return "Transfer";
-  if (type === "card") return "POS";
-  if (type === "split") return "Split";
-  if (type === "credit_split") return "Credit split";
-  if (type === "deposit" || type === "apply_deposit") return "Apply Deposit";
-  if (type === "cash") return "Cash";
-  return paymentType || "—";
-}
-
-function pendingCollectTab(paymentType) {
-  const type = String(paymentType || "").toLowerCase();
-  if (type === "transfer" || type === "bank") return "transfer";
-  if (type === "card") return "card";
-  if (type === "deposit" || type === "apply_deposit") return "deposit";
-  if (type === "credit" || type === "credit_split") return "credit";
-  return "cash";
-}
-
-function pendingCollectStatus(status) {
-  const value = String(status || "").toLowerCase();
-  if (value === "awaiting_payment") return "Awaiting payment";
-  if (value === "awaiting_cashier_confirm") return "Awaiting cashier";
-  if (value === "awaiting_payment_method") return "Choose method";
-  if (value === "awaiting_payment_mode_approval") return "Method approval";
-  if (value === "warehouse_picking") return "Warehouse collection";
-  if (value === "dual_signature") return "Dual signature";
-  return status || "—";
-}
-
-const EMPTY_PENDING_COLLECT = {
-  count: 0,
-  total: 0,
-  rows: [],
-};
-
 /**
  * Cashier supervisor hand-in confirmation — not bank reconciliation.
  */
@@ -216,7 +179,6 @@ export default function CollectionReconciliation() {
   const [cashiers, setCashiers] = useState([]);
   const [cashierOptions, setCashierOptions] = useState([]);
   const [summary, setSummary] = useState(null);
-  const [pendingCollect, setPendingCollect] = useState(EMPTY_PENDING_COLLECT);
   const [drafts, setDrafts] = useState({});
   const [confirmingId, setConfirmingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
@@ -350,7 +312,6 @@ export default function CollectionReconciliation() {
           setCashiers(list);
           setCashierOptions(options);
           setSummary(res.summary || null);
-          setPendingCollect(res.pending_to_collect || EMPTY_PENDING_COLLECT);
           setCashierFilter((prev) => {
             if (prev === "all") return prev;
             const stillThere = options.some(
@@ -381,7 +342,6 @@ export default function CollectionReconciliation() {
           setCashiers([]);
           setCashierOptions([]);
           setSummary(null);
-          setPendingCollect(EMPTY_PENDING_COLLECT);
         }
       },
       (err) => {
@@ -390,7 +350,6 @@ export default function CollectionReconciliation() {
         setCashiers([]);
         setCashierOptions([]);
         setSummary(null);
-        setPendingCollect(EMPTY_PENDING_COLLECT);
       },
     );
   }, [facilityId, date]);
@@ -906,16 +865,6 @@ export default function CollectionReconciliation() {
     () =>
       [
         {
-          label: "Pending to collect",
-          value: Number(pendingCollect.total) || 0,
-          note: pendingCollect.count
-            ? `${pendingCollect.count} invoice${
-                pendingCollect.count === 1 ? "" : "s"
-              } still at Verification Points`
-            : "Nothing waiting to collect",
-          alert: pendingCollect.count > 0,
-        },
-        {
           label: "To retire",
           value: viewSummary.expected_total,
         },
@@ -951,7 +900,7 @@ export default function CollectionReconciliation() {
           raw: true,
         },
       ].filter(Boolean),
-    [viewSummary, showCash, showCard, showTransfer, pendingCollect],
+    [viewSummary, showCash, showCard, showTransfer],
   );
 
   return (
@@ -1166,66 +1115,6 @@ export default function CollectionReconciliation() {
           ))}
         </div>
 
-        {pendingCollect.rows?.length ? (
-          <div className="mb-5 overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2.5">
-              <p className="text-sm font-semibold text-slate-800">
-                Pending to collect
-              </p>
-              <Link
-                to="/app/payments/verification-points"
-                className="text-xs font-semibold text-[var(--aa-accent)] hover:underline"
-              >
-                Open Verification Points
-              </Link>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-3 py-2 font-semibold">Invoice</th>
-                    <th className="px-3 py-2 font-semibold">Customer</th>
-                    <th className="px-3 py-2 font-semibold">Method</th>
-                    <th className="px-3 py-2 font-semibold text-right">Amount</th>
-                    <th className="px-3 py-2 font-semibold">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingCollect.rows.map((row) => (
-                    <tr
-                      key={row.sale_code}
-                      className="border-b border-slate-100"
-                    >
-                      <td className="px-3 py-2">
-                        <Link
-                          to={`/app/payments/verification-points?sale_code=${encodeURIComponent(
-                            row.sale_code,
-                          )}&tab=${pendingCollectTab(row.payment_type)}`}
-                          className="font-medium text-[var(--aa-accent)] hover:underline"
-                        >
-                          {row.sale_code}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-2 text-slate-700">
-                        {row.customer_name || "—"}
-                      </td>
-                      <td className="px-3 py-2 text-slate-700">
-                        {pendingCollectMethod(row.payment_type)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        ₦{formatNumber1(row.amount)}
-                      </td>
-                      <td className="px-3 py-2 text-slate-600">
-                        {pendingCollectStatus(row.status)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : null}
-
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           {loading ? (
             <div className="space-y-3 p-4">
@@ -1237,11 +1126,9 @@ export default function CollectionReconciliation() {
             <div className="px-4 py-12 text-center text-sm text-slate-500">
               {filteredCashiers.length > 0
                 ? "Confirmed hand-ins for this date are on History."
-                : pendingCollect.count > 0
-                  ? "These invoices are still pending to collect. They are not in the till yet, so there is nothing to hand in."
-                  : `Nothing pending to collect, and no hand-in for this date${
-                      cashierFilter !== "all" ? " / cashier" : ""
-                    }.`}
+                : `No hand-in for this date${
+                    cashierFilter !== "all" ? " / cashier" : ""
+                  }.`}
             </div>
           ) : (
             <div className="overflow-x-auto">
