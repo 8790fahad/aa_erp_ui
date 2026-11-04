@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { ChevronDown, FileText, Loader2, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { Typeahead } from "react-bootstrap-typeahead";
 import "react-bootstrap-typeahead/css/Typeahead.css";
-import { _fetchApi, _postApi } from "@/redux/actions/api";
+import { _fetchApi, _postApi, _putApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import {
   formatNumberWithCommas,
@@ -31,8 +31,11 @@ export default function CreditNoteCreateForm({
   embedded: _embedded = false,
   onCancel,
   onCreated,
+  onUpdated,
   forcedParty,
+  editCreditNoteNumber = "",
 } = {}) {
+  const isEditMode = Boolean(String(editCreditNoteNumber || "").trim());
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -49,25 +52,25 @@ export default function CreditNoteCreateForm({
   const type = isVendor ? "supplier" : "customer";
   const labels = isVendor
     ? {
-        title: "New Vendor Credit",
+        title: isEditMode ? "Edit Vendor Credit" : "New Vendor Credit",
         party: "Vendor Name",
         partyPlaceholder: "Select a vendor",
         number: "Credit Note#",
         date: "Vendor Credit Date",
         balanceAccount: "Accounts Payable",
-        save: "Save as Open",
+        save: isEditMode ? "Save changes" : "Save as Open",
         saveRefund: "Save and Refund",
         creditsTitle: "Open credits",
         creditsHint: "Keep open — apply to future bills",
       }
     : {
-        title: "New Credit Note",
+        title: isEditMode ? "Edit Credit Note" : "New Credit Note",
         party: "Customer Name",
         partyPlaceholder: "Select a customer",
         number: "Credit Note#",
         date: "Credit Note Date",
         balanceAccount: "Customer Deposit",
-        save: "Save to Deposit",
+        save: isEditMode ? "Save changes" : "Save to Deposit",
         saveRefund: "Save and Refund",
         creditsTitle: "Customer deposit",
         creditsHint:
@@ -121,7 +124,7 @@ export default function CreditNoteCreateForm({
   const numberPrefix = isVendor ? "CN-S" : "CN-C";
 
   const reserveNoteNumber = useCallback(() => {
-    if (!facilityId) return;
+    if (!facilityId || isEditMode) return;
     setLoadingNumber(true);
     _fetchApi(
       `/get-and-update/${numberQueryType}/${facilityId}`,
@@ -143,11 +146,80 @@ export default function CreditNoteCreateForm({
         setCreditNoteNumber("");
       },
     );
-  }, [facilityId, numberQueryType, numberPrefix]);
+  }, [facilityId, numberQueryType, numberPrefix, isEditMode]);
 
   useEffect(() => {
-    reserveNoteNumber();
-  }, [reserveNoteNumber]);
+    if (!isEditMode) reserveNoteNumber();
+  }, [reserveNoteNumber, isEditMode]);
+
+  useEffect(() => {
+    if (!isEditMode || !facilityId || !editCreditNoteNumber) return;
+    setLoadingNumber(true);
+    _fetchApi(
+      `/api/credit-notes/${encodeURIComponent(editCreditNoteNumber)}?facilityId=${facilityId}`,
+      (resp) => {
+        setLoadingNumber(false);
+        const doc = resp?.data;
+        if (!resp?.success || !doc) {
+          toast.error(resp?.message || "Could not load credit note");
+          return;
+        }
+        if (!doc.canEdit) {
+          toast.error("This note can no longer be edited");
+          if (typeof onCancel === "function") onCancel();
+          return;
+        }
+        setCreditNoteNumber(doc.creditNoteNumber || editCreditNoteNumber);
+        setDate(
+          doc.date
+            ? moment(doc.date).format("YYYY-MM-DD")
+            : moment().format("YYYY-MM-DD"),
+        );
+        setReference(doc.reference || "");
+        const reasonText = String(doc.reason || doc.description || "");
+        setSubject(reasonText.split("|")[0].replace(/^Credit Note\s*-\s*/i, "").trim());
+        if (doc.entityId) {
+          setSelectedParty([
+            {
+              id: doc.entityId,
+              label: doc.entityName || doc.entityId,
+              customerNo: doc.entityId,
+              supplier_number: doc.entityId,
+            },
+          ]);
+        }
+        const lines = Array.isArray(doc.lineItems) ? doc.lineItems : [];
+        if (lines.length) {
+          setLineItems(
+            lines.map((li) => ({
+              ...emptyLine(),
+              description: li.description || li.item_name || "",
+              quantity: String(li.quantity ?? 1),
+              rate: String(li.rate ?? li.amount ?? 0),
+              amount: Number(li.amount) || 0,
+              account: li.account_code
+                ? {
+                    code: li.account_code,
+                    head: li.account_code,
+                    description: li.account_description,
+                    name: li.account_description,
+                  }
+                : null,
+              product_id: li.sku || null,
+              product: li.sku
+                ? { sku: li.sku, name: li.item_name || li.sku }
+                : null,
+              lineKind: li.sku ? "product" : "service",
+            })),
+          );
+        }
+      },
+      () => {
+        setLoadingNumber(false);
+        toast.error("Could not load credit note");
+      },
+    );
+  }, [isEditMode, facilityId, editCreditNoteNumber, onCancel]);
 
   const partyOptions = useMemo(
     () =>
@@ -619,39 +691,53 @@ export default function CreditNoteCreateForm({
       }
     }
 
-    _postApi(
-      "/api/credit-notes",
-      payload,
-      (response) => {
-        setLoading(false);
-        if (response.success) {
-          const cnNo = response.data?.creditNoteNumber;
-          const closed = response.data?.status === "closed";
-          toast.success(
-            isMoneyOnly
+    const onSuccess = (response) => {
+      setLoading(false);
+      if (response.success) {
+        const cnNo = response.data?.creditNoteNumber;
+        const closed = response.data?.status === "closed";
+        toast.success(
+          isEditMode
+            ? `${isVendor ? "Vendor credit" : "Credit note"} ${cnNo} updated`
+            : isMoneyOnly
               ? `Vendor credit ${cnNo} posted to the supplier advance`
               : outcome === "refund"
                 ? `${isVendor ? "Vendor credit" : "Credit note"} ${cnNo} refunded${closed ? " and closed" : ""}`
                 : isVendor
                   ? `Vendor credit ${cnNo} saved as open credits`
                   : `Credit note ${cnNo} posted to customer deposit. Use Apply Deposit on Create Invoice.`,
-          );
-          if (typeof onCreated === "function") onCreated(cnNo);
-        } else {
-          toast.error(
-            response.message ||
-              `Failed to create ${isVendor ? "vendor credit" : "credit note"}`,
-          );
-        }
-      },
-      (error) => {
-        setLoading(false);
-        toast.error(
-          error?.message ||
-            `Failed to create ${isVendor ? "vendor credit" : "credit note"}`,
         );
-      },
-    );
+        if (isEditMode && typeof onUpdated === "function") onUpdated(cnNo);
+        else if (typeof onCreated === "function") onCreated(cnNo);
+      } else {
+        toast.error(
+          response.message ||
+            `Failed to ${isEditMode ? "update" : "create"} ${
+              isVendor ? "vendor credit" : "credit note"
+            }`,
+        );
+      }
+    };
+    const onError = (error) => {
+      setLoading(false);
+      toast.error(
+        error?.message ||
+          `Failed to ${isEditMode ? "update" : "create"} ${
+            isVendor ? "vendor credit" : "credit note"
+          }`,
+      );
+    };
+
+    if (isEditMode) {
+      _putApi(
+        `/api/credit-notes/${encodeURIComponent(creditNoteNumber)}`,
+        payload,
+        onSuccess,
+        onError,
+      );
+    } else {
+      _postApi("/api/credit-notes", payload, onSuccess, onError);
+    }
   };
 
   const fieldInputClass =

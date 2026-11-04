@@ -92,6 +92,8 @@ export default function ApplySupplierDeposit({
   const [moving, setMoving] = useState(false);
   const [writeOffAmount, setWriteOffAmount] = useState("");
   const [writingOff, setWritingOff] = useState(false);
+  const [recentGitActivity, setRecentGitActivity] = useState([]);
+  const [reversingRef, setReversingRef] = useState("");
   const [confirmAction, setConfirmAction] = useState(null); // move | write_off | apply
   const [bills, setBills] = useState([]);
   const [applyAmounts, setApplyAmounts] = useState({});
@@ -178,7 +180,7 @@ export default function ApplySupplierDeposit({
       _fetchApi(
         `/api/v1/get-supplier-advance-history?supplierNo=${encodeURIComponent(
           supplierNumber,
-        )}&facilityId=${facilityId}&limit=5`,
+        )}&facilityId=${facilityId}&limit=20`,
         (res) => {
           const deposit =
             parseFloat(res?.available_deposit ?? res?.available_advance) || 0;
@@ -191,12 +193,26 @@ export default function ApplySupplierDeposit({
             ) || 0,
           );
           setMoveSource(credit > 0.009 ? "credit_note" : "deposit");
+          const rows = Array.isArray(res?.results) ? res.results : [];
+          setRecentGitActivity(
+            rows.filter(
+              (r) =>
+                r.operation === "git_move" ||
+                r.operation === "advance_apply" ||
+                r.operation === "git_write_off" ||
+                r.operation === "reverse" ||
+                /^GIT[-_]/i.test(String(r.receipt_no || "")) ||
+                /^SAD[-_]/i.test(String(r.receipt_no || "")) ||
+                /^GWO[-_]/i.test(String(r.receipt_no || "")),
+            ),
+          );
           done();
         },
         () => {
           setAvailableDeposit(0);
           setAvailableCredit(0);
           setAvailableGit(0);
+          setRecentGitActivity([]);
           toast.error("Failed to load deposit balance");
           done();
         },
@@ -228,11 +244,55 @@ export default function ApplySupplierDeposit({
     [facilityId],
   );
 
+  const reverseGitActivity = (row) => {
+    const receiptNo = String(row?.receipt_no || "").trim();
+    const op = row?.operation;
+    let url = "";
+    if (op === "git_move" || /^GIT[-_]/i.test(receiptNo)) {
+      url = "/api/v1/reverse-supplier-git-move";
+    } else if (op === "advance_apply" || /^SAD[-_]/i.test(receiptNo)) {
+      url = "/api/v1/reverse-supplier-advance-application";
+    } else if (op === "git_write_off" || /^GWO[-_]/i.test(receiptNo)) {
+      url = "/api/v1/reverse-supplier-git-write-off";
+    }
+    if (!url || !row?.reversible) {
+      toast.error("This entry cannot be reversed");
+      return;
+    }
+    if (!window.confirm(`Reverse ${receiptNo}?`)) return;
+    setReversingRef(receiptNo);
+    _postApi(
+      url,
+      {
+        facilityId,
+        userId: user?.id || user?.email,
+        reference_number: receiptNo,
+      },
+      (resp) => {
+        setReversingRef("");
+        if (resp?.success) {
+          toast.success(resp.message || "Reversed");
+          const supplierNumber =
+            selectedSupplier?.supplier_number || selectedSupplier?.supplierNo;
+          if (supplierNumber) loadSupplierData(supplierNumber);
+          if (typeof onSuccess === "function") onSuccess();
+        } else {
+          toast.error(resp?.error || resp?.message || "Reverse failed");
+        }
+      },
+      (err) => {
+        setReversingRef("");
+        toast.error(err?.error || err?.message || "Reverse failed");
+      },
+    );
+  };
+
   const handleSupplierChange = (supplier) => {
     if (!supplier?.supplier_number && !supplier?.supplierNo) {
       setSelectedSupplier(null);
       setAvailableDeposit(0);
       setAvailableGit(0);
+      setRecentGitActivity([]);
       setBills([]);
       setApplyAmounts({});
       setMoveAmount("");
@@ -536,7 +596,7 @@ export default function ApplySupplierDeposit({
     if (confirmAction.type === "write_off") {
       return {
         title: "Confirm write-off",
-        description: `Write off ${currency} ${formatNumber1(confirmAction.amount)} goods in transit for ${supplierLabel}? This posts to Goods in Transit Loss and cannot be undone from here.`,
+        description: `Write off ${currency} ${formatNumber1(confirmAction.amount)} goods in transit for ${supplierLabel}? This posts to Goods in Transit Loss. You can reverse it later from Pay Bills or this activity list.`,
         confirmLabel: "Yes, write off",
         destructive: true,
       };
@@ -871,6 +931,55 @@ export default function ApplySupplierDeposit({
                   </div>
                 </div>
 
+                {recentGitActivity.length ? (
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="mb-2 text-sm font-semibold text-slate-800">
+                      Recent GIT activity
+                    </div>
+                    <div className="max-h-48 space-y-2 overflow-y-auto">
+                      {recentGitActivity.map((row) => (
+                        <div
+                          key={`${row.receipt_no}-${row.entry_id}`}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-100 px-2 py-1.5 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <div className="font-medium text-slate-800">
+                              {row.receipt_no}{" "}
+                              <span className="font-normal text-slate-500">
+                                · {row.operation?.replace(/_/g, " ") || row.mode_of_payment}
+                              </span>
+                            </div>
+                            <div className="text-slate-500">
+                              {currency} {formatNumber1(row.amount || 0)}
+                              {row.date
+                                ? ` · ${moment(row.date).format("DD/MM/YYYY")}`
+                                : ""}
+                            </div>
+                          </div>
+                          {row.reversible ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              disabled={reversingRef === row.receipt_no}
+                              onClick={() => reverseGitActivity(row)}
+                            >
+                              {reversingRef === row.receipt_no
+                                ? "Reversing…"
+                                : "Reverse"}
+                            </Button>
+                          ) : (
+                            <span className="text-[11px] text-slate-400">
+                              {row.operation === "reverse" ? "Reversal" : "Locked"}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 <div className="rounded-lg border border-rose-200 bg-rose-50/70 p-3">
                   <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
                     <Trash2 className="h-4 w-4 text-rose-600" />
@@ -878,7 +987,8 @@ export default function ApplySupplierDeposit({
                   </div>
                   <p className="mb-2 text-xs text-slate-600">
                     Posts to Goods in Transit Loss (800904), or Inventory
-                    Write-off if that head is missing.
+                    Write-off if that head is missing. Reverse later from this
+                    list or Pay Bills.
                   </p>
                   <div className="flex flex-wrap items-end gap-2">
                     <div className="min-w-[8rem] flex-1">

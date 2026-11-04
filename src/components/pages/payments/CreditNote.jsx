@@ -16,7 +16,7 @@ import {
   ArrowRight,
   X,
 } from "lucide-react";
-import { _fetchApi, _postApi } from "@/redux/actions/api";
+import { _fetchApi, _postApi, _deleteApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import CustomButton from "@/common/Custom/CustomButton";
 import CustomTable1 from "@/common/Custom/CustomTable1";
@@ -90,6 +90,8 @@ export default function CreditNote() {
       };
 
   const [view, setView] = useState("list"); // list | create
+  const [editCreditNoteNumber, setEditCreditNoteNumber] = useState("");
+  const [deletingCn, setDeletingCn] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | open | closed
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -159,6 +161,19 @@ export default function CreditNote() {
   useEffect(() => {
     if (view === "list") fetchList();
   }, [fetchList, view, isVendor]);
+
+  useEffect(() => {
+    const editNo = String(searchParams.get("edit") || "").trim();
+    if (!editNo) return;
+    setEditCreditNoteNumber(editNo);
+    setView("create");
+    const next = new URLSearchParams(searchParams);
+    next.delete("edit");
+    navigate(
+      `${location.pathname}${next.toString() ? `?${next.toString()}` : ""}`,
+      { replace: true },
+    );
+  }, [searchParams, navigate, location.pathname]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -383,6 +398,51 @@ export default function CreditNote() {
                     {labels.apply}
                   </DropdownMenuItem>
                 )}
+                {item.canEdit ? (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setEditCreditNoteNumber(item.creditNoteNumber);
+                      setView("create");
+                    }}
+                  >
+                    Edit
+                  </DropdownMenuItem>
+                ) : null}
+                {item.canDelete ? (
+                  <DropdownMenuItem
+                    className="text-red-600 focus:text-red-600"
+                    disabled={deletingCn === item.creditNoteNumber}
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          `Delete ${item.creditNoteNumber}? This cannot be undone.`,
+                        )
+                      ) {
+                        return;
+                      }
+                      setDeletingCn(item.creditNoteNumber);
+                      _deleteApi(
+                        `/api/credit-notes/${encodeURIComponent(item.creditNoteNumber)}`,
+                        { facilityId, userId },
+                        (resp) => {
+                          setDeletingCn("");
+                          if (resp?.success) {
+                            toast.success("Deleted");
+                            fetchList();
+                          } else {
+                            toast.error(resp?.message || "Delete failed");
+                          }
+                        },
+                        (err) => {
+                          setDeletingCn("");
+                          toast.error(err?.message || "Delete failed");
+                        },
+                      );
+                    }}
+                  >
+                    Delete
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => openDetail(item.creditNoteNumber)}
@@ -395,7 +455,16 @@ export default function CreditNote() {
         ),
       },
     ],
-    [labels.apply, labels.party, openDetail, openApplyFromList],
+    [
+      labels.apply,
+      labels.party,
+      openDetail,
+      openApplyFromList,
+      deletingCn,
+      facilityId,
+      userId,
+      fetchList,
+    ],
   );
 
   if (view === "create") {
@@ -404,8 +473,18 @@ export default function CreditNote() {
         <CreditNoteCreateForm
           embedded
           forcedParty={isVendor ? "vendor" : "customer"}
-          onCancel={() => setView("list")}
+          editCreditNoteNumber={editCreditNoteNumber}
+          onCancel={() => {
+            setEditCreditNoteNumber("");
+            setView("list");
+          }}
+          onUpdated={() => {
+            setEditCreditNoteNumber("");
+            setView("list");
+            fetchList();
+          }}
           onCreated={(cnNo) => {
+            setEditCreditNoteNumber("");
             setView("list");
             fetchList();
             if (cnNo) openDetail(cnNo);
@@ -441,7 +520,10 @@ export default function CreditNote() {
           color="primary"
           size="sm"
           className="!mb-0"
-          onClick={() => setView("create")}
+          onClick={() => {
+            setEditCreditNoteNumber("");
+            setView("create");
+          }}
         >
           <FaPlus className="mr-1 h-4 w-4" aria-hidden />
           New {labels.singular}
@@ -560,7 +642,10 @@ export default function CreditNote() {
               color="primary"
               size="sm"
               className="!mb-0 mt-4"
-              onClick={() => setView("create")}
+              onClick={() => {
+                setEditCreditNoteNumber("");
+                setView("create");
+              }}
             >
               <FaPlus className="mr-1 h-4 w-4" aria-hidden />
               Create {labels.singular}

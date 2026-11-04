@@ -5,7 +5,7 @@ import { useReactToPrint } from "react-to-print";
 import moment from "moment";
 import { toast } from "sonner";
 import { Printer, X } from "lucide-react";
-import { _fetchApi, _postApi } from "@/redux/actions/api";
+import { _fetchApi, _postApi, _deleteApi } from "@/redux/actions/api";
 import BusinessDocumentHeader, {
   getDocumentPrintInColor,
 } from "@/components/common/BusinessDocumentHeader";
@@ -411,6 +411,49 @@ export default function CreditNotePreview() {
               className="rounded bg-emerald-600 px-3 py-0.5 text-sm text-white transition-colors hover:bg-emerald-700"
             >
               {labels.apply}
+            </button>
+          ) : null}
+          {detail?.canEdit ? (
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  `${listPath}?edit=${encodeURIComponent(detail.creditNoteNumber)}`,
+                )
+              }
+              className="rounded bg-slate-700 px-3 py-0.5 text-sm text-white transition-colors hover:bg-slate-800"
+            >
+              Edit
+            </button>
+          ) : null}
+          {detail?.canDelete ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    `Delete ${detail.creditNoteNumber}? This cannot be undone.`,
+                  )
+                ) {
+                  return;
+                }
+                _deleteApi(
+                  `/api/credit-notes/${encodeURIComponent(detail.creditNoteNumber)}`,
+                  { facilityId, userId },
+                  (resp) => {
+                    if (resp?.success) {
+                      toast.success("Deleted");
+                      navigate(listPath);
+                    } else {
+                      toast.error(resp?.message || "Delete failed");
+                    }
+                  },
+                  (err) => toast.error(err?.message || "Delete failed"),
+                );
+              }}
+              className="rounded bg-red-600 px-3 py-0.5 text-sm text-white transition-colors hover:bg-red-700"
+            >
+              Delete
             </button>
           ) : null}
           <button

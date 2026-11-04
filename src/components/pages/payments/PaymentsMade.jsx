@@ -10,8 +10,9 @@ import {
   MoreVerticalIcon,
   Pencil,
   Printer,
+  RotateCcw,
 } from "lucide-react";
-import { _fetchApi } from "@/redux/actions/api";
+import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
 import { formatExpensePaymentMode } from "@/utils/expensePaymentMode";
 import { Button } from "@/components/ui/button";
@@ -283,6 +284,51 @@ export default function PaymentsMade() {
     navigate(`/app/payments/pay-bills/new?${params.toString()}`);
   };
 
+  const reverseGitRelated = (item) => {
+    const receiptNo = String(item?.receipt_no || "").trim();
+    const op = item?.operation;
+    let url = "";
+    let label = "entry";
+    if (op === "git_move" || /^GIT[-_]/i.test(receiptNo)) {
+      url = "/api/v1/reverse-supplier-git-move";
+      label = "GIT move";
+    } else if (op === "advance_apply" || /^SAD[-_]/i.test(receiptNo)) {
+      url = "/api/v1/reverse-supplier-advance-application";
+      label = "application";
+    } else if (op === "git_write_off" || /^GWO[-_]/i.test(receiptNo)) {
+      url = "/api/v1/reverse-supplier-git-write-off";
+      label = "write-off";
+    }
+    if (!url) {
+      toast.error("This row cannot be reversed");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Reverse ${label} ${receiptNo}? Compensating ledger entries will be posted.`,
+      )
+    ) {
+      return;
+    }
+    _postApi(
+      url,
+      {
+        facilityId,
+        userId: user?.id || user?.user_id,
+        reference_number: receiptNo,
+      },
+      (resp) => {
+        if (resp?.success) {
+          toast.success(resp.message || "Reversed");
+          fetchList();
+        } else {
+          toast.error(resp?.error || resp?.message || "Reverse failed");
+        }
+      },
+      (err) => toast.error(err?.error || err?.message || "Reverse failed"),
+    );
+  };
+
   const openReceipt = (item) => {
     const ref = item.receipt_no || "";
     navigate(
@@ -379,11 +425,19 @@ export default function PaymentsMade() {
                 <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={() => editPayment(item)}>
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit
-              </DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-44">
+              {/^SAP[-_]/i.test(String(item.receipt_no || "")) ? (
+                <DropdownMenuItem onClick={() => editPayment(item)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </DropdownMenuItem>
+              ) : null}
+              {item.reversible ? (
+                <DropdownMenuItem onClick={() => reverseGitRelated(item)}>
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Reverse
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem onClick={() => openReceipt(item)}>
                 <Printer className="mr-2 h-4 w-4" />
                 View receipt

@@ -13,13 +13,12 @@ import {
   SortAsc,
   Download,
   Search,
-  Settings,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { formatNumber1 } from "@/components/router/utilities";
-import { _fetchApi, _postApi } from "@/redux/actions/api";
+import { _fetchApi } from "@/redux/actions/api";
 import { toast } from "sonner";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import moment from "moment";
 import {
@@ -47,14 +46,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import useQuery from "@/hooks/useQuery";
 import { isProductTaxable, normalizeTaxableStatus } from "@/utils/taxableStatus";
 
@@ -76,8 +67,7 @@ function txTime(tx) {
 }
 
 export default function InventoryItemView() {
-  const dispatch = useDispatch();
-  const { activeBusiness, user } = useSelector((state) => state.auth);
+  const { activeBusiness } = useSelector((state) => state.auth);
   const { id: productId } = useParams();
   const query = useQuery();
   const location = useLocation();
@@ -101,7 +91,7 @@ export default function InventoryItemView() {
     type: "all",
     searchTerm: "",
     sortBy: "date",
-    sortOrder: "desc",
+    sortOrder: "asc",
     fromDate: fromDateFromUrl,
     toDate: toDateFromUrl,
     branchId: branchIdFromUrl || "all",
@@ -109,13 +99,6 @@ export default function InventoryItemView() {
   const [dateDraft, setDateDraft] = useState({
     fromDate: fromDateFromUrl,
     toDate: toDateFromUrl,
-  });
-  const [autoSaveOpen, setAutoSaveOpen] = useState(false);
-  const [autoSaveSaving, setAutoSaveSaving] = useState(false);
-  const [autoSaveForm, setAutoSaveForm] = useState({
-    enabled: false,
-    time: "18:00",
-    timezone: "Africa/Lagos",
   });
 
   useEffect(() => {
@@ -374,17 +357,14 @@ export default function InventoryItemView() {
         return tx.movement_type || "";
       };
 
-      const rows = [
-        [
-          filters.fromDate ? moment(filters.fromDate).format("DD/MM/YYYY") : "",
-          "B/F",
-          "Balance brought forward",
-          "",
-          "",
-          "",
-          formatNumber1(balanceBroughtForward),
-        ],
-        ...filteredHistory.map((tx) => [
+      const chronoHistory = [...filteredHistory].sort((a, b) => {
+        const timeDiff = txTime(a) - txTime(b);
+        if (timeDiff !== 0) return timeDiff;
+        return (Number(a.id) || 0) - (Number(b.id) || 0);
+      });
+      const movementRows = chronoHistory.map((tx) => ({
+        balance: Number(tx.running_balance) || 0,
+        cells: [
           tx.createdAt || tx.inserted_time
             ? moment(tx.createdAt || tx.inserted_time).format("DD/MM/YYYY")
             : "",
@@ -394,19 +374,24 @@ export default function InventoryItemView() {
           txQtyIn(tx) > 0 ? formatNumber1(txQtyIn(tx)) : "-",
           txQtyOut(tx) > 0 ? formatNumber1(txQtyOut(tx)) : "-",
           formatNumber1(tx.running_balance ?? 0),
-        ]),
-        [
-          "",
-          "",
-          "Total",
-          "",
-          formatNumber1(totalQtyIn),
-          formatNumber1(totalQtyOut),
-          formatNumber1(periodClosingBalance),
         ],
+      }));
+      const totalCells = [
+        "",
+        "",
+        "Total",
+        "",
+        formatNumber1(totalQtyIn),
+        formatNumber1(totalQtyOut),
+        formatNumber1(periodClosingBalance),
       ];
 
       const summaryBoxes = [
+        {
+          label: "Brought forward",
+          value: `${formatNumber1(balanceBroughtForward)}${unit}`,
+          color: [120, 53, 15],
+        },
         {
           label: "In",
           value: `${formatNumber1(totalQtyIn)}${unit}`,
@@ -486,36 +471,60 @@ export default function InventoryItemView() {
         return y + rowH;
       };
 
-      let y = drawHeader();
-      y = drawColumns(y);
-
-      rows.forEach((cells, index) => {
-        if (y > pageHeight - 12) {
-          doc.addPage();
-          y = drawColumns(drawHeader());
-        }
-        const isTotal = index === rows.length - 1;
-        const isBroughtForward = index === 0;
-        if (isTotal) doc.setFillColor(241, 245, 249);
-        else if (isBroughtForward) doc.setFillColor(255, 251, 235);
-        else if (index % 2 === 0) doc.setFillColor(248, 250, 252);
+      const drawDataRow = (cells, kind) => {
+        if (kind === "total") doc.setFillColor(241, 245, 249);
+        else if (kind === "bf") doc.setFillColor(255, 251, 235);
+        else if (kind === "alt") doc.setFillColor(248, 250, 252);
         else doc.setFillColor(255, 255, 255);
         doc.rect(margin, y, pageWidth - margin * 2, rowH, "F");
-        doc.setFont("helvetica", isTotal || isBroughtForward ? "bold" : "normal");
+        doc.setFont("helvetica", kind === "total" || kind === "bf" ? "bold" : "normal");
         doc.setFontSize(8);
         doc.setTextColor(15, 23, 42);
         let x = margin;
         cells.forEach((text, i) => {
           const right = i >= 4;
-          const value = String(text ?? "");
-          doc.text(value, right ? x + colW[i] - 1.5 : x + 1.5, y + 4.2, {
+          doc.text(String(text ?? ""), right ? x + colW[i] - 1.5 : x + 1.5, y + 4.2, {
             align: right ? "right" : "left",
             maxWidth: colW[i] - 3,
           });
           x += colW[i];
         });
         y += rowH;
+      };
+
+      const broughtForwardCells = (amount) => [
+        filters.fromDate ? moment(filters.fromDate).format("DD/MM/YYYY") : "",
+        "B/F",
+        "Balance brought forward",
+        "",
+        "",
+        "",
+        formatNumber1(amount),
+      ];
+
+      const startPage = (carried) => {
+        y = drawColumns(drawHeader());
+        drawDataRow(broughtForwardCells(carried), "bf");
+      };
+
+      let y = 0;
+      let carried = Number(balanceBroughtForward) || 0;
+      startPage(carried);
+
+      movementRows.forEach((row, index) => {
+        if (y > pageHeight - 12) {
+          doc.addPage();
+          startPage(carried);
+        }
+        drawDataRow(row.cells, index % 2 === 0 ? "alt" : "plain");
+        carried = row.balance;
       });
+
+      if (y > pageHeight - 12) {
+        doc.addPage();
+        startPage(carried);
+      }
+      drawDataRow(totalCells, "total");
 
       const pageCount = doc.getNumberOfPages();
       for (let page = 1; page <= pageCount; page += 1) {
@@ -535,67 +544,6 @@ export default function InventoryItemView() {
       console.error(error);
       toast.error("Could not download the PDF");
     }
-  };
-
-  const openAutoSave = () => {
-    setAutoSaveForm({
-      enabled: Boolean(activeBusiness?.recon_auto_save_enabled),
-      time: activeBusiness?.recon_auto_save_time || "18:00",
-      timezone: activeBusiness?.recon_auto_save_timezone || "Africa/Lagos",
-    });
-    setAutoSaveOpen(true);
-  };
-
-  const saveAutoSaveSettings = () => {
-    if (!activeBusiness?.id || !user?.id) return;
-    if (!/^\d{2}:\d{2}$/.test(String(autoSaveForm.time || ""))) {
-      toast.error("Time must be HH:mm");
-      return;
-    }
-    const headsReady = [
-      activeBusiness?.recon_cash_account_code,
-      activeBusiness?.recon_safe_account_code,
-      activeBusiness?.recon_shortage_account_code,
-    ].every((code) => String(code || "").trim());
-    if (autoSaveForm.enabled && !headsReady) {
-      toast.error(
-        "Set Cash, Safe, and Shortage heads in Admin settings before automatic save",
-      );
-      return;
-    }
-    setAutoSaveSaving(true);
-    _postApi(
-      `/account/update-recon-auto-save/${activeBusiness.id}/${user.id}`,
-      {
-        recon_auto_save_enabled: Boolean(autoSaveForm.enabled),
-        recon_auto_save_time: autoSaveForm.time,
-        recon_auto_save_timezone: autoSaveForm.timezone || "Africa/Lagos",
-      },
-      (resp) => {
-        setAutoSaveSaving(false);
-        if (resp?.success) {
-          const saved = resp.results?.dataValues || resp.results || {};
-          dispatch({
-            type: "UPDATE_BUSINESS_SETTINGS",
-            payload: {
-              business: {
-                ...activeBusiness,
-                ...saved,
-                id: activeBusiness.id,
-              },
-            },
-          });
-          setAutoSaveOpen(false);
-          toast.success("Automatic save updated");
-        } else {
-          toast.error(resp?.message || "Could not save the schedule");
-        }
-      },
-      (err) => {
-        setAutoSaveSaving(false);
-        toast.error(err?.message || "Could not save the schedule");
-      },
-    );
   };
 
   if (loading) {
@@ -934,16 +882,6 @@ export default function InventoryItemView() {
                       <Download className="h-4 w-4" />
                       PDF
                     </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={openAutoSave}
-                      title="Set the time for automatic save"
-                      className="h-8 w-8 p-0"
-                    >
-                      <Settings className="h-4 w-4" />
-                    </Button>
                   </div>
                 </CardTitle>
               </CardHeader>
@@ -1262,21 +1200,19 @@ export default function InventoryItemView() {
                     {formatNumber1(pendingToCollect)} {item.unit_of_measure || ''}
                   </span>
                 </div>
+                <div className="flex justify-between items-center py-1 border-b">
+                  <span className="text-xs text-gray-500">Balance brought forward</span>
+                  <span className="text-sm font-medium tabular-nums">
+                    {formatNumber1(balanceBroughtForward)} {item.unit_of_measure || ""}
+                  </span>
+                </div>
                 {(filters.fromDate || filters.toDate) && (
-                  <>
-                    <div className="flex justify-between items-center py-1 border-b">
-                      <span className="text-xs text-gray-500">Balance brought forward</span>
-                      <span className="text-sm font-medium tabular-nums">
-                        {formatNumber1(balanceBroughtForward)} {item.unit_of_measure || ""}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center py-1 border-b">
-                      <span className="text-xs text-gray-500">Closing (period)</span>
-                      <span className="text-sm font-medium tabular-nums">
-                        {formatNumber1(periodClosingBalance)} {item.unit_of_measure || ""}
-                      </span>
-                    </div>
-                  </>
+                  <div className="flex justify-between items-center py-1 border-b">
+                    <span className="text-xs text-gray-500">Closing (period)</span>
+                    <span className="text-sm font-medium tabular-nums">
+                      {formatNumber1(periodClosingBalance)} {item.unit_of_measure || ""}
+                    </span>
+                  </div>
                 )}
                 <div className="flex justify-between items-center py-1 border-b">
                   <span className="text-xs text-gray-600 flex items-center gap-1">
@@ -1328,105 +1264,6 @@ export default function InventoryItemView() {
           </div>
         </div>
       </div>
-
-      <Dialog open={autoSaveOpen} onOpenChange={setAutoSaveOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Automatic save
-            </DialogTitle>
-            <DialogDescription>
-              After this time each day, open hand-ins are saved. Cash moves to
-              Safe only when the Cash, Safe, and Shortage heads are all set.
-              A ledger line is not posted if any of those heads is missing.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <label className="flex items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
-                checked={autoSaveForm.enabled}
-                onChange={(e) =>
-                  setAutoSaveForm((prev) => ({
-                    ...prev,
-                    enabled: e.target.checked,
-                  }))
-                }
-              />
-              Save automatically
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block text-xs font-medium text-slate-600">
-                Time
-                <Input
-                  type="time"
-                  value={autoSaveForm.time}
-                  onChange={(e) =>
-                    setAutoSaveForm((prev) => ({
-                      ...prev,
-                      time: e.target.value,
-                    }))
-                  }
-                  className="mt-1 h-9"
-                />
-              </label>
-              <label className="block text-xs font-medium text-slate-600">
-                Timezone
-                <select
-                  value={autoSaveForm.timezone}
-                  onChange={(e) =>
-                    setAutoSaveForm((prev) => ({
-                      ...prev,
-                      timezone: e.target.value,
-                    }))
-                  }
-                  className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
-                >
-                  <option value="Africa/Lagos">Africa/Lagos</option>
-                  <option value="Africa/Accra">Africa/Accra</option>
-                  <option value="UTC">UTC</option>
-                </select>
-              </label>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-              <p className="mb-1 font-semibold text-slate-800">Ledger heads</p>
-              {[
-                ["Cash", activeBusiness?.recon_cash_account_code],
-                ["Safe", activeBusiness?.recon_safe_account_code],
-                ["Shortage", activeBusiness?.recon_shortage_account_code],
-              ].map(([label, code]) => (
-                <p key={label}>
-                  {label}: {code ? String(code) : "Not set"}
-                </p>
-              ))}
-            </div>
-            {activeBusiness?.recon_auto_save_last_run ? (
-              <p className="text-xs text-slate-500">
-                Last automatic save: {activeBusiness.recon_auto_save_last_run}
-              </p>
-            ) : null}
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setAutoSaveOpen(false)}
-              disabled={autoSaveSaving}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={saveAutoSaveSettings}
-              disabled={autoSaveSaving}
-            >
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
