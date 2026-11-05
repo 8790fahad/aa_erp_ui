@@ -705,7 +705,7 @@ export default function CollectionReconciliation() {
       cashDialog.shortage_input,
       cashDialog.lastEdited,
     );
-    const { toSafe } = split;
+    const { toSafe, shortage } = split;
     if (
       cashDialog.needsCash &&
       (!cashDialog.cashFrom || !cashDialog.safe || !cashDialog.shortageAccount)
