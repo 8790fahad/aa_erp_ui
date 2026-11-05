@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import { Link, useSearchParams } from "react-router-dom";
 import moment from "moment";
 import { toast } from "sonner";
@@ -14,7 +14,6 @@ import {
   Loader2,
   Percent,
   RefreshCw,
-  Settings,
   Vault,
 } from "lucide-react";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
@@ -54,6 +53,12 @@ import {
   allowedCollectionReconciliationTabs,
 } from "@/lib/access";
 import { isCashInHandHead } from "@/components/common/useAdvancePaymentAccounts";
+
+function confirmedByLabel(name, fallback = "Confirmed") {
+  const text = String(name || "").trim();
+  if (!text || /^automatic save$/i.test(text)) return fallback;
+  return text;
+}
 
 function lineModeLabel(paymentType) {
   const pt = String(paymentType || "").toLowerCase();
@@ -134,7 +139,6 @@ function AccountTypeahead({
  * Cashier supervisor hand-in confirmation — not bank reconciliation.
  */
 export default function CollectionReconciliation() {
-  const dispatch = useDispatch();
   const activeBusiness = useSelector((state) => state.auth.activeBusiness);
   const user = useSelector((state) => state.auth.user);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -202,13 +206,6 @@ export default function CollectionReconciliation() {
   const [discountLoading, setDiscountLoading] = useState(false);
   const [discountSubmitting, setDiscountSubmitting] = useState("");
   const [discountSelected, setDiscountSelected] = useState(null);
-  const [autoSaveOpen, setAutoSaveOpen] = useState(false);
-  const [autoSaveSaving, setAutoSaveSaving] = useState(false);
-  const [autoSaveForm, setAutoSaveForm] = useState({
-    enabled: false,
-    time: "18:00",
-    timezone: "Africa/Lagos",
-  });
 
   const selectView = (view) => {
     setPageView(view);
@@ -699,58 +696,6 @@ export default function CollectionReconciliation() {
     });
   };
 
-  const saveAutoSaveSettings = () => {
-    if (!facilityId || !user?.id) return;
-    if (!/^\d{2}:\d{2}$/.test(String(autoSaveForm.time || ""))) {
-      toast.error("Time must be HH:mm");
-      return;
-    }
-    const headsReady = [
-      activeBusiness?.recon_cash_account_code,
-      activeBusiness?.recon_safe_account_code,
-      activeBusiness?.recon_shortage_account_code,
-    ].every((code) => String(code || "").trim());
-    if (autoSaveForm.enabled && !headsReady) {
-      toast.error(
-        "Set Cash, Safe, and Shortage heads in Admin settings before automatic save",
-      );
-      return;
-    }
-    setAutoSaveSaving(true);
-    _postApi(
-      `/account/update-recon-auto-save/${facilityId}/${user.id}`,
-      {
-        recon_auto_save_enabled: Boolean(autoSaveForm.enabled),
-        recon_auto_save_time: autoSaveForm.time,
-        recon_auto_save_timezone: autoSaveForm.timezone || "Africa/Lagos",
-      },
-      (resp) => {
-        setAutoSaveSaving(false);
-        if (resp?.success) {
-          const saved = resp.results?.dataValues || resp.results || {};
-          dispatch({
-            type: "UPDATE_BUSINESS_SETTINGS",
-            payload: {
-              business: {
-                ...activeBusiness,
-                ...saved,
-                id: activeBusiness.id,
-              },
-            },
-          });
-          setAutoSaveOpen(false);
-          toast.success("Automatic save updated");
-        } else {
-          toast.error(resp?.message || "Could not save the schedule");
-        }
-      },
-      (err) => {
-        setAutoSaveSaving(false);
-        toast.error(err?.message || "Could not save the schedule");
-      },
-    );
-  };
-
   const submitCashDialog = () => {
     if (!cashDialog?.row) return;
     const { row, received_card, received_transfer, expected_cash } = cashDialog;
@@ -1001,27 +946,6 @@ export default function CollectionReconciliation() {
               Refresh
             </Button>
             ) : null}
-            {reconTabs.length ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setAutoSaveForm({
-                  enabled: Boolean(activeBusiness?.recon_auto_save_enabled),
-                  time: activeBusiness?.recon_auto_save_time || "18:00",
-                  timezone:
-                    activeBusiness?.recon_auto_save_timezone || "Africa/Lagos",
-                });
-                setAutoSaveOpen(true);
-              }}
-              title="Set the time for automatic save"
-              className="gap-1.5"
-            >
-              <Settings className="h-3.5 w-3.5" />
-              Automatic save
-            </Button>
-            ) : null}
           </div>
         </div>
 
@@ -1217,7 +1141,7 @@ export default function CollectionReconciliation() {
                             {locked ? (
                               <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                                {row.confirmed_by_name || "Confirmed"}
+                                {confirmedByLabel(row.confirmed_by_name)}
                               </span>
                             ) : (Number(row.expected_total) || 0) > 0.05 ||
                               (Number(row.credit_pending) || 0) > 0.05 ||
@@ -1454,7 +1378,7 @@ export default function CollectionReconciliation() {
                                     className="h-8 bg-white"
                                   />
                                 </div>
-                              ) : row.note ? (
+                              ) : row.note && !/^saved automatically$/i.test(String(row.note).trim()) ? (
                                 <p className="mt-2 text-xs text-slate-600">
                                   Note: {row.note}
                                 </p>
@@ -1622,7 +1546,7 @@ export default function CollectionReconciliation() {
                           <StatusPill status={row.status} />
                         </td>
                         <td className="px-3 py-2.5">
-                          {row.confirmed_by_name || "—"}
+                          {confirmedByLabel(row.confirmed_by_name, "—")}
                         </td>
                       </tr>
                     ))}
@@ -1632,111 +1556,6 @@ export default function CollectionReconciliation() {
             )}
           </div>
         )}
-
-        <Dialog open={autoSaveOpen} onOpenChange={setAutoSaveOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Settings className="h-4 w-4" />
-                Automatic save
-              </DialogTitle>
-              <DialogDescription>
-                After this time each day, open hand-ins are saved on History.
-                Cash moves to Safe only when the Cash, Safe, and Shortage heads
-                are all set.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4"
-                  checked={autoSaveForm.enabled}
-                  onChange={(e) =>
-                    setAutoSaveForm((prev) => ({
-                      ...prev,
-                      enabled: e.target.checked,
-                    }))
-                  }
-                />
-                Save hand-ins automatically
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs font-medium text-slate-600">
-                  Time
-                  <Input
-                    type="time"
-                    value={autoSaveForm.time}
-                    onChange={(e) =>
-                      setAutoSaveForm((prev) => ({
-                        ...prev,
-                        time: e.target.value,
-                      }))
-                    }
-                    className="mt-1 h-9"
-                  />
-                </label>
-                <label className="block text-xs font-medium text-slate-600">
-                  Timezone
-                  <select
-                    value={autoSaveForm.timezone}
-                    onChange={(e) =>
-                      setAutoSaveForm((prev) => ({
-                        ...prev,
-                        timezone: e.target.value,
-                      }))
-                    }
-                    className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
-                  >
-                    <option value="Africa/Lagos">Africa/Lagos</option>
-                    <option value="Africa/Accra">Africa/Accra</option>
-                    <option value="UTC">UTC</option>
-                  </select>
-                </label>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-                <p className="mb-1 font-semibold text-slate-800">
-                  Ledger heads
-                </p>
-                {[
-                  ["Cash", activeBusiness?.recon_cash_account_code],
-                  ["Safe", activeBusiness?.recon_safe_account_code],
-                  ["Shortage", activeBusiness?.recon_shortage_account_code],
-                ].map(([label, code]) => (
-                  <p key={label}>
-                    {label}: {code ? String(code) : "Not set"}
-                  </p>
-                ))}
-              </div>
-              {activeBusiness?.recon_auto_save_last_run ? (
-                <p className="text-xs text-slate-500">
-                  Last automatic save: {activeBusiness.recon_auto_save_last_run}
-                </p>
-              ) : null}
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setAutoSaveOpen(false)}
-                disabled={autoSaveSaving}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={saveAutoSaveSettings}
-                disabled={autoSaveSaving}
-              >
-                {autoSaveSaving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Save"
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         <Dialog
           open={!!cashDialog}
