@@ -21,6 +21,7 @@ import SaleWorkflowSearchBar from "./SaleWorkflowSearchBar";
 import {
   canAccessPrivileges,
   getUserFunctionalities,
+  parseAccessList,
 } from "@/lib/access";
 
 const HISTORY_PRIVILEGE = "Warehouse Collection History";
@@ -29,12 +30,19 @@ export default function WarehouseRequests() {
   const { activeBusiness, user } = useSelector((state) => state.auth);
   const canViewHistory = canAccessPrivileges(
     [HISTORY_PRIVILEGE],
-    getUserFunctionalities(user, activeBusiness),
+    [
+      ...new Set([
+        ...parseAccessList(user?.functionalities, []),
+        ...getUserFunctionalities(user, activeBusiness),
+      ]),
+    ],
   );
   const [loading, setLoading] = useState(false);
   const [collecting, setCollecting] = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [rows, setRows] = useState([]);
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [branchFilter, setBranchFilter] = useState("all");
   const [listTab, setListTab] = useState("pending");
@@ -91,6 +99,51 @@ export default function WarehouseRequests() {
   useEffect(() => {
     fetchPendingCount();
   }, [fetchPendingCount]);
+
+  const fetchHistory = useCallback(() => {
+    if (!activeBusiness?.id || !canViewHistory) {
+      setHistoryRows([]);
+      return;
+    }
+    setHistoryLoading(true);
+    const params = new URLSearchParams({
+      facilityId: activeBusiness.id,
+      historyOnly: "1",
+      historyDate: moment().format("YYYY-MM-DD"),
+    });
+    if (user?.id) params.set("userId", String(user.id));
+    if (branchFilter !== "all") {
+      params.set("branchId", String(branchFilter));
+    } else if (userBranchIds.length) {
+      params.set("branchId", userBranchIds.join(","));
+    }
+    _fetchApi(
+      `/api/v1/sale-workflows/warehouse-requests?${params.toString()}`,
+      (res) => {
+        setHistoryLoading(false);
+        const list = res?.success ? res.results || [] : [];
+        setHistoryRows(
+          list.filter(
+            (row) => String(row.status || "").toLowerCase() === "collected",
+          ),
+        );
+      },
+      () => {
+        setHistoryLoading(false);
+        setHistoryRows([]);
+      },
+    );
+  }, [
+    activeBusiness?.id,
+    branchFilter,
+    canViewHistory,
+    user?.id,
+    userBranchIds,
+  ]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   const fetchOne = useCallback(
     (saleCode) => {
@@ -174,24 +227,14 @@ export default function WarehouseRequests() {
     [rows],
   );
 
-  const collectedRows = useMemo(() => {
-    const today = moment().format("YYYY-MM-DD");
-    const list = rows.filter((r) => {
-      if (String(r.status || "").toLowerCase() !== "collected") return false;
-      const when = r.collected_at || r.updated_at || r.updatedAt;
-      if (!when || !moment(when).isValid()) return false;
-      return moment(when).format("YYYY-MM-DD") === today;
-    });
-    return list.sort((a, b) => {
-      const ta = new Date(a.collected_at || a.updated_at || 0).getTime();
-      const tb = new Date(b.collected_at || b.updated_at || 0).getTime();
-      return tb - ta;
-    });
-  }, [rows]);
+  const collectedRows = historyRows;
 
   const selected = useMemo(
-    () => rows.find((r) => r.id === selectedId) || null,
-    [rows, selectedId],
+    () =>
+      rows.find((r) => r.id === selectedId) ||
+      historyRows.find((r) => r.id === selectedId) ||
+      null,
+    [rows, historyRows, selectedId],
   );
 
   const selectedHistory = useMemo(() => {
@@ -307,6 +350,7 @@ export default function WarehouseRequests() {
             toast.success("All branch invoices collected — dual signature");
           }
           fetchPendingCount();
+          fetchHistory();
           if (activeCode.current) fetchOne(activeCode.current);
           if (fullyCollected && canViewHistory) setListTab("history");
         } else {
@@ -358,6 +402,7 @@ export default function WarehouseRequests() {
                 variant="outline"
                 onClick={() => {
                   fetchPendingCount();
+                  fetchHistory();
                   if (activeCode.current) fetchOne(activeCode.current);
                 }}
                 className="flex items-center gap-2"
@@ -419,7 +464,7 @@ export default function WarehouseRequests() {
                 placeholder="Enter or scan invoice number, or the 4 digits"
               />
             </div>
-            {!searchActive ? (
+            {listTab !== "history" && !searchActive ? (
               <div className="p-8 text-center text-gray-500 text-sm space-y-2">
                 <Package className="mx-auto h-10 w-10 text-gray-300" />
                 <p className="font-medium text-gray-600">
@@ -431,7 +476,7 @@ export default function WarehouseRequests() {
                     : "Only that invoice is loaded."}
                 </p>
               </div>
-            ) : loading ? (
+            ) : (listTab === "history" ? historyLoading : loading) ? (
               <div className="p-4 space-y-3">
                 {[1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-16 w-full" />
@@ -439,7 +484,9 @@ export default function WarehouseRequests() {
               </div>
             ) : visibleRows.length === 0 ? (
               <div className="p-8 text-center text-gray-500 text-sm">
-                No warehouse invoice found for that number.
+                {listTab === "history"
+                  ? `No invoices collected on ${moment().format("DD MMM YYYY")}.`
+                  : "No warehouse invoice found for that number."}
               </div>
             ) : (
               <ul className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">

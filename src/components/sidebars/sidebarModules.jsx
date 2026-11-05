@@ -564,10 +564,7 @@ export const modules = [
           "Inventory",
         ],
         subFunctionalities: [
-          {
-            title: "History",
-            functionality: ["Warehouse Collection History"],
-          },
+          { title: "Warehouse Collection History" },
         ],
         access: [
           "services",

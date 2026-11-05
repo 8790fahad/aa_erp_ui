@@ -467,12 +467,16 @@ export function collectSubFunctionalityTitles(item) {
 export function privilegeKeysForItem(item) {
   if (!item) return [];
   const keys = [];
-  if (item.title) keys.push(item.title);
-  if (Array.isArray(item.functionality) && item.functionality.length) {
-    keys.push(...item.functionality);
-  } else if (item.functionality) {
-    keys.push(item.functionality);
-  }
+  const functionality = Array.isArray(item.functionality)
+    ? item.functionality
+    : item.functionality
+      ? [item.functionality]
+      : [];
+  // A display title such as "History" is not the stored privilege when a
+  // distinct functionality key is set. Otherwise Warehouse Collection History
+  // matches Collection Reconciliation's "History" and never grants the tab.
+  if (functionality.length) keys.push(...functionality);
+  else if (item.title) keys.push(item.title);
   if (Array.isArray(item.privileges) && item.privileges.length) {
     keys.push(...item.privileges);
   } else if (item.privileges) {
