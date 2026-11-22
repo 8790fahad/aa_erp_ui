@@ -37,6 +37,20 @@ function purchaseBillPath(reference) {
   return `/app/expenses/billing/product-supplier-bill-pdf?invoice_ref=${encodeURIComponent(ref)}&edit=1`;
 }
 
+function valuationMethodLabel(method) {
+  const raw = String(method || "").trim().toUpperCase();
+  if (raw === "BATCH") return "Batch by batch";
+  if (raw === "SELLING") return "Selling price";
+  if (raw === "AVCO") return "Weighted Average (AVCO)";
+  if (raw === "FIFO") return "FIFO";
+  if (raw === "LIFO") return "LIFO";
+  return method || "";
+}
+
+function costPriceModeLabel() {
+  return "Batch cost";
+}
+
 function formatCell(value) {
   if (value === null || value === undefined || value === "") return "—";
   const v = Number(value);
@@ -131,6 +145,7 @@ export default function InventoryValuationReport() {
 
   const [asOfDate, setAsOfDate] = useState(moment().format("YYYY-MM-DD"));
   const [valuationMethod, setValuationMethod] = useState("BATCH");
+  const [costPriceMode, setCostPriceMode] = useState("BATCH");
   const [warehouseId, setWarehouseId] = useState("");
   const [productSku, setProductSku] = useState("");
   const [category, setCategory] = useState("");
@@ -167,6 +182,7 @@ export default function InventoryValuationReport() {
           asOfDate,
           sku,
           valuationMethod,
+          costPriceMode,
           ...(unitCost !== undefined && unitCost !== null && unitCost !== ""
             ? { unitCost: Number(unitCost) }
             : {}),
@@ -186,7 +202,7 @@ export default function InventoryValuationReport() {
         },
       );
     },
-    [facilityId, asOfDate, warehouseId, valuationMethod],
+    [facilityId, asOfDate, warehouseId, valuationMethod, costPriceMode],
   );
 
   const fetchReport = useCallback(() => {
@@ -202,6 +218,7 @@ export default function InventoryValuationReport() {
         facilityId,
         asOfDate,
         valuationMethod,
+        costPriceMode,
         ...(warehouseId ? { branchId: Number(warehouseId) } : {}),
         ...(productSku ? { sku: productSku } : {}),
         ...(category ? { category } : {}),
@@ -229,7 +246,7 @@ export default function InventoryValuationReport() {
         setError("Could not load inventory valuation report.");
       }
     );
-  }, [facilityId, asOfDate, valuationMethod, warehouseId, productSku, category]);
+  }, [facilityId, asOfDate, valuationMethod, costPriceMode, warehouseId, productSku, category]);
 
   useEffect(() => {
     if (!facilityId) return;
@@ -319,7 +336,7 @@ export default function InventoryValuationReport() {
       wsFG.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
       wsFG.mergeCells(r, 1, r, colCount);
-      wsFG.getCell(r, 1).value = `As of ${moment(asOfDate).format("DD MMMM YYYY")}  |  Method: ${valuationMethod}`;
+      wsFG.getCell(r, 1).value = `As of ${moment(asOfDate).format("DD MMMM YYYY")}  |  Method: ${valuationMethodLabel(valuationMethod)}  |  Cost: ${costPriceModeLabel(costPriceMode)}`;
       wsFG.getCell(r, 1).alignment = { horizontal: "center" };
       r += 2;
 
@@ -399,7 +416,7 @@ export default function InventoryValuationReport() {
       wsSummary.getCell(r, 1).alignment = { horizontal: "center" };
       r++;
       wsSummary.mergeCells(r, 1, r, 2);
-      wsSummary.getCell(r, 1).value = `As of ${moment(asOfDate).format("DD MMMM YYYY")}  |  Method: ${valuationMethod}`;
+      wsSummary.getCell(r, 1).value = `As of ${moment(asOfDate).format("DD MMMM YYYY")}  |  Method: ${valuationMethodLabel(valuationMethod)}  |  Cost: ${costPriceModeLabel(costPriceMode)}`;
       wsSummary.getCell(r, 1).alignment = { horizontal: "center" };
       r += 2;
 
@@ -441,7 +458,7 @@ export default function InventoryValuationReport() {
       console.error(e);
       toast.error("Could not export Excel");
     }
-  }, [data, businessName, asOfDate, valuationMethod, warehouseId]);
+  }, [data, businessName, asOfDate, valuationMethod, costPriceMode, warehouseId]);
 
   // ── PDF export ────────────────────────────────────────────────────────────
   const handleExportPdf = useCallback(async () => {
@@ -492,6 +509,7 @@ export default function InventoryValuationReport() {
     0,
   );
   const isBatchMethod = String(valuationMethod || "").toUpperCase() === "BATCH";
+  const isSellingMethod = String(valuationMethod || "").toUpperCase() === "SELLING";
   const layersAreBatch =
     String(layersData?.formula?.method || "").toUpperCase() === "BATCH" ||
     isBatchMethod;
@@ -580,10 +598,23 @@ export default function InventoryValuationReport() {
                     onChange={(e) => setValuationMethod(e.target.value)}
                     className="h-10 rounded border border-gray-300 bg-white px-3 text-sm"
                   >
-                    <option value="BATCH">Batch by Batch</option>
+                    <option value="BATCH">Batch by batch</option>
+                    <option value="SELLING">Selling price</option>
                     <option value="AVCO">Weighted Average (AVCO)</option>
                     <option value="FIFO">FIFO</option>
                     <option value="LIFO">LIFO</option>
+                  </select>
+                </div>
+                <div className="flex min-w-[14rem] flex-col gap-1">
+                  <label className="text-sm font-semibold text-gray-700">
+                    Cost price
+                  </label>
+                  <select
+                    value={costPriceMode}
+                    onChange={(e) => setCostPriceMode(e.target.value)}
+                    className="h-10 rounded border border-gray-300 bg-white px-3 text-sm"
+                  >
+                    <option value="BATCH">Batch cost</option>
                   </select>
                 </div>
                 <div className="flex min-w-[12rem] flex-col gap-1">
@@ -706,9 +737,11 @@ export default function InventoryValuationReport() {
                 business={business}
                 title="INVENTORY REPORT"
                 numberLabel={`As of ${formatReportDate(asOfDate)}`}
-                extraLine={`Method: ${valuationMethod}${
-                  filterExtra ? ` · ${filterExtra}` : ""
-                }`}
+                extraLine={`Method: ${valuationMethodLabel(valuationMethod)} · Cost: ${costPriceModeLabel(costPriceMode)}${
+                  isSellingMethod
+                    ? " · valued at the selling price"
+                    : ""
+                }${filterExtra ? ` · ${filterExtra}` : ""}`}
                 date={new Date()}
                 dateFormat="dddd, DD MMMM YYYY hh:mm A [GMT]Z"
                 className="mb-0"
@@ -737,6 +770,13 @@ export default function InventoryValuationReport() {
                   <h2 className="text-sm font-bold text-white uppercase tracking-wide">
                     Inventory Report — {fgItems.length} items
                   </h2>
+                  {isSellingMethod || isBatchMethod ? (
+                    <p className="text-xs text-gray-200 mt-0.5">
+                      {isSellingMethod
+                        ? "One line per product in each store. The valuation is the selling amount. Cost price is the purchase price on the product."
+                        : "Each purchase price stays on its own line. The valuation is the cost amount."}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm border-collapse">
@@ -800,11 +840,17 @@ export default function InventoryValuationReport() {
                     <tfoot className="bg-gray-50 border-t-2 border-gray-400">
                       <tr>
                         <td colSpan={5} className="px-3 py-2 font-bold text-gray-900 text-right border-r border-gray-200">Total</td>
-                        <td className="px-3 py-2 text-right font-bold tabular-nums text-gray-900 border-r border-gray-200">
+                        <td className={`px-3 py-2 text-right tabular-nums text-gray-900 border-r border-gray-200 ${isSellingMethod ? "" : "font-bold"}`}>
                           {formatNaira(visibleTotal)}
+                          {!isSellingMethod ? (
+                            <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Valuation</div>
+                          ) : null}
                         </td>
-                        <td className="px-3 py-2 text-right font-bold tabular-nums text-gray-900 border-r border-gray-200">
+                        <td className={`px-3 py-2 text-right tabular-nums text-gray-900 border-r border-gray-200 ${isSellingMethod ? "font-bold" : ""}`}>
                           {formatNaira(sellingTotal)}
+                          {isSellingMethod ? (
+                            <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Valuation</div>
+                          ) : null}
                         </td>
                         <td className="border-r border-gray-200" />
                       </tr>
@@ -820,7 +866,7 @@ export default function InventoryValuationReport() {
               </div> */}
 
               <div className="mt-2 text-xs text-gray-500 text-right">
-                Generated: {data.reportInfo?.generatedAt} | Method: {data.reportInfo?.valuationMethod}
+                Generated: {data.reportInfo?.generatedAt} | Method: {valuationMethodLabel(data.reportInfo?.valuationMethod)} | Cost: {costPriceModeLabel(data.reportInfo?.costPriceMode || costPriceMode)}
               </div>
             </div>
           )}
