@@ -430,7 +430,7 @@ export default function InvoiceCorrection() {
       (resp) => {
         setSaving(false);
         if (resp.success) {
-          toast.success("Invoice and linked ledger entries deleted");
+          toast.success("Invoice, ledger, and sales workflow deleted");
           setInvoiceRef("");
           setSelectedRow(null);
           setLineRows([]);

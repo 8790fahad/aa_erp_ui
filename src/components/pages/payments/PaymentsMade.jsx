@@ -11,6 +11,7 @@ import {
   Pencil,
   Printer,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
 import { _fetchApi, _postApi } from "@/redux/actions/api";
 import { formatNumber1 } from "@/components/router/utilities";
@@ -284,6 +285,42 @@ export default function PaymentsMade() {
     navigate(`/app/payments/pay-bills/new?${params.toString()}`);
   };
 
+  const deletePayment = (item) => {
+    const receiptNo = String(item?.receipt_no || "").trim();
+    if (!/^SAP[-_]/i.test(receiptNo)) {
+      toast.message("This payment can't be deleted", {
+        description: "Only a Pay Bills payment (SAP-) can be deleted.",
+      });
+      return;
+    }
+    const vendor = item.supplier_name || "this vendor";
+    const amount = formatNumber1(item.amount || 0);
+    if (
+      !window.confirm(
+        `Delete ${receiptNo} for ${vendor} (₦${amount})? The payment and its ledger will be removed. Any bill it paid will be unpaid again.`,
+      )
+    ) {
+      return;
+    }
+    _postApi(
+      "/api/v1/delete-supplier-payment",
+      {
+        facilityId,
+        userId: user?.id || user?.user_id,
+        receipt_no: receiptNo,
+      },
+      (resp) => {
+        if (resp?.success) {
+          toast.success(resp.message || `${receiptNo} deleted`);
+          fetchList();
+        } else {
+          toast.error(resp?.error || resp?.message || "Delete failed");
+        }
+      },
+      (err) => toast.error(err?.error || err?.message || "Delete failed"),
+    );
+  };
+
   const reverseGitRelated = (item) => {
     const receiptNo = String(item?.receipt_no || "").trim();
     const op = item?.operation;
@@ -430,6 +467,15 @@ export default function PaymentsMade() {
                 <DropdownMenuItem onClick={() => editPayment(item)}>
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit
+                </DropdownMenuItem>
+              ) : null}
+              {/^SAP[-_]/i.test(String(item.receipt_no || "")) ? (
+                <DropdownMenuItem
+                  className="text-red-600 focus:text-red-600"
+                  onClick={() => deletePayment(item)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
                 </DropdownMenuItem>
               ) : null}
               {item.reversible ? (
